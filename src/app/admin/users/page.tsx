@@ -1,6 +1,6 @@
 
 import { PageHeader } from '@/components/layout/page-header';
-import { Users as UsersIcon, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle } from 'lucide-react';
+import { Users as UsersIcon, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Eye } from 'lucide-react';
 import type { User } from '@/types';
 import {
   Table,
@@ -14,6 +14,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const mockUsers: User[] = [
   { id: 'u1', name: 'Dr. Admin First', email: 'admin.first@labstation.com', role: 'Admin', avatarUrl: 'https://placehold.co/100x100.png', avatarDataAiHint: 'avatar person' },
@@ -55,6 +61,7 @@ export default function UserManagementPage() {
       />
 
       {mockUsers.length > 0 ? (
+        <TooltipProvider>
         <div className="overflow-x-auto rounded-lg border shadow-sm">
           <Table>
             <TableHeader>
@@ -85,15 +92,31 @@ export default function UserManagementPage() {
                         {user.role}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/admin/users/edit/${user.id}`}> {/* This link will be a 404 for now */}
-                          <Edit className="mr-2 h-4 w-4" /> Edit
-                        </Link>
-                      </Button>
-                       <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive-foreground hover:bg-destructive">
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete
-                      </Button>
+                    <TableCell className="text-right space-x-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="outline" size="icon" asChild className="h-8 w-8">
+                            <Link href={`/admin/users/edit/${user.id}`}>
+                              <Edit className="h-4 w-4" />
+                              <span className="sr-only">Edit User</span>
+                            </Link>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Edit User</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                           <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8">
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Delete User</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                           <p>Delete User</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 );
@@ -101,6 +124,7 @@ export default function UserManagementPage() {
             </TableBody>
           </Table>
         </div>
+        </TooltipProvider>
       ) : (
         <div className="text-center py-10 text-muted-foreground bg-card rounded-lg border shadow-sm">
           <UsersIcon className="mx-auto h-12 w-12 mb-4" />
@@ -116,3 +140,4 @@ export default function UserManagementPage() {
     </div>
   );
 }
+
