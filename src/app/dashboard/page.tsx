@@ -18,11 +18,11 @@ import {
 } from "@/components/ui/table";
 import { format, isValid, parseISO, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { allAdminMockResources, initialBookings, mockCurrentUser } from '@/lib/mock-data'; // Use centralized mock data
+import { allAdminMockResources, initialBookings, mockCurrentUser } from '@/lib/mock-data';
 
 
 export default function DashboardPage() {
-  const frequentlyUsedResources = allAdminMockResources.slice(0, 2); // Use resources from admin page
+  const frequentlyUsedResources = allAdminMockResources.slice(0, 2);
 
   const getResourceStatusBadge = (status: Resource['status']) => {
     switch (status) {
@@ -76,17 +76,7 @@ export default function DashboardPage() {
                     <Image src={resource.imageUrl || 'https://placehold.co/300x200.png'} alt={resource.name} layout="fill" objectFit="cover" />
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{resource.description}</p>
-                   {resource.features && resource.features.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold mb-1 text-muted-foreground">Features:</h4>
-                      <div className="flex flex-wrap gap-1">
-                        {resource.features.slice(0, 3).map((feature, index) => (
-                          <Badge key={index} variant="secondary" className="text-xs">{feature}</Badge>
-                        ))}
-                        {resource.features.length > 3 && <Badge variant="secondary" className="text-xs">...</Badge>}
-                      </div>
-                    </div>
-                  )}
+                  {/* Features section removed from dashboard card */}
                 </CardContent>
                 <CardFooter>
                   <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
