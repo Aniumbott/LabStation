@@ -11,6 +11,7 @@ import {
   Users,
   UserCog,
   Loader2,
+  Building, // Added for Lab Management
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -25,7 +26,7 @@ import {
   SidebarMenuButton,
   SidebarInset,
 } from '@/components/ui/sidebar';
-import { Separator } from '@/components/ui/separator'; // Import Separator
+import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/icons/logo';
 import { MobileSidebarToggle } from './MobileSidebarToggle';
@@ -34,13 +35,15 @@ interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  admin?: boolean; // Optional flag for admin section styling/grouping later
 }
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/resources', label: 'Resource Search', icon: Search },
   { href: '/bookings', label: 'Manage Bookings', icon: CalendarDays },
-  { href: '/admin/users', label: 'User Management', icon: Users },
+  { href: '/admin/users', label: 'User Management', icon: Users, admin: true },
+  { href: '/admin/labs', label: 'Lab Management', icon: Building, admin: true }, // New Item
   { href: '/profile', label: 'My Profile', icon: UserCog },
 ];
 
@@ -67,7 +70,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <SidebarHeader className="p-4">
           <Logo />
         </SidebarHeader>
-        <Separator className="mx-2 my-1 bg-sidebar-border" /> {/* Added Separator */}
+        <Separator className="mx-2 my-1 bg-sidebar-border" />
         <SidebarContent>
           <SidebarMenu>
             {navItems.map((item) => (

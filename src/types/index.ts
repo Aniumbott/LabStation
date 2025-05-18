@@ -1,3 +1,4 @@
+
 export interface Resource {
   id: string;
   name: string;
@@ -17,7 +18,7 @@ export interface Booking {
   id: string;
   resourceId: string;
   resourceName: string;
-  userId: string; // For simplicity, using string. In a real app, this would be a user object or ID.
+  userId: string;
   userName: string;
   startTime: Date;
   endTime: Date;
@@ -34,7 +35,16 @@ export interface User {
   email: string;
   role: RoleName;
   avatarUrl?: string;
-  avatarDataAiHint?: string; // For AI-generated placeholder hints
+  avatarDataAiHint?: string;
+}
+
+// Lab Management Types
+export interface Lab {
+  id: string;
+  name: string;
+  location: string;
+  description?: string;
+  timezone: string; // Example: "America/New_York", "Europe/London"
 }
 
 // Add other types as needed
