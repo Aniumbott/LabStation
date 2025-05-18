@@ -21,18 +21,18 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Save, X, PlusCircle, Network } from 'lucide-react';
-import type { Resource, ResourceType, ResourceStatus, RemoteAccessDetails } from '@/types';
-import { initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data'; // Updated imports
+import type { Resource, ResourceStatus, RemoteAccessDetails } from '@/types';
+import { initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data';
 import { parseISO, format, isValid } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
 
 
-const remoteAccessProtocols: RemoteAccessDetails['protocol'][] = ['RDP', 'SSH', 'VNC', 'Other'];
+const remoteAccessProtocols: (RemoteAccessDetails['protocol'] | undefined)[] = ['RDP', 'SSH', 'VNC', 'Other', undefined];
 
 const resourceFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, { message: 'Name cannot exceed 100 characters.' }),
   resourceTypeId: z.string().min(1, { message: 'Please select a resource type.' }),
-  lab: z.enum(labsList as [string, ...string[]], { required_error: 'Please select a lab.' }), // Zod enum needs at least one value
+  lab: z.enum(labsList as [string, ...string[]], { required_error: 'Please select a lab.' }),
   status: z.enum(resourceStatusesList as [string, ...string[]], { required_error: 'Please select a status.'}),
   description: z.string().max(500, { message: 'Description cannot exceed 500 characters.' }).optional().or(z.literal('')),
   imageUrl: z.string().url({ message: 'Please enter a valid URL.' }).optional().or(z.literal('')),
@@ -48,9 +48,9 @@ const resourceFormSchema = z.object({
   notes: z.string().max(500).optional().or(z.literal('')),
   features: z.string().max(200, {message: "Features list cannot exceed 200 characters."}).optional().or(z.literal('')),
   remoteAccess: z.object({
-    ipAddress: z.string().max(45).optional().or(z.literal('')), 
+    ipAddress: z.string().max(45).optional().or(z.literal('')),
     hostname: z.string().max(255).optional().or(z.literal('')),
-    protocol: z.enum(remoteAccessProtocols).optional().or(z.literal('')),
+    protocol: z.enum(remoteAccessProtocols as [string, ...string[]]).optional().or(z.literal('')),
     username: z.string().max(100).optional().or(z.literal('')),
     port: z.coerce.number().int().min(1).max(65535).optional().or(z.literal('')),
     notes: z.string().max(500).optional().or(z.literal('')),
@@ -64,7 +64,6 @@ interface ResourceFormDialogProps {
   onOpenChange: (open: boolean) => void;
   initialResource: Resource | null;
   onSave: (data: ResourceFormValues) => void;
-  // resourceTypes, labs, statuses props removed as they are now imported
 }
 
 export function ResourceFormDialog({
@@ -74,8 +73,8 @@ export function ResourceFormDialog({
     resolver: zodResolver(resourceFormSchema),
     defaultValues: {
       name: '',
-      resourceTypeId: '',
-      lab: labsList.length > 0 ? labsList[0] : undefined, // Ensure lab has a default if labsList is not empty
+      resourceTypeId: initialMockResourceTypes.length > 0 ? initialMockResourceTypes[0].id : '',
+      lab: labsList.length > 0 ? labsList[0] : undefined,
       status: 'Available',
       description: '',
       imageUrl: '',
@@ -399,8 +398,8 @@ export function ResourceFormDialog({
                                         <FormControl><SelectTrigger><SelectValue placeholder="Select protocol" /></SelectTrigger></FormControl>
                                         <SelectContent>
                                             <SelectItem value="">None</SelectItem>
-                                            {remoteAccessProtocols.map(protocol => (
-                                                <SelectItem key={protocol} value={protocol}>{protocol}</SelectItem>
+                                            {remoteAccessProtocols.filter(p => p !== undefined).map(protocol => (
+                                                <SelectItem key={protocol} value={protocol!}>{protocol}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>

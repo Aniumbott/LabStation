@@ -18,12 +18,6 @@ import {
 } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -156,7 +150,7 @@ export default function ResourcesPage() {
         ...data,
         name: data.name,
         resourceTypeId: data.resourceTypeId,
-        resourceTypeName: resourceType.name,
+        resourceTypeName: resourceType.name, // Set resourceTypeName
         lab: data.lab,
         status: data.status,
         description: data.description || '',
@@ -168,9 +162,7 @@ export default function ResourcesPage() {
         purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : undefined,
         notes: data.notes || undefined,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-        availability: editingResource.availability, 
-        lastCalibration: editingResource.lastCalibration, 
-        nextCalibration: editingResource.nextCalibration, 
+        availability: editingResource.availability,
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
           ...data.remoteAccess,
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
@@ -186,7 +178,7 @@ export default function ResourcesPage() {
         ...data,
         name: data.name,
         resourceTypeId: data.resourceTypeId,
-        resourceTypeName: resourceType.name,
+        resourceTypeName: resourceType.name, // Set resourceTypeName
         lab: data.lab,
         status: data.status,
         description: data.description || '',
@@ -199,8 +191,6 @@ export default function ResourcesPage() {
         notes: data.notes || undefined,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
         availability: [], 
-        lastCalibration: undefined, 
-        nextCalibration: undefined, 
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
           ...data.remoteAccess,
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
@@ -331,7 +321,6 @@ export default function ResourcesPage() {
       />
 
       {filteredResources.length > 0 ? (
-        <TooltipProvider>
         <div className="overflow-x-auto rounded-lg border shadow-sm">
           <Table>
             <TableHeader>
@@ -385,7 +374,6 @@ export default function ResourcesPage() {
             </TableBody>
           </Table>
         </div>
-        </TooltipProvider>
       ) : (
          <Card className="text-center py-10 text-muted-foreground bg-card rounded-lg border shadow-sm">
           <ClipboardList className="mx-auto h-12 w-12 mb-4" />
