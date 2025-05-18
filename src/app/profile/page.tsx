@@ -1,6 +1,6 @@
 
 import { PageHeader } from '@/components/layout/page-header';
-import { UserCog, Shield, Edit3, KeyRound, Image as ImageIcon, Save, Mail } from 'lucide-react';
+import { UserCog, Shield, Edit3, KeyRound, Image as ImageIcon, Save } from 'lucide-react';
 import type { User } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
