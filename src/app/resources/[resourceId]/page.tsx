@@ -16,15 +16,16 @@ import type { Resource } from '@/types';
 import { format, parseISO, isValid } from 'date-fns';
 
 const getResourceStatusBadge = (status: Resource['status'], className?: string) => {
+    const baseBadgeClass = `inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors ${className || ''}`;
     switch (status) {
       case 'Available':
-        return <Badge variant="default" className={className}><CheckCircle className="mr-2 h-4 w-4" />{status}</Badge>;
+        return <Badge className={`${baseBadgeClass} bg-green-500 text-white border-transparent hover:bg-green-600`}><CheckCircle className="mr-2 h-4 w-4" />{status}</Badge>;
       case 'Booked':
-        return <Badge variant="secondary" className={className}><AlertTriangle className="mr-2 h-4 w-4" />{status}</Badge>;
+        return <Badge className={`${baseBadgeClass} bg-yellow-400 text-yellow-900 border-transparent hover:bg-yellow-500`}><AlertTriangle className="mr-2 h-4 w-4" />{status}</Badge>;
       case 'Maintenance':
-        return <Badge variant="destructive" className={className}><Construction className="mr-2 h-4 w-4" />{status}</Badge>;
+        return <Badge className={`${baseBadgeClass} bg-orange-500 text-white border-transparent hover:bg-orange-600`}><Construction className="mr-2 h-4 w-4" />{status}</Badge>;
       default:
-        return <Badge variant="outline" className={className}>{status}</Badge>;
+        return <Badge variant="outline" className={baseBadgeClass}><AlertTriangle className="mr-2 h-4 w-4" />{status}</Badge>;
     }
 };
 
@@ -139,7 +140,7 @@ export default function ResourceDetailPage() {
               <p className="text-base text-foreground leading-relaxed">{resource.description}</p>
             </CardContent>
           </Card>
-          
+
           {(resource.lastCalibration || resource.nextCalibration) && (
             <Card className="shadow-lg">
               <CardHeader>
@@ -168,18 +169,35 @@ export default function ResourceDetailPage() {
                 <CardContent>
                     <ul className="space-y-2">
                     {resource.availability
-                        .filter(avail => new Date(avail.date) >= new Date(format(new Date(), 'yyyy-MM-dd'))) // Only show today and future
+                        .filter(avail => {
+                            try {
+                                // Ensure date is valid and not in the past
+                                const availDate = parseISO(avail.date);
+                                const today = new Date();
+                                today.setHours(0,0,0,0); // Compare dates only
+                                return isValid(availDate) && availDate >= today;
+                            } catch (e) {
+                                return false; // Invalid date string
+                            }
+                        })
                         .slice(0, 5) // Limit to 5 entries
                         .map((avail, index) => (
                         <li key={index} className="text-sm p-2 border-b last:border-b-0">
-                            <span className="font-medium text-foreground">{format(parseISO(avail.date), 'PPP')}</span>: 
+                            <span className="font-medium text-foreground">{format(parseISO(avail.date), 'PPP')}</span>:
                             <span className="text-muted-foreground ml-2">
                                 {avail.slots.join(', ').length > 50 ? 'Multiple slots available' : avail.slots.join(', ')}
                             </span>
                         </li>
                     ))}
                     </ul>
-                    {resource.availability.filter(avail => new Date(avail.date) >= new Date(format(new Date(), 'yyyy-MM-dd'))).length > 5 && (
+                    {resource.availability.filter(avail => {
+                        try {
+                           const availDate = parseISO(avail.date);
+                           const today = new Date();
+                           today.setHours(0,0,0,0);
+                           return isValid(availDate) && availDate >= today;
+                        } catch(e) { return false; }
+                    }).length > 5 && (
                          <p className="text-xs text-muted-foreground mt-2">More dates available...</p>
                     )}
                 </CardContent>

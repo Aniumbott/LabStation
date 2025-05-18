@@ -45,7 +45,7 @@ const mockResources: Resource[] = [
     features: ['HEPA Filtered', 'UV Sterilization'],
     lastCalibration: '2024-01-15',
     nextCalibration: '2024-07-15',
-    availability: [{ date: 'Tomorrow', slots: ['09:00-11:00'] }], 
+    availability: [{ date: 'Tomorrow', slots: ['09:00-11:00'] }],
   },
   {
     id: '3',
@@ -58,7 +58,7 @@ const mockResources: Resource[] = [
     dataAiHint: 'hplc chemistry',
     features: ['Autosampler', 'UV Detector', 'Diode Array Detector'],
     lastCalibration: '2023-11-10',
-    nextCalibration: 'N/A', 
+    nextCalibration: 'N/A',
   },
 ];
 
@@ -72,15 +72,16 @@ export default function DashboardPage() {
   const availableResources = mockResources.filter(r => r.status === 'Available').slice(0, 2);
 
   const getResourceStatusBadge = (status: Resource['status']) => {
+    const baseBadgeClass = "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors";
     switch (status) {
       case 'Available':
-        return <Badge variant="default"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={`${baseBadgeClass} bg-green-500 text-white border-transparent hover:bg-green-600`}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Booked':
-        return <Badge variant="secondary"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={`${baseBadgeClass} bg-yellow-400 text-yellow-900 border-transparent hover:bg-yellow-500`}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Maintenance':
-        return <Badge variant="destructive"><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={`${baseBadgeClass} bg-orange-500 text-white border-transparent hover:bg-orange-600`}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline" className={baseBadgeClass}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     }
   };
 
@@ -90,13 +91,13 @@ export default function DashboardPage() {
         return 'default';
       case 'Pending':
         return 'secondary';
-      case 'Cancelled': 
+      case 'Cancelled':
         return 'outline';
       default:
         return 'outline';
     }
   };
-  
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -127,11 +128,28 @@ export default function DashboardPage() {
                     <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint} />
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{resource.description}</p>
+                   {resource.features && resource.features.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold mb-1 text-muted-foreground">Features:</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {resource.features.slice(0, 3).map((feature, index) => (
+                          <Badge key={index} variant="secondary" className="text-xs">{feature}</Badge>
+                        ))}
+                        {resource.features.length > 3 && <Badge variant="secondary" className="text-xs">...</Badge>}
+                      </div>
+                    </div>
+                  )}
+                  {(resource.lastCalibration || resource.nextCalibration) && (
+                     <div className="text-xs text-muted-foreground space-y-0.5 pt-1 border-t border-dashed mt-2">
+                        {resource.lastCalibration && resource.lastCalibration !== 'N/A' && <p>Last Calibrated: {format(parseISO(resource.lastCalibration), 'MMM dd, yyyy')}</p>}
+                        {resource.nextCalibration && resource.nextCalibration !== 'N/A' && <p>Next Due: {format(parseISO(resource.nextCalibration), 'MMM dd, yyyy')}</p>}
+                    </div>
+                  )}
                 </CardContent>
                 <CardFooter>
                   <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
                     <Link href={`/bookings?resourceId=${resource.id}`}>
-                      <CalendarPlus className="mr-2 h-4 w-4" /> 
+                      <CalendarPlus className="mr-2 h-4 w-4" />
                        {resource.status === 'Available' ? 'Book Now' : resource.status}
                     </Link>
                   </Button>
@@ -144,7 +162,7 @@ export default function DashboardPage() {
             <p className="text-muted-foreground">No resources immediately available. Try the full <Link href="/resources" className="text-primary hover:underline">Resource Search</Link>.</p>
           </Card>
         )}
-        {mockResources.length > 2 && availableResources.length > 0 && ( 
+        {mockResources.length > 2 && availableResources.length > 0 && (
             <div className="mt-4 text-right">
                 <Button variant="outline" asChild>
                     <Link href="/resources">View All Resources <ChevronRight className="ml-2 h-4 w-4" /></Link>
