@@ -3,9 +3,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { CheckSquare, ThumbsUp, ThumbsDown, Filter as FilterIcon, FilterX, Search as SearchIcon, CalendarDays, ListFilter } from 'lucide-react';
+import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter } from 'lucide-react';
 import type { Booking } from '@/types';
-import { initialBookings, allAdminMockResources, mockCurrentUser } from '@/lib/mock-data'; // Use global mock data
+import { initialBookings, allAdminMockResources } from '@/lib/mock-data';
 import {
   Table,
   TableBody,
@@ -37,7 +37,6 @@ import { Separator } from '@/components/ui/separator';
 
 export default function BookingApprovalsPage() {
   const { toast } = useToast();
-  // Manage the global initialBookings array statefully for this page
   const [allBookings, setAllBookings] = useState<Booking[]>(() => JSON.parse(JSON.stringify(initialBookings)));
 
   // Active filters for the page
@@ -50,11 +49,10 @@ export default function BookingApprovalsPage() {
   const [tempFilterResourceId, setTempFilterResourceId] = useState<string>(activeFilterResourceId);
 
   useEffect(() => {
-    // If the global initialBookings array changes (e.g., by another part of the app if it were truly global state),
-    // update this page's view. For now, this mainly helps if we were to add polling or websockets.
-    // For our mock scenario, it ensures the list is fresh if 'initialBookings' is manipulated directly for testing.
+    // For this mock setup, re-filter if initialBookings (the global array) were to somehow change.
+    // In a real app, this might involve re-fetching or subscribing to updates.
     setAllBookings(JSON.parse(JSON.stringify(initialBookings)));
-  }, []); // Re-check initialBookings only on mount for this mock setup
+  }, []); 
 
   const pendingBookings = useMemo(() => {
     let filtered = allBookings.filter(b => b.status === 'Pending');
@@ -83,7 +81,6 @@ export default function BookingApprovalsPage() {
       updatedBookings[bookingIndex].status = 'Confirmed';
       setAllBookings(updatedBookings);
 
-      // Also update the "global" mock initialBookings array
       const globalBookingIndex = initialBookings.findIndex(b => b.id === bookingId);
       if (globalBookingIndex !== -1) {
         initialBookings[globalBookingIndex].status = 'Confirmed';
@@ -99,7 +96,7 @@ export default function BookingApprovalsPage() {
     const bookingIndex = allBookings.findIndex(b => b.id === bookingId);
     if (bookingIndex !== -1) {
       const updatedBookings = [...allBookings];
-      updatedBookings[bookingIndex].status = 'Cancelled'; // Or 'Rejected'
+      updatedBookings[bookingIndex].status = 'Cancelled'; 
       setAllBookings(updatedBookings);
 
       const globalBookingIndex = initialBookings.findIndex(b => b.id === bookingId);
@@ -128,8 +125,8 @@ export default function BookingApprovalsPage() {
   const resetAllActiveFilters = () => {
     setActiveSearchTerm('');
     setActiveFilterResourceId('all');
-    resetDialogFilters();
-    setIsFilterDialogOpen(false);
+    resetDialogFilters(); // Also reset temp values in dialog
+    setIsFilterDialogOpen(false); // Close dialog if open
   };
 
   const activeFilterCount = [
@@ -233,10 +230,10 @@ export default function BookingApprovalsPage() {
                       <TableCell className="font-medium">{booking.resourceName}</TableCell>
                       <TableCell>{booking.userName}</TableCell>
                       <TableCell>
-                        <div>{isValid(new Date(booking.startTime)) ? format(new Date(booking.startTime), 'MMM dd, yyyy') : 'Invalid Date'}</div>
+                        <div>{isValid(parseISO(booking.startTime.toString())) ? format(parseISO(booking.startTime.toString()), 'MMM dd, yyyy') : 'Invalid Date'}</div>
                         <div className="text-xs text-muted-foreground">
-                            {isValid(new Date(booking.startTime)) ? format(new Date(booking.startTime), 'p') : ''} - 
-                            {isValid(new Date(booking.endTime)) ? format(new Date(booking.endTime), 'p') : ''}
+                            {isValid(parseISO(booking.startTime.toString())) ? format(parseISO(booking.startTime.toString()), 'p') : ''} - 
+                            {isValid(parseISO(booking.endTime.toString())) ? format(parseISO(booking.endTime.toString()), 'p') : ''}
                         </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{booking.notes || 'N/A'}</TableCell>
