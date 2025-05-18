@@ -307,10 +307,12 @@ export default function ResourceDetailPage() {
             <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                   <Button variant="destructive" size="icon" onClick={() => setIsAlertOpen(true)}>
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Delete Resource</span>
-                  </Button>
+                   <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="icon">
+                          <Trash2 className="h-4 w-4" />
+                          <span className="sr-only">Delete Resource</span>
+                      </Button>
+                    </AlertDialogTrigger>
                 </TooltipTrigger>
                 <TooltipContent><p>Delete Resource</p></TooltipContent>
               </Tooltip>
@@ -341,7 +343,7 @@ export default function ResourceDetailPage() {
             <Card className="shadow-lg">
                 <CardContent className="p-0">
                     <div className="relative w-full h-64 md:h-80 rounded-t-lg overflow-hidden">
-                        <Image src={resource.imageUrl || 'https://placehold.co/300x200.png'} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint || 'lab equipment'} />
+                        <Image src={resource.imageUrl || 'https://placehold.co/300x200.png'} alt={resource.name} layout="fill" objectFit="cover" />
                     </div>
                 </CardContent>
             </Card>

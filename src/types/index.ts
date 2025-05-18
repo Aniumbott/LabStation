@@ -25,7 +25,6 @@ export interface Resource {
   status: ResourceStatus;
   description: string;
   imageUrl: string;
-  dataAiHint?: string;
   features?: string[];
   availability?: { date: string; slots: string[] }[];
   manufacturer?: string;
@@ -56,5 +55,4 @@ export interface User {
   email: string;
   role: RoleName;
   avatarUrl?: string;
-  avatarDataAiHint?: string;
 }

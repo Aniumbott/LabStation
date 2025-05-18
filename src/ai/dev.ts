@@ -1,7 +1,7 @@
 
-import { config } from 'dotenv';
-config();
+// import { config } from 'dotenv';
+// config();
 
-// import '@/ai/flows/calibration-schedule.ts'; // Removed: Calibration schedule flow is no longer used.
-
+// AI flows and related initializations have been removed.
+// This file is effectively empty.
     

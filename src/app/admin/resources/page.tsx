@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarDays, CalendarPlus, Search as SearchIcon } from 'lucide-react';
+import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarDays, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon } from 'lucide-react';
 import type { Resource, ResourceStatus } from '@/types';
 import { allAdminMockResources, initialMockResourceTypes, labsList } from '@/lib/mock-data';
 import {
@@ -155,7 +155,6 @@ export default function ResourcesPage() {
         status: data.status,
         description: data.description || '',
         imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
-        dataAiHint: data.dataAiHint || 'lab equipment',
         manufacturer: data.manufacturer || undefined,
         model: data.model || undefined,
         serialNumber: data.serialNumber || undefined,
@@ -183,7 +182,6 @@ export default function ResourcesPage() {
         status: data.status,
         description: data.description || '',
         imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
-        dataAiHint: data.dataAiHint || 'lab equipment',
         manufacturer: data.manufacturer || undefined,
         model: data.model || undefined,
         serialNumber: data.serialNumber || undefined,
@@ -343,7 +341,6 @@ export default function ResourcesPage() {
                           alt={resource.name}
                           width={40} height={40}
                           className="rounded-md object-cover h-10 w-10 hover:opacity-80 transition-opacity"
-                          data-ai-hint={resource.dataAiHint || 'lab equipment'}
                       />
                     </Link>
                   </TableCell>

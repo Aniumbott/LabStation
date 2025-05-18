@@ -39,7 +39,6 @@ export const allAdminMockResources: Resource[] = [
     purchaseDate: '2022-08-15T00:00:00.000Z',
     description: 'Mixed Signal Oscilloscope with 500 MHz bandwidth, 4 analog channels, and 16 digital channels. Includes built-in waveform generator and serial protocol analysis capabilities. Ideal for debugging embedded systems and mixed-signal designs.',
     imageUrl: 'https://placehold.co/300x200.png',
-    dataAiHint: 'oscilloscope electronics',
     features: ['500 MHz Bandwidth', '4 Analog Channels', '16 Digital Channels', 'WaveGen', 'Serial Decode'],
     availability: [
       { date: todayStr, slots: ['14:00-16:00', '16:00-18:00'] },
@@ -65,7 +64,6 @@ export const allAdminMockResources: Resource[] = [
     purchaseDate: '2023-01-20T00:00:00.000Z',
     description: 'Triple output programmable DC power supply. CH1: 0-30V/0-3A, CH2: 0-30V/0-3A, CH3: 0-5V/0-3A. High resolution and remote sense capabilities.',
     imageUrl: 'https://placehold.co/300x200.png',
-    dataAiHint: 'power supply lab',
     features: ['3 Channels', 'Programmable', 'Overvoltage Protection', 'LAN Interface'],
     availability: [
       { date: tomorrowStr, slots: ['09:00-11:00', '11:00-13:00'] },
@@ -86,7 +84,6 @@ export const allAdminMockResources: Resource[] = [
     purchaseDate: '2021-05-10T00:00:00.000Z',
     description: 'Dual-channel Arbitrary Waveform Generator, 40 MHz bandwidth, 1.2 GSa/s sampling rate. Generates sine, square, ramp, pulse, noise, and arbitrary waveforms.',
     imageUrl: 'https://placehold.co/300x200.png',
-    dataAiHint: 'function generator electronics',
     features: ['40 MHz Bandwidth', 'Dual Channel', 'Arbitrary Waveforms', 'IQ Modulation'],
     availability: [],
     notes: 'Output amplifier stage under repair. Expected back online next week.'
@@ -104,7 +101,6 @@ export const allAdminMockResources: Resource[] = [
     purchaseDate: '2023-06-05T00:00:00.000Z',
     description: 'Spectrum analyzer with frequency range from 5 kHz to 1 GHz (upgradable to 3 GHz). Includes tracking generator and internal VSWR bridge.',
     imageUrl: 'https://placehold.co/300x200.png',
-    dataAiHint: 'spectrum analyzer rf',
     features: ['1 GHz Base Frequency', 'Tracking Generator', 'One-Port Vector Network Analyzer'],
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },
@@ -124,7 +120,6 @@ export const allAdminMockResources: Resource[] = [
     purchaseDate: '2022-11-01T00:00:00.000Z',
     description: '70W digital soldering station with temperature control and standby mode. Suitable for general purpose and fine pitch soldering work.',
     imageUrl: 'https://placehold.co/300x200.png',
-    dataAiHint: 'soldering station circuit',
     features: ['70 Watt Power', 'Digital Temperature Control', 'ESD Safe', 'Interchangeable Tips'],
     availability: [
         { date: todayStr, slots: ['10:00-17:00'] },
@@ -145,7 +140,6 @@ export const allAdminMockResources: Resource[] = [
     purchaseDate: '2023-03-10T00:00:00.000Z',
     description: 'True-RMS industrial digital multimeter for accurate measurements on non-linear signals. Measures AC/DC voltage and current, resistance, capacitance, frequency.',
     imageUrl: 'https://placehold.co/300x200.png',
-    dataAiHint: 'multimeter electronics',
     features: ['True-RMS AC Voltage/Current', 'Temperature Measurement (with probe)', 'CAT III 1000V, CAT IV 600V Safety Rating'],
     availability: [
       { date: dayAfterTomorrowStr, slots: ['Full Day Booked'] }
@@ -165,7 +159,6 @@ export const allAdminMockResources: Resource[] = [
     purchaseDate: '2023-09-01T00:00:00.000Z',
     description: 'High-performance FPGA development node for hardware acceleration and prototyping complex digital systems.',
     imageUrl: 'https://placehold.co/300x200.png',
-    dataAiHint: 'fpga circuit board',
     features: ['High-Speed Transceivers', 'Large Logic Capacity', 'PCIe Gen3 x16'],
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },

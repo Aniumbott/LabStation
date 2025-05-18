@@ -73,7 +73,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="flex-grow space-y-3">
                   <div className="relative w-full h-40 rounded-md overflow-hidden mb-2">
-                    <Image src={resource.imageUrl || 'https://placehold.co/300x200.png'} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint || 'lab equipment'} />
+                    <Image src={resource.imageUrl || 'https://placehold.co/300x200.png'} alt={resource.name} layout="fill" objectFit="cover" />
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{resource.description}</p>
                    {resource.features && resource.features.length > 0 && (
@@ -176,4 +176,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

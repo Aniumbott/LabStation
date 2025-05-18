@@ -36,7 +36,6 @@ const resourceFormSchema = z.object({
   status: z.enum(resourceStatusesList as [string, ...string[]], { required_error: 'Please select a status.'}),
   description: z.string().max(500, { message: 'Description cannot exceed 500 characters.' }).optional().or(z.literal('')),
   imageUrl: z.string().url({ message: 'Please enter a valid URL.' }).optional().or(z.literal('')),
-  dataAiHint: z.string().max(50, {message: 'AI hint cannot exceed 50 characters.'}).optional().or(z.literal('')),
   manufacturer: z.string().max(100).optional().or(z.literal('')),
   model: z.string().max(100).optional().or(z.literal('')),
   serialNumber: z.string().max(100).optional().or(z.literal('')),
@@ -78,7 +77,6 @@ export function ResourceFormDialog({
       status: 'Available',
       description: '',
       imageUrl: '',
-      dataAiHint: '',
       manufacturer: '',
       model: '',
       serialNumber: '',
@@ -106,7 +104,6 @@ export function ResourceFormDialog({
           status: initialResource.status,
           description: initialResource.description || '',
           imageUrl: initialResource.imageUrl || '',
-          dataAiHint: initialResource.dataAiHint || '',
           manufacturer: initialResource.manufacturer || '',
           model: initialResource.model || '',
           serialNumber: initialResource.serialNumber || '',
@@ -130,7 +127,6 @@ export function ResourceFormDialog({
           status: 'Available',
           description: '',
           imageUrl: 'https://placehold.co/300x200.png',
-          dataAiHint: 'lab equipment',
           manufacturer: '',
           model: '',
           serialNumber: '',
@@ -252,18 +248,6 @@ export function ResourceFormDialog({
                             <FormItem>
                             <FormLabel>Image URL</FormLabel>
                             <FormControl><Input type="url" placeholder="https://placehold.co/300x200.png" {...field} /></FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="dataAiHint"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Image AI Hint (Optional)</FormLabel>
-                            <FormControl><Input placeholder="e.g., microscope electronics" {...field} /></FormControl>
-                            <FormDescription>Keywords for AI image search (max 2 words).</FormDescription>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -468,5 +452,3 @@ export function ResourceFormDialog({
     </Dialog>
   );
 }
-
-    
