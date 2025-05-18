@@ -22,7 +22,7 @@ import type { ResourceType } from '@/types';
 
 const resourceTypeFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(50, { message: 'Name cannot exceed 50 characters.' }),
-  description: z.string().max(200, { message: 'Description cannot exceed 200 characters.' }).optional(),
+  description: z.string().max(200, { message: 'Description cannot exceed 200 characters.' }).optional().or(z.literal('')),
 });
 
 export type ResourceTypeFormValues = z.infer<typeof resourceTypeFormSchema>;
@@ -57,7 +57,7 @@ export function ResourceTypeFormDialog({ open, onOpenChange, initialType, onSave
         });
       }
     }
-  }, [open, initialType, form]);
+  }, [open, initialType, form.reset]);
 
   function onSubmit(data: ResourceTypeFormValues) {
     onSave(data);
@@ -94,7 +94,7 @@ export function ResourceTypeFormDialog({ open, onOpenChange, initialType, onSave
                 <FormItem>
                   <FormLabel>Description (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="A brief description of this resource category..." {...field} />
+                    <Textarea placeholder="A brief description of this resource category..." {...field} value={field.value || ''}/>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

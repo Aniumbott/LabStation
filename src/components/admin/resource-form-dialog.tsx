@@ -23,11 +23,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Save, X, PlusCircle, Network } from 'lucide-react';
 import type { Resource, ResourceStatus } from '@/types';
 import { initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data';
-import { parseISO, format, isValid } from 'date-fns';
+import { parseISO, format, isValid as isValidDate } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
 
 const VALID_REMOTE_PROTOCOLS = ['RDP', 'SSH', 'VNC', 'Other'] as const;
-const NONE_PROTOCOL_VALUE = "--none-protocol--"; // Special value for "None" option
+const NONE_PROTOCOL_VALUE = "--none-protocol--"; 
 
 const resourceFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, { message: 'Name cannot exceed 100 characters.' }),
@@ -42,7 +42,7 @@ const resourceFormSchema = z.object({
   purchaseDate: z.string().optional().refine((val) => {
     if (!val || val === '') return true;
     const date = parseISO(val);
-    return isValid(date);
+    return isValidDate(date);
   }, { message: "Invalid date format for purchase date." }).or(z.literal('')),
   notes: z.string().max(500).optional().or(z.literal('')),
   features: z.string().max(200, {message: "Features list cannot exceed 200 characters."}).optional().or(z.literal('')),
@@ -107,7 +107,7 @@ export function ResourceFormDialog({
           manufacturer: initialResource.manufacturer || '',
           model: initialResource.model || '',
           serialNumber: initialResource.serialNumber || '',
-          purchaseDate: initialResource.purchaseDate && isValid(parseISO(initialResource.purchaseDate)) ? format(parseISO(initialResource.purchaseDate), 'yyyy-MM-dd') : '',
+          purchaseDate: initialResource.purchaseDate && isValidDate(parseISO(initialResource.purchaseDate)) ? format(parseISO(initialResource.purchaseDate), 'yyyy-MM-dd') : '',
           notes: initialResource.notes || '',
           features: initialResource.features?.join(', ') || '',
           remoteAccess: {
@@ -144,7 +144,7 @@ export function ResourceFormDialog({
         });
       }
     }
-  }, [open, initialResource, form]);
+  }, [open, initialResource, form.reset]);
 
   function onSubmit(data: ResourceFormValues) {
     const dataToSave: ResourceFormValues = {
@@ -295,7 +295,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Purchase Date (Optional)</FormLabel>
-                            <FormControl><Input type="date" {...field} /></FormControl>
+                            <FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -354,7 +354,7 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>IP Address</FormLabel>
-                                    <FormControl><Input placeholder="e.g., 192.168.1.100" {...field} /></FormControl>
+                                    <FormControl><Input placeholder="e.g., 192.168.1.100" {...field} value={field.value || ''} /></FormControl>
                                     <FormMessage />
                                     </FormItem>
                                 )}
@@ -365,7 +365,7 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Hostname</FormLabel>
-                                    <FormControl><Input placeholder="e.g., server.lab.example.com" {...field} /></FormControl>
+                                    <FormControl><Input placeholder="e.g., server.lab.example.com" {...field} value={field.value || ''} /></FormControl>
                                     <FormMessage />
                                     </FormItem>
                                 )}
@@ -411,7 +411,7 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Username</FormLabel>
-                                    <FormControl><Input placeholder="e.g., labuser" {...field} /></FormControl>
+                                    <FormControl><Input placeholder="e.g., labuser" {...field}  value={field.value || ''}/></FormControl>
                                     <FormMessage />
                                     </FormItem>
                                 )}
@@ -423,7 +423,7 @@ export function ResourceFormDialog({
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Connection Notes</FormLabel>
-                                <FormControl><Textarea placeholder="e.g., VPN required, specific client versions, credential location..." {...field} rows={2} /></FormControl>
+                                <FormControl><Textarea placeholder="e.g., VPN required, specific client versions, credential location..." {...field} value={field.value || ''} rows={2} /></FormControl>
                                 <FormMessage />
                                 </FormItem>
                             )}

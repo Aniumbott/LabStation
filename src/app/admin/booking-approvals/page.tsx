@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid as isValidDate } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -76,7 +76,12 @@ export default function BookingApprovalsPage() {
       filtered = filtered.filter(b => b.resourceId === activeFilterResourceId);
     }
 
-    return filtered.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    return filtered.sort((a, b) => {
+        const dateA = typeof a.startTime === 'string' ? parseISO(a.startTime) : a.startTime;
+        const dateB = typeof b.startTime === 'string' ? parseISO(b.startTime) : b.startTime;
+        if (!isValidDate(dateA) || !isValidDate(dateB)) return 0;
+        return dateA.getTime() - dateB.getTime();
+    });
   }, [allBookings, activeSearchTerm, activeFilterResourceId]);
 
 
@@ -139,6 +144,16 @@ export default function BookingApprovalsPage() {
     activeSearchTerm !== '',
     activeFilterResourceId !== 'all',
   ].filter(Boolean).length;
+
+  const formatDateField = (dateInput: string | Date): string => {
+    const date = typeof dateInput === 'string' ? parseISO(dateInput) : dateInput;
+    return isValidDate(date) ? format(date, 'MMM dd, yyyy') : 'Invalid Date';
+  };
+
+  const formatTimeField = (dateInput: string | Date): string => {
+    const date = typeof dateInput === 'string' ? parseISO(dateInput) : dateInput;
+    return isValidDate(date) ? format(date, 'p') : '';
+  };
 
   return (
     <TooltipProvider>
@@ -237,10 +252,9 @@ export default function BookingApprovalsPage() {
                         <TableCell className="font-medium">{booking.resourceName}</TableCell>
                         <TableCell>{booking.userName}</TableCell>
                         <TableCell>
-                          <div>{isValid(parseISO(booking.startTime.toString())) ? format(parseISO(booking.startTime.toString()), 'MMM dd, yyyy') : 'Invalid Date'}</div>
+                          <div>{formatDateField(booking.startTime)}</div>
                           <div className="text-xs text-muted-foreground">
-                              {isValid(parseISO(booking.startTime.toString())) ? format(parseISO(booking.startTime.toString()), 'p') : ''} - 
-                              {isValid(parseISO(booking.endTime.toString())) ? format(parseISO(booking.endTime.toString()), 'p') : ''}
+                              {formatTimeField(booking.startTime)} - {formatTimeField(booking.endTime)}
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{booking.notes || 'N/A'}</TableCell>

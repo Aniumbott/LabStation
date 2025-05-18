@@ -22,12 +22,22 @@ import { Save, X, PlusCircle } from 'lucide-react';
 import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource } from '@/types';
 import { maintenanceRequestStatuses } from '@/lib/mock-data';
 
+const UNASSIGNED_TECHNICIAN_VALUE = "--unassigned--";
+
 const maintenanceRequestFormSchema = z.object({
   resourceId: z.string().min(1, { message: 'Please select a resource.' }),
   issueDescription: z.string().min(10, { message: 'Issue description must be at least 10 characters.' }).max(1000, { message: 'Description cannot exceed 1000 characters.' }),
   status: z.enum(maintenanceRequestStatuses as [string, ...string[]], { required_error: 'Please select a status.'}),
-  assignedTechnicianId: z.string().optional().or(z.literal('')), // Allow empty string or undefined
-  resolutionNotes: z.string().max(1000).optional(),
+  assignedTechnicianId: z.string().optional().or(z.literal('')), 
+  resolutionNotes: z.string().max(1000).optional().or(z.literal('')),
+}).refine(data => {
+  if ((data.status === 'Resolved' || data.status === 'Closed') && (!data.resolutionNotes || data.resolutionNotes.trim() === '')) {
+    return false;
+  }
+  return true;
+}, {
+  message: 'Resolution notes are required when status is Resolved or Closed.',
+  path: ['resolutionNotes'], // Path to the field to which the error will be attached
 });
 
 export type MaintenanceRequestFormValues = z.infer<typeof maintenanceRequestFormSchema>;
@@ -41,7 +51,6 @@ interface MaintenanceRequestFormDialogProps {
   resources: Resource[];
 }
 
-const UNASSIGNED_TECHNICIAN_VALUE = "--unassigned--";
 
 export function MaintenanceRequestFormDialog({
     open, onOpenChange, initialRequest, onSave, technicians, resources
@@ -79,8 +88,7 @@ export function MaintenanceRequestFormDialog({
         });
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialRequest, resources]); // form.reset should not be a dependency here
+  }, [open, initialRequest, resources, form.reset]); 
 
   function onSubmit(data: MaintenanceRequestFormValues) {
     const dataToSave = {
@@ -164,7 +172,7 @@ export function MaintenanceRequestFormDialog({
                             <FormLabel>Assign Technician (Optional)</FormLabel>
                             <Select 
                                 onValueChange={(value) => field.onChange(value === UNASSIGNED_TECHNICIAN_VALUE ? '' : value)} 
-                                value={field.value || ''}
+                                value={field.value || UNASSIGNED_TECHNICIAN_VALUE}
                             >
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select a technician" /></SelectTrigger></FormControl>
                                 <SelectContent>
@@ -186,7 +194,7 @@ export function MaintenanceRequestFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Resolution Notes {watchStatus === 'Resolved' || watchStatus === 'Closed' ? <span className="text-destructive">*</span> : ''}</FormLabel>
-                            <FormControl><Textarea placeholder="Describe the resolution steps taken..." {...field} rows={4} /></FormControl>
+                            <FormControl><Textarea placeholder="Describe the resolution steps taken..." {...field} value={field.value || ''} rows={4} /></FormControl>
                              <FormDescription>Required if status is Resolved or Closed.</FormDescription>
                             <FormMessage />
                             </FormItem>

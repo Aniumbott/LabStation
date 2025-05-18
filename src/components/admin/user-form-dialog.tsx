@@ -34,7 +34,7 @@ export type UserFormValues = z.infer<typeof userFormSchema>;
 interface UserFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initialUser: User | null; // Null for new user, User object for editing
+  initialUser: User | null; 
   onSave: (data: UserFormValues) => void;
 }
 
@@ -64,7 +64,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
         });
       }
     }
-  }, [open, initialUser, form]);
+  }, [open, initialUser, form.reset]);
 
   function onSubmit(data: UserFormValues) {
     onSave(data);
@@ -113,7 +113,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Role</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a role" />
@@ -148,5 +148,3 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
     </Dialog>
   );
 }
-
-    
