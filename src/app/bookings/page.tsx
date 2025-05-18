@@ -81,8 +81,8 @@ function BookingsPageContent() {
 
   const [allUserBookings, setAllUserBookings] = useState<Booking[]>(() => initialBookings.filter(b => b.userId === mockCurrentUser.id));
   
-  // Active Date Filter
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => {
+  // Active Filters
+  const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(() => {
     const dateParam = searchParams.get('date');
     if (dateParam) {
       const parsedDate = parseISO(dateParam);
@@ -90,23 +90,22 @@ function BookingsPageContent() {
     }
     return undefined; 
   });
+  const [activeSearchTerm, setActiveSearchTerm] = useState('');
+  const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
+  const [activeFilterStatus, setActiveFilterStatus] = useState<BookingStatusFilter>('all');
   
-  const [currentMonth, setCurrentMonth] = useState<Date>(selectedDate || startOfDay(new Date()));
-  const [isClient, setIsClient] = useState(false);
+  // Dialog State & Temporary Filters
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentBooking, setCurrentBooking] = useState<Partial<Booking> & { resourceId?: string } | null>(null);
-
-  // Active Popover Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterResourceId, setFilterResourceId] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<BookingStatusFilter>('all');
-
-  // Temporary Popover Filters
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterResourceId, setTempFilterResourceId] = useState<string>('all');
   const [tempFilterStatus, setTempFilterStatus] = useState<BookingStatusFilter>('all');
-  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+  const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(activeSelectedDate);
+  const [currentCalendarMonth, setCurrentCalendarMonth] = useState<Date>(activeSelectedDate || startOfDay(new Date()));
 
+
+  const [isClient, setIsClient] = useState(false);
   const [selectedBookingForDetails, setSelectedBookingForDetails] = useState<Booking | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   
@@ -116,15 +115,16 @@ function BookingsPageContent() {
     const dateParam = searchParams.get('date');
     const bookingIdParam = searchParams.get('bookingId');
 
-    let dateToSet = selectedDate;
+    let dateToSet = activeSelectedDate;
     if (dateParam) {
       const parsedQueryDate = parseISO(dateParam);
       if (isValidDate(parsedQueryDate)) dateToSet = startOfDay(parsedQueryDate);
     }
     
-     if (dateToSet && (!selectedDate || selectedDate.getTime() !== dateToSet.getTime())) {
-        setSelectedDate(dateToSet);
-        setCurrentMonth(dateToSet);
+     if (dateToSet && (!activeSelectedDate || activeSelectedDate.getTime() !== dateToSet.getTime())) {
+        setActiveSelectedDate(dateToSet);
+        setTempSelectedDate(dateToSet); // Sync temp state
+        setCurrentCalendarMonth(dateToSet);
     }
 
     if (bookingIdParam) {
@@ -142,78 +142,80 @@ function BookingsPageContent() {
 
   useEffect(() => {
     if (isFilterDialogOpen) {
-      setTempSearchTerm(searchTerm);
-      setTempFilterResourceId(filterResourceId);
-      setTempFilterStatus(filterStatus);
+      setTempSearchTerm(activeSearchTerm);
+      setTempFilterResourceId(activeFilterResourceId);
+      setTempFilterStatus(activeFilterStatus);
+      setTempSelectedDate(activeSelectedDate);
+      if (activeSelectedDate) setCurrentCalendarMonth(activeSelectedDate); else setCurrentCalendarMonth(startOfDay(new Date()));
     }
-  }, [isFilterDialogOpen, searchTerm, filterResourceId, filterStatus]);
+  }, [isFilterDialogOpen, activeSearchTerm, activeFilterResourceId, activeFilterStatus, activeSelectedDate]);
 
 
   const bookingsToDisplay = useMemo(() => {
     let filtered = [...allUserBookings];
 
-    if (selectedDate) {
-      filtered = filtered.filter(b => isSameDay(b.startTime, selectedDate));
+    if (activeSelectedDate) {
+      filtered = filtered.filter(b => isSameDay(b.startTime, activeSelectedDate));
     }
 
-    if (searchTerm && searchTerm !== '') {
-      const lowerSearchTerm = searchTerm.toLowerCase();
+    if (activeSearchTerm && activeSearchTerm !== '') {
+      const lowerSearchTerm = activeSearchTerm.toLowerCase();
       filtered = filtered.filter(b => 
         b.resourceName.toLowerCase().includes(lowerSearchTerm) ||
         (b.notes && b.notes.toLowerCase().includes(lowerSearchTerm))
       );
     }
 
-    if (filterResourceId && filterResourceId !== 'all') {
-      filtered = filtered.filter(b => b.resourceId === filterResourceId);
+    if (activeFilterResourceId && activeFilterResourceId !== 'all') {
+      filtered = filtered.filter(b => b.resourceId === activeFilterResourceId);
     }
 
-    if (filterStatus && filterStatus !== 'all') {
-      filtered = filtered.filter(b => b.status === filterStatus);
+    if (activeFilterStatus && activeFilterStatus !== 'all') {
+      filtered = filtered.filter(b => b.status === activeFilterStatus);
     }
     
     return filtered.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()); 
-  }, [allUserBookings, selectedDate, searchTerm, filterResourceId, filterStatus]);
+  }, [allUserBookings, activeSelectedDate, activeSearchTerm, activeFilterResourceId, activeFilterStatus]);
 
 
-  const bookedDatesInMonth = useMemo(() => {
+  const bookedDatesInCurrentMonth = useMemo(() => {
     const dates = new Set<string>();
     allUserBookings.forEach(booking => {
       if (booking.status !== 'Cancelled' && 
-          new Date(booking.startTime).getFullYear() === currentMonth.getFullYear() &&
-          new Date(booking.startTime).getMonth() === currentMonth.getMonth()) {
+          new Date(booking.startTime).getFullYear() === currentCalendarMonth.getFullYear() &&
+          new Date(booking.startTime).getMonth() === currentCalendarMonth.getMonth()) {
         dates.add(format(startOfDay(new Date(booking.startTime)), 'yyyy-MM-dd'));
       }
     });
     return dates;
-  }, [allUserBookings, currentMonth]);
+  }, [allUserBookings, currentCalendarMonth]);
 
   const calendarModifiers = {
-    booked: (date: Date) => bookedDatesInMonth.has(format(date, 'yyyy-MM-dd')),
-    selected: selectedDate ? (date: Date) => isSameDay(date, selectedDate) : undefined,
+    booked: (date: Date) => bookedDatesInCurrentMonth.has(format(date, 'yyyy-MM-dd')),
+    selected: tempSelectedDate ? (date: Date) => isSameDay(date, tempSelectedDate) : undefined,
   };
   
   const calendarModifierStyles = { booked: { position: 'relative' as React.CSSProperties['position'], } };
   
-  const handleDateSelect = (date?: Date) => {
+  const handleDateSelectForURL = (date?: Date) => {
     const newSearchParams = new URLSearchParams(searchParams.toString());
     if (date) {
         const newSelectedDate = startOfDay(date);
-        setSelectedDate(newSelectedDate);
-        setCurrentMonth(newSelectedDate); 
+        setActiveSelectedDate(newSelectedDate);
+        setCurrentCalendarMonth(newSelectedDate); 
         newSearchParams.set('date', format(newSelectedDate, 'yyyy-MM-dd'));
         if (newSearchParams.has('bookingId')) newSearchParams.delete('bookingId'); 
         if (newSearchParams.has('resourceId') && isFormOpen) { /* keep resourceId */ }
         else if (newSearchParams.has('resourceId')) newSearchParams.delete('resourceId');
     } else {
-        setSelectedDate(undefined);
+        setActiveSelectedDate(undefined);
         newSearchParams.delete('date');
     }
     router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
   };
   
   const handleOpenForm = (bookingToEdit?: Booking, resourceIdForNew?: string | null) => {
-    const baseDateForNewBooking = selectedDate || startOfDay(new Date());
+    const baseDateForNewBooking = activeSelectedDate || startOfDay(new Date());
     const defaultStartTime = set(new Date(baseDateForNewBooking), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 });
 
     let bookingData: Partial<Booking> & { resourceId?: string };
@@ -286,20 +288,37 @@ function BookingsPageContent() {
   };
 
   const handleApplyDialogFilters = () => {
-    setSearchTerm(tempSearchTerm);
-    setFilterResourceId(tempFilterResourceId);
-    setFilterStatus(tempFilterStatus);
+    setActiveSearchTerm(tempSearchTerm);
+    setActiveFilterResourceId(tempFilterResourceId);
+    setActiveFilterStatus(tempFilterStatus);
+    
+    const newSearchParams = new URLSearchParams(searchParams.toString());
+    if (tempSelectedDate) {
+        setActiveSelectedDate(startOfDay(tempSelectedDate));
+        newSearchParams.set('date', format(startOfDay(tempSelectedDate), 'yyyy-MM-dd'));
+    } else {
+        setActiveSelectedDate(undefined);
+        newSearchParams.delete('date');
+    }
+    router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
     setIsFilterDialogOpen(false);
   };
 
-  const resetAllFilters = () => {
-    setSearchTerm('');
-    setFilterResourceId('all');
-    setFilterStatus('all');
+  const resetAllActiveFilters = () => {
+    setActiveSearchTerm('');
+    setActiveFilterResourceId('all');
+    setActiveFilterStatus('all');
+    setActiveSelectedDate(undefined);
+    
     setTempSearchTerm('');
     setTempFilterResourceId('all');
     setTempFilterStatus('all');
-    handleDateSelect(undefined); // Also clear date filter
+    setTempSelectedDate(undefined);
+    setCurrentCalendarMonth(startOfDay(new Date()));
+
+    const newSearchParams = new URLSearchParams(searchParams.toString());
+    newSearchParams.delete('date');
+    router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
   };
   
   if (!isClient) {
@@ -307,9 +326,10 @@ function BookingsPageContent() {
   }
 
   const activeFilterCount = [
-    searchTerm !== '',
-    filterResourceId !== 'all',
-    filterStatus !== 'all',
+    activeSearchTerm !== '',
+    activeFilterResourceId !== 'all',
+    activeFilterStatus !== 'all',
+    activeSelectedDate !== undefined,
   ].filter(Boolean).length;
 
   return (
@@ -319,189 +339,183 @@ function BookingsPageContent() {
         description="View, search, filter, and manage your lab resource bookings."
         icon={CalendarDays}
         actions={
-          <Button onClick={() => handleOpenForm()}><PlusCircle className="mr-2 h-4 w-4" /> New Booking</Button>
+          <div className="flex items-center gap-2">
+            <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline">
+                <FilterIcon className="mr-2 h-4 w-4" />
+                Filters
+                {activeFilterCount > 0 && (
+                    <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
+                    {activeFilterCount}
+                    </Badge>
+                )}
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Filter Your Bookings</DialogTitle>
+                <DialogDescription>
+                  Refine your list of bookings by date, resource, status, or keywords.
+                </DialogDescription>
+              </DialogHeader>
+                <Separator className="my-4" />
+                <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2">
+                    <div>
+                        <Label htmlFor="bookingSearchDialog" className="text-sm font-medium mb-1 block">Search by Keyword</Label>
+                        <Input 
+                            id="bookingSearchDialog"
+                            type="search" 
+                            placeholder="Resource name or notes..." 
+                            className="h-9"
+                            value={tempSearchTerm}
+                            onChange={(e) => setTempSearchTerm(e.target.value)}
+                        />
+                    </div>
+                     <Separator />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <Label htmlFor="bookingResourceDialog" className="text-sm font-medium mb-1 block">Resource</Label>
+                            <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId}>
+                                <SelectTrigger id="bookingResourceDialog" className="h-9"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Resources</SelectItem>
+                                    {mockResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label htmlFor="bookingStatusDialog" className="text-sm font-medium mb-1 block">Status</Label>
+                            <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as BookingStatusFilter)}>
+                                <SelectTrigger id="bookingStatusDialog" className="h-9"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Statuses</SelectItem>
+                                    {bookingStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <Separator />
+                     <div>
+                        <Label className="text-sm font-medium mb-2 block">Filter by Date</Label>
+                        <div className="flex justify-center items-center rounded-md border p-2">
+                            <Calendar
+                                mode="single" selected={tempSelectedDate} onSelect={setTempSelectedDate} 
+                                month={currentCalendarMonth} onMonthChange={setCurrentCalendarMonth}
+                                disabled={(date) => date < startOfDay(new Date(new Date().setDate(new Date().getDate() -90))) } // Allow viewing past 90 days
+                                modifiers={calendarModifiers} modifiersStyles={calendarModifierStyles}
+                                footer={
+                                    <div className="flex flex-col gap-2 items-center pt-2">
+                                    {tempSelectedDate && <Button variant="ghost" size="sm" onClick={() => setTempSelectedDate(undefined)} className="w-full text-xs">Clear Date Selection</Button>}
+                                    <p className="text-xs text-muted-foreground">{tempSelectedDate ? format(tempSelectedDate, 'PPP') : "No specific date selected"}</p>
+                                    </div>
+                                }
+                                classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
+                            />
+                        </div>
+                    </div>
+                </div>
+                <DialogFooter className="pt-6">
+                    <Button variant="ghost" onClick={() => { resetAllActiveFilters(); setIsFilterDialogOpen(false); }} className="mr-auto">
+                        <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
+                </DialogFooter>
+            </DialogContent>
+            </Dialog>
+            <Button onClick={() => handleOpenForm()}><PlusCircle className="mr-2 h-4 w-4" /> New Booking</Button>
+          </div>
         }
       />
 
-      <div className="grid md:grid-cols-3 gap-8 items-start">
-        <div className="md:col-span-1 space-y-6">
-          <Card className="shadow-lg">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xl">Filter by Date</CardTitle>
-               <div className="flex justify-between items-center pt-2">
-                  <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></Button>
-                  <span className="font-semibold text-center min-w-[120px]">{format(currentMonth, 'MMMM yyyy')}</span>
-                  <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} aria-label="Next month"><ChevronRight className="h-4 w-4" /></Button>
-              </div>
-            </CardHeader>
-            <CardContent className="flex justify-center">
-              <Calendar
-                mode="single" selected={selectedDate} onSelect={handleDateSelect} month={currentMonth} onMonthChange={setCurrentMonth}
-                className="rounded-md border p-3"
-                disabled={(date) => date < startOfDay(new Date(new Date().setDate(new Date().getDate() -30))) } 
-                modifiers={calendarModifiers} modifiersStyles={calendarModifierStyles}
-                footer={
-                  selectedDate ? 
-                      <Button variant="outline" className="w-full mt-2 text-sm" onClick={() => handleDateSelect(undefined)}>View All My Bookings</Button>
-                     : <p className="text-xs text-center text-muted-foreground mt-2">Viewing all your bookings (filtered below).</p>
-                }
-                classNames={{ day_selected: 'bg-primary text-primary-foreground hover:bg-primary/90 focus:bg-primary focus:text-primary-foreground', day_today: 'bg-accent text-accent-foreground font-bold', day_disabled: 'text-muted-foreground/50 opacity-50', day_modifier_booked: 'relative day-booked-dot' }}
-              />
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="md:col-span-2 space-y-6">
-          <Card className="shadow-lg">
-            <CardHeader>
-                <div className="flex justify-between items-center">
-                    <CardTitle>
-                    {selectedDate ? `Your Bookings for ${format(selectedDate, 'PPP')}` : 'All Your Bookings'}
-                    </CardTitle>
-                    <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                        <FilterIcon className="mr-2 h-4 w-4" />
-                        Filters
-                        {activeFilterCount > 0 && (
-                            <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
-                            {activeFilterCount}
-                            </Badge>
-                        )}
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>Filter Bookings</DialogTitle>
-                        <DialogDescription>
-                          Refine your list of bookings. Applied filters will persist after closing.
-                        </DialogDescription>
-                      </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                            <div>
-                                <Label htmlFor="bookingSearchDialog" className="text-sm font-medium">Search</Label>
-                                <Input 
-                                    id="bookingSearchDialog"
-                                    type="search" 
-                                    placeholder="Resource name or notes..." 
-                                    className="mt-1"
-                                    value={tempSearchTerm}
-                                    onChange={(e) => setTempSearchTerm(e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="bookingResourceDialog" className="text-sm font-medium">Resource</Label>
-                                <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId}>
-                                    <SelectTrigger id="bookingResourceDialog" className="mt-1"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Resources</SelectItem>
-                                        {mockResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label htmlFor="bookingStatusDialog" className="text-sm font-medium">Status</Label>
-                                <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as BookingStatusFilter)}>
-                                    <SelectTrigger id="bookingStatusDialog" className="mt-1"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Statuses</SelectItem>
-                                        {bookingStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button variant="ghost" onClick={() => { setTempSearchTerm(''); setTempFilterResourceId('all'); setTempFilterStatus('all'); }}>
-                            Reset Dialog Filters
-                            </Button>
-                            <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                    </Dialog>
-                </div>
-                <CardDescription>
-                  Use the calendar and filters to narrow down your bookings. {bookingsToDisplay.length} booking(s) currently displayed.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-                {bookingsToDisplay.length > 0 ? (
-                <div className="overflow-x-auto">
-                <Table>
-                    <TableHeader>
-                    <TableRow>
-                        <TableHead>Resource</TableHead>
-                        <TableHead>Date & Time</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                    {bookingsToDisplay.map((booking) => (
-                        <TableRow key={booking.id} className={cn(booking.status === 'Cancelled' && 'opacity-60')}>
-                        <TableCell 
-                            className="font-medium cursor-pointer hover:underline hover:text-primary"
-                            onClick={() => handleOpenDetailsDialog(booking)}
-                        >
-                            {booking.resourceName}
-                        </TableCell>
-                        <TableCell>
-                            <div>{format(new Date(booking.startTime), 'MMM dd, yyyy')}</div>
-                            <div className="text-xs text-muted-foreground">{format(new Date(booking.startTime), 'p')} - {format(new Date(booking.endTime), 'p')}</div>
-                        </TableCell>
-                        <TableCell>
-                            <Badge 
-                                className={cn(
-                                    "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
-                                    booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
-                                    booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
-                                    booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500'
-                                )}
-                            >{booking.status}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right space-x-1">
-                            {booking.status !== 'Cancelled' && (
-                            <>
-                                <Button variant="outline" size="sm" className="h-7 px-2 py-1 text-xs" onClick={() => handleOpenForm(booking)}>
-                                <Edit3 className="mr-1.5 h-3 w-3" /> Edit
-                                </Button>
-                                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-2 py-1 text-xs" onClick={() => handleCancelBooking(booking.id)}>
-                                <X className="mr-1.5 h-3 w-3" /> Cancel
-                                </Button>
-                            </>
+      <Card className="shadow-lg">
+        <CardHeader>
+            <CardTitle>
+            {activeSelectedDate ? `Your Bookings for ${format(activeSelectedDate, 'PPP')}` : 'All Your Bookings'}
+            </CardTitle>
+            <CardDescription>
+                Displaying {bookingsToDisplay.length} booking(s) based on active filters.
+            </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+            {bookingsToDisplay.length > 0 ? (
+            <div className="overflow-x-auto">
+            <Table>
+                <TableHeader>
+                <TableRow>
+                    <TableHead>Resource</TableHead>
+                    <TableHead>Date & Time</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+                </TableHeader>
+                <TableBody>
+                {bookingsToDisplay.map((booking) => (
+                    <TableRow key={booking.id} className={cn(booking.status === 'Cancelled' && 'opacity-60')}>
+                    <TableCell 
+                        className="font-medium cursor-pointer hover:underline hover:text-primary"
+                        onClick={() => handleOpenDetailsDialog(booking)}
+                    >
+                        {booking.resourceName}
+                    </TableCell>
+                    <TableCell>
+                        <div>{format(new Date(booking.startTime), 'MMM dd, yyyy')}</div>
+                        <div className="text-xs text-muted-foreground">{format(new Date(booking.startTime), 'p')} - {format(new Date(booking.endTime), 'p')}</div>
+                    </TableCell>
+                    <TableCell>
+                        <Badge 
+                            className={cn(
+                                "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
+                                booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
+                                booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
+                                booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500'
                             )}
-                        </TableCell>
-                        </TableRow>
-                    ))}
-                    </TableBody>
-                </Table>
-                </div>
-                ) : (
-                <div className="text-center py-10 text-muted-foreground px-6">
-                    <CalendarDays className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                    <p className="font-medium">No bookings match your current filters.</p>
-                    <p className="text-sm">Try adjusting your search or filter criteria, or select a different date.</p>
-                    {(searchTerm || (filterResourceId && filterResourceId !== 'all') || (filterStatus && filterStatus !== 'all') || selectedDate) && 
-                        <Button variant="outline" onClick={resetAllFilters} className="mt-4">
-                            <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
-                        </Button>
-                    }
-                    {!(searchTerm || (filterResourceId && filterResourceId !== 'all') || (filterStatus && filterStatus !== 'all') || selectedDate) && allUserBookings.length === 0 &&
-                         <Button variant="outline" onClick={() => handleOpenForm()} className="mt-4">
-                            <PlusCircle className="mr-2 h-4 w-4" /> Create Your First Booking
-                        </Button>
-                    }
-                </div>
-                )}
-            </CardContent>
-             <CardFooter className="pt-4">
-                <p className="text-xs text-muted-foreground">
-                    Need to clear all filters including date? Click {" "}
-                    <Button variant="link" className="p-0 h-auto text-xs" onClick={resetAllFilters}>Reset All Filters</Button>.
-                </p>
-             </CardFooter>
-            </Card>
-        </div>
-      </div>
+                        >{booking.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right space-x-1">
+                        {booking.status !== 'Cancelled' && (
+                        <>
+                            <Button variant="outline" size="sm" className="h-7 px-2 py-1 text-xs" onClick={() => handleOpenForm(booking)}>
+                            <Edit3 className="mr-1.5 h-3 w-3" /> Edit
+                            </Button>
+                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-2 py-1 text-xs" onClick={() => handleCancelBooking(booking.id)}>
+                            <X className="mr-1.5 h-3 w-3" /> Cancel
+                            </Button>
+                        </>
+                        )}
+                    </TableCell>
+                    </TableRow>
+                ))}
+                </TableBody>
+            </Table>
+            </div>
+            ) : (
+            <div className="text-center py-10 text-muted-foreground px-6">
+                <CalendarDays className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                <p className="font-medium">No bookings match your current filters.</p>
+                <p className="text-sm">Try adjusting your filter criteria.</p>
+                {activeFilterCount > 0 && 
+                    <Button variant="outline" onClick={() => { resetAllActiveFilters(); handleApplyDialogFilters(); }} className="mt-4">
+                        <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                    </Button>
+                }
+                {activeFilterCount === 0 && allUserBookings.length === 0 &&
+                     <Button variant="outline" onClick={() => handleOpenForm()} className="mt-4">
+                        <PlusCircle className="mr-2 h-4 w-4" /> Create Your First Booking
+                    </Button>
+                }
+            </div>
+            )}
+        </CardContent>
+         { activeFilterCount > 0 && 
+            <CardFooter className="pt-4 justify-center">
+                <Button variant="link" className="p-0 h-auto text-xs" onClick={() => { resetAllActiveFilters(); handleApplyDialogFilters(); }}>
+                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                </Button>
+            </CardFooter>
+         }
+        </Card>
 
       <Dialog 
         open={isFormOpen} 
@@ -522,16 +536,16 @@ function BookingsPageContent() {
             <DialogTitle>{currentBooking?.id ? 'Edit Booking' : 'Create New Booking'}</DialogTitle>
             <DialogDescription>
               Fill in the details below to {currentBooking?.id ? 'update your' : 'schedule a new'} booking
-              {selectedDate && (!currentBooking || !currentBooking.id) && ` for ${format(selectedDate, 'PPP')}`}.
-              {!selectedDate && (!currentBooking || !currentBooking.id) && ` (date will be based on start time).`}
+              {activeSelectedDate && (!currentBooking || !currentBooking.id) && ` for ${format(activeSelectedDate, 'PPP')}`}.
+              {!activeSelectedDate && (!currentBooking || !currentBooking.id) && ` (date will be based on start time).`}
             </DialogDescription>
           </DialogHeader>
           <BookingForm
-            key={currentBooking?.id || `new:${currentBooking?.resourceId || 'empty'}:${currentBooking?.startTime?.getTime() || 'form'}:${selectedDate?.getTime() || 'nodate'}`}
+            key={currentBooking?.id || `new:${currentBooking?.resourceId || 'empty'}:${currentBooking?.startTime?.getTime() || 'form'}:${activeSelectedDate?.getTime() || 'nodate'}`}
             initialData={currentBooking} 
             onSave={handleSaveBooking} 
             onCancel={() => setIsFormOpen(false)}
-            selectedDateProp={selectedDate} 
+            selectedDateProp={activeSelectedDate} 
             currentUserFullName={mockCurrentUser.name}
           />
         </DialogContent>
@@ -709,4 +723,3 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     </form>
   );
 }
-

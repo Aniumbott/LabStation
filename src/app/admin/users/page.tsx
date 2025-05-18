@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Users as UsersIcon, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Search as SearchIcon, Filter as FilterIcon, FilterX } from 'lucide-react';
+import { Users as UsersIcon, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX } from 'lucide-react';
 import type { User, RoleName } from '@/types';
 import {
   Table,
@@ -125,7 +125,7 @@ export default function UserManagementPage() {
     setFilterRole('all');
     setTempSearchTerm('');
     setTempFilterRole('all');
-    // setIsFilterDialogOpen(false); // Optionally close dialog on reset
+    // setIsFilterDialogOpen(false); // User might want to apply after reset
   };
 
   const handleOpenNewUserDialog = () => {
@@ -149,7 +149,7 @@ export default function UserManagementPage() {
       const newUser: User = {
         id: `u${users.length + 1 + Date.now()}`,
         ...data,
-        avatarUrl: 'https://placehold.co/100x100.png',
+        avatarUrl: 'https://placehold.co/100x100.png', // Default avatar for new users
         avatarDataAiHint: 'avatar person',
       };
       setUsers([...users, newUser]);
@@ -198,26 +198,26 @@ export default function UserManagementPage() {
                 <DialogHeader>
                   <DialogTitle>Filter Users</DialogTitle>
                   <DialogDescription>
-                    Refine the list of users.
+                    Refine the list of users by applying filters below.
                   </DialogDescription>
                 </DialogHeader>
-                <Separator className="my-3" />
-                <div className="grid gap-4 py-2">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="userSearchDialog" className="text-right col-span-1">Search</Label>
+                <Separator className="my-4" />
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="userSearchDialog" className="text-sm font-medium">Search</Label>
                     <Input
                       id="userSearchDialog"
                       type="search"
                       placeholder="Name or email..."
                       value={tempSearchTerm}
                       onChange={(e) => setTempSearchTerm(e.target.value)}
-                      className="col-span-3 h-9"
+                      className="mt-1 h-9"
                     />
                   </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="userRoleDialog" className="text-right col-span-1">Role</Label>
+                  <div>
+                    <Label htmlFor="userRoleDialog" className="text-sm font-medium">Role</Label>
                     <Select value={tempFilterRole} onValueChange={(value) => setTempFilterRole(value as RoleName | 'all')} >
-                      <SelectTrigger id="userRoleDialog" className="col-span-3 h-9">
+                      <SelectTrigger id="userRoleDialog" className="mt-1 h-9">
                         <SelectValue placeholder="Select Role" />
                       </SelectTrigger>
                       <SelectContent>
@@ -229,13 +229,12 @@ export default function UserManagementPage() {
                     </Select>
                   </div>
                 </div>
-                <Separator className="mt-3 mb-1" />
-                <DialogFooter className="pt-2">
-                  <Button variant="ghost" onClick={resetFilters} className="text-sm mr-auto">
+                <DialogFooter className="pt-6">
+                  <Button variant="ghost" onClick={resetFilters} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={handleApplyFilters} className="text-sm">Apply Filters</Button>
+                  <Button onClick={handleApplyFilters}>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -345,7 +344,7 @@ export default function UserManagementPage() {
             }
           </p>
           {searchTerm || filterRole !== 'all' ? (
-             <Button variant="outline" onClick={resetFilters}>
+             <Button variant="outline" onClick={() => { resetFilters(); handleApplyFilters(); }}>
                 <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
             </Button>
           ) : (
@@ -364,4 +363,3 @@ export default function UserManagementPage() {
     </div>
   );
 }
-

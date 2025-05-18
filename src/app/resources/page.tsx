@@ -4,7 +4,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, CalendarPlus, Filter as FilterIcon, FilterX, CalendarDays, CheckCircle, AlertTriangle, Construction } from 'lucide-react';
+import { Search, CalendarPlus, Filter as FilterIcon, FilterX, CalendarDays, CheckCircle, AlertTriangle, Construction, ChevronRight } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
-import { format, addDays, parseISO, isValid } from 'date-fns';
+import { format, addDays, parseISO, isValid, startOfDay, isSameDay } from 'date-fns';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 
@@ -76,7 +76,7 @@ export const allMockResources: Resource[] = [
     dataAiHint: 'hplc chemistry',
     features: ['Quaternary Solvent Delivery', 'Autosampler (120 vial capacity)', 'Column Thermostatting (5-80°C)', 'Diode Array Detector (190-800nm)', 'Fraction Collector (Optional)'],
     lastCalibration: '2023-11-10',
-    nextCalibration: '2024-05-10', 
+    nextCalibration: '2024-05-10',
     availability: []
   },
   {
@@ -122,7 +122,7 @@ export const allMockResources: Resource[] = [
     imageUrl: 'https://placehold.co/300x200.png',
     dataAiHint: 'fume hood',
     features: ['Airflow Monitor & Alarm', 'Vertical Sliding Sash', 'Internal Baffles for Uniform Airflow', 'Utility Valves (Air, Gas, Vacuum)', 'Explosion-Proof Light'],
-    lastCalibration: 'N/A',
+    lastCalibration: 'N/A', // Example of N/A calibration
     nextCalibration: 'N/A',
     availability: [
         { date: todayStr, slots: ['Booked until 15:00', '15:00-17:00'] },
@@ -140,6 +140,8 @@ export default function ResourcesPage() {
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedLab, setSelectedLab] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [currentMonth, setCurrentMonth] = useState<Date>(startOfDay(new Date()));
+
 
   // Temporary filters for Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
@@ -159,6 +161,7 @@ export default function ResourcesPage() {
       setTempSelectedType(selectedType);
       setTempSelectedLab(selectedLab);
       setTempSelectedDate(selectedDate);
+      if (selectedDate) setCurrentMonth(selectedDate); else setCurrentMonth(startOfDay(new Date()));
     }
   }, [isFilterDialogOpen, searchTerm, selectedType, selectedLab, selectedDate]);
 
@@ -193,25 +196,21 @@ export default function ResourcesPage() {
     setIsFilterDialogOpen(false);
   };
 
-  const resetFiltersInDialog = () => {
-    setTempSearchTerm('');
-    setTempSelectedType('all');
-    setTempSelectedLab('all');
-    setTempSelectedDate(undefined);
-  };
-  
   const resetAllActiveFilters = () => {
     setSearchTerm('');
     setSelectedType('all');
     setSelectedLab('all');
     setSelectedDate(undefined);
-    // Also reset dialog temp state if it's open
-    resetFiltersInDialog();
+    // Also reset dialog temp state
+    setTempSearchTerm('');
+    setTempSelectedType('all');
+    setTempSelectedLab('all');
+    setTempSelectedDate(undefined);
+    setCurrentMonth(startOfDay(new Date()));
   };
 
-
   const getResourceStatusBadge = (status: Resource['status']) => {
-    const baseBadgeClass = "absolute top-2 right-2 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors";
+    const baseBadgeClass = "absolute top-2 right-2 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold";
     switch (status) {
       case 'Available':
         return <Badge className={`${baseBadgeClass} bg-green-500 text-white border-transparent`}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
@@ -232,6 +231,7 @@ export default function ResourcesPage() {
   ].filter(Boolean).length;
 
   if (!isClient) {
+    // For initial server render or if client script hasn't run, render nothing or a minimal placeholder
     return null; 
   }
 
@@ -258,74 +258,85 @@ export default function ResourcesPage() {
                 <DialogHeader>
                   <DialogTitle>Filter Resources</DialogTitle>
                   <DialogDescription>
-                    Refine the list of available lab resources.
+                    Refine the list of available lab resources by applying filters.
                   </DialogDescription>
                 </DialogHeader>
-                <Separator className="my-3" />
-                <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto pr-2">
+                <Separator className="my-4" />
+                <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2">
                   <div>
-                    <Label htmlFor="resourceSearchDialog" className="text-sm font-medium">Search by Name/Keyword</Label>
+                    <Label htmlFor="resourceSearchDialog" className="text-sm font-medium mb-1 block">Search by Name/Keyword</Label>
                     <Input
                       id="resourceSearchDialog"
                       type="search"
                       placeholder="e.g., Microscope Alpha, EDX..."
                       value={tempSearchTerm}
                       onChange={(e) => setTempSearchTerm(e.target.value)}
-                      className="h-9 mt-1"
+                      className="h-9"
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="resourceTypeDialog" className="text-sm font-medium">Type</Label>
-                    <Select value={tempSelectedType} onValueChange={setTempSelectedType}>
-                      <SelectTrigger id="resourceTypeDialog" className="h-9 mt-1">
-                        <SelectValue placeholder="Filter by Type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Types</SelectItem>
-                        {resourceTypes.map(type => (
-                          <SelectItem key={type} value={type}>{type}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <Separator />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="resourceTypeDialog" className="text-sm font-medium mb-1 block">Type</Label>
+                      <Select value={tempSelectedType} onValueChange={setTempSelectedType}>
+                        <SelectTrigger id="resourceTypeDialog" className="h-9">
+                          <SelectValue placeholder="Filter by Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Types</SelectItem>
+                          {resourceTypes.map(type => (
+                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="resourceLabDialog" className="text-sm font-medium mb-1 block">Lab</Label>
+                      <Select value={tempSelectedLab} onValueChange={setTempSelectedLab}>
+                        <SelectTrigger id="resourceLabDialog" className="h-9">
+                          <SelectValue placeholder="Filter by Lab" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Labs</SelectItem>
+                          {labs.map(lab => (
+                            <SelectItem key={lab} value={lab}>{lab}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
+                  <Separator />
                   <div>
-                    <Label htmlFor="resourceLabDialog" className="text-sm font-medium">Lab</Label>
-                    <Select value={tempSelectedLab} onValueChange={setTempSelectedLab}>
-                      <SelectTrigger id="resourceLabDialog" className="h-9 mt-1">
-                        <SelectValue placeholder="Filter by Lab" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Labs</SelectItem>
-                        {labs.map(lab => (
-                          <SelectItem key={lab} value={lab}>{lab}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                      <Label className="text-sm font-medium mb-1 block">Available On</Label>
-                      <div className="flex justify-center">
+                      <Label className="text-sm font-medium mb-2 block">Available On</Label>
+                      <div className="flex justify-center items-center rounded-md border p-2">
                         <Calendar
                             mode="single"
                             selected={tempSelectedDate}
                             onSelect={setTempSelectedDate}
-                            initialFocus
-                            disabled={(date) => date < addDays(new Date(), -1) }
-                            className="rounded-md border p-2" 
+                            month={currentMonth}
+                            onMonthChange={setCurrentMonth}
+                            disabled={(date) => date < startOfDay(new Date()) } // Disable past dates
+                            footer={ tempSelectedDate && 
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={() => setTempSelectedDate(undefined)} 
+                                    className="w-full mt-2 text-xs"
+                                >
+                                    Clear Date Selection
+                                </Button>
+                            }
+                            classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
                         />
                       </div>
-                      {tempSelectedDate && (
-                           <Button variant="ghost" size="sm" onClick={() => setTempSelectedDate(undefined)} className="mt-1 w-full text-xs">Clear Date Selection</Button>
-                      )}
                   </div>
                 </div>
-                <Separator className="mt-3 mb-1" />
-                <DialogFooter className="pt-2">
-                  <Button variant="ghost" onClick={resetFiltersInDialog} className="text-sm mr-auto">
-                    <FilterX className="mr-2 h-4 w-4" /> Reset Current Filters
+                <DialogFooter className="pt-6">
+                  <Button variant="ghost" onClick={() => { resetAllActiveFilters(); setIsFilterDialogOpen(false); }} className="mr-auto">
+                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={handleApplyFilters} className="text-sm">Apply Filters</Button>
+                  <Button onClick={handleApplyFilters}>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -352,8 +363,24 @@ export default function ResourcesPage() {
               </CardHeader>
               <CardContent className="flex-grow p-4 pt-0">
                 <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{resource.description || 'No description available.'}</p>
+                 {resource.features && resource.features.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold mb-1 text-muted-foreground">Features:</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {resource.features.slice(0, 2).map((feature, index) => (
+                          <Badge key={index} variant="secondary" className="text-xs">{feature}</Badge>
+                        ))}
+                        {resource.features.length > 2 && <Badge variant="secondary" className="text-xs">+{resource.features.length - 2} more</Badge>}
+                      </div>
+                    </div>
+                  )}
               </CardContent>
-              <CardFooter className="p-4 pt-0">
+              <CardFooter className="p-4 pt-2 flex flex-col items-stretch gap-2">
+                 <Button asChild size="sm" className="w-full" variant="outline">
+                    <Link href={`/resources/${resource.id}`}>
+                        View Details <ChevronRight className="ml-auto h-4 w-4" />
+                    </Link>
+                 </Button>
                 <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
                   <Link href={`/bookings?resourceId=${resource.id}${selectedDate ? `&date=${format(selectedDate, 'yyyy-MM-dd')}`: ''}`}>
                     <CalendarPlus className="mr-2 h-4 w-4" />
@@ -372,7 +399,7 @@ export default function ResourcesPage() {
             {activeFilterCount > 0 ? "Try adjusting your search terms or filters." : "There are currently no resources to display."}
           </p>
           {activeFilterCount > 0 && (
-             <Button onClick={resetAllActiveFilters} variant="outline">
+             <Button onClick={() => { resetAllActiveFilters(); handleApplyFilters(); }} variant="outline">
                 <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
             </Button>
           )}
@@ -381,4 +408,3 @@ export default function ResourcesPage() {
     </div>
   );
 }
-
