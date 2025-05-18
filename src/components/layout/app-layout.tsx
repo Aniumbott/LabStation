@@ -11,7 +11,7 @@ import {
   Users,
   UserCog,
   Loader2,
-  Building,
+  // Building, // Icon for Lab Management removed
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -43,7 +43,7 @@ const navItems: NavItem[] = [
   { href: '/resources', label: 'Resource Search', icon: Search },
   { href: '/bookings', label: 'Manage Bookings', icon: CalendarDays },
   { href: '/admin/users', label: 'User Management', icon: Users, admin: true },
-  { href: '/admin/labs', label: 'Lab Management', icon: Building, admin: true },
+  // { href: '/admin/labs', label: 'Lab Management', icon: Building, admin: true }, // Lab Management link removed
   { href: '/profile', label: 'My Profile', icon: UserCog },
 ];
 

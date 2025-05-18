@@ -38,13 +38,13 @@ export interface User {
   avatarDataAiHint?: string;
 }
 
-// Lab Management Types
-export interface Lab {
-  id: string;
-  name: string;
-  location: string;
-  description?: string;
-  timezone: string; // Example: "America/New_York", "Europe/London"
-}
+// Lab Management Types - REMOVED
+// export interface Lab {
+//   id: string;
+//   name: string;
+//   location: string;
+//   description?: string;
+//   timezone: string; // Example: "America/New_York", "Europe/London"
+// }
 
 // Add other types as needed
