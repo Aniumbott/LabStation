@@ -58,6 +58,8 @@ const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
 });
 
 const bookingStatuses: Booking['status'][] = ['Confirmed', 'Pending', 'Cancelled'];
+type BookingStatusFilter = Booking['status'] | 'all';
+
 
 function BookingsPageContent() {
   const router = useRouter();
@@ -82,8 +84,8 @@ function BookingsPageContent() {
   const [currentBooking, setCurrentBooking] = useState<Partial<Booking> & { resourceId?: string } | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterResourceId, setFilterResourceId] = useState<string>('');
-  const [filterStatus, setFilterStatus] = useState<Booking['status'] | ''>('');
+  const [filterResourceId, setFilterResourceId] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<BookingStatusFilter>('all');
   
   useEffect(() => {
     setIsClient(true);
@@ -101,7 +103,7 @@ function BookingsPageContent() {
         setSelectedDate(dateToSet);
         setCurrentMonth(dateToSet);
     } else if (!dateParam && selectedDate !== undefined) { // Clear date if param removed
-        setSelectedDate(undefined);
+        // setSelectedDate(undefined); // Keep selectedDate if other filters are active. Cleared by handleDateSelect(undefined)
     }
 
     if (bookingIdParam) {
@@ -133,15 +135,15 @@ function BookingsPageContent() {
       );
     }
 
-    if (filterResourceId) {
+    if (filterResourceId && filterResourceId !== 'all') {
       filtered = filtered.filter(b => b.resourceId === filterResourceId);
     }
 
-    if (filterStatus) {
+    if (filterStatus && filterStatus !== 'all') {
       filtered = filtered.filter(b => b.status === filterStatus);
     }
     
-    return filtered.sort((a, b) => b.startTime.getTime() - a.startTime.getTime()); // Show most recent first or upcoming
+    return filtered.sort((a, b) => b.startTime.getTime() - a.startTime.getTime()); 
   }, [allUserBookings, selectedDate, searchTerm, filterResourceId, filterStatus]);
 
 
@@ -251,8 +253,8 @@ function BookingsPageContent() {
 
   const resetFilters = () => {
     setSearchTerm('');
-    setFilterResourceId('');
-    setFilterStatus('');
+    setFilterResourceId('all');
+    setFilterStatus('all');
     handleDateSelect(undefined); // also clears date from URL
   };
   
@@ -287,7 +289,7 @@ function BookingsPageContent() {
               modifiers={calendarModifiers} modifiersStyles={calendarModifierStyles}
               footer={
                 selectedDate ? 
-                    <Button variant="ghost" className="w-full mt-2 text-sm" onClick={() => handleDateSelect(undefined)}>View All My Bookings</Button>
+                    <Button variant="outline" className="w-full mt-2 text-sm" onClick={() => handleDateSelect(undefined)}>View All My Bookings</Button>
                    : <p className="text-xs text-center text-muted-foreground mt-2">Viewing all your bookings (filtered below).</p>
               }
               classNames={{ day_selected: 'bg-primary text-primary-foreground hover:bg-primary/90 focus:bg-primary focus:text-primary-foreground', day_today: 'bg-accent text-accent-foreground font-bold', day_disabled: 'text-muted-foreground/50 opacity-50', day_modifier_booked: 'relative day-booked-dot' }}
@@ -315,14 +317,14 @@ function BookingsPageContent() {
                         <Select value={filterResourceId} onValueChange={setFilterResourceId}>
                             <SelectTrigger><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">All Resources</SelectItem>
+                                <SelectItem value="all">All Resources</SelectItem>
                                 {mockResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                             </SelectContent>
                         </Select>
-                        <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as Booking['status'] | '')}>
+                        <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as BookingStatusFilter)}>
                             <SelectTrigger><SelectValue placeholder="Filter by Status" /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">All Statuses</SelectItem>
+                                <SelectItem value="all">All Statuses</SelectItem>
                                 {bookingStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                             </SelectContent>
                         </Select>
@@ -391,12 +393,12 @@ function BookingsPageContent() {
                     <CalendarDays className="mx-auto h-12 w-12 mb-4 opacity-50" />
                     <p className="font-medium">No bookings match your current filters.</p>
                     <p className="text-sm">Try adjusting your search or filter criteria, or select a different date.</p>
-                    {(searchTerm || filterResourceId || filterStatus || selectedDate) && 
+                    {(searchTerm || (filterResourceId && filterResourceId !== 'all') || (filterStatus && filterStatus !== 'all') || selectedDate) && 
                         <Button variant="outline" onClick={resetFilters} className="mt-4">
                             <FilterX className="mr-2 h-4 w-4" /> Clear All Filters
                         </Button>
                     }
-                    {!(searchTerm || filterResourceId || filterStatus || selectedDate) && allUserBookings.length === 0 &&
+                    {!(searchTerm || (filterResourceId && filterResourceId !== 'all') || (filterStatus && filterStatus !== 'all') || selectedDate) && allUserBookings.length === 0 &&
                          <Button variant="outline" onClick={() => handleOpenForm()} className="mt-4">
                             <PlusCircle className="mr-2 h-4 w-4" /> Create Your First Booking
                         </Button>
@@ -415,7 +417,7 @@ function BookingsPageContent() {
             if (!isOpen) {
                 setCurrentBooking(null);
                 const newSearchParams = new URLSearchParams(searchParams.toString());
-                if (newSearchParams.has('bookingId') || newSearchParams.has('resourceId')) { // Also clear resourceId if form closed without saving
+                if (newSearchParams.has('bookingId') || newSearchParams.has('resourceId')) { 
                     newSearchParams.delete('bookingId');
                     newSearchParams.delete('resourceId');
                     router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
@@ -432,7 +434,7 @@ function BookingsPageContent() {
             </DialogDescription>
           </DialogHeader>
           <BookingForm
-            key={currentBooking?.id || `new:${currentBooking?.resourceId || 'empty'}:${currentBooking?.startTime?.getTime() || 'form'}`}
+            key={currentBooking?.id || `new:${currentBooking?.resourceId || 'empty'}:${currentBooking?.startTime?.getTime() || 'form'}:${selectedDate?.getTime() || 'nodate'}`}
             initialData={currentBooking} 
             onSave={handleSaveBooking} 
             onCancel={() => setIsFormOpen(false)}
@@ -475,7 +477,8 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
         initialStartTime = new Date(initialData.startTime);
         initialEndTime = initialData.endTime ? new Date(initialData.endTime) : new Date(initialStartTime.getTime() + 2 * 60 * 60 * 1000);
         
-        if (!isEditing && selectedDateProp) { // If creating new and specific date is chosen on calendar
+        // If creating NEW booking AND a specific date is chosen on calendar, form date should reflect calendar date
+        if (!isEditing && selectedDateProp && startOfDay(initialStartTime).getTime() !== startOfDay(selectedDateProp).getTime()) { 
             initialStartTime = set(initialStartTime, { year: selectedDateProp.getFullYear(), month: selectedDateProp.getMonth(), date: selectedDateProp.getDate() });
             initialEndTime = set(initialEndTime, { year: selectedDateProp.getFullYear(), month: selectedDateProp.getMonth(), date: selectedDateProp.getDate() });
         }
@@ -536,6 +539,12 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     } else {
         baseDateForTimeChange = startOfDay(new Date());
     }
+    // If we are setting time for a new booking AND selectedDateProp is available,
+    // ensure the time change applies to selectedDateProp.
+     if (!formData.id && selectedDateProp) {
+       baseDateForTimeChange = set(selectedDateProp, { hours: new Date().getHours(), minutes: new Date().getMinutes()}); // Use selectedDateProp as base
+    }
+
 
     const newDate = set(baseDateForTimeChange, { hours, minutes, seconds: 0, milliseconds: 0 });
     handleChange(field, newDate);
@@ -548,6 +557,7 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
              if (existingDuration > 0) duration = existingDuration;
         }
         let newAutoEndTime = new Date(currentStartTime.getTime() + duration);
+        // Ensure newAutoEndTime retains the date of currentStartTime
         newAutoEndTime = set(newAutoEndTime, { year: currentStartTime.getFullYear(), month: currentStartTime.getMonth(), date: currentStartTime.getDate() });
         handleChange('endTime', newAutoEndTime);
     }
@@ -607,6 +617,8 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     </form>
   );
 }
+    
+
     
 
     
