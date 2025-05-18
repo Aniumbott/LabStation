@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -64,9 +65,27 @@ export default function BookingsPage() {
   
   const handleOpenForm = (booking?: Booking) => {
     const defaultStartTime = selectedDate ? new Date(selectedDate) : new Date();
+    // Ensure the date part is from selectedDate, time part is default or from booking
+    if (selectedDate) {
+        defaultStartTime.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+    }
     defaultStartTime.setHours(9,0,0,0); // Default to 9 AM on selected day
 
-    setCurrentBooking(booking || { startTime: defaultStartTime, endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000) }); // Default 2 hour slot
+    let bookingData: Partial<Booking>;
+    if (booking) {
+        // Ensure startTime and endTime for existing booking are Date objects
+        bookingData = {
+            ...booking,
+            startTime: new Date(booking.startTime),
+            endTime: new Date(booking.endTime),
+        };
+    } else {
+        bookingData = { 
+            startTime: defaultStartTime, 
+            endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000) // Default 2 hour slot
+        };
+    }
+    setCurrentBooking(bookingData);
     setIsFormOpen(true);
   };
 
@@ -81,9 +100,49 @@ export default function BookingsPage() {
         toast({ title: "Error", description: "Selected resource not found.", variant: "destructive" });
         return;
     }
+    
+    const proposedStartTime = new Date(formData.startTime);
+    const proposedEndTime = new Date(formData.endTime);
+
+    if (proposedEndTime <= proposedStartTime) {
+        toast({ title: "Invalid Time", description: "End time must be after start time.", variant: "destructive" });
+        return;
+    }
+
+    // Conflict detection
+    const conflictingBooking = bookings.find(existingBooking => {
+        if (existingBooking.resourceId !== formData.resourceId) return false;
+        if (existingBooking.status === 'Cancelled') return false; // Ignore cancelled bookings
+
+        // Check if it's the same booking being edited (currentBooking will have an id if editing)
+        if (currentBooking && currentBooking.id && existingBooking.id === currentBooking.id) {
+            return false;
+        }
+        
+        // Ensure date part matches for comparison
+        if(format(existingBooking.startTime, 'yyyy-MM-dd') !== format(proposedStartTime, 'yyyy-MM-dd')) return false;
+
+        const existingStartTime = new Date(existingBooking.startTime);
+        const existingEndTime = new Date(existingBooking.endTime);
+
+        // Check for overlap: (StartA < EndB) and (EndA > StartB)
+        return proposedStartTime < existingEndTime && proposedEndTime > existingStartTime;
+    });
+
+    if (conflictingBooking) {
+        toast({
+            title: "Booking Conflict",
+            description: `This time slot for ${resource.name} is already booked by ${conflictingBooking.userName} from ${format(conflictingBooking.startTime, 'p')} to ${format(conflictingBooking.endTime, 'p')}.`,
+            variant: "destructive",
+            duration: 5000,
+        });
+        return;
+    }
 
     const newBookingData = {
         ...formData,
+        startTime: proposedStartTime, // ensure it's a Date object
+        endTime: proposedEndTime,   // ensure it's a Date object
         resourceName: resource.name,
         status: formData.status || 'Pending', // Default status
     } as Booking;
@@ -145,7 +204,7 @@ export default function BookingsPage() {
             </CardTitle>
             <CardDescription>
               {bookingsForSelectedDate.length > 0 
-                ? `${bookingsForSelectedDate.length} booking(s) found.`
+                ? `${bookingsForSelectedDate.filter(b => b.status !== 'Cancelled').length} active booking(s) found.`
                 : "No bookings for this date. Click 'New Booking' to add one."}
             </CardDescription>
           </CardHeader>
@@ -164,12 +223,16 @@ export default function BookingsPage() {
                             booking.status === 'Pending' ? 'secondary' : 
                             'destructive'
                          }
-                         className={booking.status === 'Confirmed' ? 'bg-green-600' : ''}
+                         className={`${
+                            booking.status === 'Confirmed' ? 'bg-green-600 hover:bg-green-700' : 
+                            booking.status === 'Pending' ? 'bg-amber-500 hover:bg-amber-600' :
+                            booking.status === 'Cancelled' ? 'bg-slate-500 hover:bg-slate-600' : ''
+                          } text-white`}
                          >
                             {booking.status}
                         </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1"><Clock size={14} /> {format(booking.startTime, 'p')} - {format(booking.endTime, 'p')}</p>
+                    <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1"><Clock size={14} /> {format(new Date(booking.startTime), 'p')} - {format(new Date(booking.endTime), 'p')}</p>
                     {booking.notes && <p className="text-sm mt-2 pt-2 border-t border-dashed">{booking.notes}</p>}
                     {booking.status !== 'Cancelled' && (
                         <div className="mt-3 flex gap-2">
@@ -226,21 +289,56 @@ interface BookingFormProps {
 }
 
 function BookingForm({ initialData, onSave, onCancel, selectedDate }: BookingFormProps) {
-  const [formData, setFormData] = useState<Partial<Booking>>(
-    initialData || { startTime: selectedDate || new Date(), endTime: selectedDate || new Date() }
-  );
+  const [formData, setFormData] = useState<Partial<Booking>>(() => {
+    const baseDate = initialData?.startTime ? new Date(initialData.startTime) : (selectedDate || new Date());
+    if (selectedDate) { // Ensure form date matches selected calendar date for new bookings
+        baseDate.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+    }
+    
+    if (initialData) {
+        return {
+            ...initialData,
+            startTime: new Date(initialData.startTime!),
+            endTime: new Date(initialData.endTime!),
+        };
+    }
+    
+    const defaultStartTime = new Date(baseDate);
+    defaultStartTime.setHours(9,0,0,0);
+    const defaultEndTime = new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000); // Default 2h
+
+    return { startTime: defaultStartTime, endTime: defaultEndTime, resourceId: '', userName: '', notes: '' };
+  });
+
 
   useEffect(() => {
-    // If initialData or selectedDate changes, update the form.
-    // Prioritize initialData if it exists (editing mode).
     if (initialData) {
-        setFormData(initialData);
+        const newStartTime = new Date(initialData.startTime!);
+        const newEndTime = new Date(initialData.endTime!);
+        // If selectedDate is provided and we are editing, ensure date part of initialData aligns
+        // This is mainly for when opening an existing booking from a different date view
+        if (selectedDate && format(newStartTime, 'yyyy-MM-dd') !== format(selectedDate, 'yyyy-MM-dd')) {
+             newStartTime.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+             newEndTime.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+             // Keep original times if possible, or reset if date change makes times invalid (e.g., across DST)
+             // For simplicity, we'll keep the hour/minute from initialData here.
+             newStartTime.setHours(new Date(initialData.startTime!).getHours(), new Date(initialData.startTime!).getMinutes());
+             newEndTime.setHours(new Date(initialData.endTime!).getHours(), new Date(initialData.endTime!).getMinutes());
+        }
+        setFormData(prev => ({ ...prev, ...initialData, startTime: newStartTime, endTime: newEndTime }));
+
     } else if (selectedDate) {
-        // Set default start time for new booking on selected date
         const newStartTime = new Date(selectedDate);
-        newStartTime.setHours(9,0,0,0);
-        const newEndTime = new Date(newStartTime.getTime() + 2 * 60 * 60 * 1000); // Default 2h
-        setFormData(prev => ({ ...prev, startTime: newStartTime, endTime: newEndTime }));
+        newStartTime.setHours(9,0,0,0); // Default 9 AM
+        const newEndTime = new Date(newStartTime.getTime() + 2 * 60 * 60 * 1000); // Default 2h slot
+        setFormData(prev => ({ 
+            ...prev, 
+            startTime: newStartTime, 
+            endTime: newEndTime,
+            resourceId: prev.resourceId || '', // Retain other fields if any
+            userName: prev.userName || '',
+            notes: prev.notes || ''
+        }));
     }
   }, [initialData, selectedDate]);
 
@@ -251,8 +349,16 @@ function BookingForm({ initialData, onSave, onCancel, selectedDate }: BookingFor
 
   const handleTimeChange = (field: 'startTime' | 'endTime', timeString: string) => {
     const [hours, minutes] = timeString.split(':').map(Number);
-    const currentDate = formData[field] ? new Date(formData[field]!) : (selectedDate || new Date());
-    const newDate = new Date(currentDate);
+    // Base the new Date on the existing date in formData for that field, or selectedDate if not set
+    let baseDateForTimeChange = formData[field] ? new Date(formData[field]!) : (selectedDate || new Date());
+    
+    // Ensure the date part is from selectedDate if opening a new form or if start/end times are being set
+    // This keeps the date consistent with the calendar selection.
+    if (selectedDate) {
+        baseDateForTimeChange.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+    }
+
+    const newDate = new Date(baseDateForTimeChange);
     newDate.setHours(hours, minutes, 0, 0);
     handleChange(field, newDate);
   };
@@ -297,6 +403,7 @@ function BookingForm({ initialData, onSave, onCancel, selectedDate }: BookingFor
            <Select
             value={formData.startTime ? format(new Date(formData.startTime), 'HH:mm') : ''}
             onValueChange={(value) => handleTimeChange('startTime', value)}
+            required
           >
             <SelectTrigger id="startTime">
               <SelectValue placeholder="Select start time" />
@@ -311,6 +418,7 @@ function BookingForm({ initialData, onSave, onCancel, selectedDate }: BookingFor
           <Select
             value={formData.endTime ? format(new Date(formData.endTime), 'HH:mm') : ''}
             onValueChange={(value) => handleTimeChange('endTime', value)}
+            required
           >
             <SelectTrigger id="endTime">
               <SelectValue placeholder="Select end time" />
@@ -339,3 +447,4 @@ function BookingForm({ initialData, onSave, onCancel, selectedDate }: BookingFor
     </form>
   );
 }
+
