@@ -12,6 +12,8 @@ import {
   Loader2,
   ListChecks,
   ClipboardList,
+  Building, // For Lab Management (if added back)
+  CheckSquare, // For Booking Approvals
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -35,15 +37,16 @@ interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  admin?: boolean;
+  admin?: boolean; // If true, consider this for an "Admin" section or for RBAC later
 }
 
 // Updated order of navigation items
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/admin/resources', label: 'Resources', icon: ClipboardList }, // Moved up
+  { href: '/admin/resources', label: 'Resources', icon: ClipboardList },
   { href: '/bookings', label: 'Bookings', icon: CalendarDays },
   { href: '/profile', label: 'My Profile', icon: UserCog },
+  { href: '/admin/booking-approvals', label: 'Booking Approvals', icon: CheckSquare, admin: true },
   { href: '/admin/users', label: 'Users', icon: UsersIconLucide, admin: true },
   { href: '/admin/resource-types', label: 'Resource Types', icon: ListChecks, admin: true },
 ];

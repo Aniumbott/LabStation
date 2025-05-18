@@ -3,9 +3,12 @@ import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking } 
 import { format, addDays, set } from 'date-fns';
 
 // For Resource Availability
-const todayStr = format(new Date(), 'yyyy-MM-dd');
-const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
-const dayAfterTomorrowStr = format(addDays(new Date(), 2), 'yyyy-MM-dd');
+const today = new Date();
+const todayStr = format(today, 'yyyy-MM-dd');
+const tomorrowStr = format(addDays(today, 1), 'yyyy-MM-dd');
+const dayAfterTomorrowStr = format(addDays(today, 2), 'yyyy-MM-dd');
+const threeDaysLaterStr = format(addDays(today, 3), 'yyyy-MM-dd');
+const fourDaysLaterStr = format(addDays(today, 4), 'yyyy-MM-dd');
 
 export const initialMockResourceTypes: ResourceType[] = [
   { id: 'rt1', name: 'Oscilloscope', description: 'For visualizing voltage signals over time.' },
@@ -27,7 +30,7 @@ export const resourceStatusesList: ResourceStatus[] = ['Available', 'Booked', 'M
 
 export const allAdminMockResources: Resource[] = [
   {
-    id: '1',
+    id: 'res1',
     name: 'Keysight MSOX3054T Oscilloscope',
     resourceTypeId: 'rt1',
     resourceTypeName: 'Oscilloscope',
@@ -52,7 +55,7 @@ export const allAdminMockResources: Resource[] = [
     }
   },
   {
-    id: '2',
+    id: 'res2',
     name: 'Rigol DP832 Programmable Power Supply',
     resourceTypeId: 'rt2',
     resourceTypeName: 'Power Supply',
@@ -72,7 +75,7 @@ export const allAdminMockResources: Resource[] = [
     notes: 'Ensure load is disconnected before changing voltage settings.'
   },
    {
-    id: '3',
+    id: 'res3',
     name: 'Siglent SDG2042X Function Generator',
     resourceTypeId: 'rt3',
     resourceTypeName: 'Function Generator',
@@ -89,7 +92,7 @@ export const allAdminMockResources: Resource[] = [
     notes: 'Output amplifier stage under repair. Expected back online next week.'
   },
   {
-    id: '4',
+    id: 'res4',
     name: 'Rohde & Schwarz FPC1500 Spectrum Analyzer',
     resourceTypeId: 'rt4',
     resourceTypeName: 'Spectrum Analyzer',
@@ -108,7 +111,7 @@ export const allAdminMockResources: Resource[] = [
     ]
   },
   {
-    id: 'rt6-instance',
+    id: 'res5',
     name: 'Weller WE1010NA Digital Soldering Station',
     resourceTypeId: 'rt6',
     resourceTypeName: 'Soldering Station',
@@ -128,7 +131,7 @@ export const allAdminMockResources: Resource[] = [
     notes: 'Variety of tips available in the labeled drawer. Please clean tip after use.'
   },
   {
-    id: 'rt5-instance',
+    id: 'res6',
     name: 'Fluke 87V Industrial Multimeter',
     resourceTypeId: 'rt5',
     resourceTypeName: 'Digital Multimeter (DMM)',
@@ -142,12 +145,12 @@ export const allAdminMockResources: Resource[] = [
     imageUrl: 'https://placehold.co/300x200.png',
     features: ['True-RMS AC Voltage/Current', 'Temperature Measurement (with probe)', 'CAT III 1000V, CAT IV 600V Safety Rating'],
     availability: [
-      { date: dayAfterTomorrowStr, slots: ['Full Day Booked'] }
+      { date: dayAfterTomorrowStr, slots: ['Full Day Booked'] } // Example of a fully booked day
     ],
     notes: 'Includes standard test leads and thermocouple probe.'
   },
   {
-    id: 'rt12-instance',
+    id: 'res7',
     name: 'FPGA Dev Node Alpha',
     resourceTypeId: 'rt12',
     resourceTypeName: 'FPGA Dev Node',
@@ -174,23 +177,117 @@ export const allAdminMockResources: Resource[] = [
       notes: 'SSH key authentication required. Contact admin for access.'
     }
   },
+  {
+    id: 'res8',
+    name: 'Ocean Optics Flame Spectrometer',
+    resourceTypeId: 'rt11',
+    resourceTypeName: 'Spectrometer',
+    lab: 'RF Lab',
+    status: 'Available',
+    manufacturer: 'Ocean Optics',
+    model: 'Flame-S-VIS-NIR',
+    serialNumber: 'FLMS12345',
+    purchaseDate: '2022-07-20T00:00:00.000Z',
+    description: 'Compact spectrometer for VIS-NIR measurements (350-1000 nm). Ideal for absorbance, transmittance, and irradiance.',
+    imageUrl: 'https://placehold.co/300x200.png',
+    features: ['350-1000 nm Range', 'High Resolution', 'USB Interface', 'Compact Size'],
+    availability: [
+      { date: threeDaysLaterStr, slots: ['10:00-12:00', '13:00-16:00'] },
+      { date: fourDaysLaterStr, slots: ['09:00-17:00'] }
+    ],
+    notes: 'OceanView software installed on connected PC. Fiber optic cables in drawer.'
+  }
 ];
 
+// Mock Users
+export const initialMockUsers: User[] = [
+  { id: 'u1', name: 'Admin User', email: 'admin@labstation.com', role: 'Admin', avatarUrl: 'https://placehold.co/100x100.png' },
+  { id: 'u2', name: 'Dr. Manager Second', email: 'manager.second@labstation.com', role: 'Lab Manager', avatarUrl: 'https://placehold.co/100x100.png' },
+  { id: 'u3', name: 'Technician Third', email: 'tech.third@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png' },
+  { id: 'u4', name: 'Researcher Fourth', email: 'researcher.fourth@labstation.com', role: 'Researcher', avatarUrl: 'https://placehold.co/100x100.png' },
+];
 
 // Mock Current User (used across Bookings, Resource Details, Dashboard)
-export const mockCurrentUser: User = {
-  id: 'u4', // Matched to an existing user in mockUsers for consistency
-  name: 'Researcher Fourth', // This name will be used in BookingForm
-  email: 'researcher.fourth@labstation.com',
-  role: 'Researcher' as RoleName,
-};
+export const mockCurrentUser: User = initialMockUsers[3]; // Researcher Fourth
 
 // Initial Bookings (used across Bookings, Resource Details, Dashboard)
+// Some bookings made by mockCurrentUser, some by others, some pending.
 export const initialBookings: Booking[] = [
-  { id: 'b1', resourceId: '1', resourceName: 'Keysight MSOX3054T Oscilloscope', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2, 12, 0), status: 'Confirmed', notes: 'Debugging SPI communication on custom MCU board.' },
-  { id: 'b2', resourceId: '2', resourceName: 'Rigol DP832 Programmable Power Supply', userId: 'u2', userName: 'Dr. Manager Second', startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 3, 14, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 3, 16, 0), status: 'Pending', notes: 'Powering up prototype device for thermal testing.' },
-  { id: 'b3', resourceId: '1', resourceName: 'Keysight MSOX3054T Oscilloscope', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1, 14, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1, 15, 0), status: 'Confirmed', notes: 'Quick check of clock signal jitter. High priority for RF module.' },
-  { id: 'b4', resourceId: '4', resourceName: 'Rohde & Schwarz FPC1500 Spectrum Analyzer', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 9, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 11, 0), status: 'Confirmed', notes: 'Antenna matching and S11 parameter measurement for new design.' },
-  { id: 'b5', resourceId: 'rt6-instance', resourceName: 'Weller WE1010NA Digital Soldering Station', userId: 'u2', userName: 'Dr. Manager Second', startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 5, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 5, 13, 0), status: 'Pending', notes: 'Reworking BGA component on development board.' },
-  { id: 'b6', resourceId: '1', resourceName: 'Keysight MSOX3054T Oscilloscope', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 12, 0), status: 'Confirmed', notes: 'Past booking: Verifying I2C signals between sensor and MCU.' },
+  { 
+    id: 'b1', 
+    resourceId: 'res1', 
+    resourceName: 'Keysight MSOX3054T Oscilloscope', 
+    userId: mockCurrentUser.id, 
+    userName: mockCurrentUser.name, 
+    startTime: set(addDays(today, 2), { hours: 10, minutes: 0 }), 
+    endTime: set(addDays(today, 2), { hours: 12, minutes: 0 }), 
+    status: 'Confirmed', 
+    notes: 'Debugging SPI communication on custom MCU board.' 
+  },
+  { 
+    id: 'b2', 
+    resourceId: 'res2', 
+    resourceName: 'Rigol DP832 Programmable Power Supply', 
+    userId: 'u2', // Dr. Manager Second
+    userName: initialMockUsers[1].name, 
+    startTime: set(addDays(today, 3), { hours: 14, minutes: 0 }), 
+    endTime: set(addDays(today, 3), { hours: 16, minutes: 0 }), 
+    status: 'Pending', 
+    notes: 'Powering up prototype device for thermal testing.' 
+  },
+  { 
+    id: 'b3', 
+    resourceId: 'res1', 
+    resourceName: 'Keysight MSOX3054T Oscilloscope', 
+    userId: mockCurrentUser.id, 
+    userName: mockCurrentUser.name, 
+    startTime: set(addDays(today, 1), { hours: 14, minutes: 0 }), 
+    endTime: set(addDays(today, 1), { hours: 15, minutes: 0 }), 
+    status: 'Pending', // Changed to Pending for approval demo
+    notes: 'Quick check of clock signal jitter. High priority for RF module.' 
+  },
+  { 
+    id: 'b4', 
+    resourceId: 'res4', 
+    resourceName: 'Rohde & Schwarz FPC1500 Spectrum Analyzer', 
+    userId: mockCurrentUser.id, 
+    userName: mockCurrentUser.name, 
+    startTime: set(today, { hours: 9, minutes: 0 }), 
+    endTime: set(today, { hours: 11, minutes: 0 }), 
+    status: 'Confirmed', 
+    notes: 'Antenna matching and S11 parameter measurement for new design.' 
+  },
+  { 
+    id: 'b5', 
+    resourceId: 'res5', 
+    resourceName: 'Weller WE1010NA Digital Soldering Station', 
+    userId: 'u2', // Dr. Manager Second
+    userName: initialMockUsers[1].name, 
+    startTime: set(addDays(today, 5), { hours: 10, minutes: 0 }), 
+    endTime: set(addDays(today, 5), { hours: 13, minutes: 0 }), 
+    status: 'Pending', 
+    notes: 'Reworking BGA component on development board.' 
+  },
+  { 
+    id: 'b6', 
+    resourceId: 'res1', 
+    resourceName: 'Keysight MSOX3054T Oscilloscope', 
+    userId: mockCurrentUser.id, 
+    userName: mockCurrentUser.name, 
+    startTime: set(addDays(today, -1), { hours: 10, minutes: 0 }), 
+    endTime: set(addDays(today, -1), { hours: 12, minutes: 0 }), 
+    status: 'Confirmed', 
+    notes: 'Past booking: Verifying I2C signals between sensor and MCU.' 
+  },
+  {
+    id: 'b7',
+    resourceId: 'res7',
+    resourceName: 'FPGA Dev Node Alpha',
+    userId: mockCurrentUser.id,
+    userName: mockCurrentUser.name,
+    startTime: set(addDays(today, 4), { hours: 11, minutes: 0 }),
+    endTime: set(addDays(today, 4), { hours: 15, minutes: 30 }),
+    status: 'Pending',
+    notes: 'Need to test new HDL core for signal processing acceleration.'
+  },
 ];

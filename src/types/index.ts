@@ -13,7 +13,7 @@ export interface RemoteAccessDetails {
   protocol?: 'RDP' | 'SSH' | 'VNC' | 'Other';
   username?: string;
   port?: number;
-  notes?: string; // For additional instructions or credential hints
+  notes?: string;
 }
 
 export interface Resource {
@@ -21,7 +21,7 @@ export interface Resource {
   name: string;
   resourceTypeId: string;
   resourceTypeName: string;
-  lab: 'Electronics Lab 1' | 'RF Lab' | 'Prototyping Lab' | 'General Test Area'; // Updated to specific lab names
+  lab: 'Electronics Lab 1' | 'RF Lab' | 'Prototyping Lab' | 'General Test Area';
   status: ResourceStatus;
   description: string;
   imageUrl: string;
@@ -30,7 +30,7 @@ export interface Resource {
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
-  purchaseDate?: string;
+  purchaseDate?: string; // ISO string
   notes?: string;
   remoteAccess?: RemoteAccessDetails;
 }
@@ -43,7 +43,7 @@ export interface Booking {
   userName: string;
   startTime: Date;
   endTime: Date;
-  status: 'Confirmed' | 'Pending' | 'Cancelled';
+  status: 'Confirmed' | 'Pending' | 'Cancelled'; // 'Pending' will mean pending approval
   notes?: string;
 }
 
@@ -56,3 +56,12 @@ export interface User {
   role: RoleName;
   avatarUrl?: string;
 }
+
+// Lab type removed as feature was skipped
+// export interface Lab {
+//   id: string;
+//   name: string;
+//   location: string;
+//   description?: string;
+//   timezone: string;
+// }
