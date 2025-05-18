@@ -66,12 +66,12 @@ export default function ProfilePage() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="profileName" className="font-medium">Full Name</Label>
-                  <Input id="profileName" defaultValue={currentUser.name} className="mt-1 bg-muted/50" />
+                  <Input id="profileName" defaultValue={currentUser.name} className="mt-1" />
                 </div>
                 <div>
                   <Label htmlFor="profileEmail" className="font-medium">Email Address</Label>
                   <div className="flex items-center mt-1">
-                    <Input id="profileEmail" type="email" defaultValue={currentUser.email} className="bg-muted/50"/>
+                    <Input id="profileEmail" type="email" defaultValue={currentUser.email} />
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button variant="ghost" size="icon" className="ml-2 text-muted-foreground hover:text-primary h-8 w-8">
