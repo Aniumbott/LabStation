@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/icons/logo';
-import { MobileSidebarToggle } from './MobileSidebarToggle'; // New import
+import { MobileSidebarToggle } from './MobileSidebarToggle';
 
 interface NavItem {
   href: string;
@@ -37,12 +37,10 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/resources', label: 'Resource Search', icon: Search },
-  { href: '/bookings', label: 'Booking Calendar', icon: CalendarDays },
+  { href: '/bookings', label: 'Manage Bookings', icon: CalendarDays },
   { href: '/admin/users', label: 'User Management', icon: Users },
   { href: '/profile', label: 'My Profile', icon: UserCog },
 ];
-
-// Header component is removed
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -53,8 +51,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }, []);
 
   if (!isMounted) {
-    // SSR and initial client render: Keep it simple to avoid hydration issues.
-    // No complex sidebar structure, just the provider and main content area.
     return (
       <SidebarProvider defaultOpen>
         <div className="flex flex-col min-h-svh bg-background">
@@ -66,10 +62,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // Client-side render after mount: Full layout
   return (
     <SidebarProvider defaultOpen>
-      <Sidebar> {/* Sidebar handles its own mobile (Sheet) / desktop rendering */}
+      <Sidebar> 
         <SidebarHeader className="p-4">
           <Logo />
         </SidebarHeader>
@@ -95,10 +90,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </SidebarContent>
       </Sidebar>
 
-      {/* SidebarInset acts as the <main> tag and wraps page content */}
       <SidebarInset className="flex flex-col relative p-4 md:p-6 lg:p-8">
-        <MobileSidebarToggle /> {/* Mobile trigger positioned within the main content area */}
-        {children} {/* Page content */}
+        <MobileSidebarToggle /> 
+        {children} 
       </SidebarInset>
     </SidebarProvider>
   );

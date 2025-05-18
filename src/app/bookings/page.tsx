@@ -6,7 +6,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { CalendarDays, PlusCircle, Edit3, X, Clock, UserCircle, Info, ChevronLeft, ChevronRight, Search as SearchIcon, FilterX } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -102,8 +102,6 @@ function BookingsPageContent() {
      if (dateToSet && (!selectedDate || selectedDate.getTime() !== dateToSet.getTime())) {
         setSelectedDate(dateToSet);
         setCurrentMonth(dateToSet);
-    } else if (!dateParam && selectedDate !== undefined) { // Clear date if param removed
-        // setSelectedDate(undefined); // Keep selectedDate if other filters are active. Cleared by handleDateSelect(undefined)
     }
 
     if (bookingIdParam) {
@@ -112,7 +110,7 @@ function BookingsPageContent() {
             if (bookingToEdit) handleOpenForm(bookingToEdit);
         }
     } else if (resourceIdParam && !isFormOpen) {
-        if (!currentBooking || (currentBooking && currentBooking.id) || (currentBooking && !currentBooking.id && currentBooking.resourceId !== resourceIdParam)) {
+         if (!currentBooking || (currentBooking && currentBooking.id) || (currentBooking && !currentBooking.id && currentBooking.resourceId !== resourceIdParam)) {
             handleOpenForm(undefined, resourceIdParam);
         }
     }
@@ -218,10 +216,10 @@ function BookingsPageContent() {
 
     if (proposedEndTime <= proposedStartTime) { toast({ title: "Invalid Time", description: "End time must be after start time.", variant: "destructive" }); return; }
 
-    const conflictingBooking = initialBookings.find(existingBooking => { // Check against all bookings for conflicts
+    const conflictingBooking = initialBookings.find(existingBooking => { 
         if (existingBooking.resourceId !== formData.resourceId) return false;
         if (existingBooking.status === 'Cancelled') return false; 
-        if (currentBooking && currentBooking.id && existingBooking.id === currentBooking.id) return false; // Is current booking
+        if (currentBooking && currentBooking.id && existingBooking.id === currentBooking.id) return false; 
         if(format(existingBooking.startTime, 'yyyy-MM-dd') !== format(proposedStartTime, 'yyyy-MM-dd')) return false;
         const existingStartTime = new Date(existingBooking.startTime);
         const existingEndTime = new Date(existingBooking.endTime);
@@ -255,7 +253,7 @@ function BookingsPageContent() {
     setSearchTerm('');
     setFilterResourceId('all');
     setFilterStatus('all');
-    handleDateSelect(undefined); // also clears date from URL
+    handleDateSelect(undefined); 
   };
   
   if (!isClient) {
@@ -272,77 +270,73 @@ function BookingsPageContent() {
       />
 
       <div className="grid md:grid-cols-3 gap-8 items-start">
-        <Card className="md:col-span-1 shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xl">Filter by Date</CardTitle>
-             <div className="flex justify-between items-center pt-2">
-                <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></Button>
-                <span className="font-semibold text-center min-w-[120px]">{format(currentMonth, 'MMMM yyyy')}</span>
-                <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} aria-label="Next month"><ChevronRight className="h-4 w-4" /></Button>
-            </div>
-          </CardHeader>
-          <CardContent className="flex justify-center">
-            <Calendar
-              mode="single" selected={selectedDate} onSelect={handleDateSelect} month={currentMonth} onMonthChange={setCurrentMonth}
-              className="rounded-md border p-3"
-              disabled={(date) => date < startOfDay(new Date(new Date().setDate(new Date().getDate() -30))) } // Show past 30 days
-              modifiers={calendarModifiers} modifiersStyles={calendarModifierStyles}
-              footer={
-                selectedDate ? 
-                    <Button variant="outline" className="w-full mt-2 text-sm" onClick={() => handleDateSelect(undefined)}>View All My Bookings</Button>
-                   : <p className="text-xs text-center text-muted-foreground mt-2">Viewing all your bookings (filtered below).</p>
-              }
-              classNames={{ day_selected: 'bg-primary text-primary-foreground hover:bg-primary/90 focus:bg-primary focus:text-primary-foreground', day_today: 'bg-accent text-accent-foreground font-bold', day_disabled: 'text-muted-foreground/50 opacity-50', day_modifier_booked: 'relative day-booked-dot' }}
-            />
-          </CardContent>
-        </Card>
+        <div className="md:col-span-1 space-y-6">
+          <Card className="shadow-lg">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xl">Filter by Date</CardTitle>
+               <div className="flex justify-between items-center pt-2">
+                  <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></Button>
+                  <span className="font-semibold text-center min-w-[120px]">{format(currentMonth, 'MMMM yyyy')}</span>
+                  <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} aria-label="Next month"><ChevronRight className="h-4 w-4" /></Button>
+              </div>
+            </CardHeader>
+            <CardContent className="flex justify-center">
+              <Calendar
+                mode="single" selected={selectedDate} onSelect={handleDateSelect} month={currentMonth} onMonthChange={setCurrentMonth}
+                className="rounded-md border p-3"
+                disabled={(date) => date < startOfDay(new Date(new Date().setDate(new Date().getDate() -30))) } 
+                modifiers={calendarModifiers} modifiersStyles={calendarModifierStyles}
+                footer={
+                  selectedDate ? 
+                      <Button variant="outline" className="w-full mt-2 text-sm" onClick={() => handleDateSelect(undefined)}>View All My Bookings</Button>
+                     : <p className="text-xs text-center text-muted-foreground mt-2">Viewing all your bookings (filtered below).</p>
+                }
+                classNames={{ day_selected: 'bg-primary text-primary-foreground hover:bg-primary/90 focus:bg-primary focus:text-primary-foreground', day_today: 'bg-accent text-accent-foreground font-bold', day_disabled: 'text-muted-foreground/50 opacity-50', day_modifier_booked: 'relative day-booked-dot' }}
+              />
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="md:col-span-2 space-y-6">
-            <Card className="shadow-lg">
-                <CardHeader>
-                    <CardTitle>Filter & Search Your Bookings</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="relative">
-                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                        <Input 
-                            type="search" 
-                            placeholder="Search by resource name or notes..." 
-                            className="pl-10"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    <div className="grid sm:grid-cols-2 gap-4">
-                        <Select value={filterResourceId} onValueChange={setFilterResourceId}>
-                            <SelectTrigger><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Resources</SelectItem>
-                                {mockResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                        <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as BookingStatusFilter)}>
-                            <SelectTrigger><SelectValue placeholder="Filter by Status" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Statuses</SelectItem>
-                                {bookingStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <Button onClick={resetFilters} variant="outline" className="w-full sm:w-auto"><FilterX className="mr-2 h-4 w-4"/>Clear All Filters</Button>
-                </CardContent>
-            </Card>
-
-            <Card className="shadow-lg">
+          <Card className="shadow-lg">
             <CardHeader>
                 <CardTitle>
                 {selectedDate ? `Your Bookings for ${format(selectedDate, 'PPP')}` : 'All Your Bookings'}
                 </CardTitle>
                 <CardDescription>
-                {bookingsToDisplay.length} booking(s) found matching your criteria.
+                  Use the filters below to narrow down your bookings. {bookingsToDisplay.length} booking(s) currently displayed.
                 </CardDescription>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="space-y-4">
+                <div className="relative">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input 
+                        type="search" 
+                        placeholder="Search by resource name or notes..." 
+                        className="pl-10"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                    <Select value={filterResourceId} onValueChange={setFilterResourceId}>
+                        <SelectTrigger><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Resources</SelectItem>
+                            {mockResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as BookingStatusFilter)}>
+                        <SelectTrigger><SelectValue placeholder="Filter by Status" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Statuses</SelectItem>
+                            {bookingStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                 <Button onClick={resetFilters} variant="outline" className="w-full sm:w-auto"><FilterX className="mr-2 h-4 w-4"/>Clear All Filters</Button>
+            </CardContent>
+            <CardContent className="p-0"> {/* Changed from a separate card to be part of the same card */}
                 {bookingsToDisplay.length > 0 ? (
                 <div className="overflow-x-auto">
                 <Table>
@@ -477,12 +471,11 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
         initialStartTime = new Date(initialData.startTime);
         initialEndTime = initialData.endTime ? new Date(initialData.endTime) : new Date(initialStartTime.getTime() + 2 * 60 * 60 * 1000);
         
-        // If creating NEW booking AND a specific date is chosen on calendar, form date should reflect calendar date
         if (!isEditing && selectedDateProp && startOfDay(initialStartTime).getTime() !== startOfDay(selectedDateProp).getTime()) { 
             initialStartTime = set(initialStartTime, { year: selectedDateProp.getFullYear(), month: selectedDateProp.getMonth(), date: selectedDateProp.getDate() });
             initialEndTime = set(initialEndTime, { year: selectedDateProp.getFullYear(), month: selectedDateProp.getMonth(), date: selectedDateProp.getDate() });
         }
-    } else { // No initial start time provided (e.g. truly new booking)
+    } else { 
         const baseDate = selectedDateProp || startOfDay(new Date()); 
         initialStartTime = set(new Date(baseDate), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 });
         initialEndTime = new Date(initialStartTime.getTime() + 2 * 60 * 60 * 1000);
@@ -495,8 +488,8 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     return {
         id: initialData?.id,
         resourceId: initialResourceId,
-        userName: currentUserFullName, // Always current user
-        userId: initialData?.userId || mockCurrentUser.id, // Ensure userId is set
+        userName: currentUserFullName, 
+        userId: initialData?.userId || mockCurrentUser.id, 
         startTime: initialStartTime,
         endTime: initialEndTime,
         status: initialStatus,
@@ -509,11 +502,10 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     if (isNewBooking && selectedDateProp) {
       setFormData(prev => {
         const currentFormStartTime = prev.startTime ? new Date(prev.startTime) : new Date();
-        // Only update if the date part is different
         if (startOfDay(currentFormStartTime).getTime() !== startOfDay(selectedDateProp).getTime()) {
             const newStartTime = set(currentFormStartTime, { year: selectedDateProp.getFullYear(), month: selectedDateProp.getMonth(), date: selectedDateProp.getDate() });
             let duration = (prev.endTime ? new Date(prev.endTime).getTime() : 0) - (prev.startTime ? new Date(prev.startTime).getTime() : 0);
-            if (duration <= 0) duration = 2 * 60 * 60 * 1000; // Default 2 hour duration
+            if (duration <= 0) duration = 2 * 60 * 60 * 1000; 
             let newEndTime = new Date(newStartTime.getTime() + duration);
             newEndTime = set(newEndTime, { year: newStartTime.getFullYear(), month: newStartTime.getMonth(), date: newStartTime.getDate() });
             return { ...prev, startTime: newStartTime, endTime: newEndTime };
@@ -531,7 +523,6 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     const [hours, minutes] = timeString.split(':').map(Number);
     
     let baseDateForTimeChange: Date;
-    // Prioritize existing form times if available, then selectedDateProp, then today.
     if (formData[field]) {
         baseDateForTimeChange = new Date(formData[field]!);
     } else if (selectedDateProp) {
@@ -539,12 +530,9 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     } else {
         baseDateForTimeChange = startOfDay(new Date());
     }
-    // If we are setting time for a new booking AND selectedDateProp is available,
-    // ensure the time change applies to selectedDateProp.
      if (!formData.id && selectedDateProp) {
-       baseDateForTimeChange = set(selectedDateProp, { hours: new Date().getHours(), minutes: new Date().getMinutes()}); // Use selectedDateProp as base
+       baseDateForTimeChange = set(selectedDateProp, { hours: new Date().getHours(), minutes: new Date().getMinutes()}); 
     }
-
 
     const newDate = set(baseDateForTimeChange, { hours, minutes, seconds: 0, milliseconds: 0 });
     handleChange(field, newDate);
@@ -557,7 +545,6 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
              if (existingDuration > 0) duration = existingDuration;
         }
         let newAutoEndTime = new Date(currentStartTime.getTime() + duration);
-        // Ensure newAutoEndTime retains the date of currentStartTime
         newAutoEndTime = set(newAutoEndTime, { year: currentStartTime.getFullYear(), month: currentStartTime.getMonth(), date: currentStartTime.getDate() });
         handleChange('endTime', newAutoEndTime);
     }
