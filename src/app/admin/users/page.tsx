@@ -47,7 +47,7 @@ export default function UserManagementPage() {
         icon={UsersIcon}
         actions={
           <Button asChild>
-            <Link href="/admin/users/new"> {/* This link will be a 404 for now */}
+            <Link href="/admin/users/new">
               <PlusCircle className="mr-2 h-4 w-4" /> Add New User
             </Link>
           </Button>
@@ -107,7 +107,7 @@ export default function UserManagementPage() {
           <p className="text-lg font-medium">No Users Found</p>
           <p className="text-sm mb-4">There are currently no users in the system.</p>
           <Button asChild>
-            <Link href="/admin/users/new"> {/* This link will be a 404 for now */}
+            <Link href="/admin/users/new">
              <PlusCircle className="mr-2 h-4 w-4" /> Add First User
             </Link>
           </Button>
