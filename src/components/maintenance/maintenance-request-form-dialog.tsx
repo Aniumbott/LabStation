@@ -13,9 +13,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -28,7 +26,7 @@ const maintenanceRequestFormSchema = z.object({
   resourceId: z.string().min(1, { message: 'Please select a resource.' }),
   issueDescription: z.string().min(10, { message: 'Issue description must be at least 10 characters.' }).max(1000, { message: 'Description cannot exceed 1000 characters.' }),
   status: z.enum(maintenanceRequestStatuses as [string, ...string[]], { required_error: 'Please select a status.'}),
-  assignedTechnicianId: z.string().optional(),
+  assignedTechnicianId: z.string().optional().or(z.literal('')), // Allow empty string or undefined
   resolutionNotes: z.string().max(1000).optional(),
 });
 
@@ -42,6 +40,8 @@ interface MaintenanceRequestFormDialogProps {
   technicians: User[];
   resources: Resource[];
 }
+
+const UNASSIGNED_TECHNICIAN_VALUE = "--unassigned--";
 
 export function MaintenanceRequestFormDialog({
     open, onOpenChange, initialRequest, onSave, technicians, resources
@@ -79,10 +79,15 @@ export function MaintenanceRequestFormDialog({
         });
       }
     }
-  }, [open, initialRequest, form, resources]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialRequest, resources]); // form.reset should not be a dependency here
 
   function onSubmit(data: MaintenanceRequestFormValues) {
-    onSave(data);
+    const dataToSave = {
+      ...data,
+      assignedTechnicianId: data.assignedTechnicianId === UNASSIGNED_TECHNICIAN_VALUE || data.assignedTechnicianId === '' ? undefined : data.assignedTechnicianId,
+    };
+    onSave(dataToSave);
   }
 
   return (
@@ -104,7 +109,11 @@ export function MaintenanceRequestFormDialog({
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Resource</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ''} disabled={!!initialRequest}>
+                        <Select 
+                            onValueChange={field.onChange} 
+                            value={field.value || ''} 
+                            disabled={!!initialRequest}
+                        >
                             <FormControl><SelectTrigger><SelectValue placeholder="Select a resource" /></SelectTrigger></FormControl>
                             <SelectContent>
                             {resources.map(res => (
@@ -135,7 +144,7 @@ export function MaintenanceRequestFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Status</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || ''}>
+                            <Select onValueChange={field.onChange} value={field.value || 'Open'}>
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
                                 <SelectContent>
                                 {maintenanceRequestStatuses.map(statusVal => (
@@ -153,10 +162,13 @@ export function MaintenanceRequestFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Assign Technician (Optional)</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || ''}>
+                            <Select 
+                                onValueChange={(value) => field.onChange(value === UNASSIGNED_TECHNICIAN_VALUE ? '' : value)} 
+                                value={field.value || ''}
+                            >
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select a technician" /></SelectTrigger></FormControl>
                                 <SelectContent>
-                                  <SelectItem value="">Unassigned</SelectItem>
+                                  <SelectItem value={UNASSIGNED_TECHNICIAN_VALUE}>Unassigned</SelectItem>
                                 {technicians.map(tech => (
                                     <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
                                 ))}
@@ -173,7 +185,7 @@ export function MaintenanceRequestFormDialog({
                         name="resolutionNotes"
                         render={({ field }) => (
                             <FormItem>
-                            <FormLabel>Resolution Notes {watchStatus === 'Resolved' && <span className="text-destructive">*</span>}</FormLabel>
+                            <FormLabel>Resolution Notes {watchStatus === 'Resolved' || watchStatus === 'Closed' ? <span className="text-destructive">*</span> : ''}</FormLabel>
                             <FormControl><Textarea placeholder="Describe the resolution steps taken..." {...field} rows={4} /></FormControl>
                              <FormDescription>Required if status is Resolved or Closed.</FormDescription>
                             <FormMessage />
