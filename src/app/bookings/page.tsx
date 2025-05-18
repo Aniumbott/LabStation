@@ -15,7 +15,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogClose,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,15 +38,13 @@ const initialBookings: Booking[] = [
   { id: 'b2', resourceId: '2', resourceName: 'BioSafety Cabinet Omega', userId: 'user2', userName: 'Dr. Charles Babbage', startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 3, 14, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 3, 16, 0), status: 'Pending', notes: 'Cell culture experiment setup.' },
 ];
 
-// Mock current user for booking context
 const mockCurrentUser = {
   id: 'user_authed_123',
-  name: 'Dr. Lab User', // This name will be auto-filled
+  name: 'Dr. Lab User',
   email: 'lab.user@labstation.com',
   role: 'Researcher' as RoleName,
 };
 
-// Helper to generate time slots
 const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
   const hour = 9 + Math.floor(i / 2);
   const minute = i % 2 === 0 ? '00' : '30';
@@ -73,19 +70,13 @@ function BookingsPageContent() {
   const [isClient, setIsClient] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentBooking, setCurrentBooking] = useState<Partial<Booking> & { resourceId?: string } | null>(null);
-  const [initialResourceIdFromQuery, setInitialResourceIdFromQuery] = useState<string | null>(null);
-
-
+  
   useEffect(() => {
     setIsClient(true);
     const resourceIdParam = searchParams.get('resourceId');
     const dateParam = searchParams.get('date');
     const bookingIdParam = searchParams.get('bookingId');
 
-    if (resourceIdParam) {
-      setInitialResourceIdFromQuery(resourceIdParam);
-    }
-    
     if (dateParam) {
       const parsedQueryDate = parseISO(dateParam);
       if (isValidDate(parsedQueryDate)) {
@@ -93,20 +84,17 @@ function BookingsPageContent() {
       }
     }
     
-    // If bookingId is in URL, try to open that booking for editing
     if (bookingIdParam) {
         const bookingToEdit = bookings.find(b => b.id === bookingIdParam);
         if (bookingToEdit) {
             handleOpenForm(bookingToEdit);
-        } else if (resourceIdParam && !isFormOpen) { // If bookingId not found, but resourceId exists, open new booking for that resource
-            handleOpenForm();
+        } else if (resourceIdParam && !isFormOpen) { 
+            handleOpenForm(undefined, resourceIdParam);
         }
-    } else if (resourceIdParam && !isFormOpen) { // If no bookingId, but resourceId exists, open new booking
-        handleOpenForm();
+    } else if (resourceIdParam && !isFormOpen) { 
+        handleOpenForm(undefined, resourceIdParam);
     }
-
-
-  }, [searchParams]); // Re-run if searchParams change
+  }, [searchParams, bookings, isFormOpen]); // Added bookings and isFormOpen to ensure effect re-runs if needed
 
   const bookingsForSelectedDate = selectedDate
     ? bookings.filter(
@@ -122,26 +110,28 @@ function BookingsPageContent() {
     }
   };
   
-  const handleOpenForm = (booking?: Booking) => {
-    const baseDate = selectedDate || startOfDay(new Date());
-    const defaultStartTime = new Date(baseDate);
+  const handleOpenForm = (bookingToEdit?: Booking, resourceIdForNew?: string | null) => {
+    const baseDateForNewBooking = selectedDate || startOfDay(new Date());
+    const defaultStartTime = new Date(baseDateForNewBooking);
     defaultStartTime.setHours(9,0,0,0);
 
     let bookingData: Partial<Booking> & { resourceId?: string };
 
-    if (booking) {
+    if (bookingToEdit) {
         bookingData = {
-            ...booking,
-            startTime: new Date(booking.startTime),
-            endTime: new Date(booking.endTime),
-            userName: booking.userName || mockCurrentUser.name, // Ensure username is there
+            ...bookingToEdit,
+            startTime: new Date(bookingToEdit.startTime), // Ensure dates are Date objects
+            endTime: new Date(bookingToEdit.endTime),
+            userName: bookingToEdit.userName || mockCurrentUser.name,
         };
     } else {
         bookingData = { 
             startTime: defaultStartTime, 
-            endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000),
-            userName: mockCurrentUser.name, // Auto-fill current user's name
-            resourceId: initialResourceIdFromQuery || '', // Pre-fill resource if from query
+            endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000), // Default 2h duration
+            userName: mockCurrentUser.name,
+            resourceId: resourceIdForNew || '', // Use resourceIdForNew if provided for a new booking
+            status: 'Pending',
+            notes: '',
         };
     }
     setCurrentBooking(bookingData);
@@ -195,8 +185,9 @@ function BookingsPageContent() {
         startTime: proposedStartTime,
         endTime: proposedEndTime,
         resourceName: resource.name,
-        status: formData.status || 'Pending',
+        status: formData.status || 'Pending', // Ensure status is set
     } as Booking;
+
 
     if (currentBooking && currentBooking.id) { 
       setBookings(bookings.map(b => b.id === currentBooking.id ? { ...b, ...newBookingData, id: b.id } : b));
@@ -207,7 +198,6 @@ function BookingsPageContent() {
     }
     setIsFormOpen(false);
     setCurrentBooking(null);
-    setInitialResourceIdFromQuery(null); // Reset query param effect after use
   };
 
   const handleCancelBooking = (bookingId: string) => {
@@ -262,7 +252,7 @@ function BookingsPageContent() {
           </CardContent>
         </Card>
 
-        <Card className="md:col-span-2 shadow-lg min-h-[300px]"> {/* Added min-h */}
+        <Card className="md:col-span-2 shadow-lg min-h-[300px]">
           <CardHeader>
             <CardTitle>
               Bookings for {selectedDate ? format(selectedDate, 'PPP') : 'selected date'}
@@ -306,7 +296,7 @@ function BookingsPageContent() {
               <div className="text-center py-10 text-muted-foreground">
                 <CalendarDays className="mx-auto h-12 w-12 mb-4 opacity-50" />
                 <p>No bookings scheduled for this day.</p>
-                 <Button variant="outline" onClick={() => handleOpenForm()} className="mt-4">
+                 <Button variant="outline" onClick={() => handleOpenForm(undefined, selectedDate ? undefined : searchParams.get('resourceId'))} className="mt-4">
                     <PlusCircle className="mr-2 h-4 w-4" /> Create a Booking for {selectedDate ? format(selectedDate, 'MMM do') : 'this day'}
                 </Button>
               </div>
@@ -318,8 +308,7 @@ function BookingsPageContent() {
       <Dialog open={isFormOpen} onOpenChange={(isOpen) => {
             setIsFormOpen(isOpen);
             if (!isOpen) {
-                setCurrentBooking(null); // Clear current booking when dialog closes
-                setInitialResourceIdFromQuery(null); // Reset query param effect
+                setCurrentBooking(null); 
             }
         }}>
         <DialogContent className="sm:max-w-[525px]">
@@ -327,16 +316,16 @@ function BookingsPageContent() {
             <DialogTitle>{currentBooking?.id ? 'Edit Booking' : 'Create New Booking'}</DialogTitle>
             <DialogDescription>
               Fill in the details below to {currentBooking?.id ? 'update your' : 'schedule a new'} booking
-              {selectedDate && ` for ${format(selectedDate, 'PPP')}`}.
+              {selectedDate && (!currentBooking || !currentBooking.id) && ` for ${format(selectedDate, 'PPP')}`}.
             </DialogDescription>
           </DialogHeader>
-          <BookingForm 
+          <BookingForm
+            key={currentBooking?.id || `new:${currentBooking?.resourceId || 'empty'}:${selectedDate?.getTime()}`}
             initialData={currentBooking} 
             onSave={handleSaveBooking} 
             onCancel={() => {
                 setIsFormOpen(false);
                 setCurrentBooking(null);
-                setInitialResourceIdFromQuery(null);
             }}
             selectedDate={selectedDate}
             currentUserFullName={mockCurrentUser.name}
@@ -347,7 +336,6 @@ function BookingsPageContent() {
   );
 }
 
-// Wrap with Suspense for useSearchParams
 export default function BookingsPage() {
   return (
     <Suspense fallback={<div className="flex justify-center items-center h-screen"><CalendarDays className="h-12 w-12 animate-spin text-primary" /><p className="ml-4 text-lg">Loading...</p></div>}>
@@ -361,77 +349,83 @@ interface BookingFormProps {
   initialData?: Partial<Booking> & { resourceId?: string } | null;
   onSave: (data: Partial<Booking>) => void;
   onCancel: () => void;
-  selectedDate?: Date;
+  selectedDate?: Date; // Date from the main calendar
   currentUserFullName: string;
 }
 
 function BookingForm({ initialData, onSave, onCancel, selectedDate, currentUserFullName }: BookingFormProps) {
   const [formData, setFormData] = useState<Partial<Booking>>(() => {
-    const baseDate = initialData?.startTime ? new Date(initialData.startTime) : (selectedDate || startOfDay(new Date()));
-    let effectiveDate = new Date(baseDate);
-    if (selectedDate) { 
-        effectiveDate = new Date(selectedDate);
-    }
+    // This initializer runs when the component mounts or its key changes.
+    // It should set up the form based on initialData and selectedDate (for new bookings).
+    const isEditing = !!initialData?.id;
     
-    if (initialData) {
-        return {
-            ...initialData,
-            userName: initialData.userName || currentUserFullName,
-            resourceId: initialData.resourceId || '',
-            startTime: new Date(initialData.startTime!),
-            endTime: new Date(initialData.endTime!),
-        };
-    }
-    
-    const defaultStartTime = new Date(effectiveDate);
-    defaultStartTime.setHours(9,0,0,0);
-    const defaultEndTime = new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000); 
+    let initialResourceId = initialData?.resourceId || '';
+    let initialStartTime: Date;
+    let initialEndTime: Date;
+    let initialNotes = initialData?.notes || '';
+    let initialStatus = initialData?.status || 'Pending';
 
-    return { 
-        startTime: defaultStartTime, 
-        endTime: defaultEndTime, 
-        resourceId: '', 
-        userName: currentUserFullName, 
-        notes: '' 
+    if (isEditing && initialData?.startTime) {
+        initialStartTime = new Date(initialData.startTime);
+        initialEndTime = initialData.endTime ? new Date(initialData.endTime) : new Date(initialStartTime.getTime() + 2 * 60 * 60 * 1000);
+    } else { // New booking
+        const baseDate = selectedDate || startOfDay(new Date()); // Use calendar's selectedDate for new booking's date part
+        initialStartTime = new Date(baseDate);
+        if (initialData?.startTime) { // If new booking form opened with specific time (e.g. from URL param - though not implemented yet)
+            initialStartTime.setHours(new Date(initialData.startTime).getHours(), new Date(initialData.startTime).getMinutes(), 0, 0);
+        } else {
+            initialStartTime.setHours(9, 0, 0, 0); // Default to 9 AM
+        }
+        
+        if (initialData?.endTime) {
+            initialEndTime = new Date(initialData.endTime);
+        } else {
+            initialEndTime = new Date(initialStartTime.getTime() + 2 * 60 * 60 * 1000); // Default 2hr duration
+        }
+    }
+
+    return {
+        id: initialData?.id,
+        resourceId: initialResourceId,
+        userName: initialData?.userName || currentUserFullName,
+        startTime: initialStartTime,
+        endTime: initialEndTime,
+        status: initialStatus,
+        notes: initialNotes,
     };
   });
 
-
+  // Effect to sync date part with selectedDate from calendar if it's a new booking
   useEffect(() => {
-    let newStartTime: Date;
-    let newEndTime: Date;
-    let newResourceId = initialData?.resourceId || formData.resourceId || ''; // Prioritize initialData for resourceId
+    const isNewBooking = !initialData?.id;
+    if (isNewBooking && selectedDate) {
+      setFormData(prev => {
+        const newStartTime = prev.startTime ? new Date(prev.startTime) : new Date();
+        newStartTime.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
 
-    if (initialData?.startTime) {
-        newStartTime = new Date(initialData.startTime);
-        newEndTime = new Date(initialData.endTime!);
-    } else if (selectedDate) {
-        newStartTime = new Date(selectedDate);
-        newStartTime.setHours(formData.startTime ? new Date(formData.startTime).getHours() : 9, formData.startTime ? new Date(formData.startTime).getMinutes() : 0, 0, 0);
-        newEndTime = new Date(newStartTime.getTime() + 2 * 60 * 60 * 1000); // Default 2h if no initial end time
-        if (formData.endTime) { // if form already has an end time, try to preserve its duration
-             const duration = new Date(formData.endTime).getTime() - (formData.startTime ? new Date(formData.startTime).getTime() : newStartTime.getTime());
-             newEndTime = new Date(newStartTime.getTime() + Math.max(duration, 30 * 60 * 1000)); // min 30 min duration
+        const newEndTime = prev.endTime ? new Date(prev.endTime) : new Date();
+        newEndTime.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+        
+        // Ensure end time is after start time after date part sync
+        if (newEndTime <= newStartTime && prev.startTime && prev.endTime) {
+             const duration = new Date(prev.endTime).getTime() - new Date(prev.startTime).getTime();
+             newEndTime.setTime(newStartTime.getTime() + Math.max(duration, 30*60*1000));
+        } else if (newEndTime <= newStartTime) {
+             newEndTime.setTime(newStartTime.getTime() + 2*60*60*1000); // Default 2h if still invalid
         }
-    } else { // Fallback if no selectedDate and no initialData times
-        newStartTime = new Date(formData.startTime || startOfDay(new Date()));
-        newStartTime.setHours(9,0,0,0);
-        newEndTime = new Date(newStartTime.getTime() + 2 * 60 * 60 * 1000);
+
+
+        if (new Date(prev.startTime || 0).toDateString() !== newStartTime.toDateString() ||
+            new Date(prev.endTime || 0).toDateString() !== newEndTime.toDateString() ) {
+          return { ...prev, startTime: newStartTime, endTime: newEndTime };
+        }
+        return prev;
+      });
     }
-
-    setFormData(prev => ({ 
-        ...prev, 
-        ...initialData, // Spread initialData first to get id, status, etc.
-        userName: initialData?.userName || currentUserFullName,
-        resourceId: newResourceId,
-        startTime: newStartTime, 
-        endTime: newEndTime,
-    }));
-
-  }, [initialData, selectedDate, currentUserFullName]);
+  }, [selectedDate, initialData?.id ]);
 
 
-  const handleChange = (field: keyof Booking, value: any) => {
+  const handleChange = (field: keyof Booking | 'resourceId', value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -439,25 +433,38 @@ function BookingForm({ initialData, onSave, onCancel, selectedDate, currentUserF
     const [hours, minutes] = timeString.split(':').map(Number);
     const baseDateForTimeChange = formData[field] ? new Date(formData[field]!) : (selectedDate || startOfDay(new Date()));
     
-    if (selectedDate) { // Ensure date part matches current selected date
+    if (selectedDate && (!initialData || !initialData.id)) { // Ensure date part matches current selected date for new bookings
         baseDateForTimeChange.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+    } else if (initialData && initialData.id && formData[field]) { // For existing bookings, use their original date part
+         baseDateForTimeChange.setFullYear(new Date(formData[field]!).getFullYear(), new Date(formData[field]!).getMonth(), new Date(formData[field]!).getDate());
     }
+
 
     const newDate = new Date(baseDateForTimeChange);
     newDate.setHours(hours, minutes, 0, 0);
     handleChange(field, newDate);
 
-    // Auto-adjust end time if start time changes, maintaining duration (or default if invalid)
     if (field === 'startTime') {
         const currentStartTime = newDate;
         const currentEndTime = formData.endTime ? new Date(formData.endTime) : new Date(currentStartTime.getTime() + 2*60*60*1000);
         let duration = currentEndTime.getTime() - (formData.startTime ? new Date(formData.startTime).getTime() : currentStartTime.getTime());
-        if (duration <= 0) duration = 2 * 60 * 60 * 1000; // Default 2h if duration is 0 or negative
+        
+        if (initialData?.id && formData.startTime && formData.endTime) { // if editing, try to preserve original duration
+            duration = new Date(formData.endTime).getTime() - new Date(formData.startTime).getTime();
+        } else { // for new booking, or if something is off
+            duration = 2 * 60 * 60 * 1000; // default 2h
+        }
+        if (currentEndTime.getTime() - currentStartTime.getTime() <=0 ) { // if current duration is invalid
+             // use original duration if valid, else default 2h
+        } else {
+            duration = currentEndTime.getTime() - currentStartTime.getTime();
+        }
+
 
         const newAutoEndTime = new Date(currentStartTime.getTime() + duration);
         if(newAutoEndTime > currentStartTime) {
              handleChange('endTime', newAutoEndTime);
-        } else { // If somehow still invalid, set it 2 hours after start
+        } else { 
              handleChange('endTime', new Date(currentStartTime.getTime() + 2 * 60 * 60 * 1000));
         }
     }
