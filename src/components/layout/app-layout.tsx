@@ -1,3 +1,4 @@
+
 // This component was modified by the AI to add User Management and Profile links.
 'use client';
 
@@ -50,9 +51,7 @@ function Header() {
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6 shadow-sm">
       {isMobile && <SidebarTrigger className="md:hidden -ml-2" />}
-      <div className="hidden md:block">
-        <Logo />
-      </div>
+      {/* Logo removed from here to avoid duplication. It's now only in SidebarHeader. */}
       <div className="flex-1 text-center md:text-left">
         {/* Could add breadcrumbs or page title here if needed */}
       </div>
@@ -99,3 +98,4 @@ export function AppLayout({ children }: { children: ReactNode }) {
     </SidebarProvider>
   );
 }
+
