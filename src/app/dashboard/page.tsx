@@ -70,19 +70,20 @@ const mockBookings: Booking[] = [
 
 
 export default function DashboardPage() {
-  const availableResources = mockResources.filter(r => r.status === 'Available').slice(0, 2);
+  // Show the first 2 resources as "Frequently Used", regardless of current status.
+  // The card will display their actual status, and booking button will be enabled/disabled accordingly.
+  const frequentlyUsedResources = mockResources.slice(0, 2);
 
   const getResourceStatusBadge = (status: Resource['status']) => {
-    const baseBadgeClass = "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors";
     switch (status) {
       case 'Available':
-        return <Badge className={`${baseBadgeClass} bg-green-500 text-white border-transparent hover:bg-green-600`}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className="bg-green-500 hover:bg-green-600 text-white border-transparent"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Booked':
-        return <Badge className={`${baseBadgeClass} bg-yellow-500 text-yellow-950 border-transparent hover:bg-yellow-600`}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className="bg-yellow-500 hover:bg-yellow-600 text-yellow-950 border-transparent"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Maintenance':
-        return <Badge className={`${baseBadgeClass} bg-orange-500 text-white border-transparent hover:bg-orange-600`}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className="bg-orange-500 hover:bg-orange-600 text-white border-transparent"><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       default:
-        return <Badge variant="outline" className={baseBadgeClass}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge variant="outline"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     }
   };
 
@@ -95,10 +96,10 @@ export default function DashboardPage() {
       />
 
       <section>
-        <h2 className="text-2xl font-semibold mb-4">Quick Available Resources</h2>
-        {availableResources.length > 0 ? (
+        <h2 className="text-2xl font-semibold mb-4">Frequently Used Resources</h2>
+        {frequentlyUsedResources.length > 0 ? (
           <div className="grid gap-6 md:grid-cols-2">
-            {availableResources.map((resource) => (
+            {frequentlyUsedResources.map((resource) => (
               <Card key={resource.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <CardHeader>
                   <div className="flex justify-between items-start">
@@ -147,10 +148,10 @@ export default function DashboardPage() {
           </div>
         ) : (
           <Card className="p-6 text-center shadow-lg">
-            <p className="text-muted-foreground">No resources immediately available. Try the full <Link href="/resources" className="text-primary hover:underline">Resource Search</Link>.</p>
+            <p className="text-muted-foreground">No frequently used resources configured. Explore the full <Link href="/resources" className="text-primary hover:underline">Resource Search</Link>.</p>
           </Card>
         )}
-        {mockResources.length > 2 && availableResources.length > 0 && (
+        {mockResources.length > 2 && frequentlyUsedResources.length > 0 && (
             <div className="mt-4 text-right">
                 <Button variant="outline" asChild>
                     <Link href="/resources">View All Resources <ChevronRight className="ml-2 h-4 w-4" /></Link>
