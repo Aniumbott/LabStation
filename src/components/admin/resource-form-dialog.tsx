@@ -22,18 +22,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Save, X, PlusCircle, Network } from 'lucide-react';
 import type { Resource, ResourceType, ResourceStatus, RemoteAccessDetails } from '@/types';
+import { initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data'; // Updated imports
 import { parseISO, format, isValid } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
 
-const labsList: Resource['lab'][] = ['Lab A', 'Lab B', 'Lab C', 'General Lab'];
-const resourceStatusesList: ResourceStatus[] = ['Available', 'Booked', 'Maintenance'];
+
 const remoteAccessProtocols: RemoteAccessDetails['protocol'][] = ['RDP', 'SSH', 'VNC', 'Other'];
 
 const resourceFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, { message: 'Name cannot exceed 100 characters.' }),
   resourceTypeId: z.string().min(1, { message: 'Please select a resource type.' }),
-  lab: z.enum(labsList, { required_error: 'Please select a lab.' }),
-  status: z.enum(resourceStatusesList, { required_error: 'Please select a status.'}),
+  lab: z.enum(labsList as [string, ...string[]], { required_error: 'Please select a lab.' }), // Zod enum needs at least one value
+  status: z.enum(resourceStatusesList as [string, ...string[]], { required_error: 'Please select a status.'}),
   description: z.string().max(500, { message: 'Description cannot exceed 500 characters.' }).optional().or(z.literal('')),
   imageUrl: z.string().url({ message: 'Please enter a valid URL.' }).optional().or(z.literal('')),
   dataAiHint: z.string().max(50, {message: 'AI hint cannot exceed 50 characters.'}).optional().or(z.literal('')),
@@ -48,9 +48,9 @@ const resourceFormSchema = z.object({
   notes: z.string().max(500).optional().or(z.literal('')),
   features: z.string().max(200, {message: "Features list cannot exceed 200 characters."}).optional().or(z.literal('')),
   remoteAccess: z.object({
-    ipAddress: z.string().max(45).optional().or(z.literal('')), // IPv6 can be long
+    ipAddress: z.string().max(45).optional().or(z.literal('')), 
     hostname: z.string().max(255).optional().or(z.literal('')),
-    protocol: z.enum(remoteAccessProtocols).optional(),
+    protocol: z.enum(remoteAccessProtocols).optional().or(z.literal('')),
     username: z.string().max(100).optional().or(z.literal('')),
     port: z.coerce.number().int().min(1).max(65535).optional().or(z.literal('')),
     notes: z.string().max(500).optional().or(z.literal('')),
@@ -64,21 +64,18 @@ interface ResourceFormDialogProps {
   onOpenChange: (open: boolean) => void;
   initialResource: Resource | null;
   onSave: (data: ResourceFormValues) => void;
-  resourceTypes: ResourceType[];
-  labs: Resource['lab'][];
-  statuses: ResourceStatus[];
+  // resourceTypes, labs, statuses props removed as they are now imported
 }
 
 export function ResourceFormDialog({
     open, onOpenChange, initialResource, onSave,
-    resourceTypes, labs, statuses
 }: ResourceFormDialogProps) {
   const form = useForm<ResourceFormValues>({
     resolver: zodResolver(resourceFormSchema),
     defaultValues: {
       name: '',
       resourceTypeId: '',
-      lab: undefined,
+      lab: labsList.length > 0 ? labsList[0] : undefined, // Ensure lab has a default if labsList is not empty
       status: 'Available',
       description: '',
       imageUrl: '',
@@ -129,8 +126,8 @@ export function ResourceFormDialog({
       } else {
         form.reset({
           name: '',
-          resourceTypeId: resourceTypes.length > 0 ? resourceTypes[0].id : '',
-          lab: labs.length > 0 ? labs[0] : undefined,
+          resourceTypeId: initialMockResourceTypes.length > 0 ? initialMockResourceTypes[0].id : '',
+          lab: labsList.length > 0 ? labsList[0] : undefined,
           status: 'Available',
           description: '',
           imageUrl: 'https://placehold.co/300x200.png',
@@ -152,24 +149,22 @@ export function ResourceFormDialog({
         });
       }
     }
-  }, [open, initialResource, form, resourceTypes, labs]);
+  }, [open, initialResource, form]);
 
   function onSubmit(data: ResourceFormValues) {
     const dataToSave: ResourceFormValues = {
         ...data,
-        purchaseDate: data.purchaseDate ? data.purchaseDate : undefined, // Already yyyy-MM-dd string or empty
+        purchaseDate: data.purchaseDate ? data.purchaseDate : undefined,
         remoteAccess: data.remoteAccess ? {
             ...data.remoteAccess,
-            port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
-            // Ensure optional fields are truly undefined if empty string, not just for zod
+            port: data.remoteAccess.port && data.remoteAccess.port !== '' ? Number(data.remoteAccess.port) : undefined,
             ipAddress: data.remoteAccess.ipAddress || undefined,
             hostname: data.remoteAccess.hostname || undefined,
-            protocol: data.remoteAccess.protocol || undefined,
+            protocol: data.remoteAccess.protocol && data.remoteAccess.protocol !== '' ? data.remoteAccess.protocol : undefined,
             username: data.remoteAccess.username || undefined,
             notes: data.remoteAccess.notes || undefined,
         } : undefined,
     };
-    // If all remoteAccess fields are undefined/empty, make remoteAccess itself undefined
     if (dataToSave.remoteAccess && Object.values(dataToSave.remoteAccess).every(val => val === undefined || val === '')) {
       dataToSave.remoteAccess = undefined;
     }
@@ -210,7 +205,7 @@ export function ResourceFormDialog({
                         <Select onValueChange={field.onChange} value={field.value || ''}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger></FormControl>
                             <SelectContent>
-                            {resourceTypes.map(type => (
+                            {initialMockResourceTypes.map(type => (
                                 <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
                             ))}
                             </SelectContent>
@@ -228,7 +223,7 @@ export function ResourceFormDialog({
                         <Select onValueChange={field.onChange} value={field.value || ''}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Select a lab" /></SelectTrigger></FormControl>
                             <SelectContent>
-                            {labs.map(labName => (
+                            {labsList.map(labName => (
                                 <SelectItem key={labName} value={labName}>{labName}</SelectItem>
                             ))}
                             </SelectContent>
@@ -331,7 +326,7 @@ export function ResourceFormDialog({
                         <Select onValueChange={field.onChange} value={field.value || ''}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
                             <SelectContent>
-                            {statuses.map(statusVal => (
+                            {resourceStatusesList.map(statusVal => (
                                 <SelectItem key={statusVal} value={statusVal}>{statusVal}</SelectItem>
                             ))}
                             </SelectContent>
@@ -419,7 +414,7 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Port</FormLabel>
-                                    <FormControl><Input type="number" placeholder="e.g., 22 (SSH), 3389 (RDP)" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} /></FormControl>
+                                    <FormControl><Input type="number" placeholder="e.g., 22 (SSH), 3389 (RDP)" {...field} value={field.value === undefined ? '' : field.value} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} /></FormControl>
                                     <FormMessage />
                                     </FormItem>
                                 )}

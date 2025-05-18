@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import { format, isValid, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { allAdminMockResources } from '@/app/admin/resources/page'; // Import from admin resources
+import { allAdminMockResources } from '@/lib/mock-data'; // Updated import
 
 const mockBookings: Booking[] = [
   { id: 'b1', resourceId: '1', resourceName: 'Electron Microscope Alpha', userId: 'user1', userName: 'Dr. Smith', startTime: new Date(new Date().setDate(new Date().getDate() + 1)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 1)).setHours(new Date().getHours() + 2)), status: 'Confirmed' },
@@ -27,7 +27,7 @@ const mockBookings: Booking[] = [
 
 
 export default function DashboardPage() {
-  const frequentlyUsedResources = allAdminMockResources.slice(0, 2); // Use resources from admin page
+  const frequentlyUsedResources = allAdminMockResources.slice(0, 2);
 
   const getResourceStatusBadge = (status: Resource['status']) => {
     switch (status) {
@@ -69,7 +69,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="flex-grow space-y-3">
                   <div className="relative w-full h-40 rounded-md overflow-hidden mb-2">
-                    <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint || 'lab equipment'} />
+                    <Image src={resource.imageUrl || 'https://placehold.co/300x200.png'} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint || 'lab equipment'} />
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{resource.description}</p>
                    {resource.features && resource.features.length > 0 && (

@@ -5,9 +5,9 @@ import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarDays, CalendarPlus, Network } from 'lucide-react';
-import type { Resource, ResourceType, ResourceStatus, RemoteAccessDetails } from '@/types'; // Added RemoteAccessDetails
-import { initialMockResourceTypes } from '@/app/admin/resource-types/page';
+import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarDays, CalendarPlus, Network, Search as SearchIcon } from 'lucide-react';
+import type { Resource, ResourceStatus } from '@/types'; // Removed RemoteAccessDetails, not directly used here
+import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data'; // Updated imports
 import {
   Table,
   TableBody,
@@ -23,17 +23,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  // AlertDialogTrigger, // No longer directly used from here for delete
-} from "@/components/ui/alert-dialog";
+// AlertDialog not directly used for delete on this page anymore
 import {
   Dialog,
   DialogContent,
@@ -52,141 +42,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { format, startOfDay, isSameDay, addDays, parseISO, isValid } from 'date-fns';
+import { format, startOfDay, isSameDay, parseISO, isValid } from 'date-fns';
 
-const todayStr = format(new Date(), 'yyyy-MM-dd');
-const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
-const dayAfterTomorrowStr = format(addDays(new Date(), 2), 'yyyy-MM-dd');
-
-
-export const allAdminMockResources: Resource[] = [
-  {
-    id: '1',
-    name: 'Electron Microscope Alpha',
-    resourceTypeId: 'rt1',
-    resourceTypeName: 'Microscope',
-    lab: 'Lab A',
-    status: 'Available',
-    manufacturer: 'Thermo Fisher Scientific',
-    model: 'Quanta SEM',
-    serialNumber: 'SN-EMA-001',
-    purchaseDate: '2022-08-15',
-    description: 'High-resolution scanning electron microscope (SEM) designed for advanced material analysis, biological sample imaging, and nanoparticle characterization. Features multiple detectors for secondary electron, backscattered electron, and X-ray microanalysis (EDX). User-friendly software interface with automated functions for ease of use. Ideal for both novice and experienced users requiring detailed surface morphology and elemental composition data.',
-    imageUrl: 'https://placehold.co/300x200.png',
-    dataAiHint: 'microscope electronics',
-    features: ['High Vacuum Mode', 'Low Vacuum Mode', 'EDX Spectroscopy', 'Automated Stage Control', 'Image Stitching'],
-    lastCalibration: '2023-12-01',
-    nextCalibration: '2024-06-01',
-    availability: [
-      { date: todayStr, slots: ['14:00-16:00', '16:00-18:00'] },
-      { date: tomorrowStr, slots: ['10:00-12:00'] }
-    ],
-    notes: 'Handle with care. Requires 30 min warm-up time before use.',
-    remoteAccess: {
-      ipAddress: '192.168.1.101',
-      protocol: 'RDP',
-      username: 'sem_user',
-      notes: 'Access via internal VPN only. Default password: "password123" (change on first login).'
-    }
-  },
-  {
-    id: '2',
-    name: 'BioSafety Cabinet Omega',
-    resourceTypeId: 'rt4', // Incubator
-    resourceTypeName: 'Incubator',
-    lab: 'Lab B',
-    status: 'Booked',
-    manufacturer: 'Baker Company',
-    model: 'SterilGARD e3',
-    serialNumber: 'SN-BSC-002',
-    purchaseDate: '2023-01-20',
-    description: 'Class II Type A2 biosafety cabinet providing personnel, product, and environmental protection for work with biological agents up to BSL-3. Features HEPA filtration, ergonomic design, and intuitive controls for safe and efficient sterile work. Equipped with UV light for decontamination cycles. Suitable for cell culture, microbiology, and other sensitive applications.',
-    imageUrl: 'https://placehold.co/300x200.png',
-    dataAiHint: 'lab cabinet',
-    features: ['HEPA Filtered Airflow', 'UV Decontamination Cycle', 'Adjustable Sash Height', 'Airflow Alarm System', 'Quiet Operation'],
-    lastCalibration: '2024-01-15',
-    nextCalibration: '2024-07-15',
-    availability: [
-      { date: tomorrowStr, slots: ['09:00-11:00', '11:00-13:00'] },
-      { date: dayAfterTomorrowStr, slots: ['Full Day Booked'] }
-    ],
-    notes: 'UV light cycle runs automatically after each use. Ensure sash is fully closed.'
-  },
-   {
-    id: '3',
-    name: 'HPLC System Zeta',
-    resourceTypeId: 'rt3', // HPLC System
-    resourceTypeName: 'HPLC System',
-    lab: 'Lab C',
-    status: 'Maintenance',
-    manufacturer: 'Agilent Technologies',
-    model: '1260 Infinity II',
-    serialNumber: 'SN-HPLC-003',
-    purchaseDate: '2021-05-10',
-    description: 'Versatile high-performance liquid chromatography (HPLC) system for analytical and semi-preparative applications.',
-    imageUrl: 'https://placehold.co/300x200.png',
-    dataAiHint: 'hplc chemistry',
-    features: ['Quaternary Solvent Delivery', 'Autosampler', 'DAD Detector'],
-    lastCalibration: '2023-11-10',
-    nextCalibration: '2024-05-10',
-    availability: [],
-  },
-  {
-    id: '4',
-    name: 'High-Speed Centrifuge Pro',
-    resourceTypeId: 'rt2', // Centrifuge
-    resourceTypeName: 'Centrifuge',
-    lab: 'Lab A',
-    status: 'Available',
-    manufacturer: 'Eppendorf',
-    model: '5810R',
-    serialNumber: 'SN-CENT-004',
-    purchaseDate: '2023-06-05',
-    description: 'Refrigerated high-speed centrifuge for various applications.',
-    imageUrl: 'https://placehold.co/300x200.png',
-    dataAiHint: 'centrifuge science',
-    features: ['Refrigerated', 'Max 20,000 RPM'],
-    lastCalibration: '2024-02-20',
-    nextCalibration: '2024-08-20',
-    availability: [
-      { date: todayStr, slots: ['09:00-17:00'] },
-      { date: dayAfterTomorrowStr, slots: ['10:00-12:00', '14:00-16:00'] }
-    ]
-  },
-  {
-    id: 'rt8-instance',
-    name: 'FPGA Dev Node Alpha',
-    resourceTypeId: 'rt8',
-    resourceTypeName: 'FPGA Node',
-    lab: 'Lab C',
-    status: 'Available',
-    manufacturer: 'Xilinx',
-    model: 'Alveo U250',
-    serialNumber: 'XFL-FPGA-01A',
-    purchaseDate: '2023-09-01',
-    description: 'High-performance FPGA node for compute acceleration and custom hardware development. Suitable for machine learning, video processing, and financial computing.',
-    imageUrl: 'https://placehold.co/300x200.png',
-    dataAiHint: 'fpga circuit board',
-    features: ['PCIe Gen3 x16', '28GB HBM2', 'On-board DDR4'],
-    lastCalibration: 'N/A',
-    nextCalibration: 'N/A',
-    availability: [
-        { date: todayStr, slots: ['09:00-12:00', '13:00-17:00'] },
-        { date: tomorrowStr, slots: ['09:00-17:00'] },
-    ],
-    notes: 'Requires Vivado Design Suite for development.',
-    remoteAccess: {
-        hostname: 'fpga-node-alpha.lab.internal',
-        protocol: 'SSH',
-        username: 'dev_user',
-        port: 22,
-        notes: 'Access restricted to lab network. Key-based authentication required.'
-    }
-  },
-];
-
-const labsList: Resource['lab'][] = ['Lab A', 'Lab B', 'Lab C', 'General Lab'];
-const resourceStatusesList: ResourceStatus[] = ['Available', 'Booked', 'Maintenance'];
+// allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList are now imported from lib/mock-data
 
 const getStatusBadge = (status: ResourceStatus) => {
   switch (status) {
@@ -203,14 +61,13 @@ const getStatusBadge = (status: ResourceStatus) => {
 
 export default function ManageResourcesPage() {
   const { toast } = useToast();
-  // This state will hold a deep copy of the mock resources for client-side modifications
   const [resources, setResources] = useState<Resource[]>(() => JSON.parse(JSON.stringify(allAdminMockResources)));
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
   // Active filters
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
-  const [activeFilterTypeId, setActiveFilterTypeId] = useState<string>('all'); // Store type ID now
+  const [activeFilterTypeId, setActiveFilterTypeId] = useState<string>('all');
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
 
@@ -266,14 +123,11 @@ export default function ManageResourcesPage() {
   };
 
   const resetFilters = () => {
-    // Reset temp filters in dialog
     setTempSearchTerm('');
     setTempFilterTypeId('all');
     setTempFilterLab('all');
     setTempSelectedDate(undefined);
     setCurrentMonthInDialog(startOfDay(new Date()));
-    // To actually clear active filters and update list, call handleApplyFilters after reset
-    // or reset active filters directly here if preferred. For now, this just resets dialog state.
   };
 
   const resetAllActiveFilters = () => {
@@ -281,13 +135,17 @@ export default function ManageResourcesPage() {
     setActiveFilterTypeId('all');
     setActiveFilterLab('all');
     setActiveSelectedDate(undefined);
-    // also reset temp filters to match
-    resetFilters();
+    resetFilters(); // Also reset temp filters
   }
 
 
   const handleOpenNewDialog = () => {
     setEditingResource(null);
+    setIsFormDialogOpen(true);
+  };
+  
+  const handleOpenEditDialog = (resource: Resource) => { // Added for potential future use, not directly on this page now
+    setEditingResource(resource);
     setIsFormDialogOpen(true);
   };
 
@@ -313,14 +171,13 @@ export default function ManageResourcesPage() {
         manufacturer: data.manufacturer || undefined,
         model: data.model || undefined,
         serialNumber: data.serialNumber || undefined,
-        purchaseDate: data.purchaseDate ? parseISO(data.purchaseDate).toISOString() : undefined,
+        purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : undefined,
         notes: data.notes || undefined,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-        // Keep existing availability & calibration unless form is extended to edit these
         availability: editingResource.availability,
         lastCalibration: editingResource.lastCalibration,
         nextCalibration: editingResource.nextCalibration,
-        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined) ? {
+        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
           ...data.remoteAccess,
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
         } : undefined,
@@ -344,13 +201,13 @@ export default function ManageResourcesPage() {
         manufacturer: data.manufacturer || undefined,
         model: data.model || undefined,
         serialNumber: data.serialNumber || undefined,
-        purchaseDate: data.purchaseDate ? parseISO(data.purchaseDate).toISOString() : undefined,
+        purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : undefined,
         notes: data.notes || undefined,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
         availability: [],
-        lastCalibration: undefined, // Or prompt user / set default
-        nextCalibration: undefined, // Or prompt user / set default
-        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined) ? {
+        lastCalibration: undefined,
+        nextCalibration: undefined,
+        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
           ...data.remoteAccess,
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
         } : undefined,
@@ -364,9 +221,6 @@ export default function ManageResourcesPage() {
     setIsFormDialogOpen(false);
     setEditingResource(null);
   };
-
-  // Note: Delete functionality is now primarily on the detail page.
-  // This can be removed if not used by a global delete confirmation dialog.
 
   const activeFilterCount = [activeSearchTerm !== '', activeFilterTypeId !== 'all', activeFilterLab !== 'all', activeSelectedDate !== undefined].filter(Boolean).length;
 
@@ -401,14 +255,17 @@ export default function ManageResourcesPage() {
                 <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2">
                   <div>
                     <Label htmlFor="resourceSearchDialog" className="text-sm font-medium mb-1 block">Search by Name/Keyword</Label>
-                    <Input
-                      id="resourceSearchDialog"
-                      type="search"
-                      placeholder="Name, manufacturer, model..."
-                      value={tempSearchTerm}
-                      onChange={(e) => setTempSearchTerm(e.target.value)}
-                      className="h-9"
-                    />
+                    <div className="relative">
+                        <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                        id="resourceSearchDialog"
+                        type="search"
+                        placeholder="Name, manufacturer, model..."
+                        value={tempSearchTerm}
+                        onChange={(e) => setTempSearchTerm(e.target.value)}
+                        className="h-9 pl-8"
+                        />
+                    </div>
                   </div>
                   <Separator />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -464,7 +321,7 @@ export default function ManageResourcesPage() {
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                   <Button variant="ghost" onClick={() => { resetFilters(); }} className="mr-auto"> {/* Reset only temp filters */}
+                   <Button variant="ghost" onClick={() => { resetFilters(); }} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
@@ -566,12 +423,7 @@ export default function ManageResourcesPage() {
         }}
         initialResource={editingResource}
         onSave={handleSaveResource}
-        resourceTypes={initialMockResourceTypes}
-        labs={labsList}
-        statuses={resourceStatusesList}
       />
-
-      {/* Delete confirmation dialog is handled on the resource detail page */}
     </div>
   );
 }

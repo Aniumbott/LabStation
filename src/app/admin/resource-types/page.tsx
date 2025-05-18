@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon } from 'lucide-react';
 import type { ResourceType } from '@/types';
+import { initialMockResourceTypes } from '@/lib/mock-data'; // Updated import
 import {
   Table,
   TableBody,
@@ -38,7 +39,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger, // Added DialogTrigger
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { ResourceTypeFormDialog, ResourceTypeFormValues } from '@/components/admin/resource-type-form-dialog';
@@ -48,18 +49,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 
-// Updated to be more comprehensive and serve as the source for mock types
-export const initialMockResourceTypes: ResourceType[] = [
-  { id: 'rt1', name: 'Microscope', description: 'Optical and electron microscopes for various imaging needs.' },
-  { id: 'rt2', name: 'Centrifuge', description: 'For separating substances of different densities.' },
-  { id: 'rt3', name: 'HPLC System', description: 'High-Performance Liquid Chromatography systems.' },
-  { id: 'rt4', name: 'Incubator', description: 'Controlled environment for biological cultures.' },
-  { id: 'rt5', name: 'Fume Hood', description: 'Ventilated enclosure for safe handling of hazardous materials.' },
-  { id: 'rt6', name: 'Spectrometer', description: 'Measures properties of light over a specific portion of the electromagnetic spectrum.' },
-  { id: 'rt7', name: '3D Printer', description: 'For additive manufacturing and rapid prototyping.' },
-  { id: 'rt8', name: 'FPGA Node', description: 'Field-Programmable Gate Array development boards/nodes.' },
-];
-
+// initialMockResourceTypes is now imported from lib/mock-data
 
 export default function ResourceTypeManagementPage() {
   const { toast } = useToast();
@@ -98,10 +88,17 @@ export default function ResourceTypeManagementPage() {
   };
 
   const resetFilters = () => {
+    // Reset temp filters in dialog
+    setTempSearchTerm('');
+    // To actually clear active filters and update list, call handleApplyFilters after reset
+    // or reset active filters directly here if preferred. For now, this just resets dialog state.
+  };
+  
+  const resetAllActiveFilters = () => {
     setSearchTerm('');
     setTempSearchTerm('');
-    // setIsFilterDialogOpen(false); // User might want to apply after reset
   };
+
 
   const handleOpenNewDialog = () => {
     setEditingType(null);
@@ -189,7 +186,7 @@ export default function ResourceTypeManagementPage() {
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                  <Button variant="ghost" onClick={resetFilters} className="mr-auto">
+                  <Button variant="ghost" onClick={() => { resetFilters(); }} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Filter
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
@@ -283,8 +280,8 @@ export default function ResourceTypeManagementPage() {
             }
           </p>
           {searchTerm ? (
-             <Button variant="outline" onClick={() => { resetFilters(); handleApplyFilters(); }}>
-                <FilterX className="mr-2 h-4 w-4" /> Reset Filter
+             <Button variant="outline" onClick={() => { resetAllActiveFilters(); handleApplyFilters(); }}>
+                <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
             </Button>
           ) : (
             <Button onClick={handleOpenNewDialog}>
