@@ -1,19 +1,20 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, Thermometer, ChevronRight, Loader2, Tag, Building, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data';
-import type { Resource, ResourceType, ResourceStatus } from '@/types';
-import { format, parseISO, isValid, startOfToday } from 'date-fns';
+import { initialBookings, mockCurrentUser } from '@/app/bookings/page'; // Import booking data and current user
+import type { Resource, ResourceType, ResourceStatus, Booking } from '@/types';
+import { format, parseISO, isValid, startOfToday, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
@@ -32,8 +33,14 @@ function ResourceDetailPageSkeleton() {
       <PageHeader
         title={<Skeleton className="h-8 w-3/4 rounded-md bg-muted" />}
         description={<Skeleton className="h-4 w-1/2 rounded-md bg-muted mt-1" />}
-        icon={Archive} // Updated Icon
-        actions={<Skeleton className="h-9 w-24 rounded-md bg-muted" />}
+        icon={Archive}
+        actions={
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-9 w-24 rounded-md bg-muted" />
+            <Skeleton className="h-9 w-9 rounded-md bg-muted" />
+            <Skeleton className="h-9 w-9 rounded-md bg-muted" />
+          </div>
+        }
       />
       <div className="grid md:grid-cols-3 gap-6 items-start">
         <div className="md:col-span-1 space-y-6">
@@ -48,6 +55,13 @@ function ResourceDetailPageSkeleton() {
               <Skeleton className="h-4 w-full rounded-md" />
               <Skeleton className="h-4 w-5/6 rounded-md" />
               <Skeleton className="h-4 w-full rounded-md" />
+            </CardContent>
+          </Card>
+           <Card className="shadow-lg"> {/* Skeleton for Past Bookings */}
+            <CardHeader><Skeleton className="h-6 w-3/4 rounded-md" /></CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-4 w-full rounded-md" />
+              <Skeleton className="h-4 w-5/6 rounded-md" />
             </CardContent>
           </Card>
         </div>
@@ -143,17 +157,28 @@ export default function ResourceDetailPage() {
   useEffect(() => {
     if (resourceId) {
       setIsLoading(true);
-      // Simulate API call
       setTimeout(() => {
         const foundResource = allAdminMockResources.find(r => r.id === resourceId);
         setResource(foundResource || null);
         setIsLoading(false);
-      }, 300); // Short delay to show skeleton
+      }, 300);
     } else {
       setIsLoading(false);
       setResource(null);
     }
   }, [resourceId]);
+
+  const userPastBookingsForResource = useMemo(() => {
+    if (!resource || !mockCurrentUser) return [];
+    return initialBookings
+      .filter(booking =>
+        booking.resourceId === resource.id &&
+        booking.userId === mockCurrentUser.id &&
+        isPast(new Date(booking.startTime)) &&
+        booking.status !== 'Cancelled'
+      )
+      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  }, [resource]);
 
   const handleSaveResource = (data: ResourceFormValues) => {
     if (resource) {
@@ -177,8 +202,7 @@ export default function ResourceDetailPage() {
               notes: data.remoteAccess.notes || undefined,
             } : undefined,
         };
-        setResource(updatedResource); // Update local state for immediate UI reflection
-        // In a real app, here you'd call an API. For mock data, update the shared array:
+        setResource(updatedResource);
         const resourceIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
         if (resourceIndex !== -1) {
             allAdminMockResources[resourceIndex] = updatedResource;
@@ -193,7 +217,6 @@ export default function ResourceDetailPage() {
 
   const handleConfirmDelete = () => {
     if (resource) {
-      // In a real app, here you'd call an API. For mock data, update the shared array:
       const resourceIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
         if (resourceIndex !== -1) {
             allAdminMockResources.splice(resourceIndex, 1);
@@ -219,7 +242,7 @@ export default function ResourceDetailPage() {
             actions={
              <Button variant="outline" asChild onClick={() => router.push('/admin/resources')}>
                 <Link href="/admin/resources">
-                    <ArrowLeft className="mr-2 h-4 w-4" /> Back to Manage Resources
+                    <ArrowLeft className="mr-2 h-4 w-4" /> Back to Resources
                 </Link>
             </Button>
             }
@@ -253,7 +276,7 @@ export default function ResourceDetailPage() {
       <PageHeader
         title={resource.name}
         description={`Detailed information for ${resource.resourceTypeName} in ${resource.lab}.`}
-        icon={Archive} // Updated Icon
+        icon={Archive}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" asChild>
@@ -327,21 +350,36 @@ export default function ResourceDetailPage() {
                 </Card>
             )}
 
-           {(resource.lastCalibration || resource.nextCalibration) && (resource.lastCalibration !== 'N/A' || resource.nextCalibration !== 'N/A') && (
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="text-xl flex items-center gap-2"><Thermometer className="text-primary h-5 w-5" /> Calibration</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1.5 text-sm">
-                {resource.lastCalibration && resource.lastCalibration !== 'N/A' && (
-                    <p><span className="font-medium text-foreground">Last:</span> {formatDateSafe(resource.lastCalibration)}</p>
-                )}
-                {resource.nextCalibration && resource.nextCalibration !== 'N/A' && (
-                  <p><span className="font-medium text-foreground">Next Due:</span> {formatDateSafe(resource.nextCalibration)}</p>
-                )}
-              </CardContent>
-            </Card>
-          )}
+            {userPastBookingsForResource.length > 0 && (
+              <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-xl flex items-center gap-2"><History className="text-primary h-5 w-5" /> Your Past Bookings</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-3 text-sm">
+                    {userPastBookingsForResource.slice(0,5).map((booking) => (
+                      <li key={booking.id} className="pb-2 border-b border-dashed last:border-b-0 last:pb-0">
+                        <p className="font-medium text-foreground">{format(new Date(booking.startTime), 'PPP, p')}</p>
+                        {booking.notes && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">Notes: {booking.notes}</p>}
+                      </li>
+                    ))}
+                     {userPastBookingsForResource.length > 5 && <p className="text-xs text-muted-foreground mt-2">...and more.</p>}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
+             {userPastBookingsForResource.length === 0 && (
+                 <Card className="shadow-lg">
+                     <CardHeader>
+                         <CardTitle className="text-xl flex items-center gap-2"><History className="text-primary h-5 w-5" /> Your Past Bookings</CardTitle>
+                     </CardHeader>
+                     <CardContent>
+                         <p className="text-sm text-muted-foreground">You have no past bookings for this resource.</p>
+                     </CardContent>
+                 </Card>
+             )}
+
+
         </div>
 
         <div className="md:col-span-2 space-y-6">
@@ -360,7 +398,7 @@ export default function ResourceDetailPage() {
               <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><SlidersHorizontal className="text-primary h-5 w-5"/> Specifications</h3>
               <div className="space-y-1">
                 <DetailItem icon={Building} label="Manufacturer" value={resource.manufacturer} />
-                <DetailItem icon={Tag} label="Model" value={resource.model} />
+                <DetailItem icon={Archive} label="Model" value={resource.model} />
                 <DetailItem icon={Info} label="Serial #" value={resource.serialNumber} />
                 <DetailItem icon={ShoppingCart} label="Purchase Date" value={formatDateSafe(resource.purchaseDate, undefined)} />
               </div>

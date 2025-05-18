@@ -19,15 +19,11 @@ import {
 import { format, isValid, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { allAdminMockResources } from '@/lib/mock-data'; // Use centralized mock data
-
-const mockBookings: Booking[] = [
-  { id: 'b1', resourceId: '1', resourceName: 'Keysight MSOX3054T Oscilloscope', userId: 'user1', userName: 'Dr. Smith', startTime: new Date(new Date().setDate(new Date().getDate() + 1)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 1)).setHours(new Date().getHours() + 2)), status: 'Confirmed', notes: 'Signal integrity check.' },
-  { id: 'b2', resourceId: '4', resourceName: 'Rohde & Schwarz FPC1500 Spectrum Analyzer', userId: 'user2', userName: 'Dr. Jones', startTime: new Date(new Date().setDate(new Date().getDate() + 2)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 2)).setHours(new Date().getHours() + 3)), status: 'Pending', notes: 'EMI pre-compliance scan.' },
-];
+import { initialBookings } from '@/app/bookings/page';
 
 
 export default function DashboardPage() {
-  const frequentlyUsedResources = allAdminMockResources.slice(0, 2); // Use resources from admin page
+  const frequentlyUsedResources = allAdminMockResources.slice(0, 2);
 
   const getResourceStatusBadge = (status: Resource['status']) => {
     switch (status) {
@@ -83,12 +79,6 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   )}
-                  {(resource.lastCalibration || resource.nextCalibration) && (
-                     <div className="text-xs text-muted-foreground space-y-0.5 pt-1 border-t border-dashed mt-2">
-                        {resource.lastCalibration && resource.lastCalibration !== 'N/A' && <p>Last Calibrated: {isValid(parseISO(resource.lastCalibration)) ? format(parseISO(resource.lastCalibration), 'MMM dd, yyyy') : resource.lastCalibration}</p>}
-                        {resource.nextCalibration && resource.nextCalibration !== 'N/A' && <p>Next Due: {isValid(parseISO(resource.nextCalibration)) ? format(parseISO(resource.nextCalibration), 'MMM dd, yyyy') : resource.nextCalibration}</p>}
-                    </div>
-                  )}
                 </CardContent>
                 <CardFooter>
                   <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
@@ -119,7 +109,7 @@ export default function DashboardPage() {
 
       <section>
         <h2 className="text-2xl font-semibold mb-4">Your Upcoming Bookings</h2>
-        {mockBookings.length > 0 ? (
+        {initialBookings.filter(b => !isPast(b.startTime) && b.status !== 'Cancelled' && b.userId === mockCurrentUser.id).length > 0 ? (
           <Card className="shadow-lg">
             <CardContent className="p-0">
               <Table>
@@ -133,7 +123,11 @@ export default function DashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {mockBookings.map((booking) => (
+                  {initialBookings
+                    .filter(b => !isPast(b.startTime) && b.status !== 'Cancelled' && b.userId === mockCurrentUser.id)
+                    .sort((a,b) => a.startTime.getTime() - b.startTime.getTime())
+                    .slice(0, 5) // Show up to 5 upcoming bookings
+                    .map((booking) => (
                     <TableRow key={booking.id}>
                       <TableCell className="font-medium">{booking.resourceName}</TableCell>
                       <TableCell>{format(booking.startTime, 'MMM dd, yyyy')}</TableCell>

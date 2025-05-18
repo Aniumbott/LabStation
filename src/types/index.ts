@@ -21,14 +21,12 @@ export interface Resource {
   name: string;
   resourceTypeId: string;
   resourceTypeName: string;
-  lab: 'Lab A' | 'Lab B' | 'Lab C' | 'General Lab';
+  lab: 'Electronics Lab 1' | 'RF Lab' | 'Prototyping Lab' | 'General Test Area'; // Updated to specific lab names
   status: ResourceStatus;
   description: string;
   imageUrl: string;
   dataAiHint?: string;
   features?: string[];
-  lastCalibration?: string;
-  nextCalibration?: string;
   availability?: { date: string; slots: string[] }[];
   manufacturer?: string;
   model?: string;

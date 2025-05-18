@@ -7,7 +7,6 @@ const todayStr = format(new Date(), 'yyyy-MM-dd');
 const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 const dayAfterTomorrowStr = format(addDays(new Date(), 2), 'yyyy-MM-dd');
 
-// For ResourceTypeFormDialog and Resource Search Filters
 export const initialMockResourceTypes: ResourceType[] = [
   { id: 'rt1', name: 'Oscilloscope', description: 'For visualizing voltage signals over time.' },
   { id: 'rt2', name: 'Power Supply', description: 'Provides DC or AC power to test circuits.' },
@@ -18,13 +17,14 @@ export const initialMockResourceTypes: ResourceType[] = [
   { id: 'rt7', name: 'Logic Analyzer', description: 'Captures and displays signals from a digital system.' },
   { id: 'rt8', name: 'Test Probe Set', description: 'Various probes for connecting to circuits.' },
   { id: 'rt9', name: 'ESD Workstation Mat', description: 'Anti-static mat for protecting sensitive components.' },
+  { id: 'rt10', name: 'Fume Hood', description: 'Ventilated enclosure for safe handling of hazardous materials.' },
+  { id: 'rt11', name: 'Spectrometer', description: 'Measures properties of light over a specific portion of the electromagnetic spectrum.' },
+  { id: 'rt12', name: 'FPGA Dev Node', description: 'Field-Programmable Gate Array development node for hardware acceleration tasks.'},
 ];
 
-// For ResourceFormDialog
 export const labsList: Resource['lab'][] = ['Electronics Lab 1', 'RF Lab', 'Prototyping Lab', 'General Test Area'];
 export const resourceStatusesList: ResourceStatus[] = ['Available', 'Booked', 'Maintenance'];
 
-// For Manage Resources Page, Resource Detail Page, and Dashboard
 export const allAdminMockResources: Resource[] = [
   {
     id: '1',
@@ -36,13 +36,11 @@ export const allAdminMockResources: Resource[] = [
     manufacturer: 'Keysight Technologies',
     model: 'MSOX3054T',
     serialNumber: 'MY58012345',
-    purchaseDate: '2022-08-15',
+    purchaseDate: '2022-08-15T00:00:00.000Z',
     description: 'Mixed Signal Oscilloscope with 500 MHz bandwidth, 4 analog channels, and 16 digital channels. Includes built-in waveform generator and serial protocol analysis capabilities. Ideal for debugging embedded systems and mixed-signal designs.',
     imageUrl: 'https://placehold.co/300x200.png',
     dataAiHint: 'oscilloscope electronics',
     features: ['500 MHz Bandwidth', '4 Analog Channels', '16 Digital Channels', 'WaveGen', 'Serial Decode'],
-    lastCalibration: '2023-12-01',
-    nextCalibration: '2024-12-01',
     availability: [
       { date: todayStr, slots: ['14:00-16:00', '16:00-18:00'] },
       { date: tomorrowStr, slots: ['10:00-12:00'] }
@@ -64,13 +62,11 @@ export const allAdminMockResources: Resource[] = [
     manufacturer: 'Rigol Technologies',
     model: 'DP832',
     serialNumber: 'DP8C198765',
-    purchaseDate: '2023-01-20',
+    purchaseDate: '2023-01-20T00:00:00.000Z',
     description: 'Triple output programmable DC power supply. CH1: 0-30V/0-3A, CH2: 0-30V/0-3A, CH3: 0-5V/0-3A. High resolution and remote sense capabilities.',
     imageUrl: 'https://placehold.co/300x200.png',
     dataAiHint: 'power supply lab',
     features: ['3 Channels', 'Programmable', 'Overvoltage Protection', 'LAN Interface'],
-    lastCalibration: '2024-01-15',
-    nextCalibration: '2025-01-15',
     availability: [
       { date: tomorrowStr, slots: ['09:00-11:00', '11:00-13:00'] },
       { date: dayAfterTomorrowStr, slots: ['10:00-17:00'] }
@@ -87,13 +83,11 @@ export const allAdminMockResources: Resource[] = [
     manufacturer: 'Siglent Technologies',
     model: 'SDG2042X',
     serialNumber: 'SDG2XABC001',
-    purchaseDate: '2021-05-10',
+    purchaseDate: '2021-05-10T00:00:00.000Z',
     description: 'Dual-channel Arbitrary Waveform Generator, 40 MHz bandwidth, 1.2 GSa/s sampling rate. Generates sine, square, ramp, pulse, noise, and arbitrary waveforms.',
     imageUrl: 'https://placehold.co/300x200.png',
     dataAiHint: 'function generator electronics',
     features: ['40 MHz Bandwidth', 'Dual Channel', 'Arbitrary Waveforms', 'IQ Modulation'],
-    lastCalibration: '2023-11-10',
-    nextCalibration: '2024-11-10', // Extended maintenance
     availability: [],
     notes: 'Output amplifier stage under repair. Expected back online next week.'
   },
@@ -107,13 +101,11 @@ export const allAdminMockResources: Resource[] = [
     manufacturer: 'Rohde & Schwarz',
     model: 'FPC1500',
     serialNumber: 'RS-FPC-987',
-    purchaseDate: '2023-06-05',
+    purchaseDate: '2023-06-05T00:00:00.000Z',
     description: 'Spectrum analyzer with frequency range from 5 kHz to 1 GHz (upgradable to 3 GHz). Includes tracking generator and internal VSWR bridge.',
     imageUrl: 'https://placehold.co/300x200.png',
     dataAiHint: 'spectrum analyzer rf',
     features: ['1 GHz Base Frequency', 'Tracking Generator', 'One-Port Vector Network Analyzer'],
-    lastCalibration: '2024-02-20',
-    nextCalibration: '2025-02-20',
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },
       { date: dayAfterTomorrowStr, slots: ['10:00-12:00', '14:00-16:00'] }
@@ -129,13 +121,11 @@ export const allAdminMockResources: Resource[] = [
     manufacturer: 'Weller',
     model: 'WE1010NA',
     serialNumber: 'WEL-WE-007A',
-    purchaseDate: '2022-11-01',
+    purchaseDate: '2022-11-01T00:00:00.000Z',
     description: '70W digital soldering station with temperature control and standby mode. Suitable for general purpose and fine pitch soldering work.',
     imageUrl: 'https://placehold.co/300x200.png',
     dataAiHint: 'soldering station circuit',
     features: ['70 Watt Power', 'Digital Temperature Control', 'ESD Safe', 'Interchangeable Tips'],
-    lastCalibration: 'N/A',
-    nextCalibration: 'N/A',
     availability: [
         { date: todayStr, slots: ['10:00-17:00'] },
         { date: tomorrowStr, slots: ['10:00-17:00'] },
@@ -152,16 +142,43 @@ export const allAdminMockResources: Resource[] = [
     manufacturer: 'Fluke Corporation',
     model: '87V',
     serialNumber: 'FLUKE-87V-011',
-    purchaseDate: '2023-03-10',
+    purchaseDate: '2023-03-10T00:00:00.000Z',
     description: 'True-RMS industrial digital multimeter for accurate measurements on non-linear signals. Measures AC/DC voltage and current, resistance, capacitance, frequency.',
     imageUrl: 'https://placehold.co/300x200.png',
     dataAiHint: 'multimeter electronics',
     features: ['True-RMS AC Voltage/Current', 'Temperature Measurement (with probe)', 'CAT III 1000V, CAT IV 600V Safety Rating'],
-    lastCalibration: '2024-03-01',
-    nextCalibration: '2025-03-01',
     availability: [
       { date: dayAfterTomorrowStr, slots: ['Full Day Booked'] }
     ],
     notes: 'Includes standard test leads and thermocouple probe.'
-  }
+  },
+  {
+    id: 'rt12-instance',
+    name: 'FPGA Dev Node Alpha',
+    resourceTypeId: 'rt12',
+    resourceTypeName: 'FPGA Dev Node',
+    lab: 'Electronics Lab 1',
+    status: 'Available',
+    manufacturer: 'Xilinx',
+    model: 'Alveo U250',
+    serialNumber: 'XALV-U250-001',
+    purchaseDate: '2023-09-01T00:00:00.000Z',
+    description: 'High-performance FPGA development node for hardware acceleration and prototyping complex digital systems.',
+    imageUrl: 'https://placehold.co/300x200.png',
+    dataAiHint: 'fpga circuit board',
+    features: ['High-Speed Transceivers', 'Large Logic Capacity', 'PCIe Gen3 x16'],
+    availability: [
+      { date: todayStr, slots: ['09:00-17:00'] },
+      { date: tomorrowStr, slots: ['09:00-13:00', '14:00-17:00'] }
+    ],
+    notes: 'Requires Vivado Design Suite. Remote access configured.',
+    remoteAccess: {
+      ipAddress: '192.168.1.105',
+      hostname: 'fpga-node-alpha.lab.internal',
+      protocol: 'SSH',
+      username: 'devuser',
+      port: 22,
+      notes: 'SSH key authentication required. Contact admin for access.'
+    }
+  },
 ];
