@@ -12,7 +12,15 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Resource } from '@/types';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { format, addDays, parseISO, isValid } from 'date-fns';
 import { Label } from '@/components/ui/label';
@@ -133,12 +141,12 @@ export default function ResourcesPage() {
   const [selectedLab, setSelectedLab] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
-  // Temporary filters for Popover
+  // Temporary filters for Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempSelectedType, setTempSelectedType] = useState<string>('all');
   const [tempSelectedLab, setTempSelectedLab] = useState<string>('all');
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(undefined);
-  const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
@@ -146,13 +154,13 @@ export default function ResourcesPage() {
   }, []);
 
   useEffect(() => {
-    if (isFilterPopoverOpen) {
+    if (isFilterDialogOpen) {
       setTempSearchTerm(searchTerm);
       setTempSelectedType(selectedType);
       setTempSelectedLab(selectedLab);
       setTempSelectedDate(selectedDate);
     }
-  }, [isFilterPopoverOpen, searchTerm, selectedType, selectedLab, selectedDate]);
+  }, [isFilterDialogOpen, searchTerm, selectedType, selectedLab, selectedDate]);
 
   const filteredResources = useMemo(() => {
     let resources = allMockResources;
@@ -182,7 +190,7 @@ export default function ResourcesPage() {
     setSelectedType(tempSelectedType);
     setSelectedLab(tempSelectedLab);
     setSelectedDate(tempSelectedDate);
-    setIsFilterPopoverOpen(false);
+    setIsFilterDialogOpen(false);
   };
 
   const resetFilters = () => {
@@ -194,7 +202,7 @@ export default function ResourcesPage() {
     setTempSelectedType('all');
     setTempSelectedLab('all');
     setTempSelectedDate(undefined);
-    // setIsFilterPopoverOpen(false); // Optionally close popover
+    // setIsFilterDialogOpen(false); // Optionally close dialog
   };
 
   const getResourceStatusBadge = (status: Resource['status']) => {
@@ -212,10 +220,10 @@ export default function ResourcesPage() {
   };
 
   const activeFilterCount = [
-    searchTerm,
+    searchTerm !== '',
     selectedType !== 'all',
     selectedLab !== 'all',
-    selectedDate,
+    selectedDate !== undefined,
   ].filter(Boolean).length;
 
   if (!isClient) {
@@ -229,8 +237,8 @@ export default function ResourcesPage() {
         description="Find and filter available lab resources."
         icon={Search}
         actions={
-            <Popover open={isFilterPopoverOpen} onOpenChange={setIsFilterPopoverOpen}>
-              <PopoverTrigger asChild>
+            <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+              <DialogTrigger asChild>
                 <Button variant="outline">
                   <FilterIcon className="mr-2 h-4 w-4" />
                   Filters
@@ -240,81 +248,80 @@ export default function ResourcesPage() {
                     </Badge>
                   )}
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[350px] z-50" align="end">
-                <div className="grid gap-4">
-                  <div className="space-y-2">
-                    <h4 className="font-medium leading-none">Filter Resources</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Refine the list of available lab resources.
-                    </p>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Filter Resources</DialogTitle>
+                  <DialogDescription>
+                    Refine the list of available lab resources.
+                  </DialogDescription>
+                </DialogHeader>
+                <Separator className="my-3" />
+                <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto pr-2">
+                  <div>
+                    <Label htmlFor="resourceSearchDialog" className="text-sm font-medium">Search by Name/Keyword</Label>
+                    <Input
+                      id="resourceSearchDialog"
+                      type="search"
+                      placeholder="e.g., Microscope Alpha, EDX..."
+                      value={tempSearchTerm}
+                      onChange={(e) => setTempSearchTerm(e.target.value)}
+                      className="h-9 mt-1"
+                    />
                   </div>
-                  <Separator />
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="resourceSearch" className="text-xs">Search by Name/Keyword</Label>
-                      <Input
-                        id="resourceSearch"
-                        type="search"
-                        placeholder="e.g., Microscope Alpha, EDX..."
-                        value={tempSearchTerm}
-                        onChange={(e) => setTempSearchTerm(e.target.value)}
-                        className="h-9 mt-1"
+                  <div>
+                    <Label htmlFor="resourceTypeDialog" className="text-sm font-medium">Type</Label>
+                    <Select value={tempSelectedType} onValueChange={setTempSelectedType}>
+                      <SelectTrigger id="resourceTypeDialog" className="h-9 mt-1">
+                        <SelectValue placeholder="Filter by Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        {resourceTypes.map(type => (
+                          <SelectItem key={type} value={type}>{type}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="resourceLabDialog" className="text-sm font-medium">Lab</Label>
+                    <Select value={tempSelectedLab} onValueChange={setTempSelectedLab}>
+                      <SelectTrigger id="resourceLabDialog" className="h-9 mt-1">
+                        <SelectValue placeholder="Filter by Lab" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Labs</SelectItem>
+                        {labs.map(lab => (
+                          <SelectItem key={lab} value={lab}>{lab}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                      <Label className="text-sm font-medium mb-1 block">Available On</Label>
+                      <Calendar
+                          mode="single"
+                          selected={tempSelectedDate}
+                          onSelect={setTempSelectedDate}
+                          initialFocus
+                          disabled={(date) => date < addDays(new Date(), -1) }
+                          className="rounded-md border p-2"
                       />
-                    </div>
-                    <div>
-                      <Label htmlFor="resourceType" className="text-xs">Type</Label>
-                      <Select value={tempSelectedType} onValueChange={setTempSelectedType}>
-                        <SelectTrigger id="resourceType" className="h-9 mt-1">
-                          <SelectValue placeholder="Filter by Type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Types</SelectItem>
-                          {resourceTypes.map(type => (
-                            <SelectItem key={type} value={type}>{type}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="resourceLab" className="text-xs">Lab</Label>
-                      <Select value={tempSelectedLab} onValueChange={setTempSelectedLab}>
-                        <SelectTrigger id="resourceLab" className="h-9 mt-1">
-                          <SelectValue placeholder="Filter by Lab" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Labs</SelectItem>
-                          {labs.map(lab => (
-                            <SelectItem key={lab} value={lab}>{lab}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                        <Label className="text-xs mb-1 block">Available On</Label>
-                        <Calendar
-                            mode="single"
-                            selected={tempSelectedDate}
-                            onSelect={setTempSelectedDate}
-                            initialFocus
-                            disabled={(date) => date < addDays(new Date(), -1) }
-                            className="rounded-md border p-2"
-                        />
-                        {tempSelectedDate && (
-                             <Button variant="ghost" size="sm" onClick={() => setTempSelectedDate(undefined)} className="mt-1 w-full text-xs">Clear Date</Button>
-                        )}
-                    </div>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between">
-                    <Button variant="ghost" onClick={resetFilters} className="text-sm">
-                      <FilterX className="mr-2 h-4 w-4" /> Reset
-                    </Button>
-                    <Button onClick={handleApplyFilters} className="text-sm">Apply Filters</Button>
+                      {tempSelectedDate && (
+                           <Button variant="ghost" size="sm" onClick={() => setTempSelectedDate(undefined)} className="mt-1 w-full text-xs">Clear Date Selection</Button>
+                      )}
                   </div>
                 </div>
-              </PopoverContent>
-            </Popover>
+                <Separator className="mt-3 mb-1" />
+                <DialogFooter className="pt-2">
+                  <Button variant="ghost" onClick={resetFilters} className="text-sm mr-auto">
+                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                  </Button>
+                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleApplyFilters} className="text-sm">Apply Filters</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
         }
       />
 

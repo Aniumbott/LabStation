@@ -33,13 +33,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { UserFormDialog, UserFormValues } from '@/components/admin/user-form-dialog';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 
 const initialMockUsers: User[] = [
@@ -47,7 +55,7 @@ const initialMockUsers: User[] = [
   { id: 'u2', name: 'Dr. Manager Second', email: 'manager.second@labstation.com', role: 'Lab Manager', avatarUrl: 'https://placehold.co/100x100.png', avatarDataAiHint: 'avatar person' },
   { id: 'u3', name: 'Tech Third', email: 'tech.third@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png', avatarDataAiHint: 'avatar person' },
   { id: 'u4', name: 'Researcher Fourth', email: 'researcher.fourth@labstation.com', role: 'Researcher', avatarUrl: 'https://placehold.co/100x100.png', avatarDataAiHint: 'avatar person' },
-  { id: 'u5', name: 'Admin Alpha', email: 'admin.alpha@labstation.com', role: 'Admin', avatarDataAiHint: 'avatar person' },
+  { id: 'u5', name: 'Admin Alpha', email: 'admin.alpha@labstation.com', role: 'Admin', avatarUrl: 'https://placehold.co/100x100.png', avatarDataAiHint: 'avatar person' },
 ];
 
 const roleIcons: Record<User['role'], React.ElementType> = {
@@ -80,17 +88,17 @@ export default function UserManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<RoleName | 'all'>('all');
 
-  // Temporary filters for Popover
+  // Temporary filters for Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterRole, setTempFilterRole] = useState<RoleName | 'all'>('all');
-  const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (isFilterPopoverOpen) {
+    if (isFilterDialogOpen) {
       setTempSearchTerm(searchTerm);
       setTempFilterRole(filterRole);
     }
-  }, [isFilterPopoverOpen, searchTerm, filterRole]);
+  }, [isFilterDialogOpen, searchTerm, filterRole]);
 
   const filteredUsers = useMemo(() => {
     let currentUsers = [...users];
@@ -109,7 +117,7 @@ export default function UserManagementPage() {
   const handleApplyFilters = () => {
     setSearchTerm(tempSearchTerm);
     setFilterRole(tempFilterRole);
-    setIsFilterPopoverOpen(false);
+    setIsFilterDialogOpen(false);
   };
 
   const resetFilters = () => {
@@ -117,7 +125,7 @@ export default function UserManagementPage() {
     setFilterRole('all');
     setTempSearchTerm('');
     setTempFilterRole('all');
-    // setIsFilterPopoverOpen(false); // Optionally close popover on reset
+    // setIsFilterDialogOpen(false); // Optionally close dialog on reset
   };
 
   const handleOpenNewUserDialog = () => {
@@ -164,7 +172,7 @@ export default function UserManagementPage() {
     setUserToDelete(null);
   };
 
-  const activeFilterCount = [searchTerm, filterRole !== 'all'].filter(Boolean).length;
+  const activeFilterCount = [searchTerm !== '', filterRole !== 'all'].filter(Boolean).length;
 
   return (
     <div className="space-y-8">
@@ -174,8 +182,8 @@ export default function UserManagementPage() {
         icon={UsersIcon}
         actions={
           <div className="flex items-center gap-2">
-            <Popover open={isFilterPopoverOpen} onOpenChange={setIsFilterPopoverOpen}>
-              <PopoverTrigger asChild>
+            <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+              <DialogTrigger asChild>
                 <Button variant="outline">
                   <FilterIcon className="mr-2 h-4 w-4" />
                   Filters
@@ -185,53 +193,52 @@ export default function UserManagementPage() {
                     </Badge>
                   )}
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80 z-50" align="end">
-                <div className="grid gap-4">
-                  <div className="space-y-2">
-                    <h4 className="font-medium leading-none">Filters</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Refine the list of users.
-                    </p>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Filter Users</DialogTitle>
+                  <DialogDescription>
+                    Refine the list of users.
+                  </DialogDescription>
+                </DialogHeader>
+                <Separator className="my-3" />
+                <div className="grid gap-4 py-2">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="userSearchDialog" className="text-right col-span-1">Search</Label>
+                    <Input
+                      id="userSearchDialog"
+                      type="search"
+                      placeholder="Name or email..."
+                      value={tempSearchTerm}
+                      onChange={(e) => setTempSearchTerm(e.target.value)}
+                      className="col-span-3 h-9"
+                    />
                   </div>
-                  <Separator />
-                  <div className="grid gap-2">
-                    <div className="grid grid-cols-3 items-center gap-4">
-                      <Label htmlFor="userSearch" className="col-span-1">Search</Label>
-                      <Input
-                        id="userSearch"
-                        type="search"
-                        placeholder="Name or email..."
-                        value={tempSearchTerm}
-                        onChange={(e) => setTempSearchTerm(e.target.value)}
-                        className="col-span-2 h-8"
-                      />
-                    </div>
-                    <div className="grid grid-cols-3 items-center gap-4">
-                      <Label htmlFor="userRole" className="col-span-1">Role</Label>
-                      <Select value={tempFilterRole} onValueChange={(value) => setTempFilterRole(value as RoleName | 'all')} >
-                        <SelectTrigger id="userRole" className="col-span-2 h-8">
-                          <SelectValue placeholder="Select Role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Roles</SelectItem>
-                          {userRolesList.map(role => (
-                            <SelectItem key={role} value={role}>{role}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between">
-                    <Button variant="ghost" onClick={resetFilters} className="text-sm">
-                      <FilterX className="mr-2 h-4 w-4" /> Reset
-                    </Button>
-                    <Button onClick={handleApplyFilters} className="text-sm">Apply Filters</Button>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="userRoleDialog" className="text-right col-span-1">Role</Label>
+                    <Select value={tempFilterRole} onValueChange={(value) => setTempFilterRole(value as RoleName | 'all')} >
+                      <SelectTrigger id="userRoleDialog" className="col-span-3 h-9">
+                        <SelectValue placeholder="Select Role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Roles</SelectItem>
+                        {userRolesList.map(role => (
+                          <SelectItem key={role} value={role}>{role}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-              </PopoverContent>
-            </Popover>
+                <Separator className="mt-3 mb-1" />
+                <DialogFooter className="pt-2">
+                  <Button variant="ghost" onClick={resetFilters} className="text-sm mr-auto">
+                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                  </Button>
+                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleApplyFilters} className="text-sm">Apply Filters</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             <Button onClick={handleOpenNewUserDialog}>
               <PlusCircle className="mr-2 h-4 w-4" /> Add New User
@@ -357,3 +364,4 @@ export default function UserManagementPage() {
     </div>
   );
 }
+
