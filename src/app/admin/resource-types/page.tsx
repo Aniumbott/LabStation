@@ -29,8 +29,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@/components/ui/alert-dialog"; // Removed AlertDialogTrigger as it's part of AlertDialog
 import {
   Dialog,
   DialogContent,
@@ -48,7 +47,8 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 
-const initialMockResourceTypes: ResourceType[] = [
+// Updated to be more comprehensive and serve as the source for mock types
+export const initialMockResourceTypes: ResourceType[] = [
   { id: 'rt1', name: 'Microscope', description: 'Optical and electron microscopes for various imaging needs.' },
   { id: 'rt2', name: 'Centrifuge', description: 'For separating substances of different densities.' },
   { id: 'rt3', name: 'HPLC System', description: 'High-Performance Liquid Chromatography systems.' },
@@ -67,7 +67,10 @@ export default function ResourceTypeManagementPage() {
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingType, setEditingType] = useState<ResourceType | null>(null);
 
+  // Active filter
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Temp filter for Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
 
@@ -96,6 +99,7 @@ export default function ResourceTypeManagementPage() {
   const resetFilters = () => {
     setSearchTerm('');
     setTempSearchTerm('');
+    // setIsFilterDialogOpen(false); // User might want to apply after reset
   };
 
   const handleOpenNewDialog = () => {
@@ -230,12 +234,12 @@ export default function ResourceTypeManagementPage() {
                       <AlertDialog>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <AlertDialogTrigger asChild>
+                            <AlertDialog.Trigger asChild> {/* Corrected: Use AlertDialog.Trigger */}
                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setTypeToDelete(type)}>
                                   <Trash2 className="h-4 w-4" />
                                   <span className="sr-only">Delete Resource Type</span>
                               </Button>
-                            </AlertDialogTrigger>
+                            </AlertDialog.Trigger>
                           </TooltipTrigger>
                           <TooltipContent><p>Delete Resource Type</p></TooltipContent>
                         </Tooltip>
@@ -297,3 +301,5 @@ export default function ResourceTypeManagementPage() {
     </div>
   );
 }
+
+    

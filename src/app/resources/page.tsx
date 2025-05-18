@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { Resource, ResourceType as AppResourceType } from '@/types'; // Renamed to avoid conflict
+import type { Resource, ResourceType } from '@/types';
+import { initialMockResourceTypes } from '@/app/admin/resource-types/page'; // Import from admin page
 import {
   Dialog,
   DialogContent,
@@ -30,22 +31,12 @@ const todayStr = format(new Date(), 'yyyy-MM-dd');
 const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 const dayAfterTomorrowStr = format(addDays(new Date(), 2), 'yyyy-MM-dd');
 
-// Mock Resource Types (these would ideally come from a data store or the new admin page)
-const mockResourceTypes: AppResourceType[] = [
-  { id: 'rt1', name: 'Microscope', description: 'Optical and electron microscopes for various imaging needs.' },
-  { id: 'rt2', name: 'Centrifuge', description: 'For separating substances of different densities.' },
-  { id: 'rt3', name: 'HPLC System', description: 'High-Performance Liquid Chromatography systems.' },
-  { id: 'rt4', name: 'Incubator', description: 'Controlled environment for biological cultures.' },
-  { id: 'rt5', name: 'Fume Hood', description: 'Ventilated enclosure for safe handling of hazardous materials.' },
-  { id: 'rt6', name: 'Spectrometer', description: 'Measures properties of light over a specific portion of the electromagnetic spectrum.' },
-];
-
 export const allMockResources: Resource[] = [
   {
     id: '1',
     name: 'Electron Microscope Alpha',
-    resourceTypeId: 'rt1',
-    resourceTypeName: 'Microscope',
+    resourceTypeId: 'rt1', // Matches ID from initialMockResourceTypes
+    resourceTypeName: 'Microscope', // Matches name from initialMockResourceTypes
     lab: 'Lab A',
     status: 'Available',
     manufacturer: 'Thermo Fisher Scientific',
@@ -103,7 +94,7 @@ export const allMockResources: Resource[] = [
     dataAiHint: 'hplc chemistry',
     features: ['Quaternary Solvent Delivery', 'Autosampler (120 vial capacity)', 'Column Thermostatting (5-80°C)', 'Diode Array Detector (190-800nm)', 'Fraction Collector (Optional)'],
     lastCalibration: '2023-11-10',
-    nextCalibration: '2024-05-10', // Past due for maintenance
+    nextCalibration: '2024-05-10', 
     availability: [],
     notes: 'System offline for preventative maintenance until further notice. Contact lab manager for updates.'
   },
@@ -173,11 +164,31 @@ export const allMockResources: Resource[] = [
         { date: dayAfterTomorrowStr, slots: ['09:00-12:00'] }
     ]
   },
+  {
+    id: '7',
+    name: 'Research Spectrometer Gamma',
+    resourceTypeId: 'rt6',
+    resourceTypeName: 'Spectrometer',
+    lab: 'Lab C',
+    status: 'Available',
+    manufacturer: 'PerkinElmer',
+    model: 'Lambda 365',
+    serialNumber: 'SN-SPEC-007',
+    purchaseDate: '2022-11-05',
+    description: 'UV/Vis spectrometer for quantitative analysis, kinetics, scanning, and multicomponent analysis. Features a double-beam optical system for high stability and accuracy. Wide wavelength range ideal for diverse research applications.',
+    imageUrl: 'https://placehold.co/300x200.png',
+    dataAiHint: 'spectrometer lab',
+    features: ['Double-Beam Optics', 'Wavelength Range: 190-1100nm', 'Spectral Bandwidth Control', 'Peltier Temperature Control', 'Kinetics Mode'],
+    lastCalibration: '2024-01-10',
+    nextCalibration: '2025-01-10',
+    availability: [
+      { date: todayStr, slots: ['10:00-13:00', '14:00-17:00'] },
+      { date: tomorrowStr, slots: ['09:00-12:00'] }
+    ]
+  },
 ];
 
 const labs = Array.from(new Set(allMockResources.map(r => r.lab)));
-const resourceTypeNames = mockResourceTypes.map(rt => rt.name);
-
 
 export default function ResourcesPage() {
   // Active filters
@@ -243,13 +254,12 @@ export default function ResourcesPage() {
     setIsFilterDialogOpen(false);
   };
 
-  const resetAllActiveFilters = () => {
+  const resetAllActiveFiltersAndDialog = () => {
     setActiveSearchTerm('');
     setActiveSelectedTypeName('all');
     setActiveSelectedLab('all');
     setActiveSelectedDate(undefined);
     
-    // Also reset dialog temp state immediately
     setTempSearchTerm('');
     setTempSelectedTypeName('all');
     setTempSelectedLab('all');
@@ -260,14 +270,14 @@ export default function ResourcesPage() {
   const getResourceStatusBadge = (status: Resource['status']) => {
     const baseClasses = "absolute top-2 right-2 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold";
     switch (status) {
-      case 'Available':
-        return <Badge className={`${baseClasses} bg-green-500 text-white border-transparent`}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-      case 'Booked':
-        return <Badge className={`${baseClasses} bg-yellow-500 text-yellow-950 border-transparent`}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-      case 'Maintenance':
-        return <Badge className={`${baseClasses} bg-orange-500 text-white border-transparent`}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-      default:
-        return <Badge variant="outline" className={baseClasses}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        case 'Available':
+            return <Badge className={`${baseClasses} bg-green-500 text-white border-transparent`}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        case 'Booked':
+            return <Badge className={`${baseClasses} bg-yellow-500 text-yellow-950 border-transparent`}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        case 'Maintenance':
+            return <Badge className={`${baseClasses} bg-orange-500 text-white border-transparent`}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        default:
+            return <Badge variant="outline" className={baseClasses}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     }
   };
 
@@ -279,7 +289,6 @@ export default function ResourcesPage() {
   ].filter(Boolean).length;
 
   if (!isClient) {
-    // Basic loader while client scripts are loading
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /><p className="ml-3">Loading resources...</p></div>;
   }
 
@@ -332,8 +341,8 @@ export default function ResourcesPage() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">All Types</SelectItem>
-                          {resourceTypeNames.map(typeName => (
-                            <SelectItem key={typeName} value={typeName}>{typeName}</SelectItem>
+                          {initialMockResourceTypes.map(type => ( // Use imported resource types
+                            <SelectItem key={type.id} value={type.name}>{type.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -380,7 +389,7 @@ export default function ResourcesPage() {
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                  <Button variant="ghost" onClick={() => { resetAllActiveFilters(); setIsFilterDialogOpen(false);}} className="mr-auto">
+                  <Button variant="ghost" onClick={() => { resetAllActiveFiltersAndDialog(); }} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
@@ -424,7 +433,7 @@ export default function ResourcesPage() {
                   )}
               </CardContent>
               <CardFooter className="p-4 pt-2 flex flex-col items-stretch gap-2">
-                <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
+                <Button asChild size="sm" className="w-full" variant={resource.status !== 'Available' ? "outline" : "default"} disabled={resource.status !== 'Available'}>
                   <Link href={`/bookings?resourceId=${resource.id}${activeSelectedDate ? `&date=${format(activeSelectedDate, 'yyyy-MM-dd')}`: ''}`}>
                     <CalendarPlus className="mr-2 h-4 w-4" />
                     {resource.status === 'Available' ? 'Book Now' : resource.status}
@@ -442,7 +451,7 @@ export default function ResourcesPage() {
             {activeFilterCount > 0 ? "Try adjusting your search terms or filters." : "There are currently no resources to display."}
           </p>
           {activeFilterCount > 0 && (
-             <Button onClick={() => { resetAllActiveFilters(); handleApplyFilters(); }} variant="outline">
+             <Button onClick={() => { resetAllActiveFiltersAndDialog(); handleApplyFilters(); }} variant="outline">
                 <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
             </Button>
           )}
@@ -451,3 +460,5 @@ export default function ResourcesPage() {
     </div>
   );
 }
+
+    
