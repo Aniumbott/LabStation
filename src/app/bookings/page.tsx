@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, X, Clock, UserCircle, Info, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, X, Clock, UserCircle, Info, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Calendar as CalendarIcon } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { BookingDetailsDialog } from '@/components/bookings/booking-details-dialog';
 import { Separator } from '@/components/ui/separator';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 
 const mockResources: Resource[] = [
@@ -95,6 +96,7 @@ function BookingsPageContent() {
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentBooking, setCurrentBooking] = useState<Partial<Booking> & { resourceId?: string } | null>(null);
+  
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterResourceId, setTempFilterResourceId] = useState<string>('all');
@@ -119,8 +121,8 @@ function BookingsPageContent() {
     }
      if (dateToSet && (!activeSelectedDate || !isSameDay(activeSelectedDate, dateToSet))) {
         setActiveSelectedDate(dateToSet);
-        setTempSelectedDateInDialog(dateToSet);
-        setCurrentCalendarMonthInDialog(dateToSet); // Also for filter dialog
+        setTempSelectedDateInDialog(dateToSet); // For filter dialog
+        if (isFilterDialogOpen) setCurrentCalendarMonthInDialog(dateToSet);
     }
 
     if (bookingIdParam) {
@@ -283,24 +285,20 @@ function BookingsPageContent() {
   };
 
   const resetAllActiveFiltersAndDialog = () => {
-    // Reset active filters
     setActiveSearchTerm('');
     setActiveFilterResourceId('all');
     setActiveFilterStatus('all');
     setActiveSelectedDate(undefined);
     
-    // Reset temporary dialog filters
     setTempSearchTerm('');
     setTempFilterResourceId('all');
     setTempFilterStatus('all');
     setTempSelectedDateInDialog(undefined);
     setCurrentCalendarMonthInDialog(startOfDay(new Date()));
 
-    // Clear date from URL
     const newSearchParams = new URLSearchParams(searchParams.toString());
     newSearchParams.delete('date');
     router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
-    // setIsFilterDialogOpen(false); // User might want to apply after reset
   };
   
   if (!isClient) {
@@ -322,7 +320,7 @@ function BookingsPageContent() {
         icon={CalendarDays}
         actions={
           <div className="flex items-center gap-2">
-             <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+            <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
                   <FilterIcon className="mr-2 h-4 w-4" />
@@ -524,9 +522,7 @@ function BookingsPageContent() {
           <DialogHeader>
             <DialogTitle>{currentBooking?.id ? 'Edit Booking' : 'Create New Booking'}</DialogTitle>
             <DialogDescription>
-              Fill in the details below to {currentBooking?.id ? 'update your' : 'schedule a new'} booking
-              {activeSelectedDate && (!currentBooking || !currentBooking.id) && ` for ${format(activeSelectedDate, 'PPP')}`}.
-              {!activeSelectedDate && (!currentBooking || !currentBooking.id) && ` (date will be based on start time).`}
+              Fill in the details below to {currentBooking?.id ? 'update your' : 'schedule a new'} booking.
             </DialogDescription>
           </DialogHeader>
           <BookingForm
@@ -566,6 +562,7 @@ interface BookingFormProps {
 }
 
 function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentUserFullName }: BookingFormProps) {
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<Booking>>(() => {
     const isEditing = !!initialData?.id;
     
@@ -578,11 +575,6 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     if (initialData?.startTime) { 
         initialStartTime = new Date(initialData.startTime);
         initialEndTime = initialData.endTime ? new Date(initialData.endTime) : new Date(initialStartTime.getTime() + 2 * 60 * 60 * 1000);
-        
-        if (!isEditing && selectedDateProp && startOfDay(initialStartTime).getTime() !== startOfDay(selectedDateProp).getTime()) { 
-            initialStartTime = set(initialStartTime, { year: selectedDateProp.getFullYear(), month: selectedDateProp.getMonth(), date: selectedDateProp.getDate() });
-            initialEndTime = set(initialEndTime, { year: selectedDateProp.getFullYear(), month: selectedDateProp.getMonth(), date: selectedDateProp.getDate() });
-        }
     } else { 
         const baseDate = selectedDateProp || startOfDay(new Date()); 
         initialStartTime = set(new Date(baseDate), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 });
@@ -605,23 +597,28 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     };
   });
 
-  useEffect(() => {
-    const isNewBooking = !initialData?.id; 
-    if (isNewBooking && selectedDateProp) {
-      setFormData(prev => {
-        const currentFormStartTime = prev.startTime ? new Date(prev.startTime) : new Date();
-        if (startOfDay(currentFormStartTime).getTime() !== startOfDay(selectedDateProp).getTime()) {
-            const newStartTime = set(currentFormStartTime, { year: selectedDateProp.getFullYear(), month: selectedDateProp.getMonth(), date: selectedDateProp.getDate() });
-            let duration = (prev.endTime ? new Date(prev.endTime).getTime() : 0) - (prev.startTime ? new Date(prev.startTime).getTime() : 0);
-            if (duration <= 0) duration = 2 * 60 * 60 * 1000; 
-            let newEndTime = new Date(newStartTime.getTime() + duration);
-            newEndTime = set(newEndTime, { year: newStartTime.getFullYear(), month: newStartTime.getMonth(), date: newStartTime.getDate() });
-            return { ...prev, startTime: newStartTime, endTime: newEndTime };
-        }
-        return prev;
+  const handleDateChangeFromPicker = (newDate: Date | undefined) => {
+    if (!newDate) return;
+    const selectedDay = startOfDay(newDate);
+    setFormData(prev => {
+      const newStartTime = set(prev.startTime || new Date(), { 
+        year: selectedDay.getFullYear(), 
+        month: selectedDay.getMonth(), 
+        date: selectedDay.getDate() 
       });
-    }
-  }, [selectedDateProp, initialData?.id]);
+      // Keep existing duration or default to 2 hours
+      let duration = (prev.endTime && prev.startTime) ? (new Date(prev.endTime).getTime() - new Date(prev.startTime).getTime()) : (2 * 60 * 60 * 1000);
+      if (duration <= 0) duration = 2 * 60 * 60 * 1000;
+
+      const newEndTime = set(new Date(newStartTime.getTime() + duration), {
+        year: selectedDay.getFullYear(), 
+        month: selectedDay.getMonth(), 
+        date: selectedDay.getDate() 
+      });
+      return { ...prev, startTime: newStartTime, endTime: newEndTime };
+    });
+    setIsCalendarOpen(false);
+  };
 
   const handleChange = (field: keyof Booking | 'resourceId', value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -633,13 +630,10 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     let baseDateForTimeChange: Date;
     if (formData[field]) {
         baseDateForTimeChange = new Date(formData[field]!);
-    } else if (selectedDateProp) {
-        baseDateForTimeChange = new Date(selectedDateProp);
-    } else {
+    } else if (formData.startTime) { // Fallback to startTime's date part if current field is undefined
+        baseDateForTimeChange = new Date(formData.startTime);
+    } else { // Absolute fallback
         baseDateForTimeChange = startOfDay(new Date());
-    }
-     if (!formData.id && selectedDateProp) {
-       baseDateForTimeChange = set(selectedDateProp, { hours: new Date().getHours(), minutes: new Date().getMinutes()}); 
     }
 
     const newDate = set(baseDateForTimeChange, { hours, minutes, seconds: 0, milliseconds: 0 });
@@ -660,12 +654,34 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
 
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); onSave(formData); };
   
-  const bookingDate = formData.startTime ? format(new Date(formData.startTime), 'PPP') : (selectedDateProp ? format(selectedDateProp, 'PPP') : "Date not set");
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4 py-4">
-      <div className="p-2 mb-2 rounded-md border bg-muted/50 text-sm">
-        <span className="font-medium">Booking for Date:</span> {bookingDate}
+      <div>
+        <Label htmlFor="bookingFormDate">Date</Label>
+        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              id="bookingFormDate"
+              variant="outline"
+              className={cn(
+                "w-full justify-start text-left font-normal h-10", // Ensure consistent height
+                !formData.startTime && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {formData.startTime ? format(new Date(formData.startTime), "PPP") : <span>Pick a date</span>}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={formData.startTime ? new Date(formData.startTime) : undefined}
+              onSelect={handleDateChangeFromPicker}
+              initialFocus
+              disabled={(date) => date < startOfDay(new Date(new Date().setDate(new Date().getDate() -90)))} 
+            />
+          </PopoverContent>
+        </Popover>
       </div>
       <div>
         <Label htmlFor="bookingFormResourceId">Resource</Label>
@@ -713,3 +729,5 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
   );
 }
 
+
+    
