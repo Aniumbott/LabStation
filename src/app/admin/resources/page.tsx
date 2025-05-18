@@ -121,7 +121,7 @@ export default function ResourcesPage() {
     setTempSelectedDate(undefined);
     setCurrentMonthInDialog(startOfDay(new Date()));
   };
-  
+
   const resetAllActiveFilters = () => {
     setActiveSearchTerm('');
     setActiveFilterTypeId('all');
@@ -136,7 +136,7 @@ export default function ResourcesPage() {
     setEditingResource(null);
     setIsFormDialogOpen(true);
   };
-  
+
   const handleSaveResource = (data: ResourceFormValues) => {
     const resourceType = initialMockResourceTypes.find(rt => rt.id === data.resourceTypeId);
     if (!resourceType) {
@@ -150,7 +150,7 @@ export default function ResourcesPage() {
         ...data,
         name: data.name,
         resourceTypeId: data.resourceTypeId,
-        resourceTypeName: resourceType.name, 
+        resourceTypeName: resourceType.name,
         lab: data.lab,
         status: data.status,
         description: data.description || '',
@@ -177,7 +177,7 @@ export default function ResourcesPage() {
         ...data,
         name: data.name,
         resourceTypeId: data.resourceTypeId,
-        resourceTypeName: resourceType.name, 
+        resourceTypeName: resourceType.name,
         lab: data.lab,
         status: data.status,
         description: data.description || '',
@@ -294,7 +294,7 @@ export default function ResourcesPage() {
                                     onClick={() => setTempSelectedDate(undefined)}
                                     className="w-full mt-2 text-xs"
                                 >
-                                    Clear Date Selection
+                                    <FilterX className="mr-2 h-4 w-4" /> Clear Date Selection
                                 </Button>
                             }
                             classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
@@ -356,13 +356,13 @@ export default function ResourcesPage() {
                     <Button
                       asChild
                       size="sm"
-                      variant={resource.status !== 'Available' ? "outline" : "default"}
+                      variant="default"
                       disabled={resource.status !== 'Available'}
                       className="h-8 text-xs"
                     >
                       <Link href={`/bookings?resourceId=${resource.id}${activeSelectedDate ? `&date=${format(activeSelectedDate, 'yyyy-MM-dd')}`: ''}`}>
                         <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
-                        {resource.status === 'Available' ? 'Book' : resource.status}
+                        Book
                       </Link>
                     </Button>
                   </TableCell>
@@ -373,25 +373,27 @@ export default function ResourcesPage() {
         </div>
       ) : (
          <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
-          <ClipboardList className="mx-auto h-12 w-12 mb-4 opacity-50" />
-           <p className="text-lg font-medium">
-            {activeFilterCount > 0 ? "No Resources Match Filters" : "No Resources Found"}
-          </p>
-          <p className="text-sm mb-4">
-            {activeFilterCount > 0
-                ? "Try adjusting your search or filter criteria."
-                : "There are currently no resources in the catalog. Add one to get started!"
-            }
-          </p>
-          {activeFilterCount > 0 ? (
-             <Button variant="outline" onClick={resetAllActiveFilters}>
-                <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
-            </Button>
-          ) : (
-            <Button onClick={handleOpenNewDialog}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource
-            </Button>
-          )}
+          <CardContent>
+            <ClipboardList className="mx-auto h-12 w-12 mb-4 opacity-50" />
+            <p className="text-lg font-medium">
+                {activeFilterCount > 0 ? "No Resources Match Filters" : "No Resources Found"}
+            </p>
+            <p className="text-sm mb-4">
+                {activeFilterCount > 0
+                    ? "Try adjusting your search or filter criteria."
+                    : "There are currently no resources in the catalog. Add one to get started!"
+                }
+            </p>
+            {activeFilterCount > 0 ? (
+                <Button variant="outline" onClick={resetAllActiveFilters}>
+                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                </Button>
+            ) : (
+                <Button onClick={handleOpenNewDialog}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource
+                </Button>
+            )}
+          </CardContent>
         </Card>
       )}
       <ResourceFormDialog

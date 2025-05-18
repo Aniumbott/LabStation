@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList, initialBookings, mockCurrentUser } from '@/lib/mock-data'; // Corrected import
+import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList, initialBookings, mockCurrentUser } from '@/lib/mock-data';
 import type { Resource, ResourceType, ResourceStatus, Booking } from '@/types';
 import { format, parseISO, isValid, startOfToday, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -181,7 +181,7 @@ export default function ResourceDetailPage() {
       .filter(booking =>
         booking.resourceId === resource.id &&
         booking.userId === mockCurrentUser.id &&
-        isValid(new Date(booking.startTime)) && isPast(new Date(booking.startTime)) &&
+        isValid(parseISO(booking.startTime.toString())) && isPast(parseISO(booking.startTime.toString())) &&
         booking.status !== 'Cancelled'
       )
       .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
@@ -210,7 +210,7 @@ export default function ResourceDetailPage() {
             } : undefined,
         };
         setResource(updatedResource); // Update local state for immediate UI reflection
-        
+
         // Note: This updates the mock array in memory.
         // In a real app, this would be an API call.
         // This change will persist for the session but not if the app reloads fresh from `allAdminMockResources`.
@@ -372,7 +372,7 @@ export default function ResourceDetailPage() {
                   <ul className="space-y-3 text-sm">
                     {userPastBookingsForResource.slice(0,5).map((booking) => (
                       <li key={booking.id} className="pb-2 border-b border-dashed last:border-b-0 last:pb-0">
-                        <p className="font-medium text-foreground">{format(new Date(booking.startTime), 'PPP, p')}</p>
+                        <p className="font-medium text-foreground">{format(parseISO(booking.startTime.toString()), 'PPP, p')}</p>
                         {booking.notes && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">Notes: {booking.notes}</p>}
                       </li>
                     ))}
@@ -443,7 +443,7 @@ export default function ResourceDetailPage() {
                  <Button asChild className="w-full sm:w-auto" disabled={resource.status !== 'Available'}>
                     <Link href={`/bookings?resourceId=${resource.id}`}>
                         <CalendarPlus className="mr-2 h-4 w-4" />
-                        {resource.status === 'Available' ? 'Book This Resource' : resource.status}
+                        Book This Resource
                     </Link>
                 </Button>
             </CardFooter>

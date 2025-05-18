@@ -22,7 +22,7 @@ import { allAdminMockResources, initialBookings, mockCurrentUser } from '@/lib/m
 
 
 export default function DashboardPage() {
-  const frequentlyUsedResources = allAdminMockResources.slice(0, 2); 
+  const frequentlyUsedResources = allAdminMockResources.slice(0, 2);
 
   const getResourceStatusBadge = (status: Resource['status']) => {
     switch (status) {
@@ -36,7 +36,7 @@ export default function DashboardPage() {
         return <Badge variant="outline"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     }
   };
-  
+
   const upcomingUserBookings = initialBookings
     .filter(b => {
         const startTime = new Date(b.startTime);
@@ -88,7 +88,7 @@ export default function DashboardPage() {
                   <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
                     <Link href={`/bookings?resourceId=${resource.id}`}>
                       <CalendarPlus className="mr-2 h-4 w-4" />
-                       {resource.status === 'Available' ? 'Book Now' : resource.status}
+                       Book Now
                     </Link>
                   </Button>
                 </CardFooter>
@@ -149,11 +149,13 @@ export default function DashboardPage() {
                 </Table>
               </div>
             </CardContent>
-            <CardFooter className="justify-end pt-4">
-                 <Button variant="outline" asChild>
-                    <Link href="/bookings">View All Bookings <ChevronRight className="ml-2 h-4 w-4" /></Link>
-                </Button>
-            </CardFooter>
+            {upcomingUserBookings.length > 0 && (
+                <CardFooter className="justify-end pt-4">
+                    <Button variant="outline" asChild>
+                        <Link href="/bookings">View All Bookings <ChevronRight className="ml-2 h-4 w-4" /></Link>
+                    </Button>
+                </CardFooter>
+            )}
           </Card>
         ) : (
           <Card className="p-6 text-center shadow-lg">
