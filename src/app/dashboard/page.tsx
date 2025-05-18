@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { format, isValid, parseISO } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 const mockResources: Resource[] = [
   {
@@ -77,24 +78,11 @@ export default function DashboardPage() {
       case 'Available':
         return <Badge className={`${baseBadgeClass} bg-green-500 text-white border-transparent hover:bg-green-600`}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Booked':
-        return <Badge className={`${baseBadgeClass} bg-yellow-400 text-yellow-900 border-transparent hover:bg-yellow-500`}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={`${baseBadgeClass} bg-yellow-500 text-yellow-950 border-transparent hover:bg-yellow-600`}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Maintenance':
         return <Badge className={`${baseBadgeClass} bg-orange-500 text-white border-transparent hover:bg-orange-600`}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       default:
         return <Badge variant="outline" className={baseBadgeClass}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-    }
-  };
-
-  const getBookingStatusVariant = (status: Booking['status']): 'default' | 'secondary' | 'outline' | 'destructive' => {
-    switch (status) {
-      case 'Confirmed':
-        return 'default';
-      case 'Pending':
-        return 'secondary';
-      case 'Cancelled':
-        return 'outline';
-      default:
-        return 'outline';
     }
   };
 
@@ -141,8 +129,8 @@ export default function DashboardPage() {
                   )}
                   {(resource.lastCalibration || resource.nextCalibration) && (
                      <div className="text-xs text-muted-foreground space-y-0.5 pt-1 border-t border-dashed mt-2">
-                        {resource.lastCalibration && resource.lastCalibration !== 'N/A' && <p>Last Calibrated: {format(parseISO(resource.lastCalibration), 'MMM dd, yyyy')}</p>}
-                        {resource.nextCalibration && resource.nextCalibration !== 'N/A' && <p>Next Due: {format(parseISO(resource.nextCalibration), 'MMM dd, yyyy')}</p>}
+                        {resource.lastCalibration && resource.lastCalibration !== 'N/A' && <p>Last Calibrated: {isValid(parseISO(resource.lastCalibration)) ? format(parseISO(resource.lastCalibration), 'MMM dd, yyyy') : resource.lastCalibration}</p>}
+                        {resource.nextCalibration && resource.nextCalibration !== 'N/A' && <p>Next Due: {isValid(parseISO(resource.nextCalibration)) ? format(parseISO(resource.nextCalibration), 'MMM dd, yyyy') : resource.nextCalibration}</p>}
                     </div>
                   )}
                 </CardContent>
@@ -195,7 +183,14 @@ export default function DashboardPage() {
                       <TableCell>{format(booking.startTime, 'MMM dd, yyyy')}</TableCell>
                       <TableCell>{format(booking.startTime, 'p')} - {format(booking.endTime, 'p')}</TableCell>
                       <TableCell>
-                        <Badge variant={getBookingStatusVariant(booking.status)}>
+                        <Badge 
+                            className={cn(
+                                "border-transparent", // Base styles for padding/font are from Badge component itself
+                                booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
+                                booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
+                                booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500'
+                            )}
+                        >
                             {booking.status}
                         </Badge>
                       </TableCell>
