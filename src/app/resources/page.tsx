@@ -217,7 +217,7 @@ export default function ResourcesPage() {
         </div>
 
         {showFilters && (
-          <Card className="p-4 sm:p-6 bg-muted/50 shadow-md border">
+          <Card className="p-4 sm:p-6 bg-muted/50 shadow-lg border">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Select value={selectedType} onValueChange={setSelectedType}>
                 <SelectTrigger>
