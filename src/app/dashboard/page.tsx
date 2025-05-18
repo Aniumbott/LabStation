@@ -1,6 +1,7 @@
+
 import Image from 'next/image';
 import Link from 'next/link';
-import { LayoutDashboard, CalendarPlus, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Construction } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 
 const mockResources: Resource[] = [
   {
@@ -24,21 +25,27 @@ const mockResources: Resource[] = [
     type: 'Microscope',
     lab: 'Lab A',
     status: 'Available',
-    description: 'High-resolution electron microscope for advanced material analysis.',
+    description: 'High-resolution electron microscope for advanced material analysis and detailed imaging of various samples. Includes EDX spectroscopy capabilities.',
     imageUrl: 'https://placehold.co/600x400.png',
     dataAiHint: 'microscope electronics',
-    availability: [{ date: 'Today', slots: ['10:00-12:00', '14:00-16:00'] }],
+    features: ['SEM', 'TEM', 'EDX'],
+    lastCalibration: '2023-12-01',
+    nextCalibration: '2024-06-01',
+    availability: [{ date: 'Today', slots: ['14:00-16:00'] }, { date: 'Tomorrow', slots: ['10:00-12:00'] }],
   },
   {
     id: '2',
     name: 'BioSafety Cabinet Omega',
-    type: 'Incubator', // Assuming this category covers it or need to expand types
+    type: 'Incubator',
     lab: 'Lab B',
     status: 'Booked',
-    description: 'Class II Type A2 biosafety cabinet for sterile work.',
+    description: 'Class II Type A2 biosafety cabinet for sterile work with cell cultures and other sensitive biological materials.',
     imageUrl: 'https://placehold.co/600x400.png',
     dataAiHint: 'lab cabinet',
-    availability: [{ date: 'Tomorrow', slots: ['09:00-11:00'] }],
+    features: ['HEPA Filtered', 'UV Sterilization'],
+    lastCalibration: '2024-01-15',
+    nextCalibration: '2024-07-15',
+    availability: [{ date: 'Tomorrow', slots: ['09:00-11:00'] }], // No availability today
   },
   {
     id: '3',
@@ -46,20 +53,42 @@ const mockResources: Resource[] = [
     type: 'HPLC System',
     lab: 'Lab C',
     status: 'Maintenance',
-    description: 'High-performance liquid chromatography system for compound separation.',
+    description: 'High-performance liquid chromatography system for precise compound separation and quantification.',
     imageUrl: 'https://placehold.co/600x400.png',
     dataAiHint: 'hplc chemistry',
+    features: ['Autosampler', 'UV Detector', 'Diode Array Detector'],
+    lastCalibration: '2023-11-10',
+    nextCalibration: 'N/A', // Example of N/A calibration
   },
 ];
 
 const mockBookings: Booking[] = [
-  { id: 'b1', resourceId: '1', resourceName: 'Electron Microscope Alpha', userId: 'user1', userName: 'Dr. Smith', startTime: new Date(new Date().setDate(new Date().getDate() + 1)), endTime: new Date(new Date().setDate(new Date().getDate() + 1)), status: 'Confirmed' },
-  { id: 'b2', resourceId: '4', resourceName: 'Centrifuge MaxSpin', userId: 'user2', userName: 'Dr. Jones', startTime: new Date(new Date().setDate(new Date().getDate() + 2)), endTime: new Date(new Date().setDate(new Date().getDate() + 2)), status: 'Confirmed' },
+  { id: 'b1', resourceId: '1', resourceName: 'Electron Microscope Alpha', userId: 'user1', userName: 'Dr. Smith', startTime: new Date(new Date().setDate(new Date().getDate() + 1)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 1)).setHours(new Date().getHours() + 2)), status: 'Confirmed' },
+  { id: 'b2', resourceId: '4', resourceName: 'Centrifuge MaxSpin', userId: 'user2', userName: 'Dr. Jones', startTime: new Date(new Date().setDate(new Date().getDate() + 2)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 2)).setHours(new Date().getHours() + 3)), status: 'Confirmed' },
 ];
 
 
 export default function DashboardPage() {
   const availableResources = mockResources.filter(r => r.status === 'Available').slice(0, 2);
+
+  const getStatusBadge = (status: Resource['status']) => {
+    switch (status) {
+      case 'Available':
+        return <Badge variant="default" className="bg-green-500 hover:bg-green-600 text-white"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      case 'Booked':
+        return <Badge variant="secondary" className="bg-slate-500 hover:bg-slate-600 text-white"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      case 'Maintenance':
+        return <Badge variant="destructive" className="bg-yellow-500 hover:bg-yellow-600 text-black"><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+  
+  const formatDateSafe = (dateString?: string) => {
+    if (!dateString || dateString === 'N/A') return 'N/A';
+    const date = parseISO(dateString);
+    return isValid(date) ? format(date, 'MMM dd, yyyy') : 'Invalid Date';
+  };
 
   return (
     <div className="space-y-8">
@@ -74,36 +103,52 @@ export default function DashboardPage() {
         {availableResources.length > 0 ? (
           <div className="grid gap-6 md:grid-cols-2">
             {availableResources.map((resource) => (
-              <Card key={resource.id} className="flex flex-col">
+              <Card key={resource.id} className="flex flex-col shadow-md hover:shadow-lg transition-shadow">
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <CardTitle className="text-lg">{resource.name}</CardTitle>
-                    <Badge variant={resource.status === 'Available' ? 'default' : 'secondary'} className={resource.status === 'Available' ? 'bg-green-500 text-white' : ''}>
-                      {resource.status}
-                    </Badge>
+                    {getStatusBadge(resource.status)}
                   </div>
                   <CardDescription>{resource.lab} - {resource.type}</CardDescription>
                 </CardHeader>
-                <CardContent className="flex-grow">
-                  <div className="relative w-full h-40 rounded-md overflow-hidden mb-4">
+                <CardContent className="flex-grow space-y-3">
+                  <div className="relative w-full h-40 rounded-md overflow-hidden mb-2">
                     <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint} />
                   </div>
-                  <p className="text-sm text-muted-foreground mb-2">{resource.description}</p>
+                  <p className="text-sm text-muted-foreground line-clamp-3">{resource.description}</p>
+                  
+                  {resource.features && resource.features.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Features</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {resource.features.map(feature => <Badge key={feature} variant="outline" className="text-xs">{feature}</Badge>)}
+                      </div>
+                    </div>
+                  )}
+
+                  {(resource.lastCalibration || resource.nextCalibration) && (
+                    <div className="text-xs text-muted-foreground space-y-0.5">
+                       {resource.lastCalibration && <p>Last Calibrated: {formatDateSafe(resource.lastCalibration)}</p>}
+                       {resource.nextCalibration && <p>Next Calibration: {formatDateSafe(resource.nextCalibration)}</p>}
+                    </div>
+                  )}
+
                   {resource.availability && resource.availability.length > 0 && (
                     <div>
-                      <h4 className="font-medium text-sm mb-1">Next Available:</h4>
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Next Available Slots:</h4>
                       <ul className="text-xs list-disc list-inside text-muted-foreground">
-                        {resource.availability.map(avail => 
-                          avail.slots.map(slot => <li key={slot}>{avail.date} at {slot}</li>)
+                        {resource.availability.slice(0,2).map(avail => 
+                          avail.slots.map(slot => <li key={`${avail.date}-${slot}`}>{avail.date} at {slot}</li>)
                         )}
                       </ul>
                     </div>
                   )}
                 </CardContent>
                 <CardFooter>
-                  <Button asChild size="sm" className="w-full">
+                  <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
                     <Link href={`/bookings?resourceId=${resource.id}`}>
-                      <CalendarPlus className="mr-2 h-4 w-4" /> Book Now
+                      <CalendarPlus className="mr-2 h-4 w-4" /> 
+                       {resource.status === 'Available' ? 'Book Now' : resource.status}
                     </Link>
                   </Button>
                 </CardFooter>
@@ -111,9 +156,11 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : (
-          <p className="text-muted-foreground">No resources immediately available. Try the full <Link href="/resources" className="text-primary hover:underline">Resource Search</Link>.</p>
+          <Card className="p-6 text-center">
+            <p className="text-muted-foreground">No resources immediately available. Try the full <Link href="/resources" className="text-primary hover:underline">Resource Search</Link>.</p>
+          </Card>
         )}
-        {availableResources.length > 0 && (
+        {mockResources.length > 2 && availableResources.length > 0 && ( // Show "View All" if there are more resources than shown
             <div className="mt-4 text-right">
                 <Button variant="outline" asChild>
                     <Link href="/resources">View All Resources <ChevronRight className="ml-2 h-4 w-4" /></Link>
@@ -145,10 +192,17 @@ export default function DashboardPage() {
                       <TableCell className="font-medium">{booking.resourceName}</TableCell>
                       <TableCell>{format(booking.startTime, 'MMM dd, yyyy')}</TableCell>
                       <TableCell>{format(booking.startTime, 'p')} - {format(booking.endTime, 'p')}</TableCell>
-                      <TableCell><Badge variant={booking.status === 'Confirmed' ? 'default' : 'secondary'}  className={booking.status === 'Confirmed' ? 'bg-green-500 text-white' : ''}>{booking.status}</Badge></TableCell>
+                      <TableCell>
+                        <Badge 
+                            variant={booking.status === 'Confirmed' ? 'default' : 'secondary'}
+                            className={booking.status === 'Confirmed' ? 'bg-green-500 hover:bg-green-600 text-white' : ''}
+                        >
+                            {booking.status}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="sm" asChild>
-                          <Link href={`/bookings/${booking.id}`}>View/Edit</Link>
+                          <Link href={`/bookings?bookingId=${booking.id}&date=${format(booking.startTime, 'yyyy-MM-dd')}`}>View/Edit</Link>
                         </Button>
                       </TableCell>
                     </TableRow>
