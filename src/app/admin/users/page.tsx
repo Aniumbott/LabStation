@@ -230,7 +230,7 @@ export default function UsersPage() {
                     </Select>
                   </div>
                 </div>
-                <DialogFooter className="pt-6">
+                <DialogFooter className="pt-6 border-t">
                   <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
@@ -333,8 +333,8 @@ export default function UsersPage() {
         </div>
         </TooltipProvider>
       ) : (
-        <Card className="text-center py-10 text-muted-foreground bg-card rounded-lg border">
-          <UsersIconLucide className="mx-auto h-12 w-12 mb-4" />
+        <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
+          <UsersIconLucide className="mx-auto h-12 w-12 mb-4 opacity-50" />
            <p className="text-lg font-medium">
             {activeFilterCount > 0 ? "No Users Match Filters" : "No Users Found"}
           </p>

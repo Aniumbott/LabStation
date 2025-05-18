@@ -201,7 +201,7 @@ export default function BookingApprovalsPage() {
                       </Select>
                     </div>
                   </div>
-                  <DialogFooter className="pt-6">
+                  <DialogFooter className="pt-6 border-t">
                      <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
                       <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                     </Button>
@@ -272,7 +272,7 @@ export default function BookingApprovalsPage() {
             </CardContent>
           </Card>
         ) : (
-          <Card className="text-center py-10 text-muted-foreground">
+          <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
             <CardContent>
               <CheckSquare className="mx-auto h-12 w-12 mb-4 opacity-50" />
               <p className="text-lg font-medium">

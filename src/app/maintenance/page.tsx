@@ -146,7 +146,7 @@ export default function MaintenanceRequestsPage() {
   const handleSaveRequest = (data: MaintenanceRequestFormValues) => {
     const resource = allAdminMockResources.find(r => r.id === data.resourceId);
     const technician = technicians.find(t => t.id === data.assignedTechnicianId);
-    const currentUser = initialMockUsers[3]; // Mock current user (e.g., Researcher)
+    const currentUser = initialMockUsers.find(u => u.id === 'u4'); // Using 'Researcher Fourth' as current user for reporting new issues
 
     if (!resource) {
       toast({ title: "Error", description: "Selected resource not found.", variant: "destructive" });
@@ -170,8 +170,8 @@ export default function MaintenanceRequestsPage() {
         id: `mr${requests.length + 1 + Date.now()}`,
         ...data,
         resourceName: resource.name,
-        reportedByUserId: currentUser.id,
-        reportedByUserName: currentUser.name,
+        reportedByUserId: currentUser?.id || 'unknownUser',
+        reportedByUserName: currentUser?.name || 'Unknown User',
         assignedTechnicianName: technician?.name,
         dateReported: new Date().toISOString(),
         dateResolved: (data.status === 'Resolved' || data.status === 'Closed') ? new Date().toISOString() : undefined,
@@ -262,13 +262,13 @@ export default function MaintenanceRequestsPage() {
                           <SelectTrigger id="maintenanceTechnicianDialog" className="h-9"><SelectValue placeholder="Filter by Technician" /></SelectTrigger>
                           <SelectContent>
                               <SelectItem value="all">All Technicians</SelectItem>
-                              <SelectItem value="unassigned">Unassigned</SelectItem> {/* Add this for unassigned */}
+                              <SelectItem value="unassigned">Unassigned</SelectItem> 
                               {technicians.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                           </SelectContent>
                       </Select>
                     </div>
                   </div>
-                  <DialogFooter className="pt-6">
+                  <DialogFooter className="pt-6 border-t">
                     <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
                       <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                     </Button>
@@ -290,7 +290,7 @@ export default function MaintenanceRequestsPage() {
               <CardTitle>Active Requests ({filteredRequests.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto rounded-lg border shadow-sm">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -333,7 +333,7 @@ export default function MaintenanceRequestsPage() {
             </CardContent>
           </Card>
         ) : (
-          <Card className="text-center py-10 text-muted-foreground">
+          <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
             <CardContent>
               <Wrench className="mx-auto h-12 w-12 mb-4 opacity-50" />
               <p className="text-lg font-medium">

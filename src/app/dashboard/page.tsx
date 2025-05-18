@@ -109,43 +109,45 @@ export default function DashboardPage() {
         {upcomingUserBookings.length > 0 ? (
           <Card className="shadow-lg">
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Resource</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Time</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {upcomingUserBookings.map((booking) => (
-                    <TableRow key={booking.id}>
-                      <TableCell className="font-medium">{booking.resourceName}</TableCell>
-                      <TableCell>{format(new Date(booking.startTime), 'MMM dd, yyyy')}</TableCell>
-                      <TableCell>{format(new Date(booking.startTime), 'p')} - {format(new Date(booking.endTime), 'p')}</TableCell>
-                      <TableCell>
-                        <Badge
-                            className={cn(
-                                "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
-                                booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
-                                booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
-                                booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500'
-                            )}
-                        >
-                            {booking.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link href={`/bookings?bookingId=${booking.id}&date=${format(new Date(booking.startTime), 'yyyy-MM-dd')}`}>View/Edit</Link>
-                        </Button>
-                      </TableCell>
+              <div className="overflow-x-auto rounded-lg border shadow-sm">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Resource</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Time</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {upcomingUserBookings.map((booking) => (
+                      <TableRow key={booking.id}>
+                        <TableCell className="font-medium">{booking.resourceName}</TableCell>
+                        <TableCell>{format(new Date(booking.startTime), 'MMM dd, yyyy')}</TableCell>
+                        <TableCell>{format(new Date(booking.startTime), 'p')} - {format(new Date(booking.endTime), 'p')}</TableCell>
+                        <TableCell>
+                          <Badge
+                              className={cn(
+                                  "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
+                                  booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
+                                  booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
+                                  booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500'
+                              )}
+                          >
+                              {booking.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link href={`/bookings?bookingId=${booking.id}&date=${format(new Date(booking.startTime), 'yyyy-MM-dd')}`}>View/Edit</Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
             <CardFooter className="justify-end pt-4">
                  <Button variant="outline" asChild>

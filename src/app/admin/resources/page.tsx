@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarDays, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon } from 'lucide-react';
+import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon } from 'lucide-react';
 import type { Resource, ResourceStatus } from '@/types';
 import { allAdminMockResources, initialMockResourceTypes, labsList } from '@/lib/mock-data';
 import {
@@ -161,7 +161,7 @@ export default function ResourcesPage() {
         purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : undefined,
         notes: data.notes || undefined,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-        availability: editingResource.availability,
+        availability: editingResource.availability, // Keep existing availability
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
           ...data.remoteAccess,
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
@@ -188,7 +188,7 @@ export default function ResourcesPage() {
         purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : undefined,
         notes: data.notes || undefined,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-        availability: [], 
+        availability: [], // New resources start with no pre-defined availability
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
           ...data.remoteAccess,
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
@@ -244,7 +244,7 @@ export default function ResourcesPage() {
                         type="search"
                         placeholder="Name, manufacturer, model..."
                         value={tempSearchTerm}
-                        onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
+                        onChange={(e) => setTempSearchTerm(e.target.value)}
                         className="h-9 pl-8"
                         />
                     </div>
@@ -302,7 +302,7 @@ export default function ResourcesPage() {
                       </div>
                   </div>
                 </div>
-                <DialogFooter className="pt-6">
+                <DialogFooter className="pt-6 border-t">
                    <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
@@ -372,8 +372,8 @@ export default function ResourcesPage() {
           </Table>
         </div>
       ) : (
-         <Card className="text-center py-10 text-muted-foreground bg-card rounded-lg border">
-          <ClipboardList className="mx-auto h-12 w-12 mb-4" />
+         <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
+          <ClipboardList className="mx-auto h-12 w-12 mb-4 opacity-50" />
            <p className="text-lg font-medium">
             {activeFilterCount > 0 ? "No Resources Match Filters" : "No Resources Found"}
           </p>
