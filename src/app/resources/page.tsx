@@ -4,7 +4,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, CalendarPlus, Filter as FilterIcon, FilterX, CalendarDays, CheckCircle, AlertTriangle, Construction, ChevronRight, ListChecks } from 'lucide-react';
+import { Search, CalendarPlus, Filter as FilterIcon, FilterX, CalendarDays, CheckCircle, AlertTriangle, Construction, ChevronRight, ListChecks, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -68,7 +68,7 @@ export const allMockResources: Resource[] = [
     id: '2',
     name: 'BioSafety Cabinet Omega',
     resourceTypeId: 'rt4',
-    resourceTypeName: 'Incubator', // Note: This was 'Incubator', changed type to match the list
+    resourceTypeName: 'Incubator', 
     lab: 'Lab B',
     status: 'Booked',
     manufacturer: 'Baker Company',
@@ -176,16 +176,15 @@ export const allMockResources: Resource[] = [
 ];
 
 const labs = Array.from(new Set(allMockResources.map(r => r.lab)));
-// Use mockResourceTypes for the type filter
 const resourceTypeNames = mockResourceTypes.map(rt => rt.name);
 
 
 export default function ResourcesPage() {
   // Active filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTypeName, setSelectedTypeName] = useState<string>('all'); // Filter by name
-  const [selectedLab, setSelectedLab] = useState<string>('all');
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [activeSearchTerm, setActiveSearchTerm] = useState('');
+  const [activeSelectedTypeName, setActiveSelectedTypeName] = useState<string>('all');
+  const [activeSelectedLab, setActiveSelectedLab] = useState<string>('all');
+  const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
   
   // Temporary filters for Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
@@ -200,55 +199,57 @@ export default function ResourcesPage() {
     setIsClient(true);
   }, []);
 
+  // Sync active filters to temp filters when dialog opens
   useEffect(() => {
     if (isFilterDialogOpen) {
-      setTempSearchTerm(searchTerm);
-      setTempSelectedTypeName(selectedTypeName);
-      setTempSelectedLab(selectedLab);
-      setTempSelectedDate(selectedDate);
-      if (selectedDate) setCurrentMonthInDialog(selectedDate); else setCurrentMonthInDialog(startOfDay(new Date()));
+      setTempSearchTerm(activeSearchTerm);
+      setTempSelectedTypeName(activeSelectedTypeName);
+      setTempSelectedLab(activeSelectedLab);
+      setTempSelectedDate(activeSelectedDate);
+      if (activeSelectedDate) setCurrentMonthInDialog(activeSelectedDate); else setCurrentMonthInDialog(startOfDay(new Date()));
     }
-  }, [isFilterDialogOpen, searchTerm, selectedTypeName, selectedLab, selectedDate]);
+  }, [isFilterDialogOpen, activeSearchTerm, activeSelectedTypeName, activeSelectedLab, activeSelectedDate]);
 
   const filteredResources = useMemo(() => {
     let resources = allMockResources;
-    if (searchTerm) {
+    if (activeSearchTerm) {
       resources = resources.filter(resource =>
-        resource.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (resource.description && resource.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (resource.manufacturer && resource.manufacturer.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (resource.model && resource.model.toLowerCase().includes(searchTerm.toLowerCase()))
+        resource.name.toLowerCase().includes(activeSearchTerm.toLowerCase()) ||
+        (resource.description && resource.description.toLowerCase().includes(activeSearchTerm.toLowerCase())) ||
+        (resource.manufacturer && resource.manufacturer.toLowerCase().includes(activeSearchTerm.toLowerCase())) ||
+        (resource.model && resource.model.toLowerCase().includes(activeSearchTerm.toLowerCase()))
       );
     }
-    if (selectedTypeName && selectedTypeName !== 'all') {
-      resources = resources.filter(resource => resource.resourceTypeName === selectedTypeName);
+    if (activeSelectedTypeName && activeSelectedTypeName !== 'all') {
+      resources = resources.filter(resource => resource.resourceTypeName === activeSelectedTypeName);
     }
-    if (selectedLab && selectedLab !== 'all') {
-      resources = resources.filter(resource => resource.lab === selectedLab);
+    if (activeSelectedLab && activeSelectedLab !== 'all') {
+      resources = resources.filter(resource => resource.lab === activeSelectedLab);
     }
-    if (selectedDate) {
-      const dateStrToFilter = format(selectedDate, 'yyyy-MM-dd');
+    if (activeSelectedDate) {
+      const dateStrToFilter = format(activeSelectedDate, 'yyyy-MM-dd');
       resources = resources.filter(resource =>
         resource.availability?.some(avail => avail.date === dateStrToFilter && avail.slots.length > 0 && !avail.slots.includes('Full Day Booked'))
       );
     }
     return resources;
-  }, [searchTerm, selectedTypeName, selectedLab, selectedDate]);
+  }, [activeSearchTerm, activeSelectedTypeName, activeSelectedLab, activeSelectedDate]);
 
   const handleApplyFilters = () => {
-    setSearchTerm(tempSearchTerm);
-    setSelectedTypeName(tempSelectedTypeName);
-    setSelectedLab(tempSelectedLab);
-    setSelectedDate(tempSelectedDate);
+    setActiveSearchTerm(tempSearchTerm);
+    setActiveSelectedTypeName(tempSelectedTypeName);
+    setActiveSelectedLab(tempSelectedLab);
+    setActiveSelectedDate(tempSelectedDate);
     setIsFilterDialogOpen(false);
   };
 
   const resetAllActiveFilters = () => {
-    setSearchTerm('');
-    setSelectedTypeName('all');
-    setSelectedLab('all');
-    setSelectedDate(undefined);
-    // Also reset dialog temp state
+    setActiveSearchTerm('');
+    setActiveSelectedTypeName('all');
+    setActiveSelectedLab('all');
+    setActiveSelectedDate(undefined);
+    
+    // Also reset dialog temp state immediately
     setTempSearchTerm('');
     setTempSelectedTypeName('all');
     setTempSelectedLab('all');
@@ -271,10 +272,10 @@ export default function ResourcesPage() {
   };
 
   const activeFilterCount = [
-    searchTerm !== '',
-    selectedTypeName !== 'all',
-    selectedLab !== 'all',
-    selectedDate !== undefined,
+    activeSearchTerm !== '',
+    activeSelectedTypeName !== 'all',
+    activeSelectedLab !== 'all',
+    activeSelectedDate !== undefined,
   ].filter(Boolean).length;
 
   if (!isClient) {
@@ -379,10 +380,10 @@ export default function ResourcesPage() {
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
-                  <Button variant="ghost" onClick={resetAllActiveFilters} className="mr-auto">
+                  <Button variant="ghost" onClick={() => { resetAllActiveFilters(); setIsFilterDialogOpen(false);}} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                   </Button>
+                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
                   <Button onClick={handleApplyFilters}>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
@@ -424,7 +425,7 @@ export default function ResourcesPage() {
               </CardContent>
               <CardFooter className="p-4 pt-2 flex flex-col items-stretch gap-2">
                 <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
-                  <Link href={`/bookings?resourceId=${resource.id}${selectedDate ? `&date=${format(selectedDate, 'yyyy-MM-dd')}`: ''}`}>
+                  <Link href={`/bookings?resourceId=${resource.id}${activeSelectedDate ? `&date=${format(activeSelectedDate, 'yyyy-MM-dd')}`: ''}`}>
                     <CalendarPlus className="mr-2 h-4 w-4" />
                     {resource.status === 'Available' ? 'Book Now' : resource.status}
                   </Link>
