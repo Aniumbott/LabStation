@@ -330,7 +330,7 @@ export default function ManageResourcesPage() {
               </DialogContent>
             </Dialog>
             <Button onClick={handleOpenNewDialog}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add New Resource
+              <PlusCircle className="mr-2 h-4 w-4" /> Add
             </Button>
           </div>
         }
