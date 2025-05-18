@@ -15,6 +15,7 @@ import {
   PanelLeft,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useEffect, useState } from 'react'; // Added useEffect, useState
 
 import {
   SidebarProvider,
@@ -28,7 +29,8 @@ import {
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
+// Button import was unused in Header, can be removed if not used elsewhere in this file.
+// import { Button } from '@/components/ui/button'; 
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/icons/logo';
 
@@ -47,10 +49,18 @@ const navItems: NavItem[] = [
 ];
 
 function Header() {
-  const { isMobile } = useSidebar();
+  // Renamed isMobile from useSidebar to sidebarIsMobile to avoid conflict with any potential local isMobile variable
+  const { isMobile: sidebarIsMobile } = useSidebar(); 
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6 shadow-sm">
-      {isMobile && <SidebarTrigger className="md:hidden -ml-2" />}
+      {/* Only render SidebarTrigger on the client and if it's determined to be mobile view */}
+      {isClient && sidebarIsMobile && <SidebarTrigger className="md:hidden -ml-2" />}
       {/* Logo removed from here to avoid duplication. It's now only in SidebarHeader. */}
       <div className="flex-1 text-center md:text-left">
         {/* Could add breadcrumbs or page title here if needed */}
@@ -78,6 +88,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   <SidebarMenuButton
                     isActive={pathname.startsWith(item.href)}
                     tooltip={item.label}
+                    className={cn(
+                      pathname.startsWith(item.href) && 'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
+                    )}
                   >
                     <item.icon />
                     <span>{item.label}</span>
@@ -98,4 +111,3 @@ export function AppLayout({ children }: { children: ReactNode }) {
     </SidebarProvider>
   );
 }
-
