@@ -4,14 +4,14 @@
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, CalendarPlus, Filter as FilterIcon, FilterX, CalendarDays, CheckCircle, AlertTriangle, Construction, ChevronRight } from 'lucide-react';
+import { Search, CalendarPlus, Filter as FilterIcon, FilterX, CalendarDays, CheckCircle, AlertTriangle, Construction, ChevronRight, ListChecks } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { Resource } from '@/types';
+import type { Resource, ResourceType as AppResourceType } from '@/types'; // Renamed to avoid conflict
 import {
   Dialog,
   DialogContent,
@@ -30,11 +30,22 @@ const todayStr = format(new Date(), 'yyyy-MM-dd');
 const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 const dayAfterTomorrowStr = format(addDays(new Date(), 2), 'yyyy-MM-dd');
 
+// Mock Resource Types (these would ideally come from a data store or the new admin page)
+const mockResourceTypes: AppResourceType[] = [
+  { id: 'rt1', name: 'Microscope', description: 'Optical and electron microscopes for various imaging needs.' },
+  { id: 'rt2', name: 'Centrifuge', description: 'For separating substances of different densities.' },
+  { id: 'rt3', name: 'HPLC System', description: 'High-Performance Liquid Chromatography systems.' },
+  { id: 'rt4', name: 'Incubator', description: 'Controlled environment for biological cultures.' },
+  { id: 'rt5', name: 'Fume Hood', description: 'Ventilated enclosure for safe handling of hazardous materials.' },
+  { id: 'rt6', name: 'Spectrometer', description: 'Measures properties of light over a specific portion of the electromagnetic spectrum.' },
+];
+
 export const allMockResources: Resource[] = [
   {
     id: '1',
     name: 'Electron Microscope Alpha',
-    type: 'Microscope',
+    resourceTypeId: 'rt1',
+    resourceTypeName: 'Microscope',
     lab: 'Lab A',
     status: 'Available',
     manufacturer: 'Thermo Fisher Scientific',
@@ -56,7 +67,8 @@ export const allMockResources: Resource[] = [
   {
     id: '2',
     name: 'BioSafety Cabinet Omega',
-    type: 'Incubator',
+    resourceTypeId: 'rt4',
+    resourceTypeName: 'Incubator', // Note: This was 'Incubator', changed type to match the list
     lab: 'Lab B',
     status: 'Booked',
     manufacturer: 'Baker Company',
@@ -78,7 +90,8 @@ export const allMockResources: Resource[] = [
   {
     id: '3',
     name: 'HPLC System Zeta',
-    type: 'HPLC System',
+    resourceTypeId: 'rt3',
+    resourceTypeName: 'HPLC System',
     lab: 'Lab C',
     status: 'Maintenance',
     manufacturer: 'Agilent Technologies',
@@ -97,7 +110,8 @@ export const allMockResources: Resource[] = [
   {
     id: '4',
     name: 'High-Speed Centrifuge Pro',
-    type: 'Centrifuge',
+    resourceTypeId: 'rt2',
+    resourceTypeName: 'Centrifuge',
     lab: 'Lab A',
     status: 'Available',
     manufacturer: 'Eppendorf',
@@ -118,7 +132,8 @@ export const allMockResources: Resource[] = [
   {
     id: '5',
     name: 'Confocal Microscope Zeiss',
-    type: 'Microscope',
+    resourceTypeId: 'rt1',
+    resourceTypeName: 'Microscope',
     lab: 'Lab B',
     status: 'Available',
     manufacturer: 'ZEISS',
@@ -139,7 +154,8 @@ export const allMockResources: Resource[] = [
   {
     id: '6',
     name: 'Chemical Fume Hood Ventus',
-    type: 'Fume Hood',
+    resourceTypeId: 'rt5',
+    resourceTypeName: 'Fume Hood',
     lab: 'General Lab',
     status: 'Booked',
     manufacturer: 'Labconco',
@@ -150,7 +166,7 @@ export const allMockResources: Resource[] = [
     imageUrl: 'https://placehold.co/300x200.png',
     dataAiHint: 'fume hood',
     features: ['Airflow Monitor & Alarm', 'Vertical Sliding Sash', 'Internal Baffles for Uniform Airflow', 'Utility Valves (Air, Gas, Vacuum)', 'Explosion-Proof Light'],
-    lastCalibration: 'N/A', // Example of N/A calibration
+    lastCalibration: 'N/A', 
     nextCalibration: 'N/A',
     availability: [
         { date: todayStr, slots: ['Booked until 15:00', '15:00-17:00'] },
@@ -159,19 +175,21 @@ export const allMockResources: Resource[] = [
   },
 ];
 
-const resourceTypes = Array.from(new Set(allMockResources.map(r => r.type)));
 const labs = Array.from(new Set(allMockResources.map(r => r.lab)));
+// Use mockResourceTypes for the type filter
+const resourceTypeNames = mockResourceTypes.map(rt => rt.name);
+
 
 export default function ResourcesPage() {
   // Active filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState<string>('all');
+  const [selectedTypeName, setSelectedTypeName] = useState<string>('all'); // Filter by name
   const [selectedLab, setSelectedLab] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   
   // Temporary filters for Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
-  const [tempSelectedType, setTempSelectedType] = useState<string>('all');
+  const [tempSelectedTypeName, setTempSelectedTypeName] = useState<string>('all');
   const [tempSelectedLab, setTempSelectedLab] = useState<string>('all');
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(undefined);
   const [currentMonthInDialog, setCurrentMonthInDialog] = useState<Date>(startOfDay(new Date()));
@@ -185,12 +203,12 @@ export default function ResourcesPage() {
   useEffect(() => {
     if (isFilterDialogOpen) {
       setTempSearchTerm(searchTerm);
-      setTempSelectedType(selectedType);
+      setTempSelectedTypeName(selectedTypeName);
       setTempSelectedLab(selectedLab);
       setTempSelectedDate(selectedDate);
       if (selectedDate) setCurrentMonthInDialog(selectedDate); else setCurrentMonthInDialog(startOfDay(new Date()));
     }
-  }, [isFilterDialogOpen, searchTerm, selectedType, selectedLab, selectedDate]);
+  }, [isFilterDialogOpen, searchTerm, selectedTypeName, selectedLab, selectedDate]);
 
   const filteredResources = useMemo(() => {
     let resources = allMockResources;
@@ -202,8 +220,8 @@ export default function ResourcesPage() {
         (resource.model && resource.model.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
-    if (selectedType && selectedType !== 'all') {
-      resources = resources.filter(resource => resource.type === selectedType);
+    if (selectedTypeName && selectedTypeName !== 'all') {
+      resources = resources.filter(resource => resource.resourceTypeName === selectedTypeName);
     }
     if (selectedLab && selectedLab !== 'all') {
       resources = resources.filter(resource => resource.lab === selectedLab);
@@ -215,11 +233,11 @@ export default function ResourcesPage() {
       );
     }
     return resources;
-  }, [searchTerm, selectedType, selectedLab, selectedDate]);
+  }, [searchTerm, selectedTypeName, selectedLab, selectedDate]);
 
   const handleApplyFilters = () => {
     setSearchTerm(tempSearchTerm);
-    setSelectedType(tempSelectedType);
+    setSelectedTypeName(tempSelectedTypeName);
     setSelectedLab(tempSelectedLab);
     setSelectedDate(tempSelectedDate);
     setIsFilterDialogOpen(false);
@@ -227,16 +245,15 @@ export default function ResourcesPage() {
 
   const resetAllActiveFilters = () => {
     setSearchTerm('');
-    setSelectedType('all');
+    setSelectedTypeName('all');
     setSelectedLab('all');
     setSelectedDate(undefined);
     // Also reset dialog temp state
     setTempSearchTerm('');
-    setTempSelectedType('all');
+    setTempSelectedTypeName('all');
     setTempSelectedLab('all');
     setTempSelectedDate(undefined);
     setCurrentMonthInDialog(startOfDay(new Date()));
-    // setIsFilterDialogOpen(false); // Keep dialog open for further interaction or explicit close
   };
 
   const getResourceStatusBadge = (status: Resource['status']) => {
@@ -255,13 +272,14 @@ export default function ResourcesPage() {
 
   const activeFilterCount = [
     searchTerm !== '',
-    selectedType !== 'all',
+    selectedTypeName !== 'all',
     selectedLab !== 'all',
     selectedDate !== undefined,
   ].filter(Boolean).length;
 
   if (!isClient) {
-    return null; 
+    // Basic loader while client scripts are loading
+    return <div className="flex justify-center items-center h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /><p className="ml-3">Loading resources...</p></div>;
   }
 
   return (
@@ -307,14 +325,14 @@ export default function ResourcesPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="resourceTypeDialog" className="text-sm font-medium mb-1 block">Type</Label>
-                      <Select value={tempSelectedType} onValueChange={setTempSelectedType}>
+                      <Select value={tempSelectedTypeName} onValueChange={setTempSelectedTypeName}>
                         <SelectTrigger id="resourceTypeDialog" className="h-9">
                           <SelectValue placeholder="Filter by Type" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">All Types</SelectItem>
-                          {resourceTypes.map(type => (
-                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                          {resourceTypeNames.map(typeName => (
+                            <SelectItem key={typeName} value={typeName}>{typeName}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -361,10 +379,10 @@ export default function ResourcesPage() {
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
+                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
                   <Button variant="ghost" onClick={resetAllActiveFilters} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                   </Button>
-                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
                   <Button onClick={handleApplyFilters}>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
@@ -387,7 +405,7 @@ export default function ResourcesPage() {
                             {resource.name}
                         </Link>
                     </CardTitle>
-                    <CardDescription>{resource.lab} - {resource.type}</CardDescription>
+                    <CardDescription>{resource.lab} - {resource.resourceTypeName}</CardDescription>
                 </div>
               </CardHeader>
               <CardContent className="flex-grow p-4 pt-0">

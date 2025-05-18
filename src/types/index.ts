@@ -1,8 +1,16 @@
 
+export interface ResourceType {
+  id: string;
+  name: string;
+  description?: string;
+}
+
 export interface Resource {
   id: string;
   name: string;
-  type: 'Microscope' | 'Centrifuge' | 'Spectrometer' | 'Incubator' | 'HPLC System' | 'Fume Hood';
+  // type: 'Microscope' | 'Centrifuge' | 'Spectrometer' | 'Incubator' | 'HPLC System' | 'Fume Hood'; // Replaced
+  resourceTypeId: string;
+  resourceTypeName: string;
   lab: 'Lab A' | 'Lab B' | 'Lab C' | 'General Lab';
   status: 'Available' | 'Booked' | 'Maintenance';
   description: string;

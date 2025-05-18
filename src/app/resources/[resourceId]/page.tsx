@@ -15,6 +15,57 @@ import { allMockResources } from '../page';
 import type { Resource } from '@/types';
 import { format, parseISO, isValid, startOfToday } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
+
+function ResourceDetailPageSkeleton() {
+  return (
+    <div className="space-y-8">
+      <PageHeader title={<Skeleton className="h-8 w-3/4 rounded-md bg-muted" />} description={<Skeleton className="h-4 w-1/2 rounded-md bg-muted mt-1" />} icon={Tag} />
+      <div className="grid md:grid-cols-3 gap-6 items-start">
+        <div className="md:col-span-1 space-y-6">
+          <Card className="shadow-lg">
+            <CardContent className="p-0">
+              <Skeleton className="w-full h-80 rounded-t-lg" />
+            </CardContent>
+          </Card>
+          <Card className="shadow-lg">
+            <CardHeader><Skeleton className="h-6 w-1/2 rounded-md" /></CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-4 w-full rounded-md" />
+              <Skeleton className="h-4 w-5/6 rounded-md" />
+              <Skeleton className="h-4 w-full rounded-md" />
+            </CardContent>
+          </Card>
+        </div>
+        <div className="md:col-span-2 space-y-6">
+          <Card className="shadow-lg">
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <Skeleton className="h-7 w-3/5 rounded-md mb-1" />
+                <Skeleton className="h-6 w-20 rounded-full" />
+              </div>
+              <Skeleton className="h-4 w-2/5 rounded-md" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Skeleton className="h-4 w-full rounded-md" />
+              <Skeleton className="h-4 w-full rounded-md" />
+              <Skeleton className="h-4 w-3/4 rounded-md" />
+              <Separator className="my-4"/>
+              <Skeleton className="h-5 w-1/4 rounded-md mb-2" />
+              <Skeleton className="h-4 w-1/2 rounded-md" />
+              <Skeleton className="h-4 w-1/2 rounded-md" />
+              <Skeleton className="h-4 w-1/2 rounded-md" />
+            </CardContent>
+            <CardFooter>
+                <Skeleton className="h-10 w-1/3 rounded-md" />
+            </CardFooter>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 const getResourceStatusBadge = (status: Resource['status'], className?: string) => {
     const baseClasses = `inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors ${className || ''}`;
@@ -36,54 +87,16 @@ const formatDateSafe = (dateString?: string, emptyVal: string = 'N/A') => {
     return isValid(date) ? format(date, 'PPP') : emptyVal;
 };
 
-function ResourceDetailPageSkeleton() {
-  return (
-    <div className="space-y-8 animate-pulse">
-      <div className="space-y-2">
-        <div className="h-8 w-3/4 rounded-md bg-muted"></div>
-        <div className="h-4 w-1/2 rounded-md bg-muted"></div>
+const DetailItem = ({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value?: string | null | undefined }) => {
+    if (!value && value !==0 ) return null; // Check for undefined or null, allow 0
+    return (
+      <div className="flex items-start text-sm py-1">
+        <Icon className="h-4 w-4 mr-3 mt-0.5 text-muted-foreground flex-shrink-0" />
+        <span className="font-medium text-muted-foreground w-32">{label}:</span>
+        <span className="text-foreground flex-1">{value}</span>
       </div>
-      <div className="grid md:grid-cols-3 gap-8 items-start">
-        <div className="md:col-span-1 space-y-6">
-          <Card className="shadow-lg">
-            <CardContent className="p-0">
-              <div className="w-full h-80 rounded-t-lg bg-muted"></div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-lg">
-            <CardHeader><div className="h-6 w-1/2 rounded-md bg-muted"></div></CardHeader>
-            <CardContent className="space-y-2">
-              <div className="h-4 w-full rounded-md bg-muted"></div>
-              <div className="h-4 w-5/6 rounded-md bg-muted"></div>
-              <div className="h-4 w-full rounded-md bg-muted"></div>
-            </CardContent>
-          </Card>
-        </div>
-        <div className="md:col-span-2 space-y-6">
-          <Card className="shadow-lg">
-            <CardHeader>
-              <div className="h-7 w-3/5 rounded-md bg-muted mb-1"></div>
-              <div className="h-4 w-2/5 rounded-md bg-muted"></div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="h-4 w-full rounded-md bg-muted"></div>
-              <div className="h-4 w-full rounded-md bg-muted"></div>
-              <div className="h-4 w-3/4 rounded-md bg-muted"></div>
-              <Separator className="my-4"/>
-              <div className="h-5 w-1/4 rounded-md bg-muted mb-2"></div>
-              <div className="h-4 w-1/2 rounded-md bg-muted"></div>
-              <div className="h-4 w-1/2 rounded-md bg-muted"></div>
-              <div className="h-4 w-1/2 rounded-md bg-muted"></div>
-            </CardContent>
-            <CardFooter>
-                <div className="h-9 w-1/3 rounded-md bg-muted"></div>
-            </CardFooter>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
-}
+    );
+  };
 
 export default function ResourceDetailPage() {
   const params = useParams();
@@ -99,7 +112,7 @@ export default function ResourceDetailPage() {
         const foundResource = allMockResources.find(r => r.id === resourceId);
         setResource(foundResource || null);
         setIsLoading(false);
-      }, 300); 
+      }, 500); 
     }
   }, [resourceId]);
 
@@ -137,24 +150,14 @@ export default function ResourceDetailPage() {
     } catch (e) {
         return false; 
     }
-  }) || [];
+  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) || [];
 
-  const DetailItem = ({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value?: string | null }) => {
-    if (!value) return null;
-    return (
-      <div className="flex items-start text-sm">
-        <Icon className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
-        <span className="font-medium text-muted-foreground w-32">{label}:</span>
-        <span className="text-foreground flex-1">{value}</span>
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-8">
       <PageHeader
         title={resource.name}
-        description={`Detailed information for ${resource.type} in ${resource.lab}.`}
+        description={`Detailed information for ${resource.resourceTypeName} in ${resource.lab}.`}
         icon={Tag}
         actions={
           <Button variant="outline" onClick={() => router.push('/resources')}>
@@ -176,10 +179,10 @@ export default function ResourceDetailPage() {
             {resource.features && resource.features.length > 0 && (
                 <Card className="shadow-lg">
                     <CardHeader>
-                        <CardTitle className="text-xl flex items-center gap-2"><ListChecks className="text-primary" /> Key Features</CardTitle>
+                        <CardTitle className="text-xl flex items-center gap-2"><ListChecks className="text-primary h-5 w-5" /> Key Features</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <ul className="space-y-2 text-sm list-disc list-inside text-muted-foreground">
+                        <ul className="space-y-1.5 text-sm list-disc list-inside text-muted-foreground">
                         {resource.features.map((feature, index) => (
                             <li key={index}>{feature}</li>
                         ))}
@@ -191,9 +194,9 @@ export default function ResourceDetailPage() {
            {(resource.lastCalibration || resource.nextCalibration) && (resource.lastCalibration !== 'N/A' || resource.nextCalibration !== 'N/A') && (
             <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle className="text-xl flex items-center gap-2"><Thermometer className="text-primary" /> Calibration</CardTitle>
+                <CardTitle className="text-xl flex items-center gap-2"><Thermometer className="text-primary h-5 w-5" /> Calibration</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-1 text-sm">
+              <CardContent className="space-y-1.5 text-sm">
                 {resource.lastCalibration && resource.lastCalibration !== 'N/A' && (
                     <p><span className="font-medium text-foreground">Last:</span> {formatDateSafe(resource.lastCalibration)}</p>
                 )}
@@ -212,25 +215,25 @@ export default function ResourceDetailPage() {
                     <CardTitle className="text-2xl">{resource.name}</CardTitle>
                     {getResourceStatusBadge(resource.status)}
                 </div>
-              <CardDescription>Type: {resource.type} | Lab: {resource.lab}</CardDescription>
+              <CardDescription>Type: {resource.resourceTypeName} | Lab: {resource.lab}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-base text-foreground leading-relaxed">{resource.description}</p>
               
               <Separator className="my-6" />
               
-              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2"><WandSparkles className="text-primary"/> Specifications</h3>
-              <div className="space-y-2">
+              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2"><WandSparkles className="text-primary h-5 w-5"/> Specifications</h3>
+              <div className="space-y-1">
                 <DetailItem icon={Building} label="Manufacturer" value={resource.manufacturer} />
                 <DetailItem icon={Tag} label="Model" value={resource.model} />
                 <DetailItem icon={Info} label="Serial #" value={resource.serialNumber} />
-                <DetailItem icon={ShoppingCart} label="Purchase Date" value={formatDateSafe(resource.purchaseDate, 'Not specified')} />
+                <DetailItem icon={ShoppingCart} label="Purchase Date" value={formatDateSafe(resource.purchaseDate, undefined)} />
               </div>
 
               {resource.notes && (
                 <>
                   <Separator className="my-6" />
-                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2"><FileText className="text-primary"/> Notes</h3>
+                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2"><FileText className="text-primary h-5 w-5"/> Notes</h3>
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{resource.notes}</p>
                 </>
               )}
@@ -248,7 +251,7 @@ export default function ResourceDetailPage() {
           {upcomingAvailability.length > 0 && (
              <Card className="shadow-lg">
                 <CardHeader>
-                    <CardTitle className="text-xl flex items-center gap-2"><CalendarDays className="text-primary" /> Availability</CardTitle>
+                    <CardTitle className="text-xl flex items-center gap-2"><CalendarDays className="text-primary h-5 w-5" /> Availability</CardTitle>
                     <CardDescription>Check specific time slots and book on the bookings page.</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -271,7 +274,7 @@ export default function ResourceDetailPage() {
                  <CardFooter className="justify-center border-t pt-4">
                     <Button variant="outline" asChild>
                         <Link href={`/bookings?resourceId=${resource.id}`}>
-                            View Full Calendar & Book <ChevronRight className="ml-2 h-4 w-4" />
+                            View Full Calendar &amp; Book <ChevronRight className="ml-2 h-4 w-4" />
                         </Link>
                     </Button>
                  </CardFooter>

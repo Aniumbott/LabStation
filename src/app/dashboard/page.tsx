@@ -19,11 +19,21 @@ import {
 import { format, isValid, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 
+// Mock Resource Types (these would ideally come from a data store or the new admin page)
+const mockResourceTypesForDashboard: { id: string; name: string }[] = [
+  { id: 'rt1', name: 'Microscope' },
+  { id: 'rt2', name: 'Centrifuge' },
+  { id: 'rt3', name: 'HPLC System' },
+  { id: 'rt4', name: 'Incubator' },
+];
+
+
 const mockResources: Resource[] = [
   {
     id: '1',
     name: 'Electron Microscope Alpha',
-    type: 'Microscope',
+    resourceTypeId: 'rt1',
+    resourceTypeName: 'Microscope',
     lab: 'Lab A',
     status: 'Available',
     description: 'High-resolution electron microscope for advanced material analysis and detailed imaging of various samples. Includes EDX spectroscopy capabilities.',
@@ -37,7 +47,8 @@ const mockResources: Resource[] = [
   {
     id: '2',
     name: 'BioSafety Cabinet Omega',
-    type: 'Incubator',
+    resourceTypeId: 'rt4',
+    resourceTypeName: 'Incubator',
     lab: 'Lab B',
     status: 'Booked',
     description: 'Class II Type A2 biosafety cabinet for sterile work with cell cultures and other sensitive biological materials.',
@@ -51,7 +62,8 @@ const mockResources: Resource[] = [
   {
     id: '3',
     name: 'HPLC System Zeta',
-    type: 'HPLC System',
+    resourceTypeId: 'rt3',
+    resourceTypeName: 'HPLC System',
     lab: 'Lab C',
     status: 'Maintenance',
     description: 'High-performance liquid chromatography system for precise compound separation and quantification.',
@@ -70,8 +82,6 @@ const mockBookings: Booking[] = [
 
 
 export default function DashboardPage() {
-  // Show the first 2 resources as "Frequently Used", regardless of current status.
-  // The card will display their actual status, and booking button will be enabled/disabled accordingly.
   const frequentlyUsedResources = mockResources.slice(0, 2);
 
   const getResourceStatusBadge = (status: Resource['status']) => {
@@ -110,7 +120,7 @@ export default function DashboardPage() {
                     </CardTitle>
                     {getResourceStatusBadge(resource.status)}
                   </div>
-                  <CardDescription>{resource.lab} - {resource.type}</CardDescription>
+                  <CardDescription>{resource.lab} - {resource.resourceTypeName}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-grow space-y-3">
                   <div className="relative w-full h-40 rounded-md overflow-hidden mb-2">

@@ -11,7 +11,7 @@ import {
   Users,
   UserCog,
   Loader2,
-  // Building, // Icon for Lab Management removed
+  ListChecks, // Icon for Resource Types
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -35,7 +35,7 @@ interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  admin?: boolean;
+  admin?: boolean; // To group admin items if needed in future
 }
 
 const navItems: NavItem[] = [
@@ -43,7 +43,7 @@ const navItems: NavItem[] = [
   { href: '/resources', label: 'Resource Search', icon: Search },
   { href: '/bookings', label: 'Manage Bookings', icon: CalendarDays },
   { href: '/admin/users', label: 'User Management', icon: Users, admin: true },
-  // { href: '/admin/labs', label: 'Lab Management', icon: Building, admin: true }, // Lab Management link removed
+  { href: '/admin/resource-types', label: 'Resource Types', icon: ListChecks, admin: true },
   { href: '/profile', label: 'My Profile', icon: UserCog },
 ];
 
