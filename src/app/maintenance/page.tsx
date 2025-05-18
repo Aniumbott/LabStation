@@ -177,7 +177,7 @@ export default function MaintenanceRequestsPage() {
         dateResolved: (data.status === 'Resolved' || data.status === 'Closed') ? new Date().toISOString() : undefined,
       };
       setRequests([newRequest, ...requests]);
-      initialMaintenanceRequests.unshift(newRequest);
+      initialMaintenanceRequests.unshift(newRequest); // Add to the global mock array for persistence during session
       toast({ title: 'Request Logged', description: `New maintenance request for "${resource.name}" has been logged.` });
     }
     setIsFormDialogOpen(false);
@@ -290,7 +290,7 @@ export default function MaintenanceRequestsPage() {
               <CardTitle>Active Requests ({filteredRequests.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto rounded-lg border shadow-sm">
+              <div className="overflow-x-auto rounded-lg">
                 <Table>
                   <TableHeader>
                     <TableRow>

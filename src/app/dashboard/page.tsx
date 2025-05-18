@@ -22,7 +22,7 @@ import { allAdminMockResources, initialBookings, mockCurrentUser } from '@/lib/m
 
 
 export default function DashboardPage() {
-  const frequentlyUsedResources = allAdminMockResources.slice(0, 2);
+  const frequentlyUsedResources = allAdminMockResources.slice(0, 2); // Use resources from admin page
 
   const getResourceStatusBadge = (status: Resource['status']) => {
     switch (status) {
@@ -80,7 +80,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="p-4 pt-0 flex-grow space-y-3">
                   <div className="relative w-full h-40 rounded-md overflow-hidden">
-                    <Image src={resource.imageUrl || 'https://placehold.co/300x200.png'} alt={resource.name} layout="fill" objectFit="cover" />
+                    <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" />
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{resource.description}</p>
                 </CardContent>
@@ -109,7 +109,7 @@ export default function DashboardPage() {
         {upcomingUserBookings.length > 0 ? (
           <Card className="shadow-lg">
             <CardContent className="p-0">
-              <div className="overflow-x-auto rounded-lg border shadow-sm">
+              <div className="overflow-x-auto rounded-lg">
                 <Table>
                   <TableHeader>
                     <TableRow>
