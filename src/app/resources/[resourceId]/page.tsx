@@ -89,15 +89,13 @@ export default function ResourceDetailPage() {
 
   const today = startOfToday();
   const upcomingAvailability = resource.availability?.filter(avail => {
-      try {
-          // Ensure date is valid and not in the past
-          // Checking if avail.date can be parsed by parseISO. If not, it's likely not in 'yyyy-MM-dd' or is invalid.
-          const availDate = parseISO(avail.date); 
-          return isValid(availDate) && availDate >= today;
-      } catch (e) {
-          // If parseISO throws an error or avail.date is not a string (though type expects string)
-          return false; 
-      }
+    if (!avail || !avail.date) return false;
+    try {
+        const availDate = parseISO(avail.date); 
+        return isValid(availDate) && availDate >= today;
+    } catch (e) {
+        return false; 
+    }
   }) || [];
 
 
@@ -193,7 +191,7 @@ export default function ResourceDetailPage() {
                         .slice(0, 5) // Limit to 5 entries
                         .map((avail, index) => (
                         <li key={index} className="text-sm p-2 border-b last:border-b-0">
-                            <span className="font-medium text-foreground">{format(parseISO(avail.date), 'PPP')}</span>:
+                            <span className="font-medium text-foreground">{isValid(parseISO(avail.date)) ? format(parseISO(avail.date), 'PPP') : 'Invalid Date'}</span>:
                             <span className="text-muted-foreground ml-2">
                                 {avail.slots.join(', ').length > 50 ? 'Multiple slots available' : avail.slots.join(', ')}
                             </span>

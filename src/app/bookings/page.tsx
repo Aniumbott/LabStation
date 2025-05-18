@@ -436,7 +436,7 @@ function BookingsPageContent() {
                 const newSearchParams = new URLSearchParams(searchParams.toString());
                 if (newSearchParams.has('bookingId') || newSearchParams.has('resourceId')) { 
                     newSearchParams.delete('bookingId');
-                    newSearchParams.delete('resourceId');
+                    newSearchParams.delete('resourceId'); // Also clear resourceId if it was for a new booking
                     router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
                 }
             }

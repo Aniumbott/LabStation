@@ -92,7 +92,8 @@ export default function UserManagementPage() {
       const newUser: User = {
         id: `u${users.length + 1 + Date.now()}`, // Simple unique ID
         ...data,
-        // avatarUrl and avatarDataAiHint can be added here if needed, or generated
+        avatarUrl: 'https://placehold.co/100x100.png', 
+        avatarDataAiHint: 'avatar person',
       };
       setUsers([...users, newUser]);
       toast({
