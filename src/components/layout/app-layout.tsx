@@ -7,7 +7,7 @@ import {
   LayoutDashboard,
   Search,
   CalendarDays,
-  Wrench,
+  // Wrench, // Removed: Wrench icon for Calibration Tool
   FlaskConical,
   PanelLeft,
 } from 'lucide-react';
@@ -39,7 +39,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/resources', label: 'Resource Search', icon: Search },
   { href: '/bookings', label: 'Booking Calendar', icon: CalendarDays },
-  { href: '/calibration', label: 'Calibration Tool', icon: Wrench },
+  // { href: '/calibration', label: 'Calibration Tool', icon: Wrench }, // Removed: Calibration Tool nav item
 ];
 
 function Header() {
