@@ -5,20 +5,19 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, Building, ChevronRight } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data';
-import { initialBookings, mockCurrentUser } from '@/app/bookings/page'; // Import booking data and current user
+import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList, initialBookings, mockCurrentUser } from '@/lib/mock-data'; // Corrected import
 import type { Resource, ResourceType, ResourceStatus, Booking } from '@/types';
 import { format, parseISO, isValid, startOfToday, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import {
   Tooltip,
@@ -64,6 +63,13 @@ function ResourceDetailPageSkeleton() {
               <Skeleton className="h-4 w-5/6 rounded-md" />
             </CardContent>
           </Card>
+           <Card className="shadow-lg"> {/* Skeleton for Remote Access */}
+            <CardHeader><Skeleton className="h-6 w-3/4 rounded-md" /></CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-4 w-full rounded-md" />
+              <Skeleton className="h-4 w-5/6 rounded-md" />
+            </CardContent>
+          </Card>
         </div>
         <div className="md:col-span-2 space-y-6">
           <Card className="shadow-lg">
@@ -88,7 +94,7 @@ function ResourceDetailPageSkeleton() {
                 <Skeleton className="h-10 w-1/3 rounded-md" />
             </CardFooter>
           </Card>
-          <Card className="shadow-lg">
+          <Card className="shadow-lg"> {/* Skeleton for Availability */}
             <CardHeader><Skeleton className="h-6 w-1/2 rounded-md" /></CardHeader>
             <CardContent className="space-y-2">
               <Skeleton className="h-4 w-full rounded-md" />
@@ -157,6 +163,7 @@ export default function ResourceDetailPage() {
   useEffect(() => {
     if (resourceId) {
       setIsLoading(true);
+      // Simulate API call delay
       setTimeout(() => {
         const foundResource = allAdminMockResources.find(r => r.id === resourceId);
         setResource(foundResource || null);
@@ -174,7 +181,7 @@ export default function ResourceDetailPage() {
       .filter(booking =>
         booking.resourceId === resource.id &&
         booking.userId === mockCurrentUser.id &&
-        isPast(new Date(booking.startTime)) &&
+        isValid(new Date(booking.startTime)) && isPast(new Date(booking.startTime)) &&
         booking.status !== 'Cancelled'
       )
       .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
@@ -202,7 +209,11 @@ export default function ResourceDetailPage() {
               notes: data.remoteAccess.notes || undefined,
             } : undefined,
         };
-        setResource(updatedResource);
+        setResource(updatedResource); // Update local state for immediate UI reflection
+        
+        // Note: This updates the mock array in memory.
+        // In a real app, this would be an API call.
+        // This change will persist for the session but not if the app reloads fresh from `allAdminMockResources`.
         const resourceIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
         if (resourceIndex !== -1) {
             allAdminMockResources[resourceIndex] = updatedResource;
@@ -219,7 +230,7 @@ export default function ResourceDetailPage() {
     if (resource) {
       const resourceIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
         if (resourceIndex !== -1) {
-            allAdminMockResources.splice(resourceIndex, 1);
+            allAdminMockResources.splice(resourceIndex, 1); // Remove from mock array
         }
       toast({
         title: "Resource Deleted",
@@ -397,7 +408,7 @@ export default function ResourceDetailPage() {
               <Separator className="my-4" />
               <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><SlidersHorizontal className="text-primary h-5 w-5"/> Specifications</h3>
               <div className="space-y-1">
-                <DetailItem icon={Building} label="Manufacturer" value={resource.manufacturer} />
+                <DetailItem icon={Wrench} label="Manufacturer" value={resource.manufacturer} />
                 <DetailItem icon={Archive} label="Model" value={resource.model} />
                 <DetailItem icon={Info} label="Serial #" value={resource.serialNumber} />
                 <DetailItem icon={ShoppingCart} label="Purchase Date" value={formatDateSafe(resource.purchaseDate, undefined)} />

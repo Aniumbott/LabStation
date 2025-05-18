@@ -1,6 +1,6 @@
 
-import type { Resource, ResourceType, ResourceStatus } from '@/types';
-import { format, addDays } from 'date-fns';
+import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking } from '@/types';
+import { format, addDays, set } from 'date-fns';
 
 // For Resource Availability
 const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -22,7 +22,7 @@ export const initialMockResourceTypes: ResourceType[] = [
   { id: 'rt12', name: 'FPGA Dev Node', description: 'Field-Programmable Gate Array development node for hardware acceleration tasks.'},
 ];
 
-export const labsList: Resource['lab'][] = ['Electronics Lab 1', 'RF Lab', 'Prototyping Lab', 'General Test Area'];
+export const labsList: Array<Resource['lab']> = ['Electronics Lab 1', 'RF Lab', 'Prototyping Lab', 'General Test Area'];
 export const resourceStatusesList: ResourceStatus[] = ['Available', 'Booked', 'Maintenance'];
 
 export const allAdminMockResources: Resource[] = [
@@ -181,4 +181,23 @@ export const allAdminMockResources: Resource[] = [
       notes: 'SSH key authentication required. Contact admin for access.'
     }
   },
+];
+
+
+// Mock Current User (used across Bookings, Resource Details, Dashboard)
+export const mockCurrentUser: User = {
+  id: 'u4', // Matched to an existing user in mockUsers for consistency
+  name: 'Researcher Fourth', // This name will be used in BookingForm
+  email: 'researcher.fourth@labstation.com',
+  role: 'Researcher' as RoleName,
+};
+
+// Initial Bookings (used across Bookings, Resource Details, Dashboard)
+export const initialBookings: Booking[] = [
+  { id: 'b1', resourceId: '1', resourceName: 'Keysight MSOX3054T Oscilloscope', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2, 12, 0), status: 'Confirmed', notes: 'Debugging SPI communication on custom MCU board.' },
+  { id: 'b2', resourceId: '2', resourceName: 'Rigol DP832 Programmable Power Supply', userId: 'u2', userName: 'Dr. Manager Second', startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 3, 14, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 3, 16, 0), status: 'Pending', notes: 'Powering up prototype device for thermal testing.' },
+  { id: 'b3', resourceId: '1', resourceName: 'Keysight MSOX3054T Oscilloscope', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1, 14, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1, 15, 0), status: 'Confirmed', notes: 'Quick check of clock signal jitter. High priority for RF module.' },
+  { id: 'b4', resourceId: '4', resourceName: 'Rohde & Schwarz FPC1500 Spectrum Analyzer', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 9, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 11, 0), status: 'Confirmed', notes: 'Antenna matching and S11 parameter measurement for new design.' },
+  { id: 'b5', resourceId: 'rt6-instance', resourceName: 'Weller WE1010NA Digital Soldering Station', userId: 'u2', userName: 'Dr. Manager Second', startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 5, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 5, 13, 0), status: 'Pending', notes: 'Reworking BGA component on development board.' },
+  { id: 'b6', resourceId: '1', resourceName: 'Keysight MSOX3054T Oscilloscope', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 12, 0), status: 'Confirmed', notes: 'Past booking: Verifying I2C signals between sensor and MCU.' },
 ];

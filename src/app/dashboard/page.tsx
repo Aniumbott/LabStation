@@ -16,14 +16,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format, isValid, parseISO } from 'date-fns';
+import { format, isValid, parseISO, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { allAdminMockResources } from '@/lib/mock-data'; // Use centralized mock data
-import { initialBookings } from '@/app/bookings/page';
+import { allAdminMockResources, initialBookings, mockCurrentUser } from '@/lib/mock-data'; // Use centralized mock data
 
 
 export default function DashboardPage() {
-  const frequentlyUsedResources = allAdminMockResources.slice(0, 2);
+  const frequentlyUsedResources = allAdminMockResources.slice(0, 2); // Use resources from admin page
 
   const getResourceStatusBadge = (status: Resource['status']) => {
     switch (status) {
@@ -37,6 +36,15 @@ export default function DashboardPage() {
         return <Badge variant="outline"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     }
   };
+  
+  const upcomingUserBookings = initialBookings
+    .filter(b => {
+        const startTime = new Date(b.startTime);
+        return isValid(startTime) && !isPast(startTime) && b.status !== 'Cancelled' && b.userId === mockCurrentUser.id;
+    })
+    .sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+    .slice(0, 5);
+
 
   return (
     <div className="space-y-8">
@@ -109,7 +117,7 @@ export default function DashboardPage() {
 
       <section>
         <h2 className="text-2xl font-semibold mb-4">Your Upcoming Bookings</h2>
-        {initialBookings.filter(b => !isPast(b.startTime) && b.status !== 'Cancelled' && b.userId === mockCurrentUser.id).length > 0 ? (
+        {upcomingUserBookings.length > 0 ? (
           <Card className="shadow-lg">
             <CardContent className="p-0">
               <Table>
@@ -123,15 +131,11 @@ export default function DashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {initialBookings
-                    .filter(b => !isPast(b.startTime) && b.status !== 'Cancelled' && b.userId === mockCurrentUser.id)
-                    .sort((a,b) => a.startTime.getTime() - b.startTime.getTime())
-                    .slice(0, 5) // Show up to 5 upcoming bookings
-                    .map((booking) => (
+                  {upcomingUserBookings.map((booking) => (
                     <TableRow key={booking.id}>
                       <TableCell className="font-medium">{booking.resourceName}</TableCell>
-                      <TableCell>{format(booking.startTime, 'MMM dd, yyyy')}</TableCell>
-                      <TableCell>{format(booking.startTime, 'p')} - {format(booking.endTime, 'p')}</TableCell>
+                      <TableCell>{format(new Date(booking.startTime), 'MMM dd, yyyy')}</TableCell>
+                      <TableCell>{format(new Date(booking.startTime), 'p')} - {format(new Date(booking.endTime), 'p')}</TableCell>
                       <TableCell>
                         <Badge
                             className={cn(
@@ -146,7 +150,7 @@ export default function DashboardPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="sm" asChild>
-                          <Link href={`/bookings?bookingId=${booking.id}&date=${format(booking.startTime, 'yyyy-MM-dd')}`}>View/Edit</Link>
+                          <Link href={`/bookings?bookingId=${booking.id}&date=${format(new Date(booking.startTime), 'yyyy-MM-dd')}`}>View/Edit</Link>
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -172,3 +176,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
