@@ -5,8 +5,8 @@ import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarDays, CalendarPlus } from 'lucide-react';
-import type { Resource, ResourceType, ResourceStatus } from '@/types';
+import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarDays, CalendarPlus, Network } from 'lucide-react';
+import type { Resource, ResourceType, ResourceStatus, RemoteAccessDetails } from '@/types'; // Added RemoteAccessDetails
 import { initialMockResourceTypes } from '@/app/admin/resource-types/page';
 import {
   Table,
@@ -32,7 +32,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
+  // AlertDialogTrigger, // No longer directly used from here for delete
 } from "@/components/ui/alert-dialog";
 import {
   Dialog,
@@ -52,19 +52,19 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { format, startOfDay, isSameDay, addDays, parseISO } from 'date-fns';
+import { format, startOfDay, isSameDay, addDays, parseISO, isValid } from 'date-fns';
 
 const todayStr = format(new Date(), 'yyyy-MM-dd');
 const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 const dayAfterTomorrowStr = format(addDays(new Date(), 2), 'yyyy-MM-dd');
 
-// Define comprehensive mock resources directly here
+
 export const allAdminMockResources: Resource[] = [
   {
     id: '1',
     name: 'Electron Microscope Alpha',
-    resourceTypeId: 'rt1', 
-    resourceTypeName: 'Microscope', 
+    resourceTypeId: 'rt1',
+    resourceTypeName: 'Microscope',
     lab: 'Lab A',
     status: 'Available',
     manufacturer: 'Thermo Fisher Scientific',
@@ -81,13 +81,19 @@ export const allAdminMockResources: Resource[] = [
       { date: todayStr, slots: ['14:00-16:00', '16:00-18:00'] },
       { date: tomorrowStr, slots: ['10:00-12:00'] }
     ],
-    notes: 'Handle with care. Requires 30 min warm-up time before use.'
+    notes: 'Handle with care. Requires 30 min warm-up time before use.',
+    remoteAccess: {
+      ipAddress: '192.168.1.101',
+      protocol: 'RDP',
+      username: 'sem_user',
+      notes: 'Access via internal VPN only. Default password: "password123" (change on first login).'
+    }
   },
   {
     id: '2',
     name: 'BioSafety Cabinet Omega',
-    resourceTypeId: 'rt4',
-    resourceTypeName: 'Incubator', 
+    resourceTypeId: 'rt4', // Incubator
+    resourceTypeName: 'Incubator',
     lab: 'Lab B',
     status: 'Booked',
     manufacturer: 'Baker Company',
@@ -109,7 +115,7 @@ export const allAdminMockResources: Resource[] = [
    {
     id: '3',
     name: 'HPLC System Zeta',
-    resourceTypeId: 'rt3',
+    resourceTypeId: 'rt3', // HPLC System
     resourceTypeName: 'HPLC System',
     lab: 'Lab C',
     status: 'Maintenance',
@@ -122,13 +128,13 @@ export const allAdminMockResources: Resource[] = [
     dataAiHint: 'hplc chemistry',
     features: ['Quaternary Solvent Delivery', 'Autosampler', 'DAD Detector'],
     lastCalibration: '2023-11-10',
-    nextCalibration: '2024-05-10', 
+    nextCalibration: '2024-05-10',
     availability: [],
   },
   {
     id: '4',
     name: 'High-Speed Centrifuge Pro',
-    resourceTypeId: 'rt2',
+    resourceTypeId: 'rt2', // Centrifuge
     resourceTypeName: 'Centrifuge',
     lab: 'Lab A',
     status: 'Available',
@@ -146,6 +152,36 @@ export const allAdminMockResources: Resource[] = [
       { date: todayStr, slots: ['09:00-17:00'] },
       { date: dayAfterTomorrowStr, slots: ['10:00-12:00', '14:00-16:00'] }
     ]
+  },
+  {
+    id: 'rt8-instance',
+    name: 'FPGA Dev Node Alpha',
+    resourceTypeId: 'rt8',
+    resourceTypeName: 'FPGA Node',
+    lab: 'Lab C',
+    status: 'Available',
+    manufacturer: 'Xilinx',
+    model: 'Alveo U250',
+    serialNumber: 'XFL-FPGA-01A',
+    purchaseDate: '2023-09-01',
+    description: 'High-performance FPGA node for compute acceleration and custom hardware development. Suitable for machine learning, video processing, and financial computing.',
+    imageUrl: 'https://placehold.co/300x200.png',
+    dataAiHint: 'fpga circuit board',
+    features: ['PCIe Gen3 x16', '28GB HBM2', 'On-board DDR4'],
+    lastCalibration: 'N/A',
+    nextCalibration: 'N/A',
+    availability: [
+        { date: todayStr, slots: ['09:00-12:00', '13:00-17:00'] },
+        { date: tomorrowStr, slots: ['09:00-17:00'] },
+    ],
+    notes: 'Requires Vivado Design Suite for development.',
+    remoteAccess: {
+        hostname: 'fpga-node-alpha.lab.internal',
+        protocol: 'SSH',
+        username: 'dev_user',
+        port: 22,
+        notes: 'Access restricted to lab network. Key-based authentication required.'
+    }
   },
 ];
 
@@ -167,20 +203,20 @@ const getStatusBadge = (status: ResourceStatus) => {
 
 export default function ManageResourcesPage() {
   const { toast } = useToast();
-  const [resources, setResources] = useState<Resource[]>(() => JSON.parse(JSON.stringify(allAdminMockResources))); 
-  const [resourceToDelete, setResourceToDelete] = useState<Resource | null>(null); // For delete confirmation on detail page
+  // This state will hold a deep copy of the mock resources for client-side modifications
+  const [resources, setResources] = useState<Resource[]>(() => JSON.parse(JSON.stringify(allAdminMockResources)));
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
   // Active filters
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
-  const [activeFilterTypeName, setActiveFilterTypeName] = useState<string>('all');
+  const [activeFilterTypeId, setActiveFilterTypeId] = useState<string>('all'); // Store type ID now
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
 
   // Temp filters for Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
-  const [tempFilterTypeName, setTempFilterTypeName] = useState<string>('all');
+  const [tempFilterTypeId, setTempFilterTypeId] = useState<string>('all');
   const [tempFilterLab, setTempFilterLab] = useState<string>('all');
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(undefined);
   const [currentMonthInDialog, setCurrentMonthInDialog] = useState<Date>(startOfDay(new Date()));
@@ -189,12 +225,12 @@ export default function ManageResourcesPage() {
   useEffect(() => {
     if (isFilterDialogOpen) {
       setTempSearchTerm(activeSearchTerm);
-      setTempFilterTypeName(activeFilterTypeName);
+      setTempFilterTypeId(activeFilterTypeId);
       setTempFilterLab(activeFilterLab);
       setTempSelectedDate(activeSelectedDate);
       if (activeSelectedDate) setCurrentMonthInDialog(activeSelectedDate); else setCurrentMonthInDialog(startOfDay(new Date()));
     }
-  }, [isFilterDialogOpen, activeSearchTerm, activeFilterTypeName, activeFilterLab, activeSelectedDate]);
+  }, [isFilterDialogOpen, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
 
   const filteredResources = useMemo(() => {
     let currentResources = [...resources];
@@ -206,8 +242,8 @@ export default function ManageResourcesPage() {
         (resource.model && resource.model.toLowerCase().includes(activeSearchTerm.toLowerCase()))
       );
     }
-    if (activeFilterTypeName !== 'all') {
-      currentResources = currentResources.filter(resource => resource.resourceTypeName === activeFilterTypeName);
+    if (activeFilterTypeId !== 'all') {
+      currentResources = currentResources.filter(resource => resource.resourceTypeId === activeFilterTypeId);
     }
     if (activeFilterLab !== 'all') {
       currentResources = currentResources.filter(resource => resource.lab === activeFilterLab);
@@ -219,38 +255,39 @@ export default function ManageResourcesPage() {
       );
     }
     return currentResources.sort((a,b) => a.name.localeCompare(b.name));
-  }, [resources, activeSearchTerm, activeFilterTypeName, activeFilterLab, activeSelectedDate]);
+  }, [resources, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
 
   const handleApplyFilters = () => {
     setActiveSearchTerm(tempSearchTerm);
-    setActiveFilterTypeName(tempFilterTypeName);
+    setActiveFilterTypeId(tempFilterTypeId);
     setActiveFilterLab(tempFilterLab);
     setActiveSelectedDate(tempSelectedDate);
     setIsFilterDialogOpen(false);
   };
 
   const resetFilters = () => {
-    setActiveSearchTerm('');
-    setActiveFilterTypeName('all');
-    setActiveFilterLab('all');
-    setActiveSelectedDate(undefined);
-    
+    // Reset temp filters in dialog
     setTempSearchTerm('');
-    setTempFilterTypeName('all');
+    setTempFilterTypeId('all');
     setTempFilterLab('all');
     setTempSelectedDate(undefined);
     setCurrentMonthInDialog(startOfDay(new Date()));
+    // To actually clear active filters and update list, call handleApplyFilters after reset
+    // or reset active filters directly here if preferred. For now, this just resets dialog state.
   };
+
+  const resetAllActiveFilters = () => {
+    setActiveSearchTerm('');
+    setActiveFilterTypeId('all');
+    setActiveFilterLab('all');
+    setActiveSelectedDate(undefined);
+    // also reset temp filters to match
+    resetFilters();
+  }
+
 
   const handleOpenNewDialog = () => {
     setEditingResource(null);
-    setIsFormDialogOpen(true);
-  };
-
-  // Edit is now on detail page. This is kept for consistency if needed or can be removed if truly all edit actions move.
-  // For now, this function will be called from the detail page via router params.
-  const handleOpenEditDialog = (resource: Resource) => {
-    setEditingResource(resource);
     setIsFormDialogOpen(true);
   };
 
@@ -262,13 +299,31 @@ export default function ManageResourcesPage() {
     }
 
     if (editingResource) {
-      setResources(resources.map(r => r.id === editingResource.id ? { 
-        ...editingResource, 
+      setResources(prevResources => prevResources.map(r => r.id === editingResource.id ? {
+        ...editingResource,
         ...data,
+        name: data.name,
+        resourceTypeId: data.resourceTypeId,
         resourceTypeName: resourceType.name,
-        availability: editingResource.availability, 
-        lastCalibration: editingResource.lastCalibration, 
+        lab: data.lab,
+        status: data.status,
+        description: data.description || '',
+        imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
+        dataAiHint: data.dataAiHint || 'lab equipment',
+        manufacturer: data.manufacturer || undefined,
+        model: data.model || undefined,
+        serialNumber: data.serialNumber || undefined,
+        purchaseDate: data.purchaseDate ? parseISO(data.purchaseDate).toISOString() : undefined,
+        notes: data.notes || undefined,
+        features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
+        // Keep existing availability & calibration unless form is extended to edit these
+        availability: editingResource.availability,
+        lastCalibration: editingResource.lastCalibration,
         nextCalibration: editingResource.nextCalibration,
+        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined) ? {
+          ...data.remoteAccess,
+          port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
+        } : undefined,
       } : r));
       toast({
         title: 'Resource Updated',
@@ -278,13 +333,29 @@ export default function ManageResourcesPage() {
       const newResource: Resource = {
         id: `res${resources.length + 1 + Date.now()}`,
         ...data,
+        name: data.name,
+        resourceTypeId: data.resourceTypeId,
         resourceTypeName: resourceType.name,
+        lab: data.lab,
+        status: data.status,
+        description: data.description || '',
         imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
         dataAiHint: data.dataAiHint || 'lab equipment',
-        availability: [], 
+        manufacturer: data.manufacturer || undefined,
+        model: data.model || undefined,
+        serialNumber: data.serialNumber || undefined,
+        purchaseDate: data.purchaseDate ? parseISO(data.purchaseDate).toISOString() : undefined,
+        notes: data.notes || undefined,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
+        availability: [],
+        lastCalibration: undefined, // Or prompt user / set default
+        nextCalibration: undefined, // Or prompt user / set default
+        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined) ? {
+          ...data.remoteAccess,
+          port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
+        } : undefined,
       };
-      setResources([...resources, newResource]);
+      setResources(prevResources => [...prevResources, newResource]);
       toast({
         title: 'Resource Created',
         description: `Resource "${data.name}" has been created.`,
@@ -293,20 +364,11 @@ export default function ManageResourcesPage() {
     setIsFormDialogOpen(false);
     setEditingResource(null);
   };
-  
-  // This delete is for dialog on this page, will be triggered by detail page
-  const handleDeleteResource = (resourceId: string) => {
-    const deletedResource = resources.find(r => r.id === resourceId);
-    setResources(currentResources => currentResources.filter(resource => resource.id !== resourceId));
-    toast({
-      title: "Resource Deleted",
-      description: `Resource "${deletedResource?.name}" has been removed.`,
-      variant: "destructive"
-    });
-    setResourceToDelete(null);
-  };
 
-  const activeFilterCount = [activeSearchTerm !== '', activeFilterTypeName !== 'all', activeFilterLab !== 'all', activeSelectedDate !== undefined].filter(Boolean).length;
+  // Note: Delete functionality is now primarily on the detail page.
+  // This can be removed if not used by a global delete confirmation dialog.
+
+  const activeFilterCount = [activeSearchTerm !== '', activeFilterTypeId !== 'all', activeFilterLab !== 'all', activeSelectedDate !== undefined].filter(Boolean).length;
 
   return (
     <div className="space-y-8">
@@ -352,12 +414,12 @@ export default function ManageResourcesPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="resourceTypeFilterDialog" className="text-sm font-medium mb-1 block">Type</Label>
-                      <Select value={tempFilterTypeName} onValueChange={setTempFilterTypeName}>
+                      <Select value={tempFilterTypeId} onValueChange={setTempFilterTypeId}>
                         <SelectTrigger id="resourceTypeFilterDialog" className="h-9"><SelectValue placeholder="Filter by Type" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">All Types</SelectItem>
                           {initialMockResourceTypes.map(type => (
-                            <SelectItem key={type.id} value={type.name}>{type.name}</SelectItem>
+                            <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -386,11 +448,11 @@ export default function ManageResourcesPage() {
                             month={currentMonthInDialog}
                             onMonthChange={setCurrentMonthInDialog}
                             disabled={(date) => date < startOfDay(new Date()) }
-                            footer={ tempSelectedDate && 
-                                <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    onClick={() => setTempSelectedDate(undefined)} 
+                            footer={ tempSelectedDate &&
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setTempSelectedDate(undefined)}
                                     className="w-full mt-2 text-xs"
                                 >
                                     Clear Date Selection
@@ -402,8 +464,8 @@ export default function ManageResourcesPage() {
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                   <Button variant="ghost" onClick={() => { resetFilters(); setIsFilterDialogOpen(false); }} className="mr-auto">
-                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                   <Button variant="ghost" onClick={() => { resetFilters(); }} className="mr-auto"> {/* Reset only temp filters */}
+                    <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
                   <Button onClick={handleApplyFilters}>Apply Filters</Button>
@@ -436,12 +498,12 @@ export default function ManageResourcesPage() {
                 <TableRow key={resource.id}>
                   <TableCell>
                     <Link href={`/resources/${resource.id}`}>
-                      <Image 
-                          src={resource.imageUrl || 'https://placehold.co/100x100.png'} 
-                          alt={resource.name} 
-                          width={40} height={40} 
+                      <Image
+                          src={resource.imageUrl || 'https://placehold.co/100x100.png'}
+                          alt={resource.name}
+                          width={40} height={40}
                           className="rounded-md object-cover h-10 w-10 hover:opacity-80 transition-opacity"
-                          data-ai-hint={resource.dataAiHint || 'lab equipment'} 
+                          data-ai-hint={resource.dataAiHint || 'lab equipment'}
                       />
                     </Link>
                   </TableCell>
@@ -454,9 +516,9 @@ export default function ManageResourcesPage() {
                   <TableCell>{resource.lab}</TableCell>
                   <TableCell>{getStatusBadge(resource.status)}</TableCell>
                   <TableCell className="text-right">
-                    <Button 
-                      asChild 
-                      size="sm" 
+                    <Button
+                      asChild
+                      size="sm"
                       variant={resource.status !== 'Available' ? "outline" : "default"}
                       disabled={resource.status !== 'Available'}
                       className="h-8 text-xs"
@@ -486,7 +548,7 @@ export default function ManageResourcesPage() {
             }
           </p>
           {activeFilterCount > 0 ? (
-             <Button variant="outline" onClick={() => { resetFilters(); handleApplyFilters(); }}> {/* Changed to apply after reset */}
+             <Button variant="outline" onClick={() => { resetAllActiveFilters(); setIsFilterDialogOpen(false); }}>
                 <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
             </Button>
           ) : (
@@ -500,7 +562,7 @@ export default function ManageResourcesPage() {
         open={isFormDialogOpen}
         onOpenChange={(isOpen) => {
             setIsFormDialogOpen(isOpen);
-            if (!isOpen) setEditingResource(null); // Clear editing state when dialog closes
+            if (!isOpen) setEditingResource(null);
         }}
         initialResource={editingResource}
         onSave={handleSaveResource}
@@ -508,29 +570,8 @@ export default function ManageResourcesPage() {
         labs={labsList}
         statuses={resourceStatusesList}
       />
-      
-      {/* This AlertDialog is for delete confirmation triggered from detail page */}
-      {resourceToDelete && (
-         <AlertDialog open={!!resourceToDelete} onOpenChange={() => setResourceToDelete(null)}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete the resource: <span className="font-semibold">"{resourceToDelete.name}"</span>.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setResourceToDelete(null)}>Cancel</AlertDialogCancel>
-                    <AlertDialogAction variant="destructive" onClick={() => {
-                        handleDeleteResource(resourceToDelete.id);
-                        // Optionally, redirect to admin/resources if not already there or after some delay
-                    }}>
-                    Delete Resource
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-      )}
+
+      {/* Delete confirmation dialog is handled on the resource detail page */}
     </div>
   );
 }

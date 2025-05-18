@@ -7,6 +7,15 @@ export interface ResourceType {
 
 export type ResourceStatus = 'Available' | 'Booked' | 'Maintenance';
 
+export interface RemoteAccessDetails {
+  ipAddress?: string;
+  hostname?: string;
+  protocol?: 'RDP' | 'SSH' | 'VNC' | 'Other';
+  username?: string;
+  port?: number;
+  notes?: string; // For additional instructions or credential hints
+}
+
 export interface Resource {
   id: string;
   name: string;
@@ -18,14 +27,15 @@ export interface Resource {
   imageUrl: string;
   dataAiHint?: string;
   features?: string[];
-  lastCalibration?: string; 
-  nextCalibration?: string; 
+  lastCalibration?: string;
+  nextCalibration?: string;
   availability?: { date: string; slots: string[] }[];
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
-  purchaseDate?: string; 
+  purchaseDate?: string;
   notes?: string;
+  remoteAccess?: RemoteAccessDetails;
 }
 
 export interface Booking {

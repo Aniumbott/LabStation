@@ -5,20 +5,20 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, Thermometer, ChevronRight, Loader2, Tag, Building, WandSparkles, FileText, ShoppingCart, Wrench, Edit, Trash2 } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, Thermometer, ChevronRight, Loader2, Tag, Building, WandSparkles, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { allAdminMockResources } from '@/app/admin/resources/page'; 
-import type { Resource, ResourceType, ResourceStatus } from '@/types';
+import { allAdminMockResources } from '@/app/admin/resources/page';
+import type { Resource, ResourceType, ResourceStatus, RemoteAccessDetails } from '@/types';
 import { format, parseISO, isValid, startOfToday } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
 import { initialMockResourceTypes } from '@/app/admin/resource-types/page';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'; // Removed AlertDialogTrigger
 import { useToast } from '@/hooks/use-toast';
 import {
   Tooltip,
@@ -27,16 +27,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-// Define labsList and resourceStatusesList if not globally available or pass as props if needed
 const labsList: Resource['lab'][] = ['Lab A', 'Lab B', 'Lab C', 'General Lab'];
 const resourceStatusesList: ResourceStatus[] = ['Available', 'Booked', 'Maintenance'];
 
 function ResourceDetailPageSkeleton() {
   return (
     <div className="space-y-8">
-      <PageHeader 
-        title={<Skeleton className="h-8 w-3/4 rounded-md bg-muted" />} 
-        description={<Skeleton className="h-4 w-1/2 rounded-md bg-muted mt-1" />} 
+      <PageHeader
+        title={<Skeleton className="h-8 w-3/4 rounded-md bg-muted" />}
+        description={<Skeleton className="h-4 w-1/2 rounded-md bg-muted mt-1" />}
         icon={Tag}
         actions={<Skeleton className="h-9 w-24 rounded-md bg-muted" />}
       />
@@ -79,6 +78,13 @@ function ResourceDetailPageSkeleton() {
                 <Skeleton className="h-10 w-1/3 rounded-md" />
             </CardFooter>
           </Card>
+          <Card className="shadow-lg">
+            <CardHeader><Skeleton className="h-6 w-1/2 rounded-md" /></CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-4 w-full rounded-md" />
+              <Skeleton className="h-4 w-5/6 rounded-md" />
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
@@ -101,27 +107,38 @@ const getResourceStatusBadgeStyle = (status: Resource['status'], className?: str
 
 const formatDateSafe = (dateString?: string, emptyVal: string = 'N/A') => {
     if (!dateString || dateString === 'N/A') return emptyVal;
-    const date = parseISO(dateString);
-    return isValid(date) ? format(date, 'PPP') : emptyVal;
+    try {
+        const date = parseISO(dateString);
+        return isValid(date) ? format(date, 'PPP') : (dateString === '' ? emptyVal : dateString); // handle empty string as N/A too
+    } catch {
+        return dateString; // If parseISO itself throws for a very malformed string
+    }
 };
 
-const DetailItem = ({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value?: string | null | undefined }) => {
+const DetailItem = ({ icon: Icon, label, value, isLink = false }: { icon: React.ElementType, label: string, value?: string | number | null | undefined, isLink?: boolean }) => {
     if (!value && value !==0 ) return null;
+    const displayValue = value === '' ? 'N/A' : value;
     return (
-      <div className="flex items-start text-sm py-1">
+      <div className="flex items-start text-sm py-1.5">
         <Icon className="h-4 w-4 mr-3 mt-0.5 text-muted-foreground flex-shrink-0" />
         <span className="font-medium text-muted-foreground w-32">{label}:</span>
-        <span className="text-foreground flex-1">{value}</span>
+        {isLink && typeof displayValue === 'string' && displayValue !== 'N/A' ? (
+          <a href={displayValue.startsWith('http') ? displayValue : `//${displayValue}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex-1 break-all">
+            {displayValue} <ExternalLink className="inline-block h-3 w-3 ml-1" />
+          </a>
+        ) : (
+          <span className="text-foreground flex-1 break-words">{String(displayValue)}</span>
+        )}
       </div>
     );
-  };
+};
 
 export default function ResourceDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
   const resourceId = params.resourceId as string;
-  
+
   const [resource, setResource] = useState<Resource | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
@@ -129,13 +146,15 @@ export default function ResourceDetailPage() {
 
   useEffect(() => {
     if (resourceId) {
-      setTimeout(() => { // Simulate API delay
+      setIsLoading(true);
+      setTimeout(() => {
         const foundResource = allAdminMockResources.find(r => r.id === resourceId);
         setResource(foundResource || null);
         setIsLoading(false);
-      }, 300); 
+      }, 300);
     } else {
       setIsLoading(false);
+      setResource(null);
     }
   }, [resourceId]);
 
@@ -146,21 +165,26 @@ export default function ResourceDetailPage() {
             toast({ title: "Error", description: "Selected resource type not found.", variant: "destructive"});
             return;
         }
-        const updatedResource = {
+        const updatedResource: Resource = {
             ...resource,
             ...data,
             resourceTypeName: resourceType.name,
             features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-            purchaseDate: data.purchaseDate ? parseISO(data.purchaseDate).toISOString() : resource.purchaseDate, // Ensure correct date format
+            purchaseDate: data.purchaseDate ? parseISO(data.purchaseDate).toISOString() : resource.purchaseDate,
+            remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined) ? {
+              ipAddress: data.remoteAccess.ipAddress || undefined,
+              hostname: data.remoteAccess.hostname || undefined,
+              protocol: data.remoteAccess.protocol || undefined,
+              username: data.remoteAccess.username || undefined,
+              port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
+              notes: data.remoteAccess.notes || undefined,
+            } : undefined,
         };
         setResource(updatedResource);
-        // Note: This mock update won't persist in allAdminMockResources in the admin list page
-        // without a global state or backend.
         const resourceIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
         if (resourceIndex !== -1) {
             allAdminMockResources[resourceIndex] = updatedResource;
         }
-        
         toast({
             title: 'Resource Updated',
             description: `Resource "${data.name}" has been updated.`,
@@ -171,8 +195,6 @@ export default function ResourceDetailPage() {
 
   const handleConfirmDelete = () => {
     if (resource) {
-      // Note: This mock deletion won't persist in allAdminMockResources in the admin list page
-      // without a global state or backend.
       const resourceIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
         if (resourceIndex !== -1) {
             allAdminMockResources.splice(resourceIndex, 1);
@@ -194,7 +216,7 @@ export default function ResourceDetailPage() {
   if (!resource) {
     return (
       <div className="space-y-8">
-        <PageHeader title="Resource Not Found" icon={AlertTriangle} 
+        <PageHeader title="Resource Not Found" icon={AlertTriangle}
             actions={
              <Button variant="outline" onClick={() => router.push('/admin/resources')}>
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Manage Resources
@@ -217,10 +239,10 @@ export default function ResourceDetailPage() {
   const upcomingAvailability = resource.availability?.filter(avail => {
     if (!avail || !avail.date) return false;
     try {
-        const availDate = parseISO(avail.date); 
+        const availDate = parseISO(avail.date);
         return isValid(availDate) && availDate >= today;
     } catch (e) {
-        return false; 
+        return false;
     }
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) || [];
 
@@ -248,12 +270,11 @@ export default function ResourceDetailPage() {
             <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="icon">
-                          <Trash2 className="h-4 w-4" />
-                          <span className="sr-only">Delete Resource</span>
-                      </Button>
-                  </AlertDialogTrigger>
+                  {/* Changed: Removed explicit AlertDialogTrigger, Button itself will trigger via open prop of AlertDialog */}
+                   <Button variant="destructive" size="icon" onClick={() => setIsAlertOpen(true)}>
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">Delete Resource</span>
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent><p>Delete Resource</p></TooltipContent>
               </Tooltip>
@@ -266,7 +287,7 @@ export default function ResourceDetailPage() {
                   </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogCancel onClick={() => setIsAlertOpen(false)}>Cancel</AlertDialogCancel>
                   <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
                       Delete
                   </AlertDialogAction>
@@ -328,12 +349,11 @@ export default function ResourceDetailPage() {
                 </div>
               <CardDescription>Type: {resource.resourceTypeName} | Lab: {resource.lab}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3">
               <p className="text-base text-foreground leading-relaxed">{resource.description}</p>
-              
-              <Separator className="my-6" />
-              
-              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2"><WandSparkles className="text-primary h-5 w-5"/> Specifications</h3>
+
+              <Separator className="my-4" />
+              <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><WandSparkles className="text-primary h-5 w-5"/> Specifications</h3>
               <div className="space-y-1">
                 <DetailItem icon={Building} label="Manufacturer" value={resource.manufacturer} />
                 <DetailItem icon={Tag} label="Model" value={resource.model} />
@@ -341,10 +361,25 @@ export default function ResourceDetailPage() {
                 <DetailItem icon={ShoppingCart} label="Purchase Date" value={formatDateSafe(resource.purchaseDate, undefined)} />
               </div>
 
+              {resource.remoteAccess && (
+                <>
+                  <Separator className="my-4" />
+                  <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><Network className="text-primary h-5 w-5"/> Remote Access</h3>
+                  <div className="space-y-1">
+                    <DetailItem icon={Globe} label="IP Address" value={resource.remoteAccess.ipAddress} isLink={!!resource.remoteAccess.ipAddress} />
+                    <DetailItem icon={Globe} label="Hostname" value={resource.remoteAccess.hostname} isLink={!!resource.remoteAccess.hostname} />
+                    <DetailItem icon={ListChecks} label="Protocol" value={resource.remoteAccess.protocol} />
+                    <DetailItem icon={KeyRound} label="Username" value={resource.remoteAccess.username} />
+                    <DetailItem icon={Fingerprint} label="Port" value={resource.remoteAccess.port} />
+                    {resource.remoteAccess.notes && <DetailItem icon={FileText} label="RA Notes" value={resource.remoteAccess.notes} />}
+                  </div>
+                </>
+              )}
+
               {resource.notes && (
                 <>
-                  <Separator className="my-6" />
-                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2"><FileText className="text-primary h-5 w-5"/> Notes</h3>
+                  <Separator className="my-4" />
+                  <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><FileText className="text-primary h-5 w-5"/> General Notes</h3>
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{resource.notes}</p>
                 </>
               )}
@@ -368,7 +403,7 @@ export default function ResourceDetailPage() {
                 <CardContent>
                     <ul className="space-y-2">
                     {upcomingAvailability
-                        .slice(0, 5) 
+                        .slice(0, 5)
                         .map((avail, index) => (
                         <li key={index} className="text-sm p-2 border-b last:border-b-0">
                             <span className="font-medium text-foreground">{isValid(parseISO(avail.date)) ? format(parseISO(avail.date), 'PPP') : 'Invalid Date'}</span>:
@@ -393,19 +428,18 @@ export default function ResourceDetailPage() {
           )}
         </div>
       </div>
-      
+
       {resource && (
         <ResourceFormDialog
             open={isFormDialogOpen}
             onOpenChange={(isOpen) => {
                 setIsFormDialogOpen(isOpen);
-                // If closing, refetch or update resource state if needed, but mock setup limits this
             }}
-            initialResource={resource} 
+            initialResource={resource}
             onSave={handleSaveResource}
-            resourceTypes={initialMockResourceTypes} 
-            labs={labsList} 
-            statuses={resourceStatusesList} 
+            resourceTypes={initialMockResourceTypes}
+            labs={labsList}
+            statuses={resourceStatusesList}
         />
       )}
     </div>
