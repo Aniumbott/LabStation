@@ -21,13 +21,13 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Save, X, PlusCircle, Network } from 'lucide-react';
-import type { Resource, ResourceStatus, RemoteAccessDetails } from '@/types';
+import type { Resource, ResourceStatus } from '@/types'; // Removed RemoteAccessDetails as it's part of Resource
 import { initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data';
 import { parseISO, format, isValid } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
 
-
-const remoteAccessProtocols: (RemoteAccessDetails['protocol'] | undefined)[] = ['RDP', 'SSH', 'VNC', 'Other', undefined];
+// Define only the valid string protocols for Zod and UI iteration
+const VALID_REMOTE_PROTOCOLS = ['RDP', 'SSH', 'VNC', 'Other'] as const;
 
 const resourceFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, { message: 'Name cannot exceed 100 characters.' }),
@@ -50,9 +50,9 @@ const resourceFormSchema = z.object({
   remoteAccess: z.object({
     ipAddress: z.string().max(45).optional().or(z.literal('')),
     hostname: z.string().max(255).optional().or(z.literal('')),
-    protocol: z.enum(remoteAccessProtocols as [string, ...string[]]).optional().or(z.literal('')),
+    protocol: z.enum(VALID_REMOTE_PROTOCOLS).or(z.literal('')).optional(), // "" means "None", optional if not provided
     username: z.string().max(100).optional().or(z.literal('')),
-    port: z.coerce.number().int().min(1).max(65535).optional().or(z.literal('')),
+    port: z.coerce.number().int().min(1).max(65535).optional().or(z.literal('')), // Empty string becomes undefined
     notes: z.string().max(500).optional().or(z.literal('')),
   }).optional(),
 });
@@ -88,9 +88,9 @@ export function ResourceFormDialog({
       remoteAccess: {
         ipAddress: '',
         hostname: '',
-        protocol: undefined,
+        protocol: '', // Default to "None" which is value ""
         username: '',
-        port: undefined,
+        port: undefined, // Important: keep as undefined for optional number
         notes: '',
       }
     },
@@ -116,9 +116,9 @@ export function ResourceFormDialog({
           remoteAccess: {
             ipAddress: initialResource.remoteAccess?.ipAddress || '',
             hostname: initialResource.remoteAccess?.hostname || '',
-            protocol: initialResource.remoteAccess?.protocol || undefined,
+            protocol: initialResource.remoteAccess?.protocol || '', // Default to "" if undefined
             username: initialResource.remoteAccess?.username || '',
-            port: initialResource.remoteAccess?.port || undefined,
+            port: initialResource.remoteAccess?.port ?? undefined,
             notes: initialResource.remoteAccess?.notes || '',
           }
         });
@@ -137,10 +137,10 @@ export function ResourceFormDialog({
           purchaseDate: '',
           notes: '',
           features: '',
-          remoteAccess: {
+          remoteAccess: { // Reset to default values
             ipAddress: '',
             hostname: '',
-            protocol: undefined,
+            protocol: '', // Default to "None"
             username: '',
             port: undefined,
             notes: '',
@@ -156,14 +156,15 @@ export function ResourceFormDialog({
         purchaseDate: data.purchaseDate ? data.purchaseDate : undefined,
         remoteAccess: data.remoteAccess ? {
             ...data.remoteAccess,
-            port: data.remoteAccess.port && data.remoteAccess.port !== '' ? Number(data.remoteAccess.port) : undefined,
+            port: data.remoteAccess.port && String(data.remoteAccess.port) !== '' ? Number(data.remoteAccess.port) : undefined,
+            protocol: data.remoteAccess.protocol === '' ? undefined : data.remoteAccess.protocol, // Map "" from UI "None" to undefined for storage if desired, or keep "" if schema allows. Here we map to undefined if schema is .optional() without .or(z.literal(''))
             ipAddress: data.remoteAccess.ipAddress || undefined,
             hostname: data.remoteAccess.hostname || undefined,
-            protocol: data.remoteAccess.protocol && data.remoteAccess.protocol !== '' ? data.remoteAccess.protocol : undefined,
             username: data.remoteAccess.username || undefined,
             notes: data.remoteAccess.notes || undefined,
         } : undefined,
     };
+     // If all remoteAccess fields are effectively empty, set remoteAccess itself to undefined
     if (dataToSave.remoteAccess && Object.values(dataToSave.remoteAccess).every(val => val === undefined || val === '')) {
       dataToSave.remoteAccess = undefined;
     }
@@ -394,12 +395,15 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Protocol</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value || ''}>
+                                    <Select
+                                      onValueChange={field.onChange}
+                                      value={field.value ?? ''} // Use ?? '' to ensure "None" is selected if value is undefined/null
+                                    >
                                         <FormControl><SelectTrigger><SelectValue placeholder="Select protocol" /></SelectTrigger></FormControl>
                                         <SelectContent>
                                             <SelectItem value="">None</SelectItem>
-                                            {remoteAccessProtocols.filter(p => p !== undefined).map(protocol => (
-                                                <SelectItem key={protocol} value={protocol!}>{protocol}</SelectItem>
+                                            {VALID_REMOTE_PROTOCOLS.map(p => (
+                                                <SelectItem key={p} value={p}>{p}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
@@ -413,7 +417,7 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Port</FormLabel>
-                                    <FormControl><Input type="number" placeholder="e.g., 22 (SSH), 3389 (RDP)" {...field} value={field.value === undefined ? '' : field.value} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} /></FormControl>
+                                    <FormControl><Input type="number" placeholder="e.g., 22 (SSH), 3389 (RDP)" {...field} value={field.value === undefined ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} /></FormControl>
                                     <FormMessage />
                                     </FormItem>
                                 )}
@@ -448,7 +452,7 @@ export function ResourceFormDialog({
             </ScrollArea>
             <DialogFooter className="pt-6 border-t">
               <DialogClose asChild>
-                <Button type="button" variant="outline">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                     <X className="mr-2 h-4 w-4" /> Cancel
                 </Button>
               </DialogClose>
@@ -465,3 +469,5 @@ export function ResourceFormDialog({
     </Dialog>
   );
 }
+
+    
