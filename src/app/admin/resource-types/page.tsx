@@ -97,6 +97,7 @@ export default function ResourceTypeManagementPage() {
   const resetAllActiveFilters = () => {
     setSearchTerm('');
     setTempSearchTerm('');
+    setIsFilterDialogOpen(false);
   };
 
 
@@ -147,7 +148,7 @@ export default function ResourceTypeManagementPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Resource Type Management"
+        title="Resource Types" // Changed Title
         description="Define and manage categories for lab resources."
         icon={ListChecks}
         actions={
