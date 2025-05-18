@@ -5,22 +5,35 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, Thermometer, ChevronRight, Loader2, Tag, Building, WandSparkles, FileText, ShoppingCart, Wrench } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, Thermometer, ChevronRight, Loader2, Tag, Building, WandSparkles, FileText, ShoppingCart, Wrench, Edit, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { allMockResources } from '../page'; 
-import type { Resource } from '@/types';
+import { allAdminMockResources } from '@/app/admin/resources/page'; // Import mock data from admin page
+import type { Resource, ResourceType, ResourceStatus } from '@/types';
 import { format, parseISO, isValid, startOfToday } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
+import { initialMockResourceTypes } from '@/app/admin/resource-types/page';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
+
+// Define labsList and resourceStatusesList if not globally available or pass as props if needed
+const labsList: Resource['lab'][] = ['Lab A', 'Lab B', 'Lab C', 'General Lab'];
+const resourceStatusesList: ResourceStatus[] = ['Available', 'Booked', 'Maintenance'];
 
 function ResourceDetailPageSkeleton() {
   return (
     <div className="space-y-8">
-      <PageHeader title={<Skeleton className="h-8 w-3/4 rounded-md bg-muted" />} description={<Skeleton className="h-4 w-1/2 rounded-md bg-muted mt-1" />} icon={Tag} />
+      <PageHeader 
+        title={<Skeleton className="h-8 w-3/4 rounded-md bg-muted" />} 
+        description={<Skeleton className="h-4 w-1/2 rounded-md bg-muted mt-1" />} 
+        icon={Tag}
+        actions={<Skeleton className="h-9 w-24 rounded-md bg-muted" />}
+      />
       <div className="grid md:grid-cols-3 gap-6 items-start">
         <div className="md:col-span-1 space-y-6">
           <Card className="shadow-lg">
@@ -66,8 +79,7 @@ function ResourceDetailPageSkeleton() {
   );
 }
 
-
-const getResourceStatusBadge = (status: Resource['status'], className?: string) => {
+const getResourceStatusBadgeStyle = (status: Resource['status'], className?: string) => {
     const baseClasses = `inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors ${className || ''}`;
     switch (status) {
       case 'Available':
@@ -88,7 +100,7 @@ const formatDateSafe = (dateString?: string, emptyVal: string = 'N/A') => {
 };
 
 const DetailItem = ({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value?: string | null | undefined }) => {
-    if (!value && value !==0 ) return null; // Check for undefined or null, allow 0
+    if (!value && value !==0 ) return null;
     return (
       <div className="flex items-start text-sm py-1">
         <Icon className="h-4 w-4 mr-3 mt-0.5 text-muted-foreground flex-shrink-0" />
@@ -101,20 +113,61 @@ const DetailItem = ({ icon: Icon, label, value }: { icon: React.ElementType, lab
 export default function ResourceDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { toast } = useToast();
   const resourceId = params.resourceId as string;
+  
   const [resource, setResource] = useState<Resource | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
+  const [isAlertOpen, setIsAlertOpen] = useState(false);
 
   useEffect(() => {
     if (resourceId) {
-      // Simulate API call delay
       setTimeout(() => {
-        const foundResource = allMockResources.find(r => r.id === resourceId);
+        const foundResource = allAdminMockResources.find(r => r.id === resourceId);
         setResource(foundResource || null);
         setIsLoading(false);
-      }, 500); 
+      }, 300); 
     }
   }, [resourceId]);
+
+  const handleSaveResource = (data: ResourceFormValues) => {
+    // In a real app, this would call an API. For mock, we'll update local state and toast.
+    if (resource) {
+        const resourceType = initialMockResourceTypes.find(rt => rt.id === data.resourceTypeId);
+        if (!resourceType) {
+            toast({ title: "Error", description: "Selected resource type not found.", variant: "destructive"});
+            return;
+        }
+        const updatedResource = {
+            ...resource,
+            ...data,
+            resourceTypeName: resourceType.name, // Ensure this is updated from selected typeId
+            features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
+             // purchaseDate should already be in correct string format from the form if date input used
+        };
+        setResource(updatedResource); // Update the local state for this detail page
+        toast({
+            title: 'Resource Updated',
+            description: `Resource "${data.name}" has been updated. (Mock update)`,
+        });
+    }
+    setIsFormDialogOpen(false);
+  };
+
+  const handleConfirmDelete = () => {
+    if (resource) {
+      toast({
+        title: "Resource Deleted (Mock)",
+        description: `Resource "${resource.name}" has been notionally removed.`,
+        variant: "destructive"
+      });
+      setIsAlertOpen(false);
+      // In a real app, you'd call an API then navigate or refresh.
+      // For mock, we just navigate back as the list page won't know about the deletion.
+      router.push('/admin/resources');
+    }
+  };
 
   if (isLoading) {
     return <ResourceDetailPageSkeleton />;
@@ -123,7 +176,13 @@ export default function ResourceDetailPage() {
   if (!resource) {
     return (
       <div className="space-y-8">
-        <PageHeader title="Resource Not Found" icon={AlertTriangle} />
+        <PageHeader title="Resource Not Found" icon={AlertTriangle} 
+            actions={
+             <Button variant="outline" onClick={() => router.push('/admin/resources')}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Manage Resources
+            </Button>
+            }
+        />
         <Card className="max-w-2xl mx-auto shadow-lg border-destructive">
           <CardHeader className="items-center">
             <CardTitle className="text-destructive">Resource Not Found</CardTitle>
@@ -131,11 +190,6 @@ export default function ResourceDetailPage() {
           <CardContent className="text-center">
             <p className="text-muted-foreground">The resource with ID "{resourceId}" could not be found.</p>
           </CardContent>
-          <CardFooter className="justify-center">
-            <Button variant="outline" onClick={() => router.push('/resources')}>
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Resource Search
-            </Button>
-          </CardFooter>
         </Card>
       </div>
     );
@@ -152,7 +206,6 @@ export default function ResourceDetailPage() {
     }
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) || [];
 
-
   return (
     <div className="space-y-8">
       <PageHeader
@@ -160,9 +213,36 @@ export default function ResourceDetailPage() {
         description={`Detailed information for ${resource.resourceTypeName} in ${resource.lab}.`}
         icon={Tag}
         actions={
-          <Button variant="outline" onClick={() => router.push('/resources')}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Search
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => router.push('/admin/resources')}>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
+            </Button>
+            <Button variant="outline" onClick={() => setIsFormDialogOpen(true)}>
+              <Edit className="mr-2 h-4 w-4" /> Edit Resource
+            </Button>
+             <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+                <AlertDialogTrigger asChild>
+                    <Button variant="destructive">
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete Resource
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete the resource
+                        <span className="font-semibold"> "{resource.name}"</span>.
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
+                        Delete
+                    </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+          </div>
         }
       />
 
@@ -213,7 +293,7 @@ export default function ResourceDetailPage() {
             <CardHeader>
                 <div className="flex justify-between items-start">
                     <CardTitle className="text-2xl">{resource.name}</CardTitle>
-                    {getResourceStatusBadge(resource.status)}
+                    {getResourceStatusBadgeStyle(resource.status)}
                 </div>
               <CardDescription>Type: {resource.resourceTypeName} | Lab: {resource.lab}</CardDescription>
             </CardHeader>
@@ -282,6 +362,18 @@ export default function ResourceDetailPage() {
           )}
         </div>
       </div>
+      
+      {resource && (
+        <ResourceFormDialog
+            open={isFormDialogOpen}
+            onOpenChange={setIsFormDialogOpen}
+            initialResource={resource} // Pass the current resource for editing
+            onSave={handleSaveResource}
+            resourceTypes={initialMockResourceTypes} // Pass available resource types
+            labs={labsList} // Pass available labs
+            statuses={resourceStatusesList} // Pass available statuses
+        />
+      )}
     </div>
   );
 }

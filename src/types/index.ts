@@ -13,18 +13,18 @@ export interface Resource {
   resourceTypeId: string;
   resourceTypeName: string;
   lab: 'Lab A' | 'Lab B' | 'Lab C' | 'General Lab';
-  status: ResourceStatus; // Changed from specific strings to ResourceStatus type
+  status: ResourceStatus;
   description: string;
   imageUrl: string;
   dataAiHint?: string;
   features?: string[];
-  lastCalibration?: string; // Date string
-  nextCalibration?: string; // Date string
+  lastCalibration?: string; 
+  nextCalibration?: string; 
   availability?: { date: string; slots: string[] }[];
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
-  purchaseDate?: string; // ISO date string
+  purchaseDate?: string; 
   notes?: string;
 }
 
@@ -40,7 +40,6 @@ export interface Booking {
   notes?: string;
 }
 
-// User Management Types
 export type RoleName = 'Admin' | 'Lab Manager' | 'Technician' | 'Researcher';
 
 export interface User {
@@ -51,5 +50,3 @@ export interface User {
   avatarUrl?: string;
   avatarDataAiHint?: string;
 }
-
-// Add other types as needed

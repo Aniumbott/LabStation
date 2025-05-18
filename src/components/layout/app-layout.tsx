@@ -6,13 +6,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
-  Search,
   CalendarDays,
   Users,
   UserCog,
   Loader2,
   ListChecks,
-  ClipboardList, // Added for Manage Resources
+  ClipboardList, 
+  Building, // Added for potential Lab Management if re-added
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -41,11 +41,11 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/resources', label: 'Resource Search', icon: Search },
+  // { href: '/resources', label: 'Resource Search', icon: Search }, // Removed
   { href: '/bookings', label: 'Manage Bookings', icon: CalendarDays },
   { href: '/admin/users', label: 'User Management', icon: Users, admin: true },
   { href: '/admin/resource-types', label: 'Resource Types', icon: ListChecks, admin: true },
-  { href: '/admin/resources', label: 'Manage Resources', icon: ClipboardList, admin: true }, // New Item
+  { href: '/admin/resources', label: 'Manage Resources', icon: ClipboardList, admin: true },
   { href: '/profile', label: 'My Profile', icon: UserCog },
 ];
 

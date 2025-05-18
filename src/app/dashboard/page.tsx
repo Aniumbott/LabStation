@@ -18,71 +18,16 @@ import {
 } from "@/components/ui/table";
 import { format, isValid, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-
-// Mock Resource Types (these would ideally come from a data store or the new admin page)
-const mockResourceTypesForDashboard: { id: string; name: string }[] = [
-  { id: 'rt1', name: 'Microscope' },
-  { id: 'rt2', name: 'Centrifuge' },
-  { id: 'rt3', name: 'HPLC System' },
-  { id: 'rt4', name: 'Incubator' },
-];
-
-
-const mockResources: Resource[] = [
-  {
-    id: '1',
-    name: 'Electron Microscope Alpha',
-    resourceTypeId: 'rt1',
-    resourceTypeName: 'Microscope',
-    lab: 'Lab A',
-    status: 'Available',
-    description: 'High-resolution electron microscope for advanced material analysis and detailed imaging of various samples. Includes EDX spectroscopy capabilities.',
-    imageUrl: 'https://placehold.co/600x400.png',
-    dataAiHint: 'microscope electronics',
-    features: ['SEM', 'TEM', 'EDX', 'Cryo-EM', 'FIB'],
-    lastCalibration: '2023-12-01',
-    nextCalibration: '2024-06-01',
-    availability: [{ date: 'Today', slots: ['14:00-16:00'] }, { date: 'Tomorrow', slots: ['10:00-12:00'] }],
-  },
-  {
-    id: '2',
-    name: 'BioSafety Cabinet Omega',
-    resourceTypeId: 'rt4',
-    resourceTypeName: 'Incubator',
-    lab: 'Lab B',
-    status: 'Booked',
-    description: 'Class II Type A2 biosafety cabinet for sterile work with cell cultures and other sensitive biological materials.',
-    imageUrl: 'https://placehold.co/600x400.png',
-    dataAiHint: 'lab cabinet',
-    features: ['HEPA Filtered', 'UV Sterilization', 'Ergonomic Design'],
-    lastCalibration: '2024-01-15',
-    nextCalibration: '2024-07-15',
-    availability: [{ date: 'Tomorrow', slots: ['09:00-11:00'] }],
-  },
-  {
-    id: '3',
-    name: 'HPLC System Zeta',
-    resourceTypeId: 'rt3',
-    resourceTypeName: 'HPLC System',
-    lab: 'Lab C',
-    status: 'Maintenance',
-    description: 'High-performance liquid chromatography system for precise compound separation and quantification.',
-    imageUrl: 'https://placehold.co/600x400.png',
-    dataAiHint: 'hplc chemistry',
-    features: ['Autosampler', 'UV Detector', 'Diode Array Detector', 'Mass Spec Interface'],
-    lastCalibration: '2023-11-10',
-    nextCalibration: 'N/A',
-  },
-];
+import { allAdminMockResources } from '@/app/admin/resources/page'; // Import from admin resources
 
 const mockBookings: Booking[] = [
   { id: 'b1', resourceId: '1', resourceName: 'Electron Microscope Alpha', userId: 'user1', userName: 'Dr. Smith', startTime: new Date(new Date().setDate(new Date().getDate() + 1)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 1)).setHours(new Date().getHours() + 2)), status: 'Confirmed' },
-  { id: 'b2', resourceId: '4', resourceName: 'Centrifuge MaxSpin', userId: 'user2', userName: 'Dr. Jones', startTime: new Date(new Date().setDate(new Date().getDate() + 2)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 2)).setHours(new Date().getHours() + 3)), status: 'Pending' },
+  { id: 'b2', resourceId: '4', resourceName: 'High-Speed Centrifuge Pro', userId: 'user2', userName: 'Dr. Jones', startTime: new Date(new Date().setDate(new Date().getDate() + 2)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 2)).setHours(new Date().getHours() + 3)), status: 'Pending' },
 ];
 
 
 export default function DashboardPage() {
-  const frequentlyUsedResources = mockResources.slice(0, 2);
+  const frequentlyUsedResources = allAdminMockResources.slice(0, 2); // Use resources from admin page
 
   const getResourceStatusBadge = (status: Resource['status']) => {
     switch (status) {
@@ -158,13 +103,13 @@ export default function DashboardPage() {
           </div>
         ) : (
           <Card className="p-6 text-center shadow-lg">
-            <p className="text-muted-foreground">No frequently used resources configured. Explore the full <Link href="/resources" className="text-primary hover:underline">Resource Search</Link>.</p>
+            <p className="text-muted-foreground">No frequently used resources configured. Explore resources via <Link href="/admin/resources" className="text-primary hover:underline">Manage Resources</Link>.</p>
           </Card>
         )}
-        {mockResources.length > 2 && frequentlyUsedResources.length > 0 && (
+        {allAdminMockResources.length > 2 && frequentlyUsedResources.length > 0 && (
             <div className="mt-4 text-right">
                 <Button variant="outline" asChild>
-                    <Link href="/resources">View All Resources <ChevronRight className="ml-2 h-4 w-4" /></Link>
+                    <Link href="/admin/resources">View All Resources <ChevronRight className="ml-2 h-4 w-4" /></Link>
                 </Button>
             </div>
         )}
@@ -225,7 +170,7 @@ export default function DashboardPage() {
           <Card className="p-6 text-center shadow-lg">
              <p className="text-muted-foreground">You have no upcoming bookings.</p>
              <Button asChild className="mt-4">
-                <Link href="/resources">Find Resources to Book</Link>
+                <Link href="/admin/resources">Find Resources to Book</Link>
              </Button>
           </Card>
         )}
