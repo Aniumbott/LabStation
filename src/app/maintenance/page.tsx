@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Wrench, PlusCircle, Edit, Filter as FilterIcon, FilterX, Search as SearchIcon, ListFilter, CheckCircle, AlertCircle, Tool } from 'lucide-react';
+import { Wrench, PlusCircle, Edit, Filter as FilterIcon, FilterX, Search as SearchIcon, ListFilter, CheckCircle, AlertCircle, PenToolIcon } from 'lucide-react';
 import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource } from '@/types';
 import { initialMaintenanceRequests, maintenanceRequestStatuses, initialMockUsers, allAdminMockResources } from '@/lib/mock-data';
 import {
@@ -46,7 +46,7 @@ const getStatusBadge = (status: MaintenanceRequestStatus) => {
     case 'Open':
       return <Badge variant="destructive" className="bg-red-500 text-white border-transparent"><AlertCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     case 'In Progress':
-      return <Badge variant="secondary" className="bg-yellow-500 text-yellow-950 border-transparent"><Tool className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      return <Badge variant="secondary" className="bg-yellow-500 text-yellow-950 border-transparent"><PenToolIcon className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     case 'Resolved':
       return <Badge className="bg-blue-500 text-white border-transparent"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     case 'Closed':
@@ -229,7 +229,7 @@ export default function MaintenanceRequestsPage() {
                           type="search"
                           placeholder="Keyword..."
                           value={tempSearchTerm}
-                          onChange={(e) => setTempSearchTerm(e.target.value)}
+                          onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
                           className="h-9 pl-8"
                         />
                       </div>
