@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, X, Clock, UserCircle, Info, ChevronLeft, ChevronRight, Search as SearchIcon, FilterX } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, X, Clock, UserCircle, Info, ChevronLeft, ChevronRight, Search as SearchIcon, FilterX, Eye } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -26,6 +26,7 @@ import { format, parseISO, isValid as isValidDate, startOfDay, addMonths, subMon
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { BookingDetailsDialog } from '@/components/bookings/booking-details-dialog';
 
 const mockResources: Resource[] = [
   { id: '1', name: 'Electron Microscope Alpha', type: 'Microscope', lab: 'Lab A', status: 'Available', description: '', imageUrl: '' },
@@ -46,9 +47,9 @@ const initialBookings: Booking[] = [
   { id: 'b1', resourceId: '1', resourceName: 'Electron Microscope Alpha', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2, 12, 0), status: 'Confirmed', notes: 'Routine sample analysis.' },
   { id: 'b2', resourceId: '2', resourceName: 'BioSafety Cabinet Omega', userId: 'user2', userName: 'Dr. Charles Babbage', startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 3, 14, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 3, 16, 0), status: 'Pending', notes: 'Cell culture experiment setup.' },
   { id: 'b3', resourceId: '1', resourceName: 'Electron Microscope Alpha', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1, 14, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1, 15, 0), status: 'Confirmed', notes: 'Quick check.' },
-  { id: 'b4', resourceId: '4', resourceName: 'High-Speed Centrifuge Pro', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 9, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 11, 0), status: 'Confirmed', notes: 'Urgent spin.' },
+  { id: 'b4', resourceId: '4', resourceName: 'High-Speed Centrifuge Pro', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 9, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 11, 0), status: 'Confirmed', notes: 'Urgent spin for immediate DNA extraction and subsequent PCR analysis. Please ensure rotor is pre-cooled.' },
   { id: 'b5', resourceId: '3', resourceName: 'HPLC System Zeta', userId: 'user2', userName: 'Dr. Charles Babbage', startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 5, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 5, 13, 0), status: 'Pending' },
-  { id: 'b6', resourceId: '5', resourceName: 'Confocal Microscope Zeiss', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 12, 0), status: 'Confirmed', notes: 'Past booking example.' },
+  { id: 'b6', resourceId: '5', resourceName: 'Confocal Microscope Zeiss', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 12, 0), status: 'Confirmed', notes: 'Past booking example for imaging stained tissue samples.' },
 ];
 
 const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
@@ -86,6 +87,9 @@ function BookingsPageContent() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterResourceId, setFilterResourceId] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<BookingStatusFilter>('all');
+
+  const [selectedBookingForDetails, setSelectedBookingForDetails] = useState<Booking | null>(null);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   
   useEffect(() => {
     setIsClient(true);
@@ -249,6 +253,11 @@ function BookingsPageContent() {
     toast({ title: "Info", description: "Booking cancelled."});
   };
 
+  const handleOpenDetailsDialog = (booking: Booking) => {
+    setSelectedBookingForDetails(booking);
+    setIsDetailsDialogOpen(true);
+  };
+
   const resetFilters = () => {
     setSearchTerm('');
     setFilterResourceId('all');
@@ -336,15 +345,14 @@ function BookingsPageContent() {
                 </div>
                  <Button onClick={resetFilters} variant="outline" className="w-full sm:w-auto"><FilterX className="mr-2 h-4 w-4"/>Clear All Filters</Button>
             </CardContent>
-            <CardContent className="p-0"> {/* Changed from a separate card to be part of the same card */}
+            <CardContent className="p-0">
                 {bookingsToDisplay.length > 0 ? (
                 <div className="overflow-x-auto">
                 <Table>
                     <TableHeader>
                     <TableRow>
                         <TableHead>Resource</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Time</TableHead>
+                        <TableHead>Date & Time</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -353,8 +361,10 @@ function BookingsPageContent() {
                     {bookingsToDisplay.map((booking) => (
                         <TableRow key={booking.id} className={cn(booking.status === 'Cancelled' && 'opacity-60')}>
                         <TableCell className="font-medium">{booking.resourceName}</TableCell>
-                        <TableCell>{format(new Date(booking.startTime), 'MMM dd, yyyy')}</TableCell>
-                        <TableCell>{format(new Date(booking.startTime), 'p')} - {format(new Date(booking.endTime), 'p')}</TableCell>
+                        <TableCell>
+                            <div>{format(new Date(booking.startTime), 'MMM dd, yyyy')}</div>
+                            <div className="text-xs text-muted-foreground">{format(new Date(booking.startTime), 'p')} - {format(new Date(booking.endTime), 'p')}</div>
+                        </TableCell>
                         <TableCell>
                             <Badge 
                                 className={cn(
@@ -365,10 +375,13 @@ function BookingsPageContent() {
                                 )}
                             >{booking.status}</Badge>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right space-x-1">
+                            <Button variant="ghost" size="sm" className="h-7 px-2 py-1 text-xs" onClick={() => handleOpenDetailsDialog(booking)}>
+                                <Eye className="mr-1.5 h-3 w-3" /> View
+                            </Button>
                             {booking.status !== 'Cancelled' && (
                             <>
-                                <Button variant="outline" size="sm" className="h-7 px-2 py-1 text-xs mr-1" onClick={() => handleOpenForm(booking)}>
+                                <Button variant="outline" size="sm" className="h-7 px-2 py-1 text-xs" onClick={() => handleOpenForm(booking)}>
                                 <Edit3 className="mr-1.5 h-3 w-3" /> Edit
                                 </Button>
                                 <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-2 py-1 text-xs" onClick={() => handleCancelBooking(booking.id)}>
@@ -437,6 +450,12 @@ function BookingsPageContent() {
           />
         </DialogContent>
       </Dialog>
+
+      <BookingDetailsDialog
+        booking={selectedBookingForDetails}
+        isOpen={isDetailsDialogOpen}
+        onOpenChange={setIsDetailsDialogOpen}
+      />
     </div>
   );
 }
@@ -604,8 +623,3 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     </form>
   );
 }
-    
-
-    
-
-    
