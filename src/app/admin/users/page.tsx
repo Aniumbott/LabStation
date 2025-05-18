@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 
-const mockUsers: User[] = [
+const initialMockUsers: User[] = [
   { id: 'u1', name: 'Dr. Admin First', email: 'admin.first@labstation.com', role: 'Admin', avatarUrl: 'https://placehold.co/100x100.png', avatarDataAiHint: 'avatar person' },
   { id: 'u2', name: 'Dr. Manager Second', email: 'manager.second@labstation.com', role: 'Lab Manager', avatarUrl: 'https://placehold.co/100x100.png', avatarDataAiHint: 'avatar person' },
   { id: 'u3', name: 'Tech Third', email: 'tech.third@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png', avatarDataAiHint: 'avatar person' },
@@ -61,17 +61,16 @@ const roleBadgeVariant: Record<User['role'], "default" | "secondary" | "destruct
 
 export default function UserManagementPage() {
   const { toast } = useToast();
-  const [users, setUsers] = useState<User[]>(mockUsers); // Manage users in state for potential deletion
+  const [users, setUsers] = useState<User[]>(initialMockUsers); // Manage users in state
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   const handleDeleteUser = (userId: string) => {
-    // In a real app, you would make an API call here.
-    // For now, we just filter the user out of the local state.
+    const deletedUser = users.find(u => u.id === userId);
     setUsers(currentUsers => currentUsers.filter(user => user.id !== userId));
-    const deletedUser = mockUsers.find(u => u.id === userId);
+    
     toast({
-      title: "User Deleted (Mock)",
-      description: `User "${deletedUser?.name}" has been "deleted".`,
+      title: "User Deleted",
+      description: `User "${deletedUser?.name}" has been removed from the list.`,
       variant: "destructive"
     });
     setUserToDelete(null); // Close dialog
@@ -158,8 +157,9 @@ export default function UserManagementPage() {
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                This action cannot be undone. This will permanently delete the user account for 
-                                <span className="font-semibold"> {userToDelete.name}</span>.
+                                This action cannot be undone. This will remove the user 
+                                <span className="font-semibold"> {userToDelete.name}</span> from the list.
+                                (Note: In this demo, this only affects the current view.)
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -183,7 +183,7 @@ export default function UserManagementPage() {
         <div className="text-center py-10 text-muted-foreground bg-card rounded-lg border shadow-sm">
           <UsersIcon className="mx-auto h-12 w-12 mb-4" />
           <p className="text-lg font-medium">No Users Found</p>
-          <p className="text-sm mb-4">There are currently no users in the system.</p>
+          <p className="text-sm mb-4">There are currently no users in the system. Add one to get started!</p>
           <Button asChild>
             <Link href="/admin/users/new">
              <PlusCircle className="mr-2 h-4 w-4" /> Add First User
