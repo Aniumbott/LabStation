@@ -166,7 +166,13 @@ export default function ResourcesPage() {
                   </div>
                 )}
                 {resource.nextCalibration && (
-                    <p className="text-xs text-muted-foreground">Next Calibration: {format(new Date(resource.nextCalibration), 'MMM dd, yyyy')}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Next Calibration: {
+                      !isNaN(new Date(resource.nextCalibration).getTime())
+                        ? format(new Date(resource.nextCalibration), 'MMM dd, yyyy')
+                        : resource.nextCalibration
+                    }
+                  </p>
                 )}
               </CardContent>
               <CardFooter>
