@@ -46,18 +46,7 @@ const navItems: NavItem[] = [
   { href: '/profile', label: 'My Profile', icon: UserCog },
 ];
 
-// Helper function to find the best matching NavItem for header context
-function getHeaderNavItem(pathname: string): NavItem | undefined {
-  // Prioritize longer matches (more specific routes) first for section context
-  const potentialMatches = navItems
-    .filter(item => pathname.startsWith(item.href))
-    .sort((a, b) => b.href.length - a.href.length); 
-
-  return potentialMatches[0]; // The most specific parent route
-}
-
-
-function Header({ currentSectionNavItem }: { currentSectionNavItem?: NavItem }) {
+function Header() {
   const { isMobile: sidebarIsMobile } = useSidebar(); 
   const [isClient, setIsClient] = useState(false);
 
@@ -65,20 +54,11 @@ function Header({ currentSectionNavItem }: { currentSectionNavItem?: NavItem }) 
     setIsClient(true);
   }, []);
 
-  const SectionIcon = currentSectionNavItem?.icon;
-
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6 shadow-sm">
       {isClient && sidebarIsMobile && <SidebarTrigger className="md:hidden -ml-2" />}
-      <div className="flex-1 flex items-center gap-3">
-        {currentSectionNavItem && SectionIcon && (
-          <SectionIcon className="h-6 w-6 text-primary flex-shrink-0" />
-        )}
-        {currentSectionNavItem && (
-          <h1 className="text-xl font-semibold text-foreground">
-            {currentSectionNavItem.label}
-          </h1>
-        )}
+      <div className="flex-1">
+        {/* This space can be used for future right-aligned header elements like user profile, notifications */}
       </div>
       {/* User/Auth section can be added here */}
     </header>
@@ -94,11 +74,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
     setIsMounted(true);
   }, []);
 
-  const currentSectionNavItem = getHeaderNavItem(pathname);
-
   const mainContentLayout = (
     <>
-      <Header currentSectionNavItem={currentSectionNavItem} />
+      <Header />
       <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-background">
         {children}
       </main>
@@ -148,3 +126,4 @@ export function AppLayout({ children }: { children: ReactNode }) {
     </SidebarProvider>
   );
 }
+
