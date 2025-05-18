@@ -6,6 +6,7 @@ export interface Resource {
   status: 'Available' | 'Booked' | 'Maintenance';
   description: string;
   imageUrl: string;
+  dataAiHint?: string;
   features?: string[];
   lastCalibration?: string; // Date string
   nextCalibration?: string; // Date string
@@ -22,6 +23,18 @@ export interface Booking {
   endTime: Date;
   status: 'Confirmed' | 'Pending' | 'Cancelled';
   notes?: string;
+}
+
+// User Management Types
+export type RoleName = 'Admin' | 'Lab Manager' | 'Technician' | 'Researcher';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: RoleName;
+  avatarUrl?: string;
+  avatarDataAiHint?: string; // For AI-generated placeholder hints
 }
 
 // Add other types as needed

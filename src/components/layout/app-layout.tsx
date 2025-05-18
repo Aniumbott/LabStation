@@ -1,3 +1,4 @@
+// This component was modified by the AI to add User Management and Profile links.
 'use client';
 
 import type { ReactNode } from 'react';
@@ -7,7 +8,8 @@ import {
   LayoutDashboard,
   Search,
   CalendarDays,
-  // Wrench, // Removed: Wrench icon for Calibration Tool
+  Users, // Added for User Management
+  UserCog, // Added for Profile
   FlaskConical,
   PanelLeft,
 } from 'lucide-react';
@@ -39,7 +41,8 @@ const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/resources', label: 'Resource Search', icon: Search },
   { href: '/bookings', label: 'Booking Calendar', icon: CalendarDays },
-  // { href: '/calibration', label: 'Calibration Tool', icon: Wrench }, // Removed: Calibration Tool nav item
+  { href: '/admin/users', label: 'User Management', icon: Users }, // New: User Management
+  { href: '/profile', label: 'My Profile', icon: UserCog }, // New: My Profile
 ];
 
 function Header() {
