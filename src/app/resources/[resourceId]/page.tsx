@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { allAdminMockResources } from '@/app/admin/resources/page'; // Import mock data from admin page
+import { allAdminMockResources } from '@/app/admin/resources/page'; 
 import type { Resource, ResourceType, ResourceStatus } from '@/types';
 import { format, parseISO, isValid, startOfToday } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -20,6 +20,12 @@ import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resou
 import { initialMockResourceTypes } from '@/app/admin/resource-types/page';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // Define labsList and resourceStatusesList if not globally available or pass as props if needed
 const labsList: Resource['lab'][] = ['Lab A', 'Lab B', 'Lab C', 'General Lab'];
@@ -123,16 +129,17 @@ export default function ResourceDetailPage() {
 
   useEffect(() => {
     if (resourceId) {
-      setTimeout(() => {
+      setTimeout(() => { // Simulate API delay
         const foundResource = allAdminMockResources.find(r => r.id === resourceId);
         setResource(foundResource || null);
         setIsLoading(false);
       }, 300); 
+    } else {
+      setIsLoading(false);
     }
   }, [resourceId]);
 
   const handleSaveResource = (data: ResourceFormValues) => {
-    // In a real app, this would call an API. For mock, we'll update local state and toast.
     if (resource) {
         const resourceType = initialMockResourceTypes.find(rt => rt.id === data.resourceTypeId);
         if (!resourceType) {
@@ -142,14 +149,21 @@ export default function ResourceDetailPage() {
         const updatedResource = {
             ...resource,
             ...data,
-            resourceTypeName: resourceType.name, // Ensure this is updated from selected typeId
+            resourceTypeName: resourceType.name,
             features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-             // purchaseDate should already be in correct string format from the form if date input used
+            purchaseDate: data.purchaseDate ? parseISO(data.purchaseDate).toISOString() : resource.purchaseDate, // Ensure correct date format
         };
-        setResource(updatedResource); // Update the local state for this detail page
+        setResource(updatedResource);
+        // Note: This mock update won't persist in allAdminMockResources in the admin list page
+        // without a global state or backend.
+        const resourceIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
+        if (resourceIndex !== -1) {
+            allAdminMockResources[resourceIndex] = updatedResource;
+        }
+        
         toast({
             title: 'Resource Updated',
-            description: `Resource "${data.name}" has been updated. (Mock update)`,
+            description: `Resource "${data.name}" has been updated.`,
         });
     }
     setIsFormDialogOpen(false);
@@ -157,14 +171,18 @@ export default function ResourceDetailPage() {
 
   const handleConfirmDelete = () => {
     if (resource) {
+      // Note: This mock deletion won't persist in allAdminMockResources in the admin list page
+      // without a global state or backend.
+      const resourceIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
+        if (resourceIndex !== -1) {
+            allAdminMockResources.splice(resourceIndex, 1);
+        }
       toast({
-        title: "Resource Deleted (Mock)",
-        description: `Resource "${resource.name}" has been notionally removed.`,
+        title: "Resource Deleted",
+        description: `Resource "${resource.name}" has been removed.`,
         variant: "destructive"
       });
       setIsAlertOpen(false);
-      // In a real app, you'd call an API then navigate or refresh.
-      // For mock, we just navigate back as the list page won't know about the deletion.
       router.push('/admin/resources');
     }
   };
@@ -207,6 +225,7 @@ export default function ResourceDetailPage() {
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) || [];
 
   return (
+    <TooltipProvider>
     <div className="space-y-8">
       <PageHeader
         title={resource.name}
@@ -217,30 +236,42 @@ export default function ResourceDetailPage() {
             <Button variant="outline" onClick={() => router.push('/admin/resources')}>
               <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
             </Button>
-            <Button variant="outline" onClick={() => setIsFormDialogOpen(true)}>
-              <Edit className="mr-2 h-4 w-4" /> Edit Resource
-            </Button>
-             <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-                <AlertDialogTrigger asChild>
-                    <Button variant="destructive">
-                        <Trash2 className="mr-2 h-4 w-4" /> Delete Resource
-                    </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete the resource
-                        <span className="font-semibold"> "{resource.name}"</span>.
-                    </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
-                        Delete
-                    </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={() => setIsFormDialogOpen(true)}>
+                  <Edit className="h-4 w-4" />
+                  <span className="sr-only">Edit Resource</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent><p>Edit Resource</p></TooltipContent>
+            </Tooltip>
+            <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="icon">
+                          <Trash2 className="h-4 w-4" />
+                          <span className="sr-only">Delete Resource</span>
+                      </Button>
+                  </AlertDialogTrigger>
+                </TooltipTrigger>
+                <TooltipContent><p>Delete Resource</p></TooltipContent>
+              </Tooltip>
+              <AlertDialogContent>
+                  <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete the resource
+                      <span className="font-semibold"> "{resource.name}"</span>.
+                  </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
+                      Delete
+                  </AlertDialogAction>
+                  </AlertDialogFooter>
+              </AlertDialogContent>
             </AlertDialog>
           </div>
         }
@@ -251,7 +282,7 @@ export default function ResourceDetailPage() {
             <Card className="shadow-lg">
                 <CardContent className="p-0">
                     <div className="relative w-full h-64 md:h-80 rounded-t-lg overflow-hidden">
-                        <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint || 'lab equipment'} />
+                        <Image src={resource.imageUrl || 'https://placehold.co/300x200.png'} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint || 'lab equipment'} />
                     </div>
                 </CardContent>
             </Card>
@@ -366,14 +397,18 @@ export default function ResourceDetailPage() {
       {resource && (
         <ResourceFormDialog
             open={isFormDialogOpen}
-            onOpenChange={setIsFormDialogOpen}
-            initialResource={resource} // Pass the current resource for editing
+            onOpenChange={(isOpen) => {
+                setIsFormDialogOpen(isOpen);
+                // If closing, refetch or update resource state if needed, but mock setup limits this
+            }}
+            initialResource={resource} 
             onSave={handleSaveResource}
-            resourceTypes={initialMockResourceTypes} // Pass available resource types
-            labs={labsList} // Pass available labs
-            statuses={resourceStatusesList} // Pass available statuses
+            resourceTypes={initialMockResourceTypes} 
+            labs={labsList} 
+            statuses={resourceStatusesList} 
         />
       )}
     </div>
+    </TooltipProvider>
   );
 }
