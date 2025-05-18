@@ -150,7 +150,7 @@ export default function ResourcesPage() {
         ...data,
         name: data.name,
         resourceTypeId: data.resourceTypeId,
-        resourceTypeName: resourceType.name, // Set resourceTypeName
+        resourceTypeName: resourceType.name, 
         lab: data.lab,
         status: data.status,
         description: data.description || '',
@@ -177,7 +177,7 @@ export default function ResourcesPage() {
         ...data,
         name: data.name,
         resourceTypeId: data.resourceTypeId,
-        resourceTypeName: resourceType.name, // Set resourceTypeName
+        resourceTypeName: resourceType.name, 
         lab: data.lab,
         status: data.status,
         description: data.description || '',
@@ -244,7 +244,7 @@ export default function ResourcesPage() {
                         type="search"
                         placeholder="Name, manufacturer, model..."
                         value={tempSearchTerm}
-                        onChange={(e) => setTempSearchTerm(e.target.value)}
+                        onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
                         className="h-9 pl-8"
                         />
                     </div>

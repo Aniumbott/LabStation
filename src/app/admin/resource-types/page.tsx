@@ -180,7 +180,7 @@ export default function ResourceTypesPage() {
                         type="search"
                         placeholder="Keyword..."
                         value={tempSearchTerm}
-                        onChange={(e) => setTempSearchTerm(e.target.value)}
+                        onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
                         className="h-9 pl-8"
                         />
                     </div>

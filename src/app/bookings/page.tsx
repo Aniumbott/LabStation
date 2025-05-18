@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, X, Clock, User as UserIconLucide, Info, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Calendar as CalendarIcon } from 'lucide-react'; // Renamed User to UserIconLucide
+import { CalendarDays, PlusCircle, Edit3, X, Clock, User as UserIconLucide, Info, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Calendar as CalendarIcon } from 'lucide-react'; 
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -68,20 +68,23 @@ function BookingsPageContent() {
     return undefined;
   });
 
+  // Active page filters
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<BookingStatusFilter>('all');
-
+  
+  // Booking Form Dialog state
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentBooking, setCurrentBooking] = useState<Partial<Booking> & { resourceId?: string } | null>(null);
 
+  // Filter Dialog State
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterResourceId, setTempFilterResourceId] = useState<string>('all');
   const [tempFilterStatus, setTempFilterStatus] = useState<BookingStatusFilter>('all');
   const [tempSelectedDateInDialog, setTempSelectedDateInDialog] = useState<Date | undefined>(activeSelectedDate);
   const [currentCalendarMonthInDialog, setCurrentCalendarMonthInDialog] = useState<Date>(activeSelectedDate || startOfDay(new Date()));
-
+  
   const [isClient, setIsClient] = useState(false);
   const [selectedBookingForDetails, setSelectedBookingForDetails] = useState<Booking | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
@@ -102,16 +105,9 @@ function BookingsPageContent() {
     
     if (dateToSet && (!activeSelectedDate || !isSameDay(activeSelectedDate, dateToSet))) {
       setActiveSelectedDate(dateToSet);
-      // Also update tempSelectedDateInDialog if the form isn't already open for a different purpose
-      if (!isFormOpen) {
-        setTempSelectedDateInDialog(dateToSet);
-        setCurrentCalendarMonthInDialog(dateToSet);
-      }
-    } else if (!dateToSet && activeSelectedDate) { // If URL clears date, clear it on page
+    } else if (!dateParam && activeSelectedDate) { 
         setActiveSelectedDate(undefined);
-        setTempSelectedDateInDialog(undefined);
     }
-
 
     const shouldOpenFormForEdit = bookingIdParam && (!isFormOpen || (currentBooking?.id !== bookingIdParam));
     const shouldOpenFormForNewWithResourceAndDate = resourceIdParam && dateToSet && (!isFormOpen || currentBooking?.id || currentBooking?.resourceId !== resourceIdParam || (currentBooking.startTime && !isSameDay(currentBooking.startTime, dateToSet)));
@@ -129,14 +125,14 @@ function BookingsPageContent() {
       handleOpenForm(undefined, resourceIdParam);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, allUserBookings]); // Removed isFormOpen, currentBooking, activeSelectedDate from deps
+  }, [searchParams, allUserBookings]); 
 
   useEffect(() => {
     if (isFilterDialogOpen) {
       setTempSearchTerm(activeSearchTerm);
       setTempFilterResourceId(activeFilterResourceId);
       setTempFilterStatus(activeFilterStatus);
-      setTempSelectedDateInDialog(activeSelectedDate); // Sync dialog date filter with page's active date
+      setTempSelectedDateInDialog(activeSelectedDate); 
       setCurrentCalendarMonthInDialog(activeSelectedDate || startOfDay(new Date()));
     }
   }, [isFilterDialogOpen, activeSearchTerm, activeFilterResourceId, activeFilterStatus, activeSelectedDate]);
@@ -181,7 +177,7 @@ function BookingsPageContent() {
         const initialResourceId = resourceIdForNew || (allAdminMockResources.length > 0 ? allAdminMockResources.find(r => r.status === 'Available')?.id || allAdminMockResources[0].id : '');
         bookingData = {
             startTime: defaultStartTime,
-            endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000), // Default 2hr duration
+            endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000), 
             userName: mockCurrentUser.name,
             userId: mockCurrentUser.id,
             resourceId: initialResourceId,
@@ -282,7 +278,7 @@ function BookingsPageContent() {
     setIsFilterDialogOpen(false);
   };
   
-  const bookedDates = useMemo(() => {
+  const bookedDatesForCalendar = useMemo(() => {
     const dates = new Set<string>();
     allUserBookings.forEach(booking => {
       if (booking.status !== 'Cancelled') {
@@ -292,7 +288,7 @@ function BookingsPageContent() {
     return Array.from(dates).map(dateStr => parseISO(dateStr));
   }, [allUserBookings]);
 
-  const handleDateSelectFromCalendar = (date?: Date) => {
+  const handleDateSelectFromMainCalendar = (date?: Date) => {
     const newSelectedDate = date ? startOfDay(date) : undefined;
     setActiveSelectedDate(newSelectedDate);
 
@@ -317,18 +313,14 @@ function BookingsPageContent() {
     activeSelectedDate !== undefined,
   ].filter(Boolean).length;
 
-
-  let formKey = `new:${activeSelectedDate?.getTime() || 'nodate'}`;
+  let formKey = `new:${activeSelectedDate?.toISOString() || 'nodate'}`;
   if (currentBooking?.id) {
     formKey = currentBooking.id;
   } else if (currentBooking?.resourceId) {
     formKey += `:${currentBooking.resourceId}`;
   }
-   if (currentBooking?.startTime) {
-     const startTime = new Date(currentBooking.startTime);
-     if (isValidDate(startTime)) {
-        formKey += `:${startTime.toISOString()}`;
-     }
+   if (currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime))) {
+    formKey += `:${new Date(currentBooking.startTime).toISOString()}`;
   }
 
 
@@ -405,7 +397,7 @@ function BookingsPageContent() {
                                         mode="single" selected={tempSelectedDateInDialog} onSelect={setTempSelectedDateInDialog}
                                         month={currentCalendarMonthInDialog} onMonthChange={setCurrentCalendarMonthInDialog}
                                         disabled={(date) => date < startOfDay(addDays(new Date(), -90)) }
-                                        modifiers={{ booked: bookedDates }}
+                                        modifiers={{ booked: bookedDatesForCalendar }}
                                         modifiersClassNames={{ booked: 'day-booked-dot' }}
                                         footer={
                                             <div className="flex flex-col gap-2 items-center pt-2">
@@ -546,7 +538,7 @@ function BookingsPageContent() {
                     currentParams.delete('bookingId');
                     paramsModified = true;
                 }
-                if (currentParams.has('resourceId')) { // Also clear resourceId if present from URL nav
+                if (currentParams.has('resourceId')) { 
                     currentParams.delete('resourceId');
                     paramsModified = true;
                 }
@@ -567,7 +559,7 @@ function BookingsPageContent() {
             initialData={currentBooking}
             onSave={handleSaveBooking}
             onCancel={() => setIsFormOpen(false)}
-            selectedDateProp={activeSelectedDate} // Pass the page's active date
+            selectedDateProp={activeSelectedDate} 
             currentUserFullName={mockCurrentUser.name}
           />
         </DialogContent>
@@ -621,6 +613,8 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     if (initialEndTime <= initialStartTime) {
         initialEndTime = new Date(initialStartTime.getTime() + 2 * 60 * 60 * 1000);
     }
+    const formDataStartTimeString = initialStartTime.toISOString();
+
 
     return {
         id: initialData?.id,
@@ -686,13 +680,12 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
 
     if (field === 'startTime') {
         const currentStartTime = newDate;
-        let duration = 2 * 60 * 60 * 1000; // Default 2 hours
+        let duration = 2 * 60 * 60 * 1000; 
         if (formData.startTime && formData.endTime && isValidDate(new Date(formData.startTime)) && isValidDate(new Date(formData.endTime))) {
             const existingDuration = new Date(formData.endTime).getTime() - new Date(formData.startTime).getTime();
              if (existingDuration > 0) duration = existingDuration;
         }
         let newAutoEndTime = new Date(currentStartTime.getTime() + duration);
-        // Ensure newAutoEndTime is on the same day as currentStartTime
         newAutoEndTime = set(newAutoEndTime, { 
             year: currentStartTime.getFullYear(), 
             month: currentStartTime.getMonth(), 
@@ -778,4 +771,3 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     </form>
   );
 }
-

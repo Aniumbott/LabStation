@@ -49,14 +49,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { initialMockUsers, userRolesList } from '@/lib/mock-data';
 
-const initialMockUsers: User[] = [
-  { id: 'u1', name: 'Dr. Admin First', email: 'admin.first@labstation.com', role: 'Admin', avatarUrl: 'https://placehold.co/100x100.png' },
-  { id: 'u2', name: 'Dr. Manager Second', email: 'manager.second@labstation.com', role: 'Lab Manager', avatarUrl: 'https://placehold.co/100x100.png' },
-  { id: 'u3', name: 'Tech Third', email: 'tech.third@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png' },
-  { id: 'u4', name: 'Researcher Fourth', email: 'researcher.fourth@labstation.com', role: 'Researcher', avatarUrl: 'https://placehold.co/100x100.png' },
-  { id: 'u5', name: 'Admin Alpha', email: 'admin.alpha@labstation.com', role: 'Admin', avatarUrl: 'https://placehold.co/100x100.png' },
-];
 
 const roleIcons: Record<User['role'], React.ElementType> = {
   'Admin': ShieldAlert,
@@ -64,8 +58,6 @@ const roleIcons: Record<User['role'], React.ElementType> = {
   'Technician': UserCheck,
   'Researcher': UserCheck,
 };
-
-const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
 
 const getRoleBadgeVariant = (role: RoleName): "default" | "secondary" | "destructive" | "outline" => {
     switch (role) {
@@ -129,8 +121,8 @@ export default function UsersPage() {
   const resetAllActiveFilters = () => {
     setActiveSearchTerm('');
     setActiveFilterRole('all');
-    resetDialogFilters(); // Also reset dialog's temp state
-    setIsFilterDialogOpen(false); // Close dialog if open
+    resetDialogFilters(); 
+    setIsFilterDialogOpen(false); 
   };
 
   const handleOpenNewUserDialog = () => {
@@ -154,7 +146,7 @@ export default function UsersPage() {
       const newUser: User = {
         id: `u${users.length + 1 + Date.now()}`,
         ...data,
-        avatarUrl: 'https://placehold.co/100x100.png', 
+        avatarUrl: 'https://placehold.co/100x100.png',
       };
       setUsers([...users, newUser]);
       toast({
