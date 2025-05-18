@@ -51,16 +51,16 @@ const roleIcons: Record<User['role'], React.ElementType> = {
 };
 
 const roleBadgeVariant: Record<User['role'], "default" | "secondary" | "destructive" | "outline"> = {
-    'Admin': 'destructive', // Using destructive for Admin as it's a high-privilege role, aligns with red primary
-    'Lab Manager': 'default', // Using default for Lab Manager, aligns with red primary
+    'Admin': 'destructive', 
+    'Lab Manager': 'default', 
     'Technician': 'secondary',
-    'Researcher': 'outline', // Using outline for less emphasis or a neutral look
+    'Researcher': 'outline', 
 };
 
 
 export default function UserManagementPage() {
   const { toast } = useToast();
-  const [users, setUsers] = useState<User[]>(initialMockUsers); // Manage users in state
+  const [users, setUsers] = useState<User[]>(initialMockUsers); 
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   const handleDeleteUser = (userId: string) => {
@@ -72,7 +72,7 @@ export default function UserManagementPage() {
       description: `User "${deletedUser?.name}" has been removed from the list.`,
       variant: "destructive"
     });
-    setUserToDelete(null); // Close dialog
+    setUserToDelete(null); 
   };
 
   return (

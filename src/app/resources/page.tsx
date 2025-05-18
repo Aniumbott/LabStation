@@ -116,7 +116,7 @@ export const allMockResources: Resource[] = [
     lastCalibration: 'N/A', 
     nextCalibration: 'N/A',
     availability: [
-        { date: todayStr, slots: ['Booked until 15:00', '15:00-17:00'] }, // Added an available slot for today
+        { date: todayStr, slots: ['Booked until 15:00', '15:00-17:00'] }, 
         { date: dayAfterTomorrowStr, slots: ['09:00-12:00'] }
     ]
   },
@@ -307,5 +307,3 @@ export default function ResourcesPage() {
     </div>
   );
 }
-
-    
