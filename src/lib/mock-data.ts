@@ -1,6 +1,6 @@
 
-import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking } from '@/types';
-import { format, addDays, set } from 'date-fns';
+import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus } from '@/types';
+import { format, addDays, set, subDays } from 'date-fns';
 
 // For Resource Availability
 const today = new Date();
@@ -205,6 +205,7 @@ export const initialMockUsers: User[] = [
   { id: 'u2', name: 'Dr. Manager Second', email: 'manager.second@labstation.com', role: 'Lab Manager', avatarUrl: 'https://placehold.co/100x100.png' },
   { id: 'u3', name: 'Technician Third', email: 'tech.third@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png' },
   { id: 'u4', name: 'Researcher Fourth', email: 'researcher.fourth@labstation.com', role: 'Researcher', avatarUrl: 'https://placehold.co/100x100.png' },
+  { id: 'u5', name: 'Lead Technician Fifth', email: 'lead.tech@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png' },
 ];
 
 // Mock Current User (used across Bookings, Resource Details, Dashboard)
@@ -243,7 +244,7 @@ export const initialBookings: Booking[] = [
     userName: mockCurrentUser.name, 
     startTime: set(addDays(today, 1), { hours: 14, minutes: 0 }), 
     endTime: set(addDays(today, 1), { hours: 15, minutes: 0 }), 
-    status: 'Pending', // Changed to Pending for approval demo
+    status: 'Pending',
     notes: 'Quick check of clock signal jitter. High priority for RF module.' 
   },
   { 
@@ -274,8 +275,8 @@ export const initialBookings: Booking[] = [
     resourceName: 'Keysight MSOX3054T Oscilloscope', 
     userId: mockCurrentUser.id, 
     userName: mockCurrentUser.name, 
-    startTime: set(addDays(today, -1), { hours: 10, minutes: 0 }), 
-    endTime: set(addDays(today, -1), { hours: 12, minutes: 0 }), 
+    startTime: set(subDays(today, 1), { hours: 10, minutes: 0 }), 
+    endTime: set(subDays(today, 1), { hours: 12, minutes: 0 }), 
     status: 'Confirmed', 
     notes: 'Past booking: Verifying I2C signals between sensor and MCU.' 
   },
@@ -289,5 +290,48 @@ export const initialBookings: Booking[] = [
     endTime: set(addDays(today, 4), { hours: 15, minutes: 30 }),
     status: 'Pending',
     notes: 'Need to test new HDL core for signal processing acceleration.'
+  },
+];
+
+// Mock Maintenance Requests
+export const maintenanceRequestStatuses: MaintenanceRequestStatus[] = ['Open', 'In Progress', 'Resolved', 'Closed'];
+
+export const initialMaintenanceRequests: MaintenanceRequest[] = [
+  {
+    id: 'mr1',
+    resourceId: 'res3', // Siglent SDG2042X Function Generator
+    resourceName: 'Siglent SDG2042X Function Generator',
+    reportedByUserId: 'u4', // Researcher Fourth
+    reportedByUserName: initialMockUsers[3].name,
+    issueDescription: 'Channel 2 output is unstable and showing significant noise above 20 MHz. Amplitude is also inconsistent.',
+    status: 'In Progress',
+    assignedTechnicianId: 'u3', // Technician Third
+    assignedTechnicianName: initialMockUsers[2].name,
+    dateReported: subDays(today, 5).toISOString(),
+    resolutionNotes: 'Replaced output amplifier IC for Channel 2. Calibrating now.'
+  },
+  {
+    id: 'mr2',
+    resourceId: 'res1', // Keysight MSOX3054T Oscilloscope
+    resourceName: 'Keysight MSOX3054T Oscilloscope',
+    reportedByUserId: 'u2', // Dr. Manager Second
+    reportedByUserName: initialMockUsers[1].name,
+    issueDescription: 'The touchscreen is unresponsive in the lower-left quadrant. Makes it difficult to access some menus.',
+    status: 'Open',
+    dateReported: subDays(today, 2).toISOString(),
+  },
+  {
+    id: 'mr3',
+    resourceId: 'res5', // Weller WE1010NA Digital Soldering Station
+    resourceName: 'Weller WE1010NA Digital Soldering Station',
+    reportedByUserId: 'u3', // Technician Third
+    reportedByUserName: initialMockUsers[2].name,
+    issueDescription: 'Heating element failed. Station does not heat up to set temperature.',
+    status: 'Resolved',
+    assignedTechnicianId: 'u5', // Lead Technician Fifth
+    assignedTechnicianName: initialMockUsers[4].name,
+    dateReported: subDays(today, 10).toISOString(),
+    dateResolved: subDays(today, 8).toISOString(),
+    resolutionNotes: 'Replaced heating element and thermocouple. Tested and verified working correctly.'
   },
 ];

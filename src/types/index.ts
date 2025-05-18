@@ -57,11 +57,19 @@ export interface User {
   avatarUrl?: string;
 }
 
-// Lab type removed as feature was skipped
-// export interface Lab {
-//   id: string;
-//   name: string;
-//   location: string;
-//   description?: string;
-//   timezone: string;
-// }
+export type MaintenanceRequestStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed';
+
+export interface MaintenanceRequest {
+  id: string;
+  resourceId: string;
+  resourceName: string; 
+  reportedByUserId: string;
+  reportedByUserName: string; 
+  issueDescription: string;
+  status: MaintenanceRequestStatus;
+  assignedTechnicianId?: string;
+  assignedTechnicianName?: string; 
+  dateReported: string; // ISO string
+  dateResolved?: string; // ISO string
+  resolutionNotes?: string;
+}

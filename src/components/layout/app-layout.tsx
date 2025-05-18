@@ -12,8 +12,8 @@ import {
   Loader2,
   ListChecks,
   ClipboardList,
-  Building, // For Lab Management (if added back)
   CheckSquare, // For Booking Approvals
+  Wrench, // For Maintenance
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -45,6 +45,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/resources', label: 'Resources', icon: ClipboardList },
   { href: '/bookings', label: 'Bookings', icon: CalendarDays },
+  { href: '/maintenance', label: 'Maintenance', icon: Wrench },
   { href: '/profile', label: 'My Profile', icon: UserCog },
   { href: '/admin/booking-approvals', label: 'Booking Approvals', icon: CheckSquare, admin: true },
   { href: '/admin/users', label: 'Users', icon: UsersIconLucide, admin: true },
