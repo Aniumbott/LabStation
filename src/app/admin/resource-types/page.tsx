@@ -269,7 +269,7 @@ export default function ResourceTypesPage() {
         </div>
         </TooltipProvider>
       ) : (
-        <Card className="text-center py-10 text-muted-foreground bg-card rounded-lg border shadow-sm">
+        <Card className="text-center py-10 text-muted-foreground bg-card rounded-lg border">
           <ListChecks className="mx-auto h-12 w-12 mb-4" />
            <p className="text-lg font-medium">
             {activeSearchTerm ? "No Resource Types Match Filter" : "No Resource Types Defined"}

@@ -372,7 +372,7 @@ export default function ResourcesPage() {
           </Table>
         </div>
       ) : (
-         <Card className="text-center py-10 text-muted-foreground bg-card rounded-lg border shadow-sm">
+         <Card className="text-center py-10 text-muted-foreground bg-card rounded-lg border">
           <ClipboardList className="mx-auto h-12 w-12 mb-4" />
            <p className="text-lg font-medium">
             {activeFilterCount > 0 ? "No Resources Match Filters" : "No Resources Found"}

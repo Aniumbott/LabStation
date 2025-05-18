@@ -49,7 +49,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { initialMockUsers, userRolesList } from '@/lib/mock-data';
+import { initialMockUsers } from '@/lib/mock-data';
+
+const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
 
 
 const roleIcons: Record<User['role'], React.ElementType> = {
@@ -331,7 +333,7 @@ export default function UsersPage() {
         </div>
         </TooltipProvider>
       ) : (
-        <Card className="text-center py-10 text-muted-foreground bg-card rounded-lg border shadow-sm">
+        <Card className="text-center py-10 text-muted-foreground bg-card rounded-lg border">
           <UsersIconLucide className="mx-auto h-12 w-12 mb-4" />
            <p className="text-lg font-medium">
             {activeFilterCount > 0 ? "No Users Match Filters" : "No Users Found"}
