@@ -4,7 +4,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, CalendarPlus, XCircle, CalendarDays, CheckCircle, AlertTriangle, Construction, FilterX } from 'lucide-react';
+import { Search, CalendarPlus, Filter as FilterIcon, FilterX, CalendarDays, CheckCircle, AlertTriangle, Construction } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -15,12 +15,13 @@ import type { Resource } from '@/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format, addDays, parseISO, isValid } from 'date-fns';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 
 const todayStr = format(new Date(), 'yyyy-MM-dd');
 const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 const dayAfterTomorrowStr = format(addDays(new Date(), 2), 'yyyy-MM-dd');
 
-// Exporting for use in the detail page
 export const allMockResources: Resource[] = [
   {
     id: '1',
@@ -67,7 +68,7 @@ export const allMockResources: Resource[] = [
     dataAiHint: 'hplc chemistry',
     features: ['Quaternary Solvent Delivery', 'Autosampler (120 vial capacity)', 'Column Thermostatting (5-80°C)', 'Diode Array Detector (190-800nm)', 'Fraction Collector (Optional)'],
     lastCalibration: '2023-11-10',
-    nextCalibration: '2024-05-10', // Assuming maintenance completes and calibration happens
+    nextCalibration: '2024-05-10', 
     availability: []
   },
   {
@@ -122,24 +123,39 @@ export const allMockResources: Resource[] = [
   },
 ];
 
-
 const resourceTypes = Array.from(new Set(allMockResources.map(r => r.type)));
 const labs = Array.from(new Set(allMockResources.map(r => r.lab)));
 
 export default function ResourcesPage() {
+  // Active filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedLab, setSelectedLab] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
+  // Temporary filters for Popover
+  const [tempSearchTerm, setTempSearchTerm] = useState('');
+  const [tempSelectedType, setTempSelectedType] = useState<string>('all');
+  const [tempSelectedLab, setTempSelectedLab] = useState<string>('all');
+  const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(undefined);
+  const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
+  
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
     setIsClient(true);
   }, []);
 
+  useEffect(() => {
+    if (isFilterPopoverOpen) {
+      setTempSearchTerm(searchTerm);
+      setTempSelectedType(selectedType);
+      setTempSelectedLab(selectedLab);
+      setTempSelectedDate(selectedDate);
+    }
+  }, [isFilterPopoverOpen, searchTerm, selectedType, selectedLab, selectedDate]);
+
   const filteredResources = useMemo(() => {
     let resources = allMockResources;
-
     if (searchTerm) {
       resources = resources.filter(resource =>
         resource.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -161,12 +177,25 @@ export default function ResourcesPage() {
     return resources;
   }, [searchTerm, selectedType, selectedLab, selectedDate]);
 
+  const handleApplyFilters = () => {
+    setSearchTerm(tempSearchTerm);
+    setSelectedType(tempSelectedType);
+    setSelectedLab(tempSelectedLab);
+    setSelectedDate(tempSelectedDate);
+    setIsFilterPopoverOpen(false);
+  };
+
   const resetFilters = () => {
     setSearchTerm('');
     setSelectedType('all');
     setSelectedLab('all');
     setSelectedDate(undefined);
-  }
+    setTempSearchTerm('');
+    setTempSelectedType('all');
+    setTempSelectedLab('all');
+    setTempSelectedDate(undefined);
+    // setIsFilterPopoverOpen(false); // Optionally close popover
+  };
 
   const getResourceStatusBadge = (status: Resource['status']) => {
     const baseBadgeClass = "absolute top-2 right-2 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors";
@@ -182,8 +211,15 @@ export default function ResourcesPage() {
     }
   };
 
+  const activeFilterCount = [
+    searchTerm,
+    selectedType !== 'all',
+    selectedLab !== 'all',
+    selectedDate,
+  ].filter(Boolean).length;
+
   if (!isClient) {
-    return null; // Or a basic loading state
+    return null; 
   }
 
   return (
@@ -192,73 +228,95 @@ export default function ResourcesPage() {
         title="Resource Search"
         description="Find and filter available lab resources."
         icon={Search}
-      />
-
-      <Card className="shadow-lg">
-        <CardHeader>
-            <CardTitle>Filter Resources</CardTitle>
-            <CardDescription>Use the filters below to narrow down your search.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-            <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-            <Input
-                type="search"
-                placeholder="Search by name, keyword..."
-                className="pl-10 w-full"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Select value={selectedType} onValueChange={setSelectedType}>
-                <SelectTrigger>
-                <SelectValue placeholder="Filter by Type" />
-                </SelectTrigger>
-                <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {resourceTypes.map(type => (
-                    <SelectItem key={type} value={type}>{type}</SelectItem>
-                ))}
-                </SelectContent>
-            </Select>
-
-            <Select value={selectedLab} onValueChange={setSelectedLab}>
-                <SelectTrigger>
-                <SelectValue placeholder="Filter by Lab" />
-                </SelectTrigger>
-                <SelectContent>
-                <SelectItem value="all">All Labs</SelectItem>
-                {labs.map(lab => (
-                    <SelectItem key={lab} value={lab}>{lab}</SelectItem>
-                ))}
-                </SelectContent>
-            </Select>
-
-            <Popover>
-                <PopoverTrigger asChild>
-                <Button variant="outline" className="w-full justify-start text-left font-normal bg-background hover:bg-accent/50">
-                    <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground"/>
-                    {selectedDate ? format(selectedDate, 'PPP') : <span>Filter by Date</span>}
+        actions={
+            <Popover open={isFilterPopoverOpen} onOpenChange={setIsFilterPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline">
+                  <FilterIcon className="mr-2 h-4 w-4" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
+                      {activeFilterCount}
+                    </Badge>
+                  )}
                 </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={setSelectedDate}
-                    initialFocus
-                    disabled={(date) => date < addDays(new Date(), -1) }
-                />
-                </PopoverContent>
+              </PopoverTrigger>
+              <PopoverContent className="w-[350px] z-50" align="end">
+                <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium leading-none">Filter Resources</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Refine the list of available lab resources.
+                    </p>
+                  </div>
+                  <Separator />
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="resourceSearch" className="text-xs">Search by Name/Keyword</Label>
+                      <Input
+                        id="resourceSearch"
+                        type="search"
+                        placeholder="e.g., Microscope Alpha, EDX..."
+                        value={tempSearchTerm}
+                        onChange={(e) => setTempSearchTerm(e.target.value)}
+                        className="h-9 mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="resourceType" className="text-xs">Type</Label>
+                      <Select value={tempSelectedType} onValueChange={setTempSelectedType}>
+                        <SelectTrigger id="resourceType" className="h-9 mt-1">
+                          <SelectValue placeholder="Filter by Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Types</SelectItem>
+                          {resourceTypes.map(type => (
+                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="resourceLab" className="text-xs">Lab</Label>
+                      <Select value={tempSelectedLab} onValueChange={setTempSelectedLab}>
+                        <SelectTrigger id="resourceLab" className="h-9 mt-1">
+                          <SelectValue placeholder="Filter by Lab" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Labs</SelectItem>
+                          {labs.map(lab => (
+                            <SelectItem key={lab} value={lab}>{lab}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                        <Label className="text-xs mb-1 block">Available On</Label>
+                        <Calendar
+                            mode="single"
+                            selected={tempSelectedDate}
+                            onSelect={setTempSelectedDate}
+                            initialFocus
+                            disabled={(date) => date < addDays(new Date(), -1) }
+                            className="rounded-md border p-2"
+                        />
+                        {tempSelectedDate && (
+                             <Button variant="ghost" size="sm" onClick={() => setTempSelectedDate(undefined)} className="mt-1 w-full text-xs">Clear Date</Button>
+                        )}
+                    </div>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between">
+                    <Button variant="ghost" onClick={resetFilters} className="text-sm">
+                      <FilterX className="mr-2 h-4 w-4" /> Reset
+                    </Button>
+                    <Button onClick={handleApplyFilters} className="text-sm">Apply Filters</Button>
+                  </div>
+                </div>
+              </PopoverContent>
             </Popover>
-
-            <Button variant="outline" onClick={resetFilters} className="lg:col-start-4">
-                <FilterX className="mr-2 h-4 w-4" /> Reset Filters
-            </Button>
-            </div>
-        </CardContent>
-      </Card>
+        }
+      />
 
       {filteredResources.length > 0 ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -296,12 +354,10 @@ export default function ResourcesPage() {
         <Card className="text-center p-10 col-span-full shadow-lg border">
           <Search className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-xl font-semibold mb-2">No Resources Found</h3>
-          <p className="text-muted-foreground mb-4">Try adjusting your search terms or filters, or select a different date.</p>
-          <Button onClick={resetFilters} variant="outline">Clear All Filters</Button>
+          <p className="text-muted-foreground mb-4">Try adjusting your search terms or filters.</p>
+          <Button onClick={resetFilters} variant="outline">Reset All Filters</Button>
         </Card>
       )}
     </div>
   );
 }
-
-    

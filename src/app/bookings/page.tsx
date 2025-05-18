@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, X, Clock, UserCircle, Info, ChevronLeft, ChevronRight, Search as SearchIcon, FilterX, Eye, Loader2 } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, X, Clock, UserCircle, Info, ChevronLeft, ChevronRight, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -27,6 +27,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { BookingDetailsDialog } from '@/components/bookings/booking-details-dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Separator } from '@/components/ui/separator';
+
 
 const mockResources: Resource[] = [
   { id: '1', name: 'Electron Microscope Alpha', type: 'Microscope', lab: 'Lab A', status: 'Available', description: '', imageUrl: '' },
@@ -78,6 +81,7 @@ function BookingsPageContent() {
 
   const [allUserBookings, setAllUserBookings] = useState<Booking[]>(() => initialBookings.filter(b => b.userId === mockCurrentUser.id));
   
+  // Active Date Filter
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => {
     const dateParam = searchParams.get('date');
     if (dateParam) {
@@ -92,9 +96,16 @@ function BookingsPageContent() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentBooking, setCurrentBooking] = useState<Partial<Booking> & { resourceId?: string } | null>(null);
 
+  // Active Popover Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [filterResourceId, setFilterResourceId] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<BookingStatusFilter>('all');
+
+  // Temporary Popover Filters
+  const [tempSearchTerm, setTempSearchTerm] = useState('');
+  const [tempFilterResourceId, setTempFilterResourceId] = useState<string>('all');
+  const [tempFilterStatus, setTempFilterStatus] = useState<BookingStatusFilter>('all');
+  const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
 
   const [selectedBookingForDetails, setSelectedBookingForDetails] = useState<Booking | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
@@ -128,6 +139,14 @@ function BookingsPageContent() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, isFormOpen, allUserBookings]); 
+
+  useEffect(() => {
+    if (isFilterPopoverOpen) {
+      setTempSearchTerm(searchTerm);
+      setTempFilterResourceId(filterResourceId);
+      setTempFilterStatus(filterStatus);
+    }
+  }, [isFilterPopoverOpen, searchTerm, filterResourceId, filterStatus]);
 
 
   const bookingsToDisplay = useMemo(() => {
@@ -266,16 +285,32 @@ function BookingsPageContent() {
     setIsDetailsDialogOpen(true);
   };
 
-  const resetFilters = () => {
+  const handleApplyPopoverFilters = () => {
+    setSearchTerm(tempSearchTerm);
+    setFilterResourceId(tempFilterResourceId);
+    setFilterStatus(tempFilterStatus);
+    setIsFilterPopoverOpen(false);
+  };
+
+  const resetAllFilters = () => {
     setSearchTerm('');
     setFilterResourceId('all');
     setFilterStatus('all');
-    handleDateSelect(undefined); 
+    setTempSearchTerm('');
+    setTempFilterResourceId('all');
+    setTempFilterStatus('all');
+    handleDateSelect(undefined); // Also clear date filter
   };
   
   if (!isClient) {
     return <SimpleLoadingSpinner />;
   }
+
+  const activeFilterCount = [
+    searchTerm,
+    filterResourceId !== 'all',
+    filterStatus !== 'all',
+  ].filter(Boolean).length;
 
   return (
     <div className="space-y-8">
@@ -283,7 +318,75 @@ function BookingsPageContent() {
         title="Manage My Bookings"
         description="View, search, filter, and manage your lab resource bookings."
         icon={CalendarDays}
-        actions={<Button onClick={() => handleOpenForm()}><PlusCircle className="mr-2 h-4 w-4" /> New Booking</Button>}
+        actions={
+          <div className="flex items-center gap-2">
+            <Popover open={isFilterPopoverOpen} onOpenChange={setIsFilterPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline">
+                  <FilterIcon className="mr-2 h-4 w-4" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
+                      {activeFilterCount}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 z-50" align="end">
+                <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium leading-none">Filter Bookings</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Refine your list of bookings.
+                    </p>
+                  </div>
+                  <Separator />
+                  <div className="grid gap-3 py-2">
+                    <div>
+                        <Label htmlFor="bookingSearch" className="text-xs">Search</Label>
+                        <Input 
+                            id="bookingSearch"
+                            type="search" 
+                            placeholder="Resource name or notes..." 
+                            className="h-9 mt-1"
+                            value={tempSearchTerm}
+                            onChange={(e) => setTempSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <Label htmlFor="bookingResource" className="text-xs">Resource</Label>
+                        <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId}>
+                            <SelectTrigger id="bookingResource" className="h-9 mt-1"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Resources</SelectItem>
+                                {mockResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div>
+                        <Label htmlFor="bookingStatus" className="text-xs">Status</Label>
+                        <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as BookingStatusFilter)}>
+                            <SelectTrigger id="bookingStatus" className="h-9 mt-1"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Statuses</SelectItem>
+                                {bookingStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between">
+                     <Button variant="ghost" onClick={() => { setTempSearchTerm(''); setTempFilterResourceId('all'); setTempFilterStatus('all'); }} className="text-sm">
+                      Clear Popover
+                    </Button>
+                    <Button onClick={handleApplyPopoverFilters} className="text-sm">Apply Filters</Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Button onClick={() => handleOpenForm()}><PlusCircle className="mr-2 h-4 w-4" /> New Booking</Button>
+          </div>
+        }
       />
 
       <div className="grid md:grid-cols-3 gap-8 items-start">
@@ -321,38 +424,9 @@ function BookingsPageContent() {
                 {selectedDate ? `Your Bookings for ${format(selectedDate, 'PPP')}` : 'All Your Bookings'}
                 </CardTitle>
                 <CardDescription>
-                  Use the filters below to narrow down your bookings. {bookingsToDisplay.length} booking(s) currently displayed.
+                  Use the filters to narrow down your bookings. {bookingsToDisplay.length} booking(s) currently displayed.
                 </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="relative">
-                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input 
-                        type="search" 
-                        placeholder="Search by resource name or notes..." 
-                        className="pl-10"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
-                <div className="grid sm:grid-cols-2 gap-4">
-                    <Select value={filterResourceId} onValueChange={setFilterResourceId}>
-                        <SelectTrigger><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Resources</SelectItem>
-                            {mockResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as BookingStatusFilter)}>
-                        <SelectTrigger><SelectValue placeholder="Filter by Status" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Statuses</SelectItem>
-                            {bookingStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-                 <Button onClick={resetFilters} variant="outline" className="w-full sm:w-auto"><FilterX className="mr-2 h-4 w-4"/>Clear All Filters</Button>
-            </CardContent>
             <CardContent className="p-0">
                 {bookingsToDisplay.length > 0 ? (
                 <div className="overflow-x-auto">
@@ -411,8 +485,8 @@ function BookingsPageContent() {
                     <p className="font-medium">No bookings match your current filters.</p>
                     <p className="text-sm">Try adjusting your search or filter criteria, or select a different date.</p>
                     {(searchTerm || (filterResourceId && filterResourceId !== 'all') || (filterStatus && filterStatus !== 'all') || selectedDate) && 
-                        <Button variant="outline" onClick={resetFilters} className="mt-4">
-                            <FilterX className="mr-2 h-4 w-4" /> Clear All Filters
+                        <Button variant="outline" onClick={resetAllFilters} className="mt-4">
+                            <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                         </Button>
                     }
                     {!(searchTerm || (filterResourceId && filterResourceId !== 'all') || (filterStatus && filterStatus !== 'all') || selectedDate) && allUserBookings.length === 0 &&
@@ -423,6 +497,12 @@ function BookingsPageContent() {
                 </div>
                 )}
             </CardContent>
+             <CardFooter className="pt-4">
+                <p className="text-xs text-muted-foreground">
+                    Need to clear all filters including date? Click {" "}
+                    <Button variant="link" className="p-0 h-auto text-xs" onClick={resetAllFilters}>Reset All Filters</Button>.
+                </p>
+             </CardFooter>
             </Card>
         </div>
       </div>
@@ -436,7 +516,7 @@ function BookingsPageContent() {
                 const newSearchParams = new URLSearchParams(searchParams.toString());
                 if (newSearchParams.has('bookingId') || newSearchParams.has('resourceId')) { 
                     newSearchParams.delete('bookingId');
-                    newSearchParams.delete('resourceId'); // Also clear resourceId if it was for a new booking
+                    newSearchParams.delete('resourceId'); 
                     router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
                 }
             }
