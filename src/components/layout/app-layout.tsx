@@ -11,7 +11,7 @@ import {
   Users,
   UserCog,
   Loader2,
-  Building, // Added for Lab Management
+  Building,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -35,7 +35,7 @@ interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  admin?: boolean; // Optional flag for admin section styling/grouping later
+  admin?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -43,7 +43,7 @@ const navItems: NavItem[] = [
   { href: '/resources', label: 'Resource Search', icon: Search },
   { href: '/bookings', label: 'Manage Bookings', icon: CalendarDays },
   { href: '/admin/users', label: 'User Management', icon: Users, admin: true },
-  { href: '/admin/labs', label: 'Lab Management', icon: Building, admin: true }, // New Item
+  { href: '/admin/labs', label: 'Lab Management', icon: Building, admin: true },
   { href: '/profile', label: 'My Profile', icon: UserCog },
 ];
 
@@ -70,7 +70,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <SidebarHeader className="p-4">
           <Logo />
         </SidebarHeader>
-        <Separator className="mx-2 my-1 bg-sidebar-border" />
+        <Separator className="my-1 bg-sidebar-border" />
         <SidebarContent>
           <SidebarMenu>
             {navItems.map((item) => (
