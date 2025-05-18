@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, Filter, CalendarPlus, XCircle } from 'lucide-react';
+import { Search, Filter, CalendarPlus, XCircle, CalendarDays } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,15 +14,111 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { Resource } from '@/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
+
+const todayStr = format(new Date(), 'yyyy-MM-dd');
+const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+const dayAfterTomorrowStr = format(addDays(new Date(), 2), 'yyyy-MM-dd');
 
 const allMockResources: Resource[] = [
-  { id: '1', name: 'Electron Microscope Alpha', type: 'Microscope', lab: 'Lab A', status: 'Available', description: 'High-resolution electron microscope.', imageUrl: 'https://placehold.co/300x200.png', dataAiHint: 'microscope electronics', features: ['SEM', 'TEM'], lastCalibration: '2023-12-01', nextCalibration: '2024-06-01' },
-  { id: '2', name: 'BioSafety Cabinet Omega', type: 'Incubator', lab: 'Lab B', status: 'Booked', description: 'Class II Type A2 biosafety cabinet.', imageUrl: 'https://placehold.co/300x200.png', dataAiHint: 'lab cabinet', features: ['HEPA Filtered'], lastCalibration: '2024-01-15', nextCalibration: '2024-07-15' },
-  { id: '3', name: 'HPLC System Zeta', type: 'HPLC System', lab: 'Lab C', status: 'Maintenance', description: 'For compound separation.', imageUrl: 'https://placehold.co/300x200.png', dataAiHint: 'hplc chemistry', features: ['Autosampler', 'UV Detector'], lastCalibration: '2023-11-10', nextCalibration: '2024-05-10' },
-  { id: '4', name: 'High-Speed Centrifuge Pro', type: 'Centrifuge', lab: 'Lab A', status: 'Available', description: 'Up to 20,000 RPM.', imageUrl: 'https://placehold.co/300x200.png', dataAiHint: 'centrifuge science', features: ['Refrigerated', 'Multiple Rotors'], lastCalibration: '2024-02-20', nextCalibration: '2024-08-20' },
-  { id: '5', name: 'Confocal Microscope Zeiss', type: 'Microscope', lab: 'Lab B', status: 'Available', description: 'Laser scanning confocal system.', imageUrl: 'https://placehold.co/300x200.png', dataAiHint: 'microscope laser', features: ['Live Cell Imaging'], lastCalibration: '2024-03-01', nextCalibration: '2024-09-01' },
-  { id: '6', name: 'Chemical Fume Hood Ventus', type: 'Fume Hood', lab: 'General Lab', status: 'Booked', description: 'Protects from hazardous fumes.', imageUrl: 'https://placehold.co/300x200.png', dataAiHint: 'fume hood', features: ['Airflow Monitor'], lastCalibration: 'N/A', nextCalibration: 'N/A' },
+  { 
+    id: '1', 
+    name: 'Electron Microscope Alpha', 
+    type: 'Microscope', 
+    lab: 'Lab A', 
+    status: 'Available', 
+    description: 'High-resolution electron microscope for various sample analyses.', 
+    imageUrl: 'https://placehold.co/300x200.png', 
+    dataAiHint: 'microscope electronics', 
+    features: ['SEM', 'TEM', 'EDX'], 
+    lastCalibration: '2023-12-01', 
+    nextCalibration: '2024-06-01',
+    availability: [
+      { date: todayStr, slots: ['14:00-16:00', '16:00-18:00'] },
+      { date: tomorrowStr, slots: ['10:00-12:00'] }
+    ]
+  },
+  { 
+    id: '2', 
+    name: 'BioSafety Cabinet Omega', 
+    type: 'Incubator', 
+    lab: 'Lab B', 
+    status: 'Booked', 
+    description: 'Class II Type A2 biosafety cabinet for sterile cell culture work.', 
+    imageUrl: 'https://placehold.co/300x200.png', 
+    dataAiHint: 'lab cabinet', 
+    features: ['HEPA Filtered', 'UV Sterilization'], 
+    lastCalibration: '2024-01-15', 
+    nextCalibration: '2024-07-15',
+    availability: [
+      { date: tomorrowStr, slots: ['09:00-11:00', '11:00-13:00'] },
+      { date: dayAfterTomorrowStr, slots: ['Full Day Booked'] } // Example for non-specific slots
+    ] 
+  },
+  { 
+    id: '3', 
+    name: 'HPLC System Zeta', 
+    type: 'HPLC System', 
+    lab: 'Lab C', 
+    status: 'Maintenance', 
+    description: 'High-performance liquid chromatography for compound separation.', 
+    imageUrl: 'https://placehold.co/300x200.png', 
+    dataAiHint: 'hplc chemistry', 
+    features: ['Autosampler', 'UV Detector', 'Diode Array Detector'], 
+    lastCalibration: '2023-11-10', 
+    nextCalibration: '2024-05-10',
+    availability: [] // No specific availability due to maintenance
+  },
+  { 
+    id: '4', 
+    name: 'High-Speed Centrifuge Pro', 
+    type: 'Centrifuge', 
+    lab: 'Lab A', 
+    status: 'Available', 
+    description: 'Refrigerated centrifuge capable of speeds up to 20,000 RPM.', 
+    imageUrl: 'https://placehold.co/300x200.png', 
+    dataAiHint: 'centrifuge science', 
+    features: ['Refrigerated', 'Multiple Rotors', 'Programmable'], 
+    lastCalibration: '2024-02-20', 
+    nextCalibration: '2024-08-20',
+    availability: [
+      { date: todayStr, slots: ['09:00-17:00'] },
+      { date: dayAfterTomorrowStr, slots: ['10:00-12:00', '14:00-16:00'] }
+    ]
+  },
+  { 
+    id: '5', 
+    name: 'Confocal Microscope Zeiss', 
+    type: 'Microscope', 
+    lab: 'Lab B', 
+    status: 'Available', 
+    description: 'Advanced laser scanning confocal system for live cell imaging.', 
+    imageUrl: 'https://placehold.co/300x200.png', 
+    dataAiHint: 'microscope laser', 
+    features: ['Live Cell Imaging', 'Multi-channel', 'Z-stack'], 
+    lastCalibration: '2024-03-01', 
+    nextCalibration: '2024-09-01',
+    availability: [
+      { date: tomorrowStr, slots: ['Full Day Available'] }
+    ]
+  },
+  { 
+    id: '6', 
+    name: 'Chemical Fume Hood Ventus', 
+    type: 'Fume Hood', 
+    lab: 'General Lab', 
+    status: 'Booked', 
+    description: 'Standard chemical fume hood for protection against hazardous fumes.', 
+    imageUrl: 'https://placehold.co/300x200.png', 
+    dataAiHint: 'fume hood', 
+    features: ['Airflow Monitor', 'Sash Sensor'], 
+    lastCalibration: 'N/A', 
+    nextCalibration: 'N/A',
+    availability: [
+        { date: todayStr, slots: ['Booked until 15:00'] },
+        { date: dayAfterTomorrowStr, slots: ['09:00-12:00'] }
+    ]
+  },
 ];
 
 const resourceTypes = Array.from(new Set(allMockResources.map(r => r.type)));
@@ -34,7 +131,6 @@ export default function ResourcesPage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Defer rendering until client-side to avoid hydration issues with initial state
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
     setIsClient(true);
@@ -42,15 +138,27 @@ export default function ResourcesPage() {
 
 
   const filteredResources = useMemo(() => {
-    return allMockResources.filter(resource => {
-      const matchesSearch = resource.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            resource.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesType = selectedType ? resource.type === selectedType : true;
-      const matchesLab = selectedLab ? resource.lab === selectedLab : true;
-      // Date filtering logic would be more complex, e.g., checking resource.availability
-      // For now, we'll skip date-based filtering in this example
-      return matchesSearch && matchesType && matchesLab;
-    });
+    let resources = allMockResources;
+
+    if (searchTerm) {
+      resources = resources.filter(resource => 
+        resource.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        resource.description.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    if (selectedType) {
+      resources = resources.filter(resource => resource.type === selectedType);
+    }
+    if (selectedLab) {
+      resources = resources.filter(resource => resource.lab === selectedLab);
+    }
+    if (selectedDate) {
+      const dateStrToFilter = format(selectedDate, 'yyyy-MM-dd');
+      resources = resources.filter(resource => 
+        resource.availability?.some(avail => avail.date === dateStrToFilter && avail.slots.length > 0)
+      );
+    }
+    return resources;
   }, [searchTerm, selectedType, selectedLab, selectedDate]);
 
   const resetFilters = () => {
@@ -61,7 +169,7 @@ export default function ResourcesPage() {
   }
 
   if (!isClient) {
-    return null; // Or a loading spinner
+    return null; 
   }
 
   return (
@@ -90,7 +198,7 @@ export default function ResourcesPage() {
         </div>
 
         {showFilters && (
-          <Card className="p-4 sm:p-6 bg-muted/50">
+          <Card className="p-4 sm:p-6 bg-muted/50 shadow-sm border">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Select value={selectedType} onValueChange={setSelectedType}>
                 <SelectTrigger>
@@ -118,21 +226,23 @@ export default function ResourcesPage() {
 
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal">
-                    {selectedDate ? format(selectedDate, 'PPP') : <span>Pick a date</span>}
+                  <Button variant="outline" className="w-full justify-start text-left font-normal bg-background hover:bg-accent/50">
+                    <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground"/>
+                    {selectedDate ? format(selectedDate, 'PPP') : <span>Filter by Date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
+                <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
                     selected={selectedDate}
                     onSelect={setSelectedDate}
                     initialFocus
+                    disabled={(date) => date < addDays(new Date(), -1) } // Disable past dates, allow today
                   />
                 </PopoverContent>
               </Popover>
               
-              <Button variant="ghost" onClick={resetFilters} className="text-destructive hover:text-destructive-foreground hover:bg-destructive/90 lg:col-start-4">
+              <Button variant="ghost" onClick={resetFilters} className="text-destructive hover:text-destructive-foreground hover:bg-destructive/10 lg:col-start-4">
                 <XCircle className="mr-2 h-4 w-4" /> Reset Filters
               </Button>
             </div>
@@ -143,19 +253,25 @@ export default function ResourcesPage() {
       {filteredResources.length > 0 ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredResources.map((resource) => (
-            <Card key={resource.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
-              <CardHeader>
-                <div className="relative w-full h-48 rounded-t-lg overflow-hidden mb-2">
+            <Card key={resource.id} className="flex flex-col shadow-md hover:shadow-lg transition-shadow duration-200">
+              <CardHeader className="p-0">
+                <div className="relative w-full h-48 rounded-t-lg overflow-hidden">
                   <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint} />
                    <Badge variant={resource.status === 'Available' ? 'default' : 'secondary'} 
-                         className={`absolute top-2 right-2 ${resource.status === 'Available' ? 'bg-green-500 text-white' : resource.status === 'Maintenance' ? 'bg-yellow-500 text-black' : 'bg-slate-500 text-white'}`}>
+                         className={`absolute top-2 right-2 ${
+                            resource.status === 'Available' ? 'bg-green-500 hover:bg-green-600 text-white' : 
+                            resource.status === 'Maintenance' ? 'bg-yellow-500 hover:bg-yellow-600 text-black' : 
+                            'bg-slate-500 hover:bg-slate-600 text-white'
+                        }`}>
                     {resource.status}
                   </Badge>
                 </div>
-                <CardTitle className="text-lg">{resource.name}</CardTitle>
-                <CardDescription>{resource.lab} - {resource.type}</CardDescription>
+                <div className="p-4">
+                    <CardTitle className="text-lg mb-1">{resource.name}</CardTitle>
+                    <CardDescription>{resource.lab} - {resource.type}</CardDescription>
+                </div>
               </CardHeader>
-              <CardContent className="flex-grow">
+              <CardContent className="flex-grow p-4 pt-0">
                 <p className="text-sm text-muted-foreground mb-3 line-clamp-3">{resource.description}</p>
                 {resource.features && resource.features.length > 0 && (
                   <div className="mb-2">
@@ -165,19 +281,16 @@ export default function ResourcesPage() {
                     </div>
                   </div>
                 )}
-                {resource.nextCalibration && (
-                  <p className="text-xs text-muted-foreground">
-                    Next Calibration: {
-                      !isNaN(new Date(resource.nextCalibration).getTime())
-                        ? format(new Date(resource.nextCalibration), 'MMM dd, yyyy')
-                        : resource.nextCalibration
-                    }
-                  </p>
-                )}
+                {(resource.lastCalibration || resource.nextCalibration) && (
+                     <div className="text-xs text-muted-foreground space-y-0.5 mt-2">
+                       {resource.lastCalibration && resource.lastCalibration !== 'N/A' && <p>Last Calibrated: {format(new Date(resource.lastCalibration), 'MMM dd, yyyy')}</p>}
+                       {resource.nextCalibration && resource.nextCalibration !== 'N/A' && <p>Next Calibration: {format(new Date(resource.nextCalibration), 'MMM dd, yyyy')}</p>}
+                    </div>
+                  )}
               </CardContent>
-              <CardFooter>
+              <CardFooter className="p-4 pt-0">
                 <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
-                  <Link href={`/bookings?resourceId=${resource.id}`}>
+                  <Link href={`/bookings?resourceId=${resource.id}${selectedDate ? `&date=${format(selectedDate, 'yyyy-MM-dd')}`: ''}`}>
                     <CalendarPlus className="mr-2 h-4 w-4" /> 
                     {resource.status === 'Available' ? 'Book Now' : resource.status}
                   </Link>
@@ -187,13 +300,14 @@ export default function ResourcesPage() {
           ))}
         </div>
       ) : (
-        <Card className="text-center p-10 col-span-full">
+        <Card className="text-center p-10 col-span-full shadow-sm border">
           <Search className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-xl font-semibold mb-2">No Resources Found</h3>
-          <p className="text-muted-foreground mb-4">Try adjusting your search terms or filters.</p>
-          <Button onClick={resetFilters}>Clear All Filters</Button>
+          <p className="text-muted-foreground mb-4">Try adjusting your search terms or filters, or select a different date.</p>
+          <Button onClick={resetFilters} variant="outline">Clear All Filters</Button>
         </Card>
       )}
     </div>
   );
 }
+
