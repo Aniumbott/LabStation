@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import { format, isValid, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { allAdminMockResources } from '@/lib/mock-data'; // Updated import
+import { allAdminMockResources } from '@/lib/mock-data';
 
 const mockBookings: Booking[] = [
   { id: 'b1', resourceId: '1', resourceName: 'Electron Microscope Alpha', userId: 'user1', userName: 'Dr. Smith', startTime: new Date(new Date().setDate(new Date().getDate() + 1)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 1)).setHours(new Date().getHours() + 2)), status: 'Confirmed' },
@@ -103,7 +103,7 @@ export default function DashboardPage() {
           </div>
         ) : (
           <Card className="p-6 text-center shadow-lg">
-            <p className="text-muted-foreground">No frequently used resources configured. Explore resources via <Link href="/admin/resources" className="text-primary hover:underline">Manage Resources</Link>.</p>
+            <p className="text-muted-foreground">No frequently used resources configured. Explore resources via <Link href="/admin/resources" className="text-primary hover:underline">Resources</Link>.</p>
           </Card>
         )}
         {allAdminMockResources.length > 2 && frequentlyUsedResources.length > 0 && (

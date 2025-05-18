@@ -11,8 +11,8 @@ import {
   UserCog,
   Loader2,
   ListChecks,
-  ClipboardList, 
-  Building, // Added for potential Lab Management if re-added
+  ClipboardList,
+  Building, // Kept for potential future Lab Management
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -41,11 +41,10 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  // { href: '/resources', label: 'Resource Search', icon: Search }, // Removed
   { href: '/bookings', label: 'Manage Bookings', icon: CalendarDays },
   { href: '/admin/users', label: 'User Management', icon: Users, admin: true },
   { href: '/admin/resource-types', label: 'Resource Types', icon: ListChecks, admin: true },
-  { href: '/admin/resources', label: 'Manage Resources', icon: ClipboardList, admin: true },
+  { href: '/admin/resources', label: 'Resources', icon: ClipboardList, admin: true }, // Changed Label
   { href: '/profile', label: 'My Profile', icon: UserCog },
 ];
 

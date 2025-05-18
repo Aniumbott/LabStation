@@ -6,8 +6,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
 import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarDays, CalendarPlus, Network, Search as SearchIcon } from 'lucide-react';
-import type { Resource, ResourceStatus } from '@/types'; // Removed RemoteAccessDetails, not directly used here
-import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data'; // Updated imports
+import type { Resource, ResourceStatus } from '@/types';
+import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data';
 import {
   Table,
   TableBody,
@@ -23,7 +23,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-// AlertDialog not directly used for delete on this page anymore
 import {
   Dialog,
   DialogContent,
@@ -43,8 +42,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { format, startOfDay, isSameDay, parseISO, isValid } from 'date-fns';
-
-// allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList are now imported from lib/mock-data
 
 const getStatusBadge = (status: ResourceStatus) => {
   switch (status) {
@@ -123,20 +120,29 @@ export default function ManageResourcesPage() {
   };
 
   const resetFilters = () => {
+    // Reset temp filters in dialog
     setTempSearchTerm('');
     setTempFilterTypeId('all');
     setTempFilterLab('all');
     setTempSelectedDate(undefined);
     setCurrentMonthInDialog(startOfDay(new Date()));
+    // To actually clear active filters and update list, call handleApplyFilters after reset
+    // or reset active filters directly here if preferred. For now, this just resets dialog state.
   };
-
+  
   const resetAllActiveFilters = () => {
     setActiveSearchTerm('');
     setActiveFilterTypeId('all');
     setActiveFilterLab('all');
     setActiveSelectedDate(undefined);
-    resetFilters(); // Also reset temp filters
-  }
+    // Also reset temp filters
+    setTempSearchTerm('');
+    setTempFilterTypeId('all');
+    setTempFilterLab('all');
+    setTempSelectedDate(undefined);
+    setCurrentMonthInDialog(startOfDay(new Date()));
+    setIsFilterDialogOpen(false); // Close dialog after resetting all
+  };
 
 
   const handleOpenNewDialog = () => {
@@ -144,11 +150,6 @@ export default function ManageResourcesPage() {
     setIsFormDialogOpen(true);
   };
   
-  const handleOpenEditDialog = (resource: Resource) => { // Added for potential future use, not directly on this page now
-    setEditingResource(resource);
-    setIsFormDialogOpen(true);
-  };
-
   const handleSaveResource = (data: ResourceFormValues) => {
     const resourceType = initialMockResourceTypes.find(rt => rt.id === data.resourceTypeId);
     if (!resourceType) {
@@ -174,9 +175,9 @@ export default function ManageResourcesPage() {
         purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : undefined,
         notes: data.notes || undefined,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-        availability: editingResource.availability,
-        lastCalibration: editingResource.lastCalibration,
-        nextCalibration: editingResource.nextCalibration,
+        availability: editingResource.availability, // Preserve existing availability for now
+        lastCalibration: editingResource.lastCalibration, // Preserve existing calibration for now
+        nextCalibration: editingResource.nextCalibration, // Preserve existing calibration for now
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
           ...data.remoteAccess,
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
@@ -204,9 +205,9 @@ export default function ManageResourcesPage() {
         purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : undefined,
         notes: data.notes || undefined,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-        availability: [],
-        lastCalibration: undefined,
-        nextCalibration: undefined,
+        availability: [], // Default to empty availability for new resources
+        lastCalibration: undefined, // Default for new
+        nextCalibration: undefined, // Default for new
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
           ...data.remoteAccess,
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
@@ -227,7 +228,7 @@ export default function ManageResourcesPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Manage Resources"
+        title="Resources"
         description="Browse, filter, and manage all lab resources. Click resource name for details and admin actions."
         icon={ClipboardList}
         actions={
@@ -321,8 +322,8 @@ export default function ManageResourcesPage() {
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                   <Button variant="ghost" onClick={() => { resetFilters(); }} className="mr-auto">
-                    <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
+                   <Button variant="ghost" onClick={resetAllActiveFilters} className="mr-auto">
+                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
                   <Button onClick={handleApplyFilters}>Apply Filters</Button>
@@ -405,7 +406,7 @@ export default function ManageResourcesPage() {
             }
           </p>
           {activeFilterCount > 0 ? (
-             <Button variant="outline" onClick={() => { resetAllActiveFilters(); setIsFilterDialogOpen(false); }}>
+             <Button variant="outline" onClick={resetAllActiveFilters}>
                 <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
             </Button>
           ) : (
