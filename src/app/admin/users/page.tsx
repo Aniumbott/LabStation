@@ -52,10 +52,10 @@ const roleIcons: Record<User['role'], React.ElementType> = {
 };
 
 const roleBadgeVariant: Record<User['role'], "default" | "secondary" | "destructive" | "outline"> = {
-    'Admin': 'destructive',
-    'Lab Manager': 'default',
+    'Admin': 'destructive', // Using destructive for Admin as it's a high-privilege role, aligns with red primary
+    'Lab Manager': 'default', // Using default for Lab Manager, aligns with red primary
     'Technician': 'secondary',
-    'Researcher': 'outline',
+    'Researcher': 'outline', // Using outline for less emphasis or a neutral look
 };
 
 
@@ -164,7 +164,7 @@ export default function UserManagementPage() {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                                 <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteUser(userToDelete.id)} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                                <AlertDialogAction variant="destructive" onClick={() => handleDeleteUser(userToDelete.id)}>
                                 Delete User
                                 </AlertDialogAction>
                             </AlertDialogFooter>

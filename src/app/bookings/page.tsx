@@ -164,6 +164,19 @@ export default function BookingsPage() {
     toast({ title: "Info", description: "Booking cancelled."});
   };
 
+  const getBookingStatusVariant = (status: Booking['status']): 'default' | 'secondary' | 'outline' | 'destructive' => {
+    switch (status) {
+      case 'Confirmed':
+        return 'default'; // Primary color (currently red by theme)
+      case 'Pending':
+        return 'secondary';
+      case 'Cancelled':
+        return 'outline';
+      default:
+        return 'outline';
+    }
+  };
+
   if (!isClient) {
     return null; // Or a loading spinner
   }
@@ -218,17 +231,7 @@ export default function BookingsPage() {
                             <h3 className="font-semibold text-lg text-primary">{booking.resourceName}</h3>
                             <p className="text-sm text-muted-foreground flex items-center gap-1"><UserCircle size={14}/> {booking.userName}</p>
                         </div>
-                         <Badge variant={
-                            booking.status === 'Confirmed' ? 'default' : 
-                            booking.status === 'Pending' ? 'secondary' : 
-                            'destructive'
-                         }
-                         className={`${
-                            booking.status === 'Confirmed' ? 'bg-green-600 hover:bg-green-700' : 
-                            booking.status === 'Pending' ? 'bg-amber-500 hover:bg-amber-600' :
-                            booking.status === 'Cancelled' ? 'bg-slate-500 hover:bg-slate-600' : ''
-                          } text-white`}
-                         >
+                         <Badge variant={getBookingStatusVariant(booking.status)}>
                             {booking.status}
                         </Badge>
                     </div>

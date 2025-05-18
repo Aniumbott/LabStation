@@ -4,7 +4,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, Filter, CalendarPlus, XCircle, CalendarDays } from 'lucide-react';
+import { Search, Filter, CalendarPlus, XCircle, CalendarDays, CheckCircle, AlertTriangle, Construction } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { Resource } from '@/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { format, addDays } from 'date-fns';
+import { format, addDays, parseISO, isValid } from 'date-fns';
 
 const todayStr = format(new Date(), 'yyyy-MM-dd');
 const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
@@ -136,7 +136,6 @@ export default function ResourcesPage() {
     setIsClient(true);
   }, []);
 
-
   const filteredResources = useMemo(() => {
     let resources = allMockResources;
 
@@ -167,6 +166,26 @@ export default function ResourcesPage() {
     setSelectedLab('');
     setSelectedDate(undefined);
   }
+
+  const getResourceStatusBadge = (status: Resource['status']) => {
+    switch (status) {
+      case 'Available':
+        return <Badge variant="default" className="absolute top-2 right-2"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      case 'Booked':
+        return <Badge variant="secondary" className="absolute top-2 right-2"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      case 'Maintenance':
+        return <Badge variant="destructive" className="absolute top-2 right-2"><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      default:
+        return <Badge variant="outline" className="absolute top-2 right-2">{status}</Badge>;
+    }
+  };
+
+  const formatDateSafe = (dateString?: string) => {
+    if (!dateString || dateString === 'N/A') return 'N/A';
+    const date = parseISO(dateString);
+    return isValid(date) ? format(date, 'MMM dd, yyyy') : 'Invalid Date';
+  };
+
 
   if (!isClient) {
     return null; 
@@ -257,14 +276,7 @@ export default function ResourcesPage() {
               <CardHeader className="p-0">
                 <div className="relative w-full h-48 rounded-t-lg overflow-hidden">
                   <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint} />
-                   <Badge variant={resource.status === 'Available' ? 'default' : 'secondary'} 
-                         className={`absolute top-2 right-2 ${
-                            resource.status === 'Available' ? 'bg-green-500 hover:bg-green-600 text-white' : 
-                            resource.status === 'Maintenance' ? 'bg-yellow-500 hover:bg-yellow-600 text-black' : 
-                            'bg-slate-500 hover:bg-slate-600 text-white'
-                        }`}>
-                    {resource.status}
-                  </Badge>
+                   {getResourceStatusBadge(resource.status)}
                 </div>
                 <div className="p-4">
                     <CardTitle className="text-lg mb-1">{resource.name}</CardTitle>
@@ -283,8 +295,8 @@ export default function ResourcesPage() {
                 )}
                 {(resource.lastCalibration || resource.nextCalibration) && (
                      <div className="text-xs text-muted-foreground space-y-0.5 mt-2">
-                       {resource.lastCalibration && resource.lastCalibration !== 'N/A' && <p>Last Calibrated: {format(new Date(resource.lastCalibration), 'MMM dd, yyyy')}</p>}
-                       {resource.nextCalibration && resource.nextCalibration !== 'N/A' && <p>Next Calibration: {format(new Date(resource.nextCalibration), 'MMM dd, yyyy')}</p>}
+                       {resource.lastCalibration && <p>Last Calibrated: {formatDateSafe(resource.lastCalibration)}</p>}
+                       {resource.nextCalibration && <p>Next Calibration: {formatDateSafe(resource.nextCalibration)}</p>}
                     </div>
                   )}
               </CardContent>

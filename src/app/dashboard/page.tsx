@@ -64,23 +64,36 @@ const mockResources: Resource[] = [
 
 const mockBookings: Booking[] = [
   { id: 'b1', resourceId: '1', resourceName: 'Electron Microscope Alpha', userId: 'user1', userName: 'Dr. Smith', startTime: new Date(new Date().setDate(new Date().getDate() + 1)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 1)).setHours(new Date().getHours() + 2)), status: 'Confirmed' },
-  { id: 'b2', resourceId: '4', resourceName: 'Centrifuge MaxSpin', userId: 'user2', userName: 'Dr. Jones', startTime: new Date(new Date().setDate(new Date().getDate() + 2)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 2)).setHours(new Date().getHours() + 3)), status: 'Confirmed' },
+  { id: 'b2', resourceId: '4', resourceName: 'Centrifuge MaxSpin', userId: 'user2', userName: 'Dr. Jones', startTime: new Date(new Date().setDate(new Date().getDate() + 2)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 2)).setHours(new Date().getHours() + 3)), status: 'Pending' },
 ];
 
 
 export default function DashboardPage() {
   const availableResources = mockResources.filter(r => r.status === 'Available').slice(0, 2);
 
-  const getStatusBadge = (status: Resource['status']) => {
+  const getResourceStatusBadge = (status: Resource['status']) => {
     switch (status) {
       case 'Available':
-        return <Badge variant="default" className="bg-green-500 hover:bg-green-600 text-white"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge variant="default"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Booked':
-        return <Badge variant="secondary" className="bg-slate-500 hover:bg-slate-600 text-white"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge variant="secondary"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Maintenance':
-        return <Badge variant="destructive" className="bg-yellow-500 hover:bg-yellow-600 text-black"><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge variant="destructive"><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const getBookingStatusVariant = (status: Booking['status']): 'default' | 'secondary' | 'outline' | 'destructive' => {
+    switch (status) {
+      case 'Confirmed':
+        return 'default';
+      case 'Pending':
+        return 'secondary';
+      case 'Cancelled': // Assuming Cancelled might appear here in future
+        return 'outline';
+      default:
+        return 'outline';
     }
   };
   
@@ -107,7 +120,7 @@ export default function DashboardPage() {
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <CardTitle className="text-lg">{resource.name}</CardTitle>
-                    {getStatusBadge(resource.status)}
+                    {getResourceStatusBadge(resource.status)}
                   </div>
                   <CardDescription>{resource.lab} - {resource.type}</CardDescription>
                 </CardHeader>
@@ -193,10 +206,7 @@ export default function DashboardPage() {
                       <TableCell>{format(booking.startTime, 'MMM dd, yyyy')}</TableCell>
                       <TableCell>{format(booking.startTime, 'p')} - {format(booking.endTime, 'p')}</TableCell>
                       <TableCell>
-                        <Badge 
-                            variant={booking.status === 'Confirmed' ? 'default' : 'secondary'}
-                            className={booking.status === 'Confirmed' ? 'bg-green-500 hover:bg-green-600 text-white' : ''}
-                        >
+                        <Badge variant={getBookingStatusVariant(booking.status)}>
                             {booking.status}
                         </Badge>
                       </TableCell>
