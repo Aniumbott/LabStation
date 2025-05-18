@@ -177,6 +177,18 @@ const Sidebar = React.forwardRef<
     ref
   ) => {
     const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+    const [isClient, setIsClient] = React.useState(false);
+
+    React.useEffect(() => {
+      setIsClient(true);
+    }, []);
+
+    if (!isClient) {
+      // Render nothing or a placeholder skeleton on the server and during initial client render
+      // This ensures the server output matches the initial client output before hydration.
+      // For a better UX, you could render a simple skeleton structure here.
+      return null; 
+    }
 
     if (collapsible === "none") {
       return (
@@ -762,3 +774,5 @@ export {
   SidebarTrigger,
   useSidebar,
 }
+
+    
