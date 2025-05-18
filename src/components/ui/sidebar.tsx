@@ -186,7 +186,6 @@ const Sidebar = React.forwardRef<
     if (!isClient) {
       // Render nothing or a placeholder skeleton on the server and during initial client render
       // This ensures the server output matches the initial client output before hydration.
-      // For a better UX, you could render a simple skeleton structure here.
       return null; 
     }
 
@@ -328,7 +327,7 @@ const SidebarRail = React.forwardRef<
 SidebarRail.displayName = "SidebarRail"
 
 const SidebarInset = React.forwardRef<
-  HTMLDivElement,
+  React.ElementRef<"main">,
   React.ComponentProps<"main">
 >(({ className, ...props }, ref) => {
   return (

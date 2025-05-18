@@ -15,7 +15,7 @@ import {
   PanelLeft,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useEffect, useState } from 'react'; // Added useEffect, useState
+import { useEffect, useState } from 'react'; 
 
 import {
   SidebarProvider,
@@ -73,7 +73,35 @@ function Header() {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const [isMounted, setIsMounted] = useState(false);
 
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Common layout for Header and main content, used by both SSR and client post-mount.
+  const mainContentLayout = (
+    <>
+      <Header />
+      <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-background">
+        {children}
+      </main>
+    </>
+  );
+
+  if (!isMounted) {
+    // SSR and initial client render: Render SidebarProvider with a simpler content structure.
+    // This avoids rendering Sidebar and SidebarInset which cause hydration issues.
+    return (
+      <SidebarProvider defaultOpen>
+        <div className="flex flex-col min-h-svh bg-background">
+         {mainContentLayout}
+        </div>
+      </SidebarProvider>
+    );
+  }
+
+  // Client-side after mount: Render the full layout with Sidebar and SidebarInset.
   return (
     <SidebarProvider defaultOpen>
       <Sidebar>
@@ -103,10 +131,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         {/* <SidebarFooter>Optional Footer Content</SidebarFooter> */}
       </Sidebar>
       <SidebarInset className="flex flex-col">
-        <Header />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-background">
-          {children}
-        </main>
+        {mainContentLayout}
       </SidebarInset>
     </SidebarProvider>
   );
