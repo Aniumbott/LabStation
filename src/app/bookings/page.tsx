@@ -81,7 +81,7 @@ function BookingsPageContent() {
 
   const [allUserBookings, setAllUserBookings] = useState<Booking[]>(() => initialBookings.filter(b => b.userId === mockCurrentUser.id));
   
-  // Active Filters
+  // Active Filters (applied to the page)
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(() => {
     const dateParam = searchParams.get('date');
     if (dateParam) {
@@ -94,16 +94,15 @@ function BookingsPageContent() {
   const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<BookingStatusFilter>('all');
   
-  // Dialog State & Temporary Filters
-  const [isFormOpen, setIsFormOpen] = useState(false);
+  // Dialog State & Temporary Filters (for the filter dialog)
+  const [isFormOpen, setIsFormOpen] = useState(false); // For booking creation/edit form
   const [currentBooking, setCurrentBooking] = useState<Partial<Booking> & { resourceId?: string } | null>(null);
-  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false); // For the filter dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterResourceId, setTempFilterResourceId] = useState<string>('all');
   const [tempFilterStatus, setTempFilterStatus] = useState<BookingStatusFilter>('all');
-  const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(activeSelectedDate);
-  const [currentCalendarMonth, setCurrentCalendarMonth] = useState<Date>(activeSelectedDate || startOfDay(new Date()));
-
+  const [tempSelectedDateInDialog, setTempSelectedDateInDialog] = useState<Date | undefined>(activeSelectedDate); // Date used inside filter dialog
+  const [currentCalendarMonthInDialog, setCurrentCalendarMonthInDialog] = useState<Date>(activeSelectedDate || startOfDay(new Date())); // Month for calendar in dialog
 
   const [isClient, setIsClient] = useState(false);
   const [selectedBookingForDetails, setSelectedBookingForDetails] = useState<Booking | null>(null);
@@ -123,8 +122,8 @@ function BookingsPageContent() {
     
      if (dateToSet && (!activeSelectedDate || activeSelectedDate.getTime() !== dateToSet.getTime())) {
         setActiveSelectedDate(dateToSet);
-        setTempSelectedDate(dateToSet); // Sync temp state
-        setCurrentCalendarMonth(dateToSet);
+        setTempSelectedDateInDialog(dateToSet); // Sync temp state for dialog
+        setCurrentCalendarMonthInDialog(dateToSet);
     }
 
     if (bookingIdParam) {
@@ -142,11 +141,12 @@ function BookingsPageContent() {
 
   useEffect(() => {
     if (isFilterDialogOpen) {
+      // Sync temporary dialog filters with active filters when dialog opens
       setTempSearchTerm(activeSearchTerm);
       setTempFilterResourceId(activeFilterResourceId);
       setTempFilterStatus(activeFilterStatus);
-      setTempSelectedDate(activeSelectedDate);
-      if (activeSelectedDate) setCurrentCalendarMonth(activeSelectedDate); else setCurrentCalendarMonth(startOfDay(new Date()));
+      setTempSelectedDateInDialog(activeSelectedDate); // Date in dialog calendar
+      if (activeSelectedDate) setCurrentCalendarMonthInDialog(activeSelectedDate); else setCurrentCalendarMonthInDialog(startOfDay(new Date()));
     }
   }, [isFilterDialogOpen, activeSearchTerm, activeFilterResourceId, activeFilterStatus, activeSelectedDate]);
 
@@ -177,42 +177,24 @@ function BookingsPageContent() {
     return filtered.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()); 
   }, [allUserBookings, activeSelectedDate, activeSearchTerm, activeFilterResourceId, activeFilterStatus]);
 
-
-  const bookedDatesInCurrentMonth = useMemo(() => {
+  const bookedDatesForDialogCalendar = useMemo(() => {
     const dates = new Set<string>();
     allUserBookings.forEach(booking => {
       if (booking.status !== 'Cancelled' && 
-          new Date(booking.startTime).getFullYear() === currentCalendarMonth.getFullYear() &&
-          new Date(booking.startTime).getMonth() === currentCalendarMonth.getMonth()) {
+          new Date(booking.startTime).getFullYear() === currentCalendarMonthInDialog.getFullYear() &&
+          new Date(booking.startTime).getMonth() === currentCalendarMonthInDialog.getMonth()) {
         dates.add(format(startOfDay(new Date(booking.startTime)), 'yyyy-MM-dd'));
       }
     });
     return dates;
-  }, [allUserBookings, currentCalendarMonth]);
+  }, [allUserBookings, currentCalendarMonthInDialog]);
 
   const calendarModifiers = {
-    booked: (date: Date) => bookedDatesInCurrentMonth.has(format(date, 'yyyy-MM-dd')),
-    selected: tempSelectedDate ? (date: Date) => isSameDay(date, tempSelectedDate) : undefined,
+    booked: (date: Date) => bookedDatesForDialogCalendar.has(format(date, 'yyyy-MM-dd')),
+    selected: tempSelectedDateInDialog ? (date: Date) => isSameDay(date, tempSelectedDateInDialog) : undefined,
   };
   
   const calendarModifierStyles = { booked: { position: 'relative' as React.CSSProperties['position'], } };
-  
-  const handleDateSelectForURL = (date?: Date) => {
-    const newSearchParams = new URLSearchParams(searchParams.toString());
-    if (date) {
-        const newSelectedDate = startOfDay(date);
-        setActiveSelectedDate(newSelectedDate);
-        setCurrentCalendarMonth(newSelectedDate); 
-        newSearchParams.set('date', format(newSelectedDate, 'yyyy-MM-dd'));
-        if (newSearchParams.has('bookingId')) newSearchParams.delete('bookingId'); 
-        if (newSearchParams.has('resourceId') && isFormOpen) { /* keep resourceId */ }
-        else if (newSearchParams.has('resourceId')) newSearchParams.delete('resourceId');
-    } else {
-        setActiveSelectedDate(undefined);
-        newSearchParams.delete('date');
-    }
-    router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
-  };
   
   const handleOpenForm = (bookingToEdit?: Booking, resourceIdForNew?: string | null) => {
     const baseDateForNewBooking = activeSelectedDate || startOfDay(new Date());
@@ -293,9 +275,9 @@ function BookingsPageContent() {
     setActiveFilterStatus(tempFilterStatus);
     
     const newSearchParams = new URLSearchParams(searchParams.toString());
-    if (tempSelectedDate) {
-        setActiveSelectedDate(startOfDay(tempSelectedDate));
-        newSearchParams.set('date', format(startOfDay(tempSelectedDate), 'yyyy-MM-dd'));
+    if (tempSelectedDateInDialog) {
+        setActiveSelectedDate(startOfDay(tempSelectedDateInDialog));
+        newSearchParams.set('date', format(startOfDay(tempSelectedDateInDialog), 'yyyy-MM-dd'));
     } else {
         setActiveSelectedDate(undefined);
         newSearchParams.delete('date');
@@ -305,17 +287,20 @@ function BookingsPageContent() {
   };
 
   const resetAllActiveFilters = () => {
+    // Reset active filters
     setActiveSearchTerm('');
     setActiveFilterResourceId('all');
     setActiveFilterStatus('all');
     setActiveSelectedDate(undefined);
     
+    // Reset temporary dialog filters
     setTempSearchTerm('');
     setTempFilterResourceId('all');
     setTempFilterStatus('all');
-    setTempSelectedDate(undefined);
-    setCurrentCalendarMonth(startOfDay(new Date()));
+    setTempSelectedDateInDialog(undefined);
+    setCurrentCalendarMonthInDialog(startOfDay(new Date()));
 
+    // Clear date from URL
     const newSearchParams = new URLSearchParams(searchParams.toString());
     newSearchParams.delete('date');
     router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
@@ -400,14 +385,14 @@ function BookingsPageContent() {
                         <Label className="text-sm font-medium mb-2 block">Filter by Date</Label>
                         <div className="flex justify-center items-center rounded-md border p-2">
                             <Calendar
-                                mode="single" selected={tempSelectedDate} onSelect={setTempSelectedDate} 
-                                month={currentCalendarMonth} onMonthChange={setCurrentCalendarMonth}
+                                mode="single" selected={tempSelectedDateInDialog} onSelect={setTempSelectedDateInDialog} 
+                                month={currentCalendarMonthInDialog} onMonthChange={setCurrentCalendarMonthInDialog}
                                 disabled={(date) => date < startOfDay(new Date(new Date().setDate(new Date().getDate() -90))) } // Allow viewing past 90 days
                                 modifiers={calendarModifiers} modifiersStyles={calendarModifierStyles}
                                 footer={
                                     <div className="flex flex-col gap-2 items-center pt-2">
-                                    {tempSelectedDate && <Button variant="ghost" size="sm" onClick={() => setTempSelectedDate(undefined)} className="w-full text-xs">Clear Date Selection</Button>}
-                                    <p className="text-xs text-muted-foreground">{tempSelectedDate ? format(tempSelectedDate, 'PPP') : "No specific date selected"}</p>
+                                    {tempSelectedDateInDialog && <Button variant="ghost" size="sm" onClick={() => setTempSelectedDateInDialog(undefined)} className="w-full text-xs">Clear Date Selection</Button>}
+                                    <p className="text-xs text-muted-foreground">{tempSelectedDateInDialog ? format(tempSelectedDateInDialog, 'PPP') : "No specific date selected"}</p>
                                     </div>
                                 }
                                 classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
@@ -508,7 +493,7 @@ function BookingsPageContent() {
             </div>
             )}
         </CardContent>
-         { activeFilterCount > 0 && 
+         { activeFilterCount > 0 && bookingsToDisplay.length > 0 &&
             <CardFooter className="pt-4 justify-center">
                 <Button variant="link" className="p-0 h-auto text-xs" onClick={() => { resetAllActiveFilters(); handleApplyDialogFilters(); }}>
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
@@ -723,3 +708,4 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     </form>
   );
 }
+
