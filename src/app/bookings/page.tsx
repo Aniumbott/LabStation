@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, X, Clock, UserCircle, Info, ChevronLeft, ChevronRight, Search as SearchIcon, FilterX, Eye } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, X, Clock, UserCircle, Info, ChevronLeft, ChevronRight, Search as SearchIcon, FilterX, Eye, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -266,7 +266,7 @@ function BookingsPageContent() {
   };
   
   if (!isClient) {
-    return <div className="flex justify-center items-center h-screen"><CalendarDays className="h-12 w-12 animate-spin text-primary" /><p className="ml-4 text-lg text-muted-foreground">Loading bookings...</p></div>;
+    return <div className="flex justify-center items-center h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /><p className="ml-4 text-lg text-muted-foreground">Loading bookings...</p></div>;
   }
 
   return (
@@ -464,7 +464,7 @@ function BookingsPageContent() {
 
 export default function BookingsPage() {
   return (
-    <Suspense fallback={<div className="flex justify-center items-center h-screen"><CalendarDays className="h-12 w-12 animate-spin text-primary" /><p className="ml-4 text-lg">Loading...</p></div>}>
+    <Suspense fallback={<div className="flex justify-center items-center h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /><p className="ml-4 text-lg">Loading...</p></div>}>
       <BookingsPageContent />
     </Suspense>
   );
@@ -625,3 +625,4 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     </form>
   );
 }
+

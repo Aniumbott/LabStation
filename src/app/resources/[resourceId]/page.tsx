@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, Thermometer, ChevronRight } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, Thermometer, ChevronRight, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -53,7 +53,7 @@ export default function ResourceDetailPage() {
   if (isLoading) {
     return (
         <div className="flex justify-center items-center h-screen">
-            <Info className="h-12 w-12 animate-spin text-primary" />
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
             <p className="ml-4 text-lg text-muted-foreground">Loading resource details...</p>
         </div>
     );
@@ -84,9 +84,10 @@ export default function ResourceDetailPage() {
   const upcomingAvailability = resource.availability?.filter(avail => {
       try {
           const availDate = parseISO(avail.date);
+          // Ensure date is valid and not in the past
           return isValid(availDate) && availDate >= today;
       } catch (e) {
-          return false; // Invalid date string
+          return false; 
       }
   }) || [];
 
