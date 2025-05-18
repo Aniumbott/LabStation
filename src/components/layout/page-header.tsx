@@ -1,9 +1,10 @@
 
 import type { LucideIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 interface PageHeaderProps {
-  title: string;
-  description?: string;
+  title: string | ReactNode;
+  description?: string | ReactNode; // Allow ReactNode for description
   icon?: LucideIcon;
   actions?: React.ReactNode;
 }
@@ -18,7 +19,15 @@ export function PageHeader({ title, description, icon: Icon, actions }: PageHead
         </div>
         {actions && <div className="mt-2 sm:mt-0">{actions}</div>}
       </div>
-      {description && <p className="mt-1 text-sm sm:text-base text-muted-foreground">{description}</p>}
+      {description && (
+        typeof description === 'string' ? (
+          <p className="mt-1 text-sm sm:text-base text-muted-foreground">{description}</p>
+        ) : (
+          // If description is a ReactNode (e.g., a Skeleton component), wrap it in a div
+          // to avoid <p><div>...</div></p> nesting.
+          <div className="mt-1 text-sm sm:text-base text-muted-foreground">{description}</div>
+        )
+      )}
     </div>
   );
 }
