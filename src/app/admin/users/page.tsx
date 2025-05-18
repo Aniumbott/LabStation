@@ -1,10 +1,9 @@
 
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useState, useMemo } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Users as UsersIcon, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, AlertTriangle, UserPlus } from 'lucide-react';
+import { Users as UsersIcon, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Search as SearchIcon, FilterX } from 'lucide-react';
 import type { User, RoleName } from '@/types';
 import {
   Table,
@@ -32,10 +31,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { UserFormDialog, UserFormValues } from '@/components/admin/user-form-dialog';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const initialMockUsers: User[] = [
   { id: 'u1', name: 'Dr. Admin First', email: 'admin.first@labstation.com', role: 'Admin', avatarUrl: 'https://placehold.co/100x100.png', avatarDataAiHint: 'avatar person' },
@@ -52,10 +53,12 @@ const roleIcons: Record<User['role'], React.ElementType> = {
   'Researcher': UserCheck,
 };
 
+const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
+
 const getRoleBadgeVariant = (role: RoleName): "default" | "secondary" | "destructive" | "outline" => {
     switch (role) {
       case 'Admin': return 'destructive';
-      case 'Lab Manager': return 'default'; // Primary color for Lab Manager
+      case 'Lab Manager': return 'default';
       case 'Technician': return 'secondary';
       case 'Researcher': return 'outline';
       default: return 'outline';
@@ -69,6 +72,28 @@ export default function UserManagementPage() {
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterRole, setFilterRole] = useState<RoleName | 'all'>('all');
+
+  const filteredUsers = useMemo(() => {
+    let currentUsers = [...users];
+    if (searchTerm) {
+      currentUsers = currentUsers.filter(user =>
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    if (filterRole !== 'all') {
+      currentUsers = currentUsers.filter(user => user.role === filterRole);
+    }
+    return currentUsers;
+  }, [users, searchTerm, filterRole]);
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setFilterRole('all');
+  };
+
   const handleOpenNewUserDialog = () => {
     setEditingUser(null);
     setIsFormDialogOpen(true);
@@ -81,16 +106,14 @@ export default function UserManagementPage() {
 
   const handleSaveUser = (data: UserFormValues) => {
     if (editingUser) {
-      // Update existing user
-      setUsers(users.map(u => u.id === editingUser.id ? { ...editingUser, ...data } : u));
+      setUsers(users.map(u => u.id === editingUser.id ? { ...editingUser, ...data, avatarUrl: u.avatarUrl || 'https://placehold.co/100x100.png', avatarDataAiHint: u.avatarDataAiHint || 'avatar person' } : u));
       toast({
         title: 'User Updated',
         description: `User ${data.name} has been updated.`,
       });
     } else {
-      // Create new user
       const newUser: User = {
-        id: `u${users.length + 1 + Date.now()}`, // Simple unique ID
+        id: `u${users.length + 1 + Date.now()}`,
         ...data,
         avatarUrl: 'https://placehold.co/100x100.png', 
         avatarDataAiHint: 'avatar person',
@@ -128,7 +151,42 @@ export default function UserManagementPage() {
         }
       />
 
-      {users.length > 0 ? (
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle>Filter Users</CardTitle>
+          <CardDescription>Use the filters below to find specific users.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="relative">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search by name or email..."
+              className="pl-10 w-full"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select value={filterRole} onValueChange={(value) => setFilterRole(value as RoleName | 'all')}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by Role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Roles</SelectItem>
+                {userRolesList.map(role => (
+                  <SelectItem key={role} value={role}>{role}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" onClick={resetFilters} className="sm:col-start-2">
+              <FilterX className="mr-2 h-4 w-4" /> Reset Filters
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {filteredUsers.length > 0 ? (
         <TooltipProvider>
         <div className="overflow-x-auto rounded-lg border shadow-sm">
           <Table>
@@ -142,7 +200,7 @@ export default function UserManagementPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user) => {
+              {filteredUsers.map((user) => {
                 const RoleIcon = roleIcons[user.role] || UsersIcon;
                 return (
                   <TableRow key={user.id}>
@@ -216,11 +274,24 @@ export default function UserManagementPage() {
       ) : (
         <div className="text-center py-10 text-muted-foreground bg-card rounded-lg border shadow-sm">
           <UsersIcon className="mx-auto h-12 w-12 mb-4" />
-          <p className="text-lg font-medium">No Users Found</p>
-          <p className="text-sm mb-4">There are currently no users in the system. Add one to get started!</p>
-          <Button onClick={handleOpenNewUserDialog}>
-             <PlusCircle className="mr-2 h-4 w-4" /> Add First User
-          </Button>
+           <p className="text-lg font-medium">
+            {searchTerm || filterRole !== 'all' ? "No Users Match Filters" : "No Users Found"}
+          </p>
+          <p className="text-sm mb-4">
+            {searchTerm || filterRole !== 'all' 
+                ? "Try adjusting your search or filter criteria." 
+                : "There are currently no users in the system. Add one to get started!"
+            }
+          </p>
+          {searchTerm || filterRole !== 'all' ? (
+             <Button variant="outline" onClick={resetFilters}>
+                <FilterX className="mr-2 h-4 w-4" /> Clear Filters
+            </Button>
+          ) : (
+            <Button onClick={handleOpenNewUserDialog}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Add First User
+            </Button>
+          )}
         </div>
       )}
       <UserFormDialog
@@ -232,3 +303,5 @@ export default function UserManagementPage() {
     </div>
   );
 }
+
+    

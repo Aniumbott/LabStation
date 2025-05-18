@@ -4,7 +4,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, Filter, CalendarPlus, XCircle, CalendarDays, CheckCircle, AlertTriangle, Construction } from 'lucide-react';
+import { Search, CalendarPlus, XCircle, CalendarDays, CheckCircle, AlertTriangle, Construction, FilterX } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -128,10 +128,9 @@ const labs = Array.from(new Set(allMockResources.map(r => r.lab)));
 
 export default function ResourcesPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState<string>('');
-  const [selectedLab, setSelectedLab] = useState<string>('');
+  const [selectedType, setSelectedType] = useState<string>('all');
+  const [selectedLab, setSelectedLab] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [showFilters, setShowFilters] = useState(false);
 
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
@@ -147,10 +146,10 @@ export default function ResourcesPage() {
         resource.description.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    if (selectedType) {
+    if (selectedType && selectedType !== 'all') {
       resources = resources.filter(resource => resource.type === selectedType);
     }
-    if (selectedLab) {
+    if (selectedLab && selectedLab !== 'all') {
       resources = resources.filter(resource => resource.lab === selectedLab);
     }
     if (selectedDate) {
@@ -164,8 +163,8 @@ export default function ResourcesPage() {
 
   const resetFilters = () => {
     setSearchTerm('');
-    setSelectedType('');
-    setSelectedLab('');
+    setSelectedType('all');
+    setSelectedLab('all');
     setSelectedDate(undefined);
   }
 
@@ -184,7 +183,7 @@ export default function ResourcesPage() {
   };
 
   if (!isClient) {
-    return null;
+    return null; // Or a basic loading state
   }
 
   return (
@@ -193,77 +192,73 @@ export default function ResourcesPage() {
         title="Resource Search"
         description="Find and filter available lab resources."
         icon={Search}
-        actions={
-          <Button variant="outline" onClick={() => setShowFilters(!showFilters)}>
-            <Filter className="mr-2 h-4 w-4" /> {showFilters ? 'Hide' : 'Show'} Filters
-          </Button>
-        }
       />
 
-      <div className="space-y-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search by name, type, or keyword..."
-            className="pl-10 w-full"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-
-        {showFilters && (
-          <Card className="p-4 sm:p-6 bg-muted/50 shadow-lg border">
+      <Card className="shadow-lg">
+        <CardHeader>
+            <CardTitle>Filter Resources</CardTitle>
+            <CardDescription>Use the filters below to narrow down your search.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+            <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Input
+                type="search"
+                placeholder="Search by name, keyword..."
+                className="pl-10 w-full"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Select value={selectedType} onValueChange={setSelectedType}>
+            <Select value={selectedType} onValueChange={setSelectedType}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Filter by Type" />
+                <SelectValue placeholder="Filter by Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
-                  {resourceTypes.map(type => (
+                <SelectItem value="all">All Types</SelectItem>
+                {resourceTypes.map(type => (
                     <SelectItem key={type} value={type}>{type}</SelectItem>
-                  ))}
+                ))}
                 </SelectContent>
-              </Select>
+            </Select>
 
-              <Select value={selectedLab} onValueChange={setSelectedLab}>
+            <Select value={selectedLab} onValueChange={setSelectedLab}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Filter by Lab" />
+                <SelectValue placeholder="Filter by Lab" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Labs</SelectItem>
-                  {labs.map(lab => (
+                <SelectItem value="all">All Labs</SelectItem>
+                {labs.map(lab => (
                     <SelectItem key={lab} value={lab}>{lab}</SelectItem>
-                  ))}
+                ))}
                 </SelectContent>
-              </Select>
+            </Select>
 
-              <Popover>
+            <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal bg-background hover:bg-accent/50">
+                <Button variant="outline" className="w-full justify-start text-left font-normal bg-background hover:bg-accent/50">
                     <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground"/>
                     {selectedDate ? format(selectedDate, 'PPP') : <span>Filter by Date</span>}
-                  </Button>
+                </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
+                <Calendar
                     mode="single"
                     selected={selectedDate}
                     onSelect={setSelectedDate}
                     initialFocus
                     disabled={(date) => date < addDays(new Date(), -1) }
-                  />
+                />
                 </PopoverContent>
-              </Popover>
+            </Popover>
 
-              <Button variant="ghost" onClick={resetFilters} className="text-destructive hover:text-destructive-foreground hover:bg-destructive/10 lg:col-start-4">
-                <XCircle className="mr-2 h-4 w-4" /> Reset Filters
-              </Button>
+            <Button variant="outline" onClick={resetFilters} className="lg:col-start-4">
+                <FilterX className="mr-2 h-4 w-4" /> Reset Filters
+            </Button>
             </div>
-          </Card>
-        )}
-      </div>
+        </CardContent>
+      </Card>
 
       {filteredResources.length > 0 ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -308,3 +303,5 @@ export default function ResourcesPage() {
     </div>
   );
 }
+
+    
