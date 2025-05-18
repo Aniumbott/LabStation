@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX } from 'lucide-react';
+import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon } from 'lucide-react';
 import type { User, RoleName } from '@/types';
 import {
   Table,
@@ -44,7 +44,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { UserFormDialog, UserFormValues } from '@/components/admin/user-form-dialog';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -77,18 +77,18 @@ const getRoleBadgeVariant = (role: RoleName): "default" | "secondary" | "destruc
     }
 };
 
-export default function UserManagementPage() {
+export default function UsersPage() {
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>(initialMockUsers);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
-  // Active filters
+  // Active filters for the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterRole, setActiveFilterRole] = useState<RoleName | 'all'>('all');
 
-  // Temporary filters for Dialog
+  // Temporary filters for the Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterRole, setTempFilterRole] = useState<RoleName | 'all'>('all');
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
@@ -154,8 +154,8 @@ export default function UserManagementPage() {
       const newUser: User = {
         id: `u${users.length + 1 + Date.now()}`,
         ...data,
-        avatarUrl: 'https://placehold.co/100x100.png', // Default avatar for new users
-        avatarDataAiHint: 'avatar person', // Default hint
+        avatarUrl: 'https://placehold.co/100x100.png', 
+        avatarDataAiHint: 'avatar person',
       };
       setUsers([...users, newUser]);
       toast({
@@ -209,15 +209,18 @@ export default function UserManagementPage() {
                 <Separator className="my-4" />
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="userSearchDialog" className="text-sm font-medium mb-1 block">Search</Label>
-                    <Input
-                      id="userSearchDialog"
-                      type="search"
-                      placeholder="Name or email..."
-                      value={tempSearchTerm}
-                      onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
-                      className="h-9"
-                    />
+                    <Label htmlFor="userSearchDialog" className="text-sm font-medium mb-1 block">Search by Name/Email</Label>
+                    <div className="relative">
+                       <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                        id="userSearchDialog"
+                        type="search"
+                        placeholder="Name or email..."
+                        value={tempSearchTerm}
+                        onChange={(e) => setTempSearchTerm(e.target.value)}
+                        className="h-9 pl-8"
+                        />
+                    </div>
                   </div>
                    <div>
                     <Label htmlFor="userRoleDialog" className="text-sm font-medium mb-1 block">Role</Label>
@@ -235,8 +238,8 @@ export default function UserManagementPage() {
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                  <Button variant="ghost" onClick={() => { resetDialogFilters(); handleApplyFilters();}} className="mr-auto">
-                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                  <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
+                    <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
                   <Button onClick={handleApplyFilters}>Apply Filters</Button>
@@ -261,7 +264,7 @@ export default function UserManagementPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right w-[120px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -368,4 +371,3 @@ export default function UserManagementPage() {
     </div>
   );
 }
-

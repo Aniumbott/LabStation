@@ -43,22 +43,22 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { ResourceTypeFormDialog, ResourceTypeFormValues } from '@/components/admin/resource-type-form-dialog';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 
 
-export default function ResourceTypeManagementPage() {
+export default function ResourceTypesPage() {
   const { toast } = useToast();
   const [resourceTypes, setResourceTypes] = useState<ResourceType[]>(initialMockResourceTypes);
   const [typeToDelete, setTypeToDelete] = useState<ResourceType | null>(null);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingType, setEditingType] = useState<ResourceType | null>(null);
 
-  // Active filter
-  const [searchTerm, setSearchTerm] = useState('');
+  // Active filter for the page
+  const [activeSearchTerm, setActiveSearchTerm] = useState('');
 
   // Temp filter for Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
@@ -66,24 +66,24 @@ export default function ResourceTypeManagementPage() {
 
   useEffect(() => {
     if (isFilterDialogOpen) {
-      setTempSearchTerm(searchTerm);
+      setTempSearchTerm(activeSearchTerm);
     }
-  }, [isFilterDialogOpen, searchTerm]);
+  }, [isFilterDialogOpen, activeSearchTerm]);
 
   const filteredResourceTypes = useMemo(() => {
     let currentTypes = [...resourceTypes];
-    if (searchTerm) {
-      const lowerSearchTerm = searchTerm.toLowerCase();
+    if (activeSearchTerm) {
+      const lowerSearchTerm = activeSearchTerm.toLowerCase();
       currentTypes = currentTypes.filter(type =>
         type.name.toLowerCase().includes(lowerSearchTerm) ||
         (type.description && type.description.toLowerCase().includes(lowerSearchTerm))
       );
     }
     return currentTypes.sort((a, b) => a.name.localeCompare(b.name));
-  }, [resourceTypes, searchTerm]);
+  }, [resourceTypes, activeSearchTerm]);
 
   const handleApplyFilters = () => {
-    setSearchTerm(tempSearchTerm);
+    setActiveSearchTerm(tempSearchTerm);
     setIsFilterDialogOpen(false);
   };
 
@@ -92,7 +92,7 @@ export default function ResourceTypeManagementPage() {
   };
 
   const resetAllActiveFilters = () => {
-    setSearchTerm('');
+    setActiveSearchTerm('');
     resetDialogFilters();
     setIsFilterDialogOpen(false);
   };
@@ -140,7 +140,7 @@ export default function ResourceTypeManagementPage() {
     setTypeToDelete(null);
   };
 
-  const activeFilterCount = [searchTerm !== ''].filter(Boolean).length;
+  const activeFilterCount = [activeSearchTerm !== ''].filter(Boolean).length;
 
   return (
     <div className="space-y-8">
@@ -173,19 +173,22 @@ export default function ResourceTypeManagementPage() {
                 <div className="space-y-4">
                   <div>
                     <Label htmlFor="typeSearchDialog" className="text-sm font-medium mb-1 block">Search by Name/Description</Label>
-                    <Input
-                      id="typeSearchDialog"
-                      type="search"
-                      placeholder="Keyword..."
-                      value={tempSearchTerm}
-                      onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
-                      className="h-9"
-                    />
+                     <div className="relative">
+                       <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                        id="typeSearchDialog"
+                        type="search"
+                        placeholder="Keyword..."
+                        value={tempSearchTerm}
+                        onChange={(e) => setTempSearchTerm(e.target.value)}
+                        className="h-9 pl-8"
+                        />
+                    </div>
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                   <Button variant="ghost" onClick={() => { resetDialogFilters(); setIsFilterDialogOpen(false); handleApplyFilters();}} className="mr-auto">
-                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                   <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
+                    <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
                   <Button onClick={handleApplyFilters}>Apply Filters</Button>
@@ -269,16 +272,16 @@ export default function ResourceTypeManagementPage() {
         <Card className="text-center py-10 text-muted-foreground bg-card rounded-lg border shadow-sm">
           <ListChecks className="mx-auto h-12 w-12 mb-4" />
            <p className="text-lg font-medium">
-            {searchTerm ? "No Resource Types Match Filter" : "No Resource Types Defined"}
+            {activeSearchTerm ? "No Resource Types Match Filter" : "No Resource Types Defined"}
           </p>
           <p className="text-sm mb-4">
-            {searchTerm
+            {activeSearchTerm
                 ? "Try adjusting your search criteria."
                 : "Add resource types to categorize your lab equipment and assets."
             }
           </p>
-          {searchTerm ? (
-             <Button variant="outline" onClick={() => { resetAllActiveFilters(); handleApplyFilters(); }}>
+          {activeSearchTerm ? (
+             <Button variant="outline" onClick={resetAllActiveFilters}>
                 <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
             </Button>
           ) : (

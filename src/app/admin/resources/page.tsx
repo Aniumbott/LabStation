@@ -5,9 +5,9 @@ import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarDays, CalendarPlus, Network, Search as SearchIcon } from 'lucide-react';
+import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarDays, CalendarPlus, Search as SearchIcon } from 'lucide-react';
 import type { Resource, ResourceStatus } from '@/types';
-import { allAdminMockResources, initialMockResourceTypes, labsList } from '@/lib/mock-data'; // Import allAdminMockResources
+import { allAdminMockResources, initialMockResourceTypes, labsList } from '@/lib/mock-data';
 import {
   Table,
   TableBody,
@@ -35,7 +35,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -56,13 +56,13 @@ const getStatusBadge = (status: ResourceStatus) => {
   }
 };
 
-export default function ManageResourcesPage() {
+export default function ResourcesPage() {
   const { toast } = useToast();
   const [resources, setResources] = useState<Resource[]>(() => JSON.parse(JSON.stringify(allAdminMockResources)));
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
-  // Active filters
+  // Active filters for the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterTypeId, setActiveFilterTypeId] = useState<string>('all');
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
@@ -134,7 +134,7 @@ export default function ManageResourcesPage() {
     setActiveFilterLab('all');
     setActiveSelectedDate(undefined);
     resetDialogFilters();
-    setIsFilterDialogOpen(false); // Close dialog after resetting all
+    setIsFilterDialogOpen(false);
   };
 
 
@@ -222,7 +222,7 @@ export default function ManageResourcesPage() {
     <div className="space-y-8">
       <PageHeader
         title="Resources"
-        description="Browse, filter, and manage all lab resources. Click resource name for details and admin actions."
+        description="Browse, filter, and manage all lab resources. Click resource name for details."
         icon={ClipboardList}
         actions={
           <div className="flex items-center gap-2">
@@ -421,5 +421,3 @@ export default function ManageResourcesPage() {
     </div>
   );
 }
-
-    
