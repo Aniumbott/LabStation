@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon } from 'lucide-react';
 import type { ResourceType } from '@/types';
-import { initialMockResourceTypes } from '@/lib/mock-data'; 
+import { initialMockResourceTypes } from '@/lib/mock-data';
 import {
   Table,
   TableBody,
@@ -30,7 +30,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger, 
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   Dialog,
@@ -59,7 +59,7 @@ export default function ResourceTypeManagementPage() {
 
   // Active filter
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Temp filter for Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
@@ -90,7 +90,7 @@ export default function ResourceTypeManagementPage() {
   const resetDialogFilters = () => {
     setTempSearchTerm('');
   };
-  
+
   const resetAllActiveFilters = () => {
     setSearchTerm('');
     resetDialogFilters();
@@ -139,13 +139,13 @@ export default function ResourceTypeManagementPage() {
     });
     setTypeToDelete(null);
   };
-  
+
   const activeFilterCount = [searchTerm !== ''].filter(Boolean).length;
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Resource Types" 
+        title="Resource Types"
         description="Define and manage categories for lab resources."
         icon={ListChecks}
         actions={
@@ -178,14 +178,14 @@ export default function ResourceTypeManagementPage() {
                       type="search"
                       placeholder="Keyword..."
                       value={tempSearchTerm}
-                      onChange={(e) => setTempSearchTerm(e.target.value)}
+                      onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
                       className="h-9"
                     />
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                  <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
-                    <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
+                   <Button variant="ghost" onClick={() => { resetDialogFilters(); setIsFilterDialogOpen(false); handleApplyFilters();}} className="mr-auto">
+                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
                   <Button onClick={handleApplyFilters}>Apply Filters</Button>
@@ -194,7 +194,7 @@ export default function ResourceTypeManagementPage() {
             </Dialog>
 
             <Button onClick={handleOpenNewDialog}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add New Type
+              <PlusCircle className="mr-2 h-4 w-4" /> Add
             </Button>
           </div>
         }
@@ -226,7 +226,7 @@ export default function ResourceTypeManagementPage() {
                         </TooltipTrigger>
                         <TooltipContent><p>Edit Resource Type</p></TooltipContent>
                       </Tooltip>
-                      
+
                       <AlertDialog>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -273,7 +273,7 @@ export default function ResourceTypeManagementPage() {
           </p>
           <p className="text-sm mb-4">
             {searchTerm
-                ? "Try adjusting your search criteria." 
+                ? "Try adjusting your search criteria."
                 : "Add resource types to categorize your lab equipment and assets."
             }
           </p>
@@ -297,5 +297,3 @@ export default function ResourceTypeManagementPage() {
     </div>
   );
 }
-
-    
