@@ -167,7 +167,7 @@ export default function BookingsPage() {
   const getBookingStatusVariant = (status: Booking['status']): 'default' | 'secondary' | 'outline' | 'destructive' => {
     switch (status) {
       case 'Confirmed':
-        return 'default'; // Primary color (currently red by theme)
+        return 'default'; 
       case 'Pending':
         return 'secondary';
       case 'Cancelled':
@@ -450,4 +450,3 @@ function BookingForm({ initialData, onSave, onCancel, selectedDate }: BookingFor
     </form>
   );
 }
-

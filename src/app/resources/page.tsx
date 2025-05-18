@@ -154,7 +154,7 @@ export default function ResourcesPage() {
     if (selectedDate) {
       const dateStrToFilter = format(selectedDate, 'yyyy-MM-dd');
       resources = resources.filter(resource => 
-        resource.availability?.some(avail => avail.date === dateStrToFilter && avail.slots.length > 0)
+        resource.availability?.some(avail => avail.date === dateStrToFilter && avail.slots.length > 0 && !avail.slots.includes('Full Day Booked'))
       );
     }
     return resources;
@@ -217,7 +217,7 @@ export default function ResourcesPage() {
         </div>
 
         {showFilters && (
-          <Card className="p-4 sm:p-6 bg-muted/50 shadow-sm border">
+          <Card className="p-4 sm:p-6 bg-muted/50 shadow-md border">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Select value={selectedType} onValueChange={setSelectedType}>
                 <SelectTrigger>
@@ -272,7 +272,7 @@ export default function ResourcesPage() {
       {filteredResources.length > 0 ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredResources.map((resource) => (
-            <Card key={resource.id} className="flex flex-col shadow-md hover:shadow-lg transition-shadow duration-200">
+            <Card key={resource.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
               <CardHeader className="p-0">
                 <div className="relative w-full h-48 rounded-t-lg overflow-hidden">
                   <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint} />
@@ -312,7 +312,7 @@ export default function ResourcesPage() {
           ))}
         </div>
       ) : (
-        <Card className="text-center p-10 col-span-full shadow-sm border">
+        <Card className="text-center p-10 col-span-full shadow-lg border">
           <Search className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-xl font-semibold mb-2">No Resources Found</h3>
           <p className="text-muted-foreground mb-4">Try adjusting your search terms or filters, or select a different date.</p>
@@ -322,4 +322,3 @@ export default function ResourcesPage() {
     </div>
   );
 }
-

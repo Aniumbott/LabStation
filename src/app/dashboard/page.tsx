@@ -90,7 +90,7 @@ export default function DashboardPage() {
         return 'default';
       case 'Pending':
         return 'secondary';
-      case 'Cancelled': // Assuming Cancelled might appear here in future
+      case 'Cancelled': 
         return 'outline';
       default:
         return 'outline';
@@ -116,7 +116,7 @@ export default function DashboardPage() {
         {availableResources.length > 0 ? (
           <div className="grid gap-6 md:grid-cols-2">
             {availableResources.map((resource) => (
-              <Card key={resource.id} className="flex flex-col shadow-md hover:shadow-lg transition-shadow">
+              <Card key={resource.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <CardTitle className="text-lg">{resource.name}</CardTitle>
@@ -169,11 +169,11 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : (
-          <Card className="p-6 text-center">
+          <Card className="p-6 text-center shadow-lg">
             <p className="text-muted-foreground">No resources immediately available. Try the full <Link href="/resources" className="text-primary hover:underline">Resource Search</Link>.</p>
           </Card>
         )}
-        {mockResources.length > 2 && availableResources.length > 0 && ( // Show "View All" if there are more resources than shown
+        {mockResources.length > 2 && availableResources.length > 0 && ( 
             <div className="mt-4 text-right">
                 <Button variant="outline" asChild>
                     <Link href="/resources">View All Resources <ChevronRight className="ml-2 h-4 w-4" /></Link>
@@ -187,7 +187,7 @@ export default function DashboardPage() {
       <section>
         <h2 className="text-2xl font-semibold mb-4">Your Upcoming Bookings</h2>
         {mockBookings.length > 0 ? (
-          <Card>
+          <Card className="shadow-lg">
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
@@ -227,7 +227,7 @@ export default function DashboardPage() {
             </CardFooter>
           </Card>
         ) : (
-          <Card className="p-6 text-center">
+          <Card className="p-6 text-center shadow-lg">
              <p className="text-muted-foreground">You have no upcoming bookings.</p>
              <Button asChild className="mt-4">
                 <Link href="/resources">Find Resources to Book</Link>
