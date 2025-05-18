@@ -103,15 +103,16 @@ export default function UserManagementPage() {
   const filteredUsers = useMemo(() => {
     let currentUsers = [...users];
     if (activeSearchTerm) {
+      const lowerSearchTerm = activeSearchTerm.toLowerCase();
       currentUsers = currentUsers.filter(user =>
-        user.name.toLowerCase().includes(activeSearchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(activeSearchTerm.toLowerCase())
+        user.name.toLowerCase().includes(lowerSearchTerm) ||
+        user.email.toLowerCase().includes(lowerSearchTerm)
       );
     }
     if (activeFilterRole !== 'all') {
       currentUsers = currentUsers.filter(user => user.role === activeFilterRole);
     }
-    return currentUsers;
+    return currentUsers.sort((a,b) => a.name.localeCompare(b.name));
   }, [users, activeSearchTerm, activeFilterRole]);
 
   const handleApplyFilters = () => {
@@ -120,7 +121,7 @@ export default function UserManagementPage() {
     setIsFilterDialogOpen(false);
   };
 
-  const resetFiltersInDialog = () => {
+  const resetDialogFilters = () => {
     setTempSearchTerm('');
     setTempFilterRole('all');
   };
@@ -128,9 +129,7 @@ export default function UserManagementPage() {
   const resetAllActiveFilters = () => {
     setActiveSearchTerm('');
     setActiveFilterRole('all');
-    // Also reset dialog's temp state
-    setTempSearchTerm('');
-    setTempFilterRole('all');
+    resetDialogFilters(); // Also reset dialog's temp state
     setIsFilterDialogOpen(false); // Close dialog if open
   };
 
@@ -155,8 +154,8 @@ export default function UserManagementPage() {
       const newUser: User = {
         id: `u${users.length + 1 + Date.now()}`,
         ...data,
-        avatarUrl: 'https://placehold.co/100x100.png',
-        avatarDataAiHint: 'avatar person',
+        avatarUrl: 'https://placehold.co/100x100.png', // Default avatar for new users
+        avatarDataAiHint: 'avatar person', // Default hint
       };
       setUsers([...users, newUser]);
       toast({
@@ -210,20 +209,20 @@ export default function UserManagementPage() {
                 <Separator className="my-4" />
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="userSearchDialog" className="text-sm font-medium">Search</Label>
+                    <Label htmlFor="userSearchDialog" className="text-sm font-medium mb-1 block">Search</Label>
                     <Input
                       id="userSearchDialog"
                       type="search"
                       placeholder="Name or email..."
                       value={tempSearchTerm}
                       onChange={(e) => setTempSearchTerm(e.target.value)}
-                      className="mt-1 h-9"
+                      className="h-9"
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="userRoleDialog" className="text-sm font-medium">Role</Label>
+                   <div>
+                    <Label htmlFor="userRoleDialog" className="text-sm font-medium mb-1 block">Role</Label>
                     <Select value={tempFilterRole} onValueChange={(value) => setTempFilterRole(value as RoleName | 'all')} >
-                      <SelectTrigger id="userRoleDialog" className="mt-1 h-9">
+                      <SelectTrigger id="userRoleDialog" className="h-9">
                         <SelectValue placeholder="Select Role" />
                       </SelectTrigger>
                       <SelectContent>
@@ -236,7 +235,7 @@ export default function UserManagementPage() {
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                  <Button variant="ghost" onClick={resetFiltersInDialog} className="mr-auto">
+                  <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
@@ -369,3 +368,5 @@ export default function UserManagementPage() {
     </div>
   );
 }
+
+    

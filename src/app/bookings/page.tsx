@@ -23,22 +23,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Booking, Resource, RoleName } from '@/types';
-import { format, parseISO, isValid as isValidDate, startOfDay, isSameDay, set } from 'date-fns';
+import { format, parseISO, isValid as isValidDate, startOfDay, isSameDay, set, addDays } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { BookingDetailsDialog } from '@/components/bookings/booking-details-dialog';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-
-
-const mockResources: Resource[] = [
-  { id: '1', name: 'Electron Microscope Alpha', resourceTypeId: 'rt1', resourceTypeName: 'Microscope', lab: 'Lab A', status: 'Available', description: '', imageUrl: '' },
-  { id: '2', name: 'BioSafety Cabinet Omega', resourceTypeId: 'rt4', resourceTypeName: 'Incubator', lab: 'Lab B', status: 'Available', description: '', imageUrl: '' },
-  { id: '3', name: 'HPLC System Zeta', resourceTypeId: 'rt3', resourceTypeName: 'HPLC System', lab: 'Lab C', status: 'Available', description: '', imageUrl: '' },
-  { id: '4', name: 'High-Speed Centrifuge Pro', resourceTypeId: 'rt2', resourceTypeName: 'Centrifuge', lab: 'Lab A', status: 'Available', description: '', imageUrl: '' },
-  { id: '5', name: 'Confocal Microscope Zeiss', resourceTypeId: 'rt1', resourceTypeName: 'Microscope', lab: 'Lab B', status: 'Available', description: '', imageUrl: '' },
-];
+import { allAdminMockResources } from '@/lib/mock-data'; // Use centralized mock data
 
 const mockCurrentUser = {
   id: 'user_authed_123',
@@ -53,7 +45,7 @@ const initialBookings: Booking[] = [
   { id: 'b3', resourceId: '1', resourceName: 'Electron Microscope Alpha', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1, 14, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1, 15, 0), status: 'Confirmed', notes: 'Quick check. High priority sample requiring immediate imaging for publication deadline. Please ensure instrument is optimally aligned.' },
   { id: 'b4', resourceId: '4', resourceName: 'High-Speed Centrifuge Pro', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 9, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 11, 0), status: 'Confirmed', notes: 'Urgent spin for immediate DNA extraction and subsequent PCR analysis. Please ensure rotor is pre-cooled.' },
   { id: 'b5', resourceId: '3', resourceName: 'HPLC System Zeta', userId: 'user2', userName: 'Dr. Charles Babbage', startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 5, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 5, 13, 0), status: 'Pending' },
-  { id: 'b6', resourceId: '5', resourceName: 'Confocal Microscope Zeiss', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 12, 0), status: 'Confirmed', notes: 'Past booking example for imaging stained tissue samples. Need to check Z-stack capabilities.' },
+  { id: 'b6', resourceId: 'rt8-instance', resourceName: 'FPGA Dev Node Alpha', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 12, 0), status: 'Confirmed', notes: 'Past booking example for FPGA development.' },
 ];
 
 const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
@@ -65,11 +57,11 @@ const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
 const bookingStatuses: Booking['status'][] = ['Confirmed', 'Pending', 'Cancelled'];
 type BookingStatusFilter = Booking['status'] | 'all';
 
-function SimpleLoadingSpinner() {
+function SimpleLoadingSpinner({ message = "Loading bookings..." }: { message?: string}) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
       <Loader2 className="h-10 w-10 animate-spin text-primary" />
-      <p className="mt-2 text-sm">Loading bookings...</p>
+      <p className="mt-2 text-sm">{message}</p>
     </div>
   );
 }
@@ -178,25 +170,7 @@ function BookingsPageContent() {
     return filtered.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()); 
   }, [allUserBookings, activeSelectedDate, activeSearchTerm, activeFilterResourceId, activeFilterStatus]);
 
-  const bookedDatesForDialogCalendar = useMemo(() => {
-    const dates = new Set<string>();
-    allUserBookings.forEach(booking => {
-      if (booking.status !== 'Cancelled' && 
-          new Date(booking.startTime).getFullYear() === currentCalendarMonthInDialog.getFullYear() &&
-          new Date(booking.startTime).getMonth() === currentCalendarMonthInDialog.getMonth()) {
-        dates.add(format(startOfDay(new Date(booking.startTime)), 'yyyy-MM-dd'));
-      }
-    });
-    return dates;
-  }, [allUserBookings, currentCalendarMonthInDialog]);
 
-  const calendarModifiers = {
-    booked: (date: Date) => bookedDatesForDialogCalendar.has(format(date, 'yyyy-MM-dd')),
-    selected: tempSelectedDateInDialog ? (date: Date) => isSameDay(date, tempSelectedDateInDialog) : undefined,
-  };
-  
-  const calendarModifierStyles = { booked: { position: 'relative' as React.CSSProperties['position'], } };
-  
   const handleOpenForm = (bookingToEdit?: Booking, resourceIdForNew?: string | null) => {
     const baseDateForNewBooking = activeSelectedDate || startOfDay(new Date());
     const defaultStartTime = set(new Date(baseDateForNewBooking), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 });
@@ -211,7 +185,7 @@ function BookingsPageContent() {
             endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000),
             userName: mockCurrentUser.name,
             userId: mockCurrentUser.id,
-            resourceId: resourceIdForNew || (mockResources.length > 0 ? mockResources[0].id : ''), 
+            resourceId: resourceIdForNew || (allAdminMockResources.length > 0 ? allAdminMockResources[0].id : ''), 
             status: 'Pending', notes: '',
         };
     }
@@ -224,7 +198,7 @@ function BookingsPageContent() {
       toast({ title: "Error", description: "Please fill all required fields.", variant: "destructive" });
       return;
     }
-    const resource = mockResources.find(r => r.id === formData.resourceId);
+    const resource = allAdminMockResources.find(r => r.id === formData.resourceId);
     if (!resource) { toast({ title: "Error", description: "Selected resource not found.", variant: "destructive" }); return; }
     
     const proposedStartTime = new Date(formData.startTime);
@@ -287,7 +261,7 @@ function BookingsPageContent() {
     setIsFilterDialogOpen(false);
   };
 
-  const resetDialogFilters = () => {
+  const resetDialogFiltersAndState = () => {
     setTempSearchTerm('');
     setTempFilterResourceId('all');
     setTempFilterStatus('all');
@@ -296,7 +270,7 @@ function BookingsPageContent() {
   };
 
   const resetAllActiveFiltersAndDialog = () => {
-    resetDialogFilters(); // Clear dialog state
+    resetDialogFiltersAndState(); // Clear dialog state
     setActiveSearchTerm('');
     setActiveFilterResourceId('all');
     setActiveFilterStatus('all');
@@ -304,13 +278,12 @@ function BookingsPageContent() {
     
     const newSearchParams = new URLSearchParams(searchParams.toString());
     newSearchParams.delete('date');
-    // If other persistent filters are added to URL, clear them here too
     router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
     setIsFilterDialogOpen(false); // Close dialog if open
   };
   
   if (!isClient) {
-    return <SimpleLoadingSpinner />;
+    return <SimpleLoadingSpinner message="Loading bookings..."/>;
   }
 
   const activeFilterCount = [
@@ -357,7 +330,7 @@ function BookingsPageContent() {
                             placeholder="Resource name or notes..." 
                             className="h-9"
                             value={tempSearchTerm}
-                            onChange={(e) => setTempSearchTerm(e.target.value)}
+                            onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
                         />
                     </div>
                      <Separator />
@@ -368,7 +341,7 @@ function BookingsPageContent() {
                                 <SelectTrigger id="bookingResourceDialog" className="h-9"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Resources</SelectItem>
-                                    {mockResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                                    {allAdminMockResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -390,8 +363,7 @@ function BookingsPageContent() {
                             <Calendar
                                 mode="single" selected={tempSelectedDateInDialog} onSelect={setTempSelectedDateInDialog} 
                                 month={currentCalendarMonthInDialog} onMonthChange={setCurrentCalendarMonthInDialog}
-                                disabled={(date) => date < startOfDay(new Date(new Date().setDate(new Date().getDate() -90))) }
-                                modifiers={calendarModifiers} modifiersStyles={calendarModifierStyles}
+                                disabled={(date) => date < startOfDay(addDays(new Date(), -90)) } // Allow past 90 days for viewing old bookings
                                 footer={
                                     <div className="flex flex-col gap-2 items-center pt-2">
                                     {tempSelectedDateInDialog && <Button variant="ghost" size="sm" onClick={() => setTempSelectedDateInDialog(undefined)} className="w-full text-xs">Clear Date Selection</Button>}
@@ -404,7 +376,7 @@ function BookingsPageContent() {
                     </div>
                 </div>
                 <DialogFooter className="pt-6">
-                    <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
+                    <Button variant="ghost" onClick={resetDialogFiltersAndState} className="mr-auto">
                         <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                     </Button>
                     <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
@@ -559,7 +531,7 @@ function BookingsPageContent() {
 
 export default function BookingsPage() {
   return (
-    <Suspense fallback={<SimpleLoadingSpinner />}>
+    <Suspense fallback={<SimpleLoadingSpinner message="Loading bookings..."/>}>
       <BookingsPageContent />
     </Suspense>
   );
@@ -578,7 +550,7 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
   const [formData, setFormData] = useState<Partial<Booking>>(() => {
     const isEditing = !!initialData?.id;
     
-    let initialResourceId = initialData?.resourceId || (mockResources.length > 0 ? mockResources[0].id : '');
+    let initialResourceId = initialData?.resourceId || (allAdminMockResources.length > 0 ? allAdminMockResources[0].id : '');
     let initialStartTime: Date;
     let initialEndTime: Date;
     let initialNotes = initialData?.notes || '';
@@ -642,9 +614,9 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     let baseDateForTimeChange: Date;
     if (formData[field]) {
         baseDateForTimeChange = new Date(formData[field]!);
-    } else if (formData.startTime) { // Fallback to startTime's date part if current field is undefined
+    } else if (formData.startTime) { 
         baseDateForTimeChange = new Date(formData.startTime);
-    } else { // Absolute fallback
+    } else { 
         baseDateForTimeChange = startOfDay(new Date());
     }
 
@@ -690,7 +662,7 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
               selected={formData.startTime ? new Date(formData.startTime) : undefined}
               onSelect={handleDateChangeFromPicker}
               initialFocus
-              disabled={(date) => date < startOfDay(new Date(new Date().setDate(new Date().getDate() -90)))} 
+              disabled={(date) => date < startOfDay(addDays(new Date(), -90))} 
             />
           </PopoverContent>
         </Popover>
@@ -700,7 +672,7 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
         <Select value={formData.resourceId || ''} onValueChange={(value) => handleChange('resourceId', value)} required>
           <SelectTrigger id="bookingFormResourceId"><SelectValue placeholder="Select a resource" /></SelectTrigger>
           <SelectContent>
-            {mockResources.map(resource => (
+            {allAdminMockResources.map(resource => (
               <SelectItem key={resource.id} value={resource.id} disabled={resource.status !== 'Available' && resource.id !== initialData?.resourceId}>
                 {resource.name} ({resource.status === 'Available' ? 'Available' : resource.status})
               </SelectItem>
@@ -740,3 +712,5 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     </form>
   );
 }
+
+    

@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
 import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarDays, CalendarPlus, Network, Search as SearchIcon } from 'lucide-react';
 import type { Resource, ResourceStatus } from '@/types';
-import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data';
+import { allAdminMockResources, initialMockResourceTypes, labsList } from '@/lib/mock-data'; // Import allAdminMockResources
 import {
   Table,
   TableBody,
@@ -41,7 +41,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { format, startOfDay, isSameDay, parseISO, isValid } from 'date-fns';
+import { format, startOfDay, isSameDay, parseISO, isValid, addDays } from 'date-fns';
 
 const getStatusBadge = (status: ResourceStatus) => {
   switch (status) {
@@ -89,11 +89,12 @@ export default function ManageResourcesPage() {
   const filteredResources = useMemo(() => {
     let currentResources = [...resources];
     if (activeSearchTerm) {
+      const lowerSearchTerm = activeSearchTerm.toLowerCase();
       currentResources = currentResources.filter(resource =>
-        resource.name.toLowerCase().includes(activeSearchTerm.toLowerCase()) ||
-        (resource.description && resource.description.toLowerCase().includes(activeSearchTerm.toLowerCase())) ||
-        (resource.manufacturer && resource.manufacturer.toLowerCase().includes(activeSearchTerm.toLowerCase())) ||
-        (resource.model && resource.model.toLowerCase().includes(activeSearchTerm.toLowerCase()))
+        resource.name.toLowerCase().includes(lowerSearchTerm) ||
+        (resource.description && resource.description.toLowerCase().includes(lowerSearchTerm)) ||
+        (resource.manufacturer && resource.manufacturer.toLowerCase().includes(lowerSearchTerm)) ||
+        (resource.model && resource.model.toLowerCase().includes(lowerSearchTerm))
       );
     }
     if (activeFilterTypeId !== 'all') {
@@ -119,15 +120,12 @@ export default function ManageResourcesPage() {
     setIsFilterDialogOpen(false);
   };
 
-  const resetFilters = () => {
-    // Reset temp filters in dialog
+  const resetDialogFilters = () => {
     setTempSearchTerm('');
     setTempFilterTypeId('all');
     setTempFilterLab('all');
     setTempSelectedDate(undefined);
     setCurrentMonthInDialog(startOfDay(new Date()));
-    // To actually clear active filters and update list, call handleApplyFilters after reset
-    // or reset active filters directly here if preferred. For now, this just resets dialog state.
   };
   
   const resetAllActiveFilters = () => {
@@ -135,12 +133,7 @@ export default function ManageResourcesPage() {
     setActiveFilterTypeId('all');
     setActiveFilterLab('all');
     setActiveSelectedDate(undefined);
-    // Also reset temp filters
-    setTempSearchTerm('');
-    setTempFilterTypeId('all');
-    setTempFilterLab('all');
-    setTempSelectedDate(undefined);
-    setCurrentMonthInDialog(startOfDay(new Date()));
+    resetDialogFilters();
     setIsFilterDialogOpen(false); // Close dialog after resetting all
   };
 
@@ -175,9 +168,9 @@ export default function ManageResourcesPage() {
         purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : undefined,
         notes: data.notes || undefined,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-        availability: editingResource.availability, // Preserve existing availability for now
-        lastCalibration: editingResource.lastCalibration, // Preserve existing calibration for now
-        nextCalibration: editingResource.nextCalibration, // Preserve existing calibration for now
+        availability: editingResource.availability, 
+        lastCalibration: editingResource.lastCalibration, 
+        nextCalibration: editingResource.nextCalibration, 
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
           ...data.remoteAccess,
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
@@ -205,9 +198,9 @@ export default function ManageResourcesPage() {
         purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : undefined,
         notes: data.notes || undefined,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-        availability: [], // Default to empty availability for new resources
-        lastCalibration: undefined, // Default for new
-        nextCalibration: undefined, // Default for new
+        availability: [], 
+        lastCalibration: undefined, 
+        nextCalibration: undefined, 
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
           ...data.remoteAccess,
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
@@ -305,7 +298,7 @@ export default function ManageResourcesPage() {
                             onSelect={setTempSelectedDate}
                             month={currentMonthInDialog}
                             onMonthChange={setCurrentMonthInDialog}
-                            disabled={(date) => date < startOfDay(new Date()) }
+                            disabled={(date) => date < startOfDay(addDays(new Date(), -90)) }
                             footer={ tempSelectedDate &&
                                 <Button
                                     variant="ghost"
@@ -322,8 +315,8 @@ export default function ManageResourcesPage() {
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                   <Button variant="ghost" onClick={resetAllActiveFilters} className="mr-auto">
-                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                   <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
+                    <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
                   <Button onClick={handleApplyFilters}>Apply Filters</Button>
@@ -428,3 +421,5 @@ export default function ManageResourcesPage() {
     </div>
   );
 }
+
+    

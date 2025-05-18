@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon } from 'lucide-react';
 import type { ResourceType } from '@/types';
-import { initialMockResourceTypes } from '@/lib/mock-data'; // Updated import
+import { initialMockResourceTypes } from '@/lib/mock-data'; 
 import {
   Table,
   TableBody,
@@ -49,7 +49,6 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 
-// initialMockResourceTypes is now imported from lib/mock-data
 
 export default function ResourceTypeManagementPage() {
   const { toast } = useToast();
@@ -74,9 +73,10 @@ export default function ResourceTypeManagementPage() {
   const filteredResourceTypes = useMemo(() => {
     let currentTypes = [...resourceTypes];
     if (searchTerm) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
       currentTypes = currentTypes.filter(type =>
-        type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (type.description && type.description.toLowerCase().includes(searchTerm.toLowerCase()))
+        type.name.toLowerCase().includes(lowerSearchTerm) ||
+        (type.description && type.description.toLowerCase().includes(lowerSearchTerm))
       );
     }
     return currentTypes.sort((a, b) => a.name.localeCompare(b.name));
@@ -87,16 +87,13 @@ export default function ResourceTypeManagementPage() {
     setIsFilterDialogOpen(false);
   };
 
-  const resetFilters = () => {
-    // Reset temp filters in dialog
+  const resetDialogFilters = () => {
     setTempSearchTerm('');
-    // To actually clear active filters and update list, call handleApplyFilters after reset
-    // or reset active filters directly here if preferred. For now, this just resets dialog state.
   };
   
   const resetAllActiveFilters = () => {
     setSearchTerm('');
-    setTempSearchTerm('');
+    resetDialogFilters();
     setIsFilterDialogOpen(false);
   };
 
@@ -148,7 +145,7 @@ export default function ResourceTypeManagementPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Resource Types" // Changed Title
+        title="Resource Types" 
         description="Define and manage categories for lab resources."
         icon={ListChecks}
         actions={
@@ -175,23 +172,23 @@ export default function ResourceTypeManagementPage() {
                 <Separator className="my-4" />
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="typeSearchDialog" className="text-sm font-medium">Search by Name/Description</Label>
+                    <Label htmlFor="typeSearchDialog" className="text-sm font-medium mb-1 block">Search by Name/Description</Label>
                     <Input
                       id="typeSearchDialog"
                       type="search"
                       placeholder="Keyword..."
                       value={tempSearchTerm}
                       onChange={(e) => setTempSearchTerm(e.target.value)}
-                      className="mt-1 h-9"
+                      className="h-9"
                     />
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                  <Button variant="ghost" onClick={() => { resetFilters(); }} className="mr-auto">
-                    <FilterX className="mr-2 h-4 w-4" /> Reset Filter
+                  <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
+                    <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={handleApplyFilters}>Apply Filter</Button>
+                  <Button onClick={handleApplyFilters}>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -300,3 +297,5 @@ export default function ResourceTypeManagementPage() {
     </div>
   );
 }
+
+    
