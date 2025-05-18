@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, X, Clock, UserCircle, Info, ChevronLeft, ChevronRight, Search as SearchIcon, FilterX, Eye } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, X, Clock, UserCircle, Info, ChevronLeft, ChevronRight, Search as SearchIcon, FilterX, Eye, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -27,7 +27,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { BookingDetailsDialog } from '@/components/bookings/booking-details-dialog';
-import { Skeleton } from '@/components/ui/skeleton';
 
 const mockResources: Resource[] = [
   { id: '1', name: 'Electron Microscope Alpha', type: 'Microscope', lab: 'Lab A', status: 'Available', description: '', imageUrl: '' },
@@ -62,89 +61,14 @@ const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
 const bookingStatuses: Booking['status'][] = ['Confirmed', 'Pending', 'Cancelled'];
 type BookingStatusFilter = Booking['status'] | 'all';
 
-
-function BookingsPageSkeleton() {
+function SimpleLoadingSpinner() {
   return (
-    <div className="space-y-8">
-      <div className="mb-6 sm:mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3 mb-2 sm:mb-0">
-            <Skeleton className="h-8 w-8 rounded-md" /> {/* Icon skeleton */}
-            <Skeleton className="h-8 w-48" /> {/* Title skeleton */}
-          </div>
-          <Skeleton className="h-10 w-36" /> {/* Actions button skeleton */}
-        </div>
-        <Skeleton className="h-5 w-3/4 mt-2" /> {/* Description skeleton */}
-      </div>
-
-      <div className="grid md:grid-cols-3 gap-8 items-start">
-        <div className="md:col-span-1 space-y-6">
-          <Card className="shadow-lg">
-            <CardHeader className="pb-2">
-              <Skeleton className="h-6 w-3/4 mb-2" /> {/* CardTitle skeleton */}
-              <div className="flex justify-between items-center pt-2">
-                <Skeleton className="h-10 w-10" /> {/* Nav button skeleton */}
-                <Skeleton className="h-6 w-24" /> {/* Month/Year skeleton */}
-                <Skeleton className="h-10 w-10" /> {/* Nav button skeleton */}
-              </div>
-            </CardHeader>
-            <CardContent className="flex justify-center p-3">
-              <Skeleton className="h-[290px] w-full max-w-[280px]" /> {/* Calendar skeleton */}
-            </CardContent>
-            <CardFooter className="p-3">
-                <Skeleton className="h-9 w-full" /> {/* Footer button skeleton */}
-            </CardFooter>
-          </Card>
-        </div>
-
-        <div className="md:col-span-2 space-y-6">
-          <Card className="shadow-lg">
-            <CardHeader>
-              <Skeleton className="h-7 w-1/2 mb-1" /> {/* CardTitle skeleton */}
-              <Skeleton className="h-4 w-3/4" /> {/* CardDescription skeleton */}
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Skeleton className="h-10 w-full" /> {/* Search input skeleton */}
-              <div className="grid sm:grid-cols-2 gap-4">
-                <Skeleton className="h-10 w-full" /> {/* Select skeleton */}
-                <Skeleton className="h-10 w-full" /> {/* Select skeleton */}
-              </div>
-              <Skeleton className="h-9 w-36" /> {/* Clear filters button skeleton */}
-              
-              {/* Table Skeleton */}
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead><Skeleton className="h-5 w-24" /></TableHead>
-                      <TableHead><Skeleton className="h-5 w-32" /></TableHead>
-                      <TableHead><Skeleton className="h-5 w-20" /></TableHead>
-                      <TableHead className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {[1, 2, 3].map(i => (
-                      <TableRow key={i}>
-                        <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
-                        <TableCell className="text-right space-x-1">
-                            <Skeleton className="h-7 w-16 inline-block" />
-                            <Skeleton className="h-7 w-20 inline-block" />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+    <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+      <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      <p className="mt-2 text-sm">Loading bookings...</p>
     </div>
   );
 }
-
 
 function BookingsPageContent() {
   const router = useRouter();
@@ -350,7 +274,7 @@ function BookingsPageContent() {
   };
   
   if (!isClient) {
-    return <BookingsPageSkeleton />;
+    return <SimpleLoadingSpinner />;
   }
 
   return (
@@ -548,7 +472,7 @@ function BookingsPageContent() {
 
 export default function BookingsPage() {
   return (
-    <Suspense fallback={<BookingsPageSkeleton />}>
+    <Suspense fallback={<SimpleLoadingSpinner />}>
       <BookingsPageContent />
     </Suspense>
   );
@@ -709,4 +633,3 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     </form>
   );
 }
-

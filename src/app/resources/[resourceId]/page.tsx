@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, Thermometer, ChevronRight } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, Thermometer, ChevronRight, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,6 @@ import { Separator } from '@/components/ui/separator';
 import { allMockResources } from '../page'; // Import mock data
 import type { Resource } from '@/types';
 import { format, parseISO, isValid, startOfToday } from 'date-fns';
-import { Skeleton } from '@/components/ui/skeleton';
 
 const getResourceStatusBadge = (status: Resource['status'], className?: string) => {
     const baseBadgeClass = `inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors ${className || ''}`;
@@ -36,80 +35,14 @@ const formatDateSafe = (dateString?: string) => {
     return isValid(date) ? format(date, 'PPP') : 'Invalid Date';
 };
 
-
-function ResourceDetailPageSkeleton() {
+function SimpleLoadingSpinner() {
   return (
-    <div className="space-y-8">
-      <div className="mb-6 sm:mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3 mb-2 sm:mb-0">
-            <Skeleton className="h-8 w-8 rounded-md" /> {/* Icon skeleton */}
-            <Skeleton className="h-8 w-1/2" /> {/* Title skeleton */}
-          </div>
-          <Skeleton className="h-10 w-36" /> {/* Actions button skeleton */}
-        </div>
-        <Skeleton className="h-5 w-3/4 mt-2" /> {/* Description skeleton */}
-      </div>
-
-      <div className="grid md:grid-cols-3 gap-8 items-start">
-        <div className="md:col-span-1 space-y-6">
-          <Card className="shadow-lg">
-            <Skeleton className="h-64 md:h-80 w-full rounded-t-lg" /> {/* Image skeleton */}
-            <CardFooter className="p-4">
-              <Skeleton className="h-10 w-full" /> {/* Book button skeleton */}
-            </CardFooter>
-          </Card>
-          <Card className="shadow-lg">
-            <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader> {/* Features Title skeleton */}
-            <CardContent className="space-y-2">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-5/6" />
-              <Skeleton className="h-4 w-3/4" />
-            </CardContent>
-          </Card>
-        </div>
-        <div className="md:col-span-2 space-y-6">
-          <Card className="shadow-lg">
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <Skeleton className="h-7 w-3/4" /> {/* Resource Name skeleton */}
-                <Skeleton className="h-6 w-24 rounded-full" /> {/* Status Badge skeleton */}
-              </div>
-              <Skeleton className="h-4 w-1/2 mt-1" /> {/* Type/Lab skeleton */}
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-5/6" />
-            </CardContent>
-          </Card>
-          <Card className="shadow-lg">
-            <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader> {/* Calibration Title skeleton */}
-            <CardContent className="space-y-2">
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-4 w-3/4" />
-            </CardContent>
-          </Card>
-           <Card className="shadow-lg">
-            <CardHeader>
-                <Skeleton className="h-6 w-1/2 mb-1" /> {/* Availability Title skeleton */}
-                <Skeleton className="h-4 w-3/4" /> {/* Availability Description skeleton */}
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
-            </CardContent>
-            <CardFooter>
-              <Skeleton className="h-9 w-48" /> {/* View Calendar Button Skeleton */}
-            </CardFooter>
-          </Card>
-        </div>
-      </div>
+    <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+      <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      <p className="mt-2 text-sm">Loading resource details...</p>
     </div>
   );
 }
-
 
 export default function ResourceDetailPage() {
   const params = useParams();
@@ -130,7 +63,7 @@ export default function ResourceDetailPage() {
   }, [resourceId]);
 
   if (isLoading) {
-    return <ResourceDetailPageSkeleton />;
+    return <SimpleLoadingSpinner />;
   }
 
   if (!resource) {
@@ -157,10 +90,12 @@ export default function ResourceDetailPage() {
   const today = startOfToday();
   const upcomingAvailability = resource.availability?.filter(avail => {
       try {
-          const availDate = parseISO(avail.date);
           // Ensure date is valid and not in the past
+          // Checking if avail.date can be parsed by parseISO. If not, it's likely not in 'yyyy-MM-dd' or is invalid.
+          const availDate = parseISO(avail.date); 
           return isValid(availDate) && availDate >= today;
       } catch (e) {
+          // If parseISO throws an error or avail.date is not a string (though type expects string)
           return false; 
       }
   }) || [];
@@ -283,4 +218,3 @@ export default function ResourceDetailPage() {
     </div>
   );
 }
-

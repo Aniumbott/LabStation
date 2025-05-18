@@ -10,6 +10,7 @@ import {
   CalendarDays,
   Users,
   UserCog,
+  Loader2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -52,13 +53,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   if (!isMounted) {
     return (
-      <SidebarProvider defaultOpen>
-        <div className="flex flex-col min-h-svh bg-background">
-          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-background">
-            {children}
-          </main>
-        </div>
-      </SidebarProvider>
+      <div className="flex flex-col items-center justify-center min-h-svh bg-background text-muted-foreground">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="mt-3 text-lg">Loading LabStation...</p>
+      </div>
     );
   }
 
