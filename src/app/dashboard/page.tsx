@@ -18,16 +18,16 @@ import {
 } from "@/components/ui/table";
 import { format, isValid, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { allAdminMockResources } from '@/lib/mock-data';
+import { allAdminMockResources } from '@/lib/mock-data'; // Use centralized mock data
 
 const mockBookings: Booking[] = [
-  { id: 'b1', resourceId: '1', resourceName: 'Electron Microscope Alpha', userId: 'user1', userName: 'Dr. Smith', startTime: new Date(new Date().setDate(new Date().getDate() + 1)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 1)).setHours(new Date().getHours() + 2)), status: 'Confirmed' },
-  { id: 'b2', resourceId: '4', resourceName: 'High-Speed Centrifuge Pro', userId: 'user2', userName: 'Dr. Jones', startTime: new Date(new Date().setDate(new Date().getDate() + 2)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 2)).setHours(new Date().getHours() + 3)), status: 'Pending' },
+  { id: 'b1', resourceId: '1', resourceName: 'Keysight MSOX3054T Oscilloscope', userId: 'user1', userName: 'Dr. Smith', startTime: new Date(new Date().setDate(new Date().getDate() + 1)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 1)).setHours(new Date().getHours() + 2)), status: 'Confirmed', notes: 'Signal integrity check.' },
+  { id: 'b2', resourceId: '4', resourceName: 'Rohde & Schwarz FPC1500 Spectrum Analyzer', userId: 'user2', userName: 'Dr. Jones', startTime: new Date(new Date().setDate(new Date().getDate() + 2)), endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 2)).setHours(new Date().getHours() + 3)), status: 'Pending', notes: 'EMI pre-compliance scan.' },
 ];
 
 
 export default function DashboardPage() {
-  const frequentlyUsedResources = allAdminMockResources.slice(0, 2);
+  const frequentlyUsedResources = allAdminMockResources.slice(0, 2); // Use resources from admin page
 
   const getResourceStatusBadge = (status: Resource['status']) => {
     switch (status) {
@@ -139,7 +139,7 @@ export default function DashboardPage() {
                       <TableCell>{format(booking.startTime, 'MMM dd, yyyy')}</TableCell>
                       <TableCell>{format(booking.startTime, 'p')} - {format(booking.endTime, 'p')}</TableCell>
                       <TableCell>
-                        <Badge 
+                        <Badge
                             className={cn(
                                 "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
                                 booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
