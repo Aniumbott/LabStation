@@ -30,6 +30,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger, // Added import
 } from "@/components/ui/alert-dialog";
 import {
   Dialog,
