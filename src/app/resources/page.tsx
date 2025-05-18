@@ -140,14 +140,13 @@ export default function ResourcesPage() {
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedLab, setSelectedLab] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [currentMonth, setCurrentMonth] = useState<Date>(startOfDay(new Date()));
-
-
+  
   // Temporary filters for Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempSelectedType, setTempSelectedType] = useState<string>('all');
   const [tempSelectedLab, setTempSelectedLab] = useState<string>('all');
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(undefined);
+  const [currentMonthInDialog, setCurrentMonthInDialog] = useState<Date>(startOfDay(new Date()));
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   
   const [isClient, setIsClient] = useState(false);
@@ -161,7 +160,7 @@ export default function ResourcesPage() {
       setTempSelectedType(selectedType);
       setTempSelectedLab(selectedLab);
       setTempSelectedDate(selectedDate);
-      if (selectedDate) setCurrentMonth(selectedDate); else setCurrentMonth(startOfDay(new Date()));
+      if (selectedDate) setCurrentMonthInDialog(selectedDate); else setCurrentMonthInDialog(startOfDay(new Date()));
     }
   }, [isFilterDialogOpen, searchTerm, selectedType, selectedLab, selectedDate]);
 
@@ -206,7 +205,7 @@ export default function ResourcesPage() {
     setTempSelectedType('all');
     setTempSelectedLab('all');
     setTempSelectedDate(undefined);
-    setCurrentMonth(startOfDay(new Date()));
+    setCurrentMonthInDialog(startOfDay(new Date()));
   };
 
   const getResourceStatusBadge = (status: Resource['status']) => {
@@ -262,7 +261,7 @@ export default function ResourcesPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <Separator className="my-4" />
-                <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2">
+                <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
                   <div>
                     <Label htmlFor="resourceSearchDialog" className="text-sm font-medium mb-1 block">Search by Name/Keyword</Label>
                     <Input
@@ -313,8 +312,8 @@ export default function ResourcesPage() {
                             mode="single"
                             selected={tempSelectedDate}
                             onSelect={setTempSelectedDate}
-                            month={currentMonth}
-                            onMonthChange={setCurrentMonth}
+                            month={currentMonthInDialog}
+                            onMonthChange={setCurrentMonthInDialog}
                             disabled={(date) => date < startOfDay(new Date()) } // Disable past dates
                             footer={ tempSelectedDate && 
                                 <Button 
@@ -376,11 +375,6 @@ export default function ResourcesPage() {
                   )}
               </CardContent>
               <CardFooter className="p-4 pt-2 flex flex-col items-stretch gap-2">
-                 <Button asChild size="sm" className="w-full" variant="outline">
-                    <Link href={`/resources/${resource.id}`}>
-                        View Details <ChevronRight className="ml-auto h-4 w-4" />
-                    </Link>
-                 </Button>
                 <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
                   <Link href={`/bookings?resourceId=${resource.id}${selectedDate ? `&date=${format(selectedDate, 'yyyy-MM-dd')}`: ''}`}>
                     <CalendarPlus className="mr-2 h-4 w-4" />
