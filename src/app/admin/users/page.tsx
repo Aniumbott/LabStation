@@ -44,7 +44,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { UserFormDialog, UserFormValues } from '@/components/admin/user-form-dialog';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -215,7 +215,7 @@ export default function UserManagementPage() {
                       type="search"
                       placeholder="Name or email..."
                       value={tempSearchTerm}
-                      onChange={(e) => setTempSearchTerm(e.target.value)}
+                      onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
                       className="h-9"
                     />
                   </div>
@@ -235,8 +235,8 @@ export default function UserManagementPage() {
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                  <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
-                    <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
+                  <Button variant="ghost" onClick={() => { resetDialogFilters(); handleApplyFilters();}} className="mr-auto">
+                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
                   <Button onClick={handleApplyFilters}>Apply Filters</Button>
@@ -245,7 +245,7 @@ export default function UserManagementPage() {
             </Dialog>
 
             <Button onClick={handleOpenNewUserDialog}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add New User
+              <PlusCircle className="mr-2 h-4 w-4" /> Add
             </Button>
           </div>
         }
@@ -369,4 +369,3 @@ export default function UserManagementPage() {
   );
 }
 
-    
