@@ -37,6 +37,10 @@ export const allMockResources: Resource[] = [
     type: 'Microscope',
     lab: 'Lab A',
     status: 'Available',
+    manufacturer: 'Thermo Fisher Scientific',
+    model: 'Quanta SEM',
+    serialNumber: 'SN-EMA-001',
+    purchaseDate: '2022-08-15',
     description: 'High-resolution scanning electron microscope (SEM) designed for advanced material analysis, biological sample imaging, and nanoparticle characterization. Features multiple detectors for secondary electron, backscattered electron, and X-ray microanalysis (EDX). User-friendly software interface with automated functions for ease of use. Ideal for both novice and experienced users requiring detailed surface morphology and elemental composition data.',
     imageUrl: 'https://placehold.co/300x200.png',
     dataAiHint: 'microscope electronics',
@@ -46,7 +50,8 @@ export const allMockResources: Resource[] = [
     availability: [
       { date: todayStr, slots: ['14:00-16:00', '16:00-18:00'] },
       { date: tomorrowStr, slots: ['10:00-12:00'] }
-    ]
+    ],
+    notes: 'Handle with care. Requires 30 min warm-up time before use.'
   },
   {
     id: '2',
@@ -54,6 +59,10 @@ export const allMockResources: Resource[] = [
     type: 'Incubator',
     lab: 'Lab B',
     status: 'Booked',
+    manufacturer: 'Baker Company',
+    model: 'SterilGARD e3',
+    serialNumber: 'SN-BSC-002',
+    purchaseDate: '2023-01-20',
     description: 'Class II Type A2 biosafety cabinet providing personnel, product, and environmental protection for work with biological agents up to BSL-3. Features HEPA filtration, ergonomic design, and intuitive controls for safe and efficient sterile work. Equipped with UV light for decontamination cycles. Suitable for cell culture, microbiology, and other sensitive applications.',
     imageUrl: 'https://placehold.co/300x200.png',
     dataAiHint: 'lab cabinet',
@@ -63,7 +72,8 @@ export const allMockResources: Resource[] = [
     availability: [
       { date: tomorrowStr, slots: ['09:00-11:00', '11:00-13:00'] },
       { date: dayAfterTomorrowStr, slots: ['Full Day Booked'] }
-    ]
+    ],
+    notes: 'UV light cycle runs automatically after each use. Ensure sash is fully closed.'
   },
   {
     id: '3',
@@ -71,13 +81,18 @@ export const allMockResources: Resource[] = [
     type: 'HPLC System',
     lab: 'Lab C',
     status: 'Maintenance',
+    manufacturer: 'Agilent Technologies',
+    model: '1260 Infinity II',
+    serialNumber: 'SN-HPLC-003',
+    purchaseDate: '2021-05-10',
     description: 'Versatile high-performance liquid chromatography (HPLC) system for analytical and semi-preparative applications. Equipped with a quaternary pump, autosampler, column thermostat, and a diode array detector (DAD) for comprehensive compound analysis. Software provides full system control, data acquisition, and processing capabilities. Currently undergoing scheduled maintenance.',
     imageUrl: 'https://placehold.co/300x200.png',
     dataAiHint: 'hplc chemistry',
     features: ['Quaternary Solvent Delivery', 'Autosampler (120 vial capacity)', 'Column Thermostatting (5-80°C)', 'Diode Array Detector (190-800nm)', 'Fraction Collector (Optional)'],
     lastCalibration: '2023-11-10',
-    nextCalibration: '2024-05-10',
-    availability: []
+    nextCalibration: '2024-05-10', // Past due for maintenance
+    availability: [],
+    notes: 'System offline for preventative maintenance until further notice. Contact lab manager for updates.'
   },
   {
     id: '4',
@@ -85,6 +100,10 @@ export const allMockResources: Resource[] = [
     type: 'Centrifuge',
     lab: 'Lab A',
     status: 'Available',
+    manufacturer: 'Eppendorf',
+    model: 'Centrifuge 5810R',
+    serialNumber: 'SN-CENT-004',
+    purchaseDate: '2023-06-05',
     description: 'Refrigerated high-speed centrifuge designed for a wide range of applications including pelleting, protein purification, and DNA/RNA isolation. Offers precise temperature control and interchangeable rotors for various sample volumes and g-forces up to 25,000 x g. User-friendly interface with programmable protocols.',
     imageUrl: 'https://placehold.co/300x200.png',
     dataAiHint: 'centrifuge science',
@@ -102,15 +121,20 @@ export const allMockResources: Resource[] = [
     type: 'Microscope',
     lab: 'Lab B',
     status: 'Available',
+    manufacturer: 'ZEISS',
+    model: 'LSM 980 with Airyscan 2',
+    serialNumber: 'SN-CMS-005',
+    purchaseDate: '2023-09-01',
     description: 'Advanced laser scanning confocal microscope system optimized for high-resolution 3D imaging of fixed and live cells/tissues. Equipped with multiple laser lines, sensitive detectors, and environmental control for live cell experiments. Software allows for complex experiment design, image acquisition, and analysis.',
     imageUrl: 'https://placehold.co/300x200.png',
     dataAiHint: 'microscope laser',
-    features: ['Multi-Laser Excitation (405, 488, 561, 640nm)', 'High-Sensitivity GaAsP Detectors', 'Live Cell Incubation Chamber', 'Z-stack & Time-lapse Imaging', 'Spectral Unmixing'],
+    features: ['Multi-Laser Excitation (405, 488, 561, 640nm)', 'High-Sensitivity GaAsP Detectors', 'Live Cell Incubation Chamber', 'Z-stack & Time-lapse Imaging', 'Spectral Unmixing', 'Airyscan 2 Superresolution'],
     lastCalibration: '2024-03-01',
     nextCalibration: '2024-09-01',
     availability: [
       { date: tomorrowStr, slots: ['Full Day Available'] }
-    ]
+    ],
+    notes: 'Booking requires prior training. Contact Dr. Eva Rostova for access.'
   },
   {
     id: '6',
@@ -118,6 +142,10 @@ export const allMockResources: Resource[] = [
     type: 'Fume Hood',
     lab: 'General Lab',
     status: 'Booked',
+    manufacturer: 'Labconco',
+    model: 'Protector Premier',
+    serialNumber: 'SN-FH-006',
+    purchaseDate: '2020-03-12',
     description: 'Standard benchtop chemical fume hood providing operator protection from hazardous vapors, fumes, and dusts during chemical manipulations. Features a vertical sliding sash, internal lighting, and services for gas, air, and vacuum. Equipped with an airflow monitor to ensure safe operation.',
     imageUrl: 'https://placehold.co/300x200.png',
     dataAiHint: 'fume hood',
@@ -169,7 +197,9 @@ export default function ResourcesPage() {
     if (searchTerm) {
       resources = resources.filter(resource =>
         resource.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (resource.description && resource.description.toLowerCase().includes(searchTerm.toLowerCase()))
+        (resource.description && resource.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (resource.manufacturer && resource.manufacturer.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (resource.model && resource.model.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
     if (selectedType && selectedType !== 'all') {
@@ -206,19 +236,20 @@ export default function ResourcesPage() {
     setTempSelectedLab('all');
     setTempSelectedDate(undefined);
     setCurrentMonthInDialog(startOfDay(new Date()));
+    // setIsFilterDialogOpen(false); // Keep dialog open for further interaction or explicit close
   };
 
   const getResourceStatusBadge = (status: Resource['status']) => {
-    const baseBadgeClass = "absolute top-2 right-2 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold";
+    const baseClasses = "absolute top-2 right-2 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold";
     switch (status) {
       case 'Available':
-        return <Badge className={`${baseBadgeClass} bg-green-500 text-white border-transparent`}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={`${baseClasses} bg-green-500 text-white border-transparent`}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Booked':
-        return <Badge className={`${baseBadgeClass} bg-yellow-500 text-yellow-950 border-transparent`}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={`${baseClasses} bg-yellow-500 text-yellow-950 border-transparent`}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Maintenance':
-        return <Badge className={`${baseBadgeClass} bg-orange-500 text-white border-transparent`}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={`${baseClasses} bg-orange-500 text-white border-transparent`}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       default:
-        return <Badge variant="outline" className={baseBadgeClass}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge variant="outline" className={baseClasses}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     }
   };
 
@@ -230,7 +261,6 @@ export default function ResourcesPage() {
   ].filter(Boolean).length;
 
   if (!isClient) {
-    // For initial server render or if client script hasn't run, render nothing or a minimal placeholder
     return null; 
   }
 
@@ -261,13 +291,13 @@ export default function ResourcesPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <Separator className="my-4" />
-                <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
+                <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2">
                   <div>
                     <Label htmlFor="resourceSearchDialog" className="text-sm font-medium mb-1 block">Search by Name/Keyword</Label>
                     <Input
                       id="resourceSearchDialog"
                       type="search"
-                      placeholder="e.g., Microscope Alpha, EDX..."
+                      placeholder="Name, manufacturer, model..."
                       value={tempSearchTerm}
                       onChange={(e) => setTempSearchTerm(e.target.value)}
                       className="h-9"
@@ -314,7 +344,7 @@ export default function ResourcesPage() {
                             onSelect={setTempSelectedDate}
                             month={currentMonthInDialog}
                             onMonthChange={setCurrentMonthInDialog}
-                            disabled={(date) => date < startOfDay(new Date()) } // Disable past dates
+                            disabled={(date) => date < startOfDay(new Date()) }
                             footer={ tempSelectedDate && 
                                 <Button 
                                     variant="ghost" 
@@ -331,7 +361,7 @@ export default function ResourcesPage() {
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                  <Button variant="ghost" onClick={() => { resetAllActiveFilters(); setIsFilterDialogOpen(false); }} className="mr-auto">
+                  <Button variant="ghost" onClick={resetAllActiveFilters} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
@@ -364,7 +394,7 @@ export default function ResourcesPage() {
                 <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{resource.description || 'No description available.'}</p>
                  {resource.features && resource.features.length > 0 && (
                     <div>
-                      <h4 className="text-xs font-semibold mb-1 text-muted-foreground">Features:</h4>
+                      <h4 className="text-xs font-semibold mb-1 text-muted-foreground">Key Features:</h4>
                       <div className="flex flex-wrap gap-1">
                         {resource.features.slice(0, 2).map((feature, index) => (
                           <Badge key={index} variant="secondary" className="text-xs">{feature}</Badge>

@@ -12,6 +12,11 @@ export interface Resource {
   lastCalibration?: string; // Date string
   nextCalibration?: string; // Date string
   availability?: { date: string; slots: string[] }[];
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  purchaseDate?: string; // ISO date string
+  notes?: string;
 }
 
 export interface Booking {
@@ -37,14 +42,5 @@ export interface User {
   avatarUrl?: string;
   avatarDataAiHint?: string;
 }
-
-// Lab Management Types - REMOVED
-// export interface Lab {
-//   id: string;
-//   name: string;
-//   location: string;
-//   description?: string;
-//   timezone: string; // Example: "America/New_York", "Europe/London"
-// }
 
 // Add other types as needed
