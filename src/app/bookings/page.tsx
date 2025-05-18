@@ -15,6 +15,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,7 +28,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { BookingDetailsDialog } from '@/components/bookings/booking-details-dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 
 
@@ -105,7 +105,7 @@ function BookingsPageContent() {
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterResourceId, setTempFilterResourceId] = useState<string>('all');
   const [tempFilterStatus, setTempFilterStatus] = useState<BookingStatusFilter>('all');
-  const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
 
   const [selectedBookingForDetails, setSelectedBookingForDetails] = useState<Booking | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
@@ -141,12 +141,12 @@ function BookingsPageContent() {
   }, [searchParams, isFormOpen, allUserBookings]); 
 
   useEffect(() => {
-    if (isFilterPopoverOpen) {
+    if (isFilterDialogOpen) {
       setTempSearchTerm(searchTerm);
       setTempFilterResourceId(filterResourceId);
       setTempFilterStatus(filterStatus);
     }
-  }, [isFilterPopoverOpen, searchTerm, filterResourceId, filterStatus]);
+  }, [isFilterDialogOpen, searchTerm, filterResourceId, filterStatus]);
 
 
   const bookingsToDisplay = useMemo(() => {
@@ -156,7 +156,7 @@ function BookingsPageContent() {
       filtered = filtered.filter(b => isSameDay(b.startTime, selectedDate));
     }
 
-    if (searchTerm) {
+    if (searchTerm && searchTerm !== '') {
       const lowerSearchTerm = searchTerm.toLowerCase();
       filtered = filtered.filter(b => 
         b.resourceName.toLowerCase().includes(lowerSearchTerm) ||
@@ -285,11 +285,11 @@ function BookingsPageContent() {
     setIsDetailsDialogOpen(true);
   };
 
-  const handleApplyPopoverFilters = () => {
+  const handleApplyDialogFilters = () => {
     setSearchTerm(tempSearchTerm);
     setFilterResourceId(tempFilterResourceId);
     setFilterStatus(tempFilterStatus);
-    setIsFilterPopoverOpen(false);
+    setIsFilterDialogOpen(false);
   };
 
   const resetAllFilters = () => {
@@ -307,7 +307,7 @@ function BookingsPageContent() {
   }
 
   const activeFilterCount = [
-    searchTerm,
+    searchTerm !== '',
     filterResourceId !== 'all',
     filterStatus !== 'all',
   ].filter(Boolean).length;
@@ -358,8 +358,8 @@ function BookingsPageContent() {
                     <CardTitle>
                     {selectedDate ? `Your Bookings for ${format(selectedDate, 'PPP')}` : 'All Your Bookings'}
                     </CardTitle>
-                    <Popover open={isFilterPopoverOpen} onOpenChange={setIsFilterPopoverOpen}>
-                    <PopoverTrigger asChild>
+                    <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+                    <DialogTrigger asChild>
                         <Button variant="outline" size="sm">
                         <FilterIcon className="mr-2 h-4 w-4" />
                         Filters
@@ -369,32 +369,30 @@ function BookingsPageContent() {
                             </Badge>
                         )}
                         </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80 z-50" align="end">
-                        <div className="grid gap-4">
-                        <div className="space-y-2">
-                            <h4 className="font-medium leading-none">Filter Bookings</h4>
-                            <p className="text-sm text-muted-foreground">
-                            Refine your list of bookings.
-                            </p>
-                        </div>
-                        <Separator />
-                        <div className="grid gap-3 py-2">
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Filter Bookings</DialogTitle>
+                        <DialogDescription>
+                          Refine your list of bookings. Applied filters will persist after closing.
+                        </DialogDescription>
+                      </DialogHeader>
+                        <div className="grid gap-4 py-4">
                             <div>
-                                <Label htmlFor="bookingSearch" className="text-xs">Search</Label>
+                                <Label htmlFor="bookingSearchDialog" className="text-sm font-medium">Search</Label>
                                 <Input 
-                                    id="bookingSearch"
+                                    id="bookingSearchDialog"
                                     type="search" 
                                     placeholder="Resource name or notes..." 
-                                    className="h-9 mt-1"
+                                    className="mt-1"
                                     value={tempSearchTerm}
                                     onChange={(e) => setTempSearchTerm(e.target.value)}
                                 />
                             </div>
                             <div>
-                                <Label htmlFor="bookingResource" className="text-xs">Resource</Label>
+                                <Label htmlFor="bookingResourceDialog" className="text-sm font-medium">Resource</Label>
                                 <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId}>
-                                    <SelectTrigger id="bookingResource" className="h-9 mt-1"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
+                                    <SelectTrigger id="bookingResourceDialog" className="mt-1"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Resources</SelectItem>
                                         {mockResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
@@ -402,9 +400,9 @@ function BookingsPageContent() {
                                 </Select>
                             </div>
                             <div>
-                                <Label htmlFor="bookingStatus" className="text-xs">Status</Label>
+                                <Label htmlFor="bookingStatusDialog" className="text-sm font-medium">Status</Label>
                                 <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as BookingStatusFilter)}>
-                                    <SelectTrigger id="bookingStatus" className="h-9 mt-1"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
+                                    <SelectTrigger id="bookingStatusDialog" className="mt-1"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Statuses</SelectItem>
                                         {bookingStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
@@ -412,19 +410,17 @@ function BookingsPageContent() {
                                 </Select>
                             </div>
                         </div>
-                        <Separator />
-                        <div className="flex justify-between">
-                            <Button variant="ghost" onClick={() => { setTempSearchTerm(''); setTempFilterResourceId('all'); setTempFilterStatus('all'); }} className="text-sm">
-                            Clear Popover
+                        <DialogFooter>
+                            <Button variant="ghost" onClick={() => { setTempSearchTerm(''); setTempFilterResourceId('all'); setTempFilterStatus('all'); }}>
+                            Reset Dialog Filters
                             </Button>
-                            <Button onClick={handleApplyPopoverFilters} className="text-sm">Apply Filters</Button>
-                        </div>
-                        </div>
-                    </PopoverContent>
-                    </Popover>
+                            <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                    </Dialog>
                 </div>
                 <CardDescription>
-                  Use the filters to narrow down your bookings. {bookingsToDisplay.length} booking(s) currently displayed.
+                  Use the calendar and filters to narrow down your bookings. {bookingsToDisplay.length} booking(s) currently displayed.
                 </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
@@ -669,9 +665,9 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
         <span className="font-medium">Booking for Date:</span> {bookingDate}
       </div>
       <div>
-        <Label htmlFor="resourceIdForm">Resource</Label>
+        <Label htmlFor="bookingFormResourceId">Resource</Label>
         <Select value={formData.resourceId || ''} onValueChange={(value) => handleChange('resourceId', value)} required>
-          <SelectTrigger id="resourceIdForm"><SelectValue placeholder="Select a resource" /></SelectTrigger>
+          <SelectTrigger id="bookingFormResourceId"><SelectValue placeholder="Select a resource" /></SelectTrigger>
           <SelectContent>
             {mockResources.map(resource => (
               <SelectItem key={resource.id} value={resource.id} disabled={resource.status !== 'Available' && resource.id !== initialData?.resourceId}>
@@ -682,29 +678,29 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
         </Select>
       </div>
       <div>
-        <Label htmlFor="userNameForm">Booked By</Label>
-        <Input id="userNameForm" value={formData.userName || ''} readOnly className="bg-muted/50"/>
+        <Label htmlFor="bookingFormUserName">Booked By</Label>
+        <Input id="bookingFormUserName" value={formData.userName || ''} readOnly className="bg-muted/50"/>
          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Info size={12} /> This is automatically set for the logged-in user.</p>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="startTimeForm">Start Time</Label>
+          <Label htmlFor="bookingFormStartTime">Start Time</Label>
            <Select value={formData.startTime ? format(new Date(formData.startTime), 'HH:mm') : ''} onValueChange={(value) => handleTimeChange('startTime', value)} required>
-            <SelectTrigger id="startTimeForm"><SelectValue placeholder="Select start time" /></SelectTrigger>
+            <SelectTrigger id="bookingFormStartTime"><SelectValue placeholder="Select start time" /></SelectTrigger>
             <SelectContent>{timeSlots.map(slot => <SelectItem key={`start-${slot}`} value={slot}>{slot}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <div>
-          <Label htmlFor="endTimeForm">End Time</Label>
+          <Label htmlFor="bookingFormEndTime">End Time</Label>
           <Select value={formData.endTime ? format(new Date(formData.endTime), 'HH:mm') : ''} onValueChange={(value) => handleTimeChange('endTime', value)} required>
-            <SelectTrigger id="endTimeForm"><SelectValue placeholder="Select end time" /></SelectTrigger>
+            <SelectTrigger id="bookingFormEndTime"><SelectValue placeholder="Select end time" /></SelectTrigger>
             <SelectContent>{timeSlots.map(slot => <SelectItem key={`end-${slot}`} value={slot}>{slot}</SelectItem>)}</SelectContent>
           </Select>
         </div>
       </div>
        <div>
-        <Label htmlFor="notesForm">Notes (Optional)</Label>
-        <Textarea id="notesForm" value={formData.notes || ''} onChange={(e) => handleChange('notes', e.target.value)} placeholder="Any specific requirements or purpose of booking..."/>
+        <Label htmlFor="bookingFormNotes">Notes (Optional)</Label>
+        <Textarea id="bookingFormNotes" value={formData.notes || ''} onChange={(e) => handleChange('notes', e.target.value)} placeholder="Any specific requirements or purpose of booking..."/>
       </div>
       <DialogFooter className="pt-2">
         <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
