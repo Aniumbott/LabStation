@@ -22,7 +22,7 @@ import { allAdminMockResources, initialBookings, mockCurrentUser } from '@/lib/m
 
 
 export default function DashboardPage() {
-  const frequentlyUsedResources = allAdminMockResources.slice(0, 2);
+  const frequentlyUsedResources = allAdminMockResources.slice(0, 2); // Use resources from admin page
 
   const getResourceStatusBadge = (status: Resource['status']) => {
     switch (status) {
@@ -60,7 +60,7 @@ export default function DashboardPage() {
           <div className="grid gap-6 md:grid-cols-2">
             {frequentlyUsedResources.map((resource) => (
               <Card key={resource.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <CardHeader>
+                <CardHeader className="p-4">
                   <div className="flex justify-between items-start">
                     <CardTitle className="text-lg hover:text-primary transition-colors">
                         <Link href={`/resources/${resource.id}`}>
@@ -71,14 +71,13 @@ export default function DashboardPage() {
                   </div>
                   <CardDescription>{resource.lab} - {resource.resourceTypeName}</CardDescription>
                 </CardHeader>
-                <CardContent className="flex-grow space-y-3">
-                  <div className="relative w-full h-40 rounded-md overflow-hidden mb-2">
+                <CardContent className="p-4 pt-0 flex-grow space-y-3">
+                  <div className="relative w-full h-40 rounded-md overflow-hidden">
                     <Image src={resource.imageUrl || 'https://placehold.co/300x200.png'} alt={resource.name} layout="fill" objectFit="cover" />
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{resource.description}</p>
-                  {/* Features section removed from dashboard card */}
                 </CardContent>
-                <CardFooter>
+                <CardFooter className="p-4 pt-0">
                   <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
                     <Link href={`/bookings?resourceId=${resource.id}`}>
                       <CalendarPlus className="mr-2 h-4 w-4" />
