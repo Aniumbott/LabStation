@@ -45,7 +45,7 @@ const mockResources: Resource[] = [
     features: ['HEPA Filtered', 'UV Sterilization'],
     lastCalibration: '2024-01-15',
     nextCalibration: '2024-07-15',
-    availability: [{ date: 'Tomorrow', slots: ['09:00-11:00'] }], // No availability today
+    availability: [{ date: 'Tomorrow', slots: ['09:00-11:00'] }], 
   },
   {
     id: '3',
@@ -58,7 +58,7 @@ const mockResources: Resource[] = [
     dataAiHint: 'hplc chemistry',
     features: ['Autosampler', 'UV Detector', 'Diode Array Detector'],
     lastCalibration: '2023-11-10',
-    nextCalibration: 'N/A', // Example of N/A calibration
+    nextCalibration: 'N/A', 
   },
 ];
 
@@ -97,12 +97,6 @@ export default function DashboardPage() {
     }
   };
   
-  const formatDateSafe = (dateString?: string) => {
-    if (!dateString || dateString === 'N/A') return 'N/A';
-    const date = parseISO(dateString);
-    return isValid(date) ? format(date, 'MMM dd, yyyy') : 'Invalid Date';
-  };
-
   return (
     <div className="space-y-8">
       <PageHeader
@@ -119,7 +113,11 @@ export default function DashboardPage() {
               <Card key={resource.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <CardHeader>
                   <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg">{resource.name}</CardTitle>
+                    <CardTitle className="text-lg hover:text-primary transition-colors">
+                        <Link href={`/resources/${resource.id}`}>
+                            {resource.name}
+                        </Link>
+                    </CardTitle>
                     {getResourceStatusBadge(resource.status)}
                   </div>
                   <CardDescription>{resource.lab} - {resource.type}</CardDescription>
@@ -128,34 +126,7 @@ export default function DashboardPage() {
                   <div className="relative w-full h-40 rounded-md overflow-hidden mb-2">
                     <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint} />
                   </div>
-                  <p className="text-sm text-muted-foreground line-clamp-3">{resource.description}</p>
-                  
-                  {resource.features && resource.features.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Features</h4>
-                      <div className="flex flex-wrap gap-1">
-                        {resource.features.map(feature => <Badge key={feature} variant="outline" className="text-xs">{feature}</Badge>)}
-                      </div>
-                    </div>
-                  )}
-
-                  {(resource.lastCalibration || resource.nextCalibration) && (
-                    <div className="text-xs text-muted-foreground space-y-0.5">
-                       {resource.lastCalibration && <p>Last Calibrated: {formatDateSafe(resource.lastCalibration)}</p>}
-                       {resource.nextCalibration && <p>Next Calibration: {formatDateSafe(resource.nextCalibration)}</p>}
-                    </div>
-                  )}
-
-                  {resource.availability && resource.availability.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Next Available Slots:</h4>
-                      <ul className="text-xs list-disc list-inside text-muted-foreground">
-                        {resource.availability.slice(0,2).map(avail => 
-                          avail.slots.map(slot => <li key={`${avail.date}-${slot}`}>{avail.date} at {slot}</li>)
-                        )}
-                      </ul>
-                    </div>
-                  )}
+                  <p className="text-sm text-muted-foreground line-clamp-2">{resource.description}</p>
                 </CardContent>
                 <CardFooter>
                   <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
@@ -238,3 +209,6 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+
+    

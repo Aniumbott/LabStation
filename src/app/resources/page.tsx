@@ -20,17 +20,18 @@ const todayStr = format(new Date(), 'yyyy-MM-dd');
 const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 const dayAfterTomorrowStr = format(addDays(new Date(), 2), 'yyyy-MM-dd');
 
-const allMockResources: Resource[] = [
+// Exporting for use in the detail page
+export const allMockResources: Resource[] = [
   { 
     id: '1', 
     name: 'Electron Microscope Alpha', 
     type: 'Microscope', 
     lab: 'Lab A', 
     status: 'Available', 
-    description: 'High-resolution electron microscope for various sample analyses.', 
+    description: 'High-resolution scanning electron microscope (SEM) designed for advanced material analysis, biological sample imaging, and nanoparticle characterization. Features multiple detectors for secondary electron, backscattered electron, and X-ray microanalysis (EDX). User-friendly software interface with automated functions for ease of use. Ideal for both novice and experienced users requiring detailed surface morphology and elemental composition data.', 
     imageUrl: 'https://placehold.co/300x200.png', 
     dataAiHint: 'microscope electronics', 
-    features: ['SEM', 'TEM', 'EDX'], 
+    features: ['High Vacuum Mode', 'Low Vacuum Mode', 'EDX Spectroscopy', 'Automated Stage Control', 'Image Stitching'], 
     lastCalibration: '2023-12-01', 
     nextCalibration: '2024-06-01',
     availability: [
@@ -44,15 +45,15 @@ const allMockResources: Resource[] = [
     type: 'Incubator', 
     lab: 'Lab B', 
     status: 'Booked', 
-    description: 'Class II Type A2 biosafety cabinet for sterile cell culture work.', 
+    description: 'Class II Type A2 biosafety cabinet providing personnel, product, and environmental protection for work with biological agents up to BSL-3. Features HEPA filtration, ergonomic design, and intuitive controls for safe and efficient sterile work. Equipped with UV light for decontamination cycles. Suitable for cell culture, microbiology, and other sensitive applications.', 
     imageUrl: 'https://placehold.co/300x200.png', 
     dataAiHint: 'lab cabinet', 
-    features: ['HEPA Filtered', 'UV Sterilization'], 
+    features: ['HEPA Filtered Airflow', 'UV Decontamination Cycle', 'Adjustable Sash Height', 'Airflow Alarm System', 'Quiet Operation'], 
     lastCalibration: '2024-01-15', 
     nextCalibration: '2024-07-15',
     availability: [
       { date: tomorrowStr, slots: ['09:00-11:00', '11:00-13:00'] },
-      { date: dayAfterTomorrowStr, slots: ['Full Day Booked'] } // Example for non-specific slots
+      { date: dayAfterTomorrowStr, slots: ['Full Day Booked'] } 
     ] 
   },
   { 
@@ -61,13 +62,13 @@ const allMockResources: Resource[] = [
     type: 'HPLC System', 
     lab: 'Lab C', 
     status: 'Maintenance', 
-    description: 'High-performance liquid chromatography for compound separation.', 
+    description: 'Versatile high-performance liquid chromatography (HPLC) system for analytical and semi-preparative applications. Equipped with a quaternary pump, autosampler, column thermostat, and a diode array detector (DAD) for comprehensive compound analysis. Software provides full system control, data acquisition, and processing capabilities. Currently undergoing scheduled maintenance.', 
     imageUrl: 'https://placehold.co/300x200.png', 
     dataAiHint: 'hplc chemistry', 
-    features: ['Autosampler', 'UV Detector', 'Diode Array Detector'], 
+    features: ['Quaternary Solvent Delivery', 'Autosampler (120 vial capacity)', 'Column Thermostatting (5-80°C)', 'Diode Array Detector (190-800nm)', 'Fraction Collector (Optional)'], 
     lastCalibration: '2023-11-10', 
-    nextCalibration: '2024-05-10',
-    availability: [] // No specific availability due to maintenance
+    nextCalibration: '2024-05-10', // Assuming maintenance completes and calibration happens
+    availability: [] 
   },
   { 
     id: '4', 
@@ -75,10 +76,10 @@ const allMockResources: Resource[] = [
     type: 'Centrifuge', 
     lab: 'Lab A', 
     status: 'Available', 
-    description: 'Refrigerated centrifuge capable of speeds up to 20,000 RPM.', 
+    description: 'Refrigerated high-speed centrifuge designed for a wide range of applications including pelleting, protein purification, and DNA/RNA isolation. Offers precise temperature control and interchangeable rotors for various sample volumes and g-forces up to 25,000 x g. User-friendly interface with programmable protocols.', 
     imageUrl: 'https://placehold.co/300x200.png', 
     dataAiHint: 'centrifuge science', 
-    features: ['Refrigerated', 'Multiple Rotors', 'Programmable'], 
+    features: ['Refrigerated (-20°C to 40°C)', 'Max Speed: 20,000 RPM', 'Multiple Fixed-Angle Rotors', 'Swinging Bucket Rotor Option', 'Programmable Memory'], 
     lastCalibration: '2024-02-20', 
     nextCalibration: '2024-08-20',
     availability: [
@@ -92,10 +93,10 @@ const allMockResources: Resource[] = [
     type: 'Microscope', 
     lab: 'Lab B', 
     status: 'Available', 
-    description: 'Advanced laser scanning confocal system for live cell imaging.', 
+    description: 'Advanced laser scanning confocal microscope system optimized for high-resolution 3D imaging of fixed and live cells/tissues. Equipped with multiple laser lines, sensitive detectors, and environmental control for live cell experiments. Software allows for complex experiment design, image acquisition, and analysis.', 
     imageUrl: 'https://placehold.co/300x200.png', 
     dataAiHint: 'microscope laser', 
-    features: ['Live Cell Imaging', 'Multi-channel', 'Z-stack'], 
+    features: ['Multi-Laser Excitation (405, 488, 561, 640nm)', 'High-Sensitivity GaAsP Detectors', 'Live Cell Incubation Chamber', 'Z-stack & Time-lapse Imaging', 'Spectral Unmixing'], 
     lastCalibration: '2024-03-01', 
     nextCalibration: '2024-09-01',
     availability: [
@@ -108,18 +109,19 @@ const allMockResources: Resource[] = [
     type: 'Fume Hood', 
     lab: 'General Lab', 
     status: 'Booked', 
-    description: 'Standard chemical fume hood for protection against hazardous fumes.', 
+    description: 'Standard benchtop chemical fume hood providing operator protection from hazardous vapors, fumes, and dusts during chemical manipulations. Features a vertical sliding sash, internal lighting, and services for gas, air, and vacuum. Equipped with an airflow monitor to ensure safe operation.', 
     imageUrl: 'https://placehold.co/300x200.png', 
     dataAiHint: 'fume hood', 
-    features: ['Airflow Monitor', 'Sash Sensor'], 
+    features: ['Airflow Monitor & Alarm', 'Vertical Sliding Sash', 'Internal Baffles for Uniform Airflow', 'Utility Valves (Air, Gas, Vacuum)', 'Explosion-Proof Light'], 
     lastCalibration: 'N/A', 
     nextCalibration: 'N/A',
     availability: [
-        { date: todayStr, slots: ['Booked until 15:00'] },
+        { date: todayStr, slots: ['Booked until 15:00', '15:00-17:00'] }, // Added an available slot for today
         { date: dayAfterTomorrowStr, slots: ['09:00-12:00'] }
     ]
   },
 ];
+
 
 const resourceTypes = Array.from(new Set(allMockResources.map(r => r.type)));
 const labs = Array.from(new Set(allMockResources.map(r => r.lab)));
@@ -179,13 +181,6 @@ export default function ResourcesPage() {
         return <Badge variant="outline" className="absolute top-2 right-2">{status}</Badge>;
     }
   };
-
-  const formatDateSafe = (dateString?: string) => {
-    if (!dateString || dateString === 'N/A') return 'N/A';
-    const date = parseISO(dateString);
-    return isValid(date) ? format(date, 'MMM dd, yyyy') : 'Invalid Date';
-  };
-
 
   if (!isClient) {
     return null; 
@@ -256,7 +251,7 @@ export default function ResourcesPage() {
                     selected={selectedDate}
                     onSelect={setSelectedDate}
                     initialFocus
-                    disabled={(date) => date < addDays(new Date(), -1) } // Disable past dates, allow today
+                    disabled={(date) => date < addDays(new Date(), -1) } 
                   />
                 </PopoverContent>
               </Popover>
@@ -279,26 +274,16 @@ export default function ResourcesPage() {
                    {getResourceStatusBadge(resource.status)}
                 </div>
                 <div className="p-4">
-                    <CardTitle className="text-lg mb-1">{resource.name}</CardTitle>
+                    <CardTitle className="text-lg mb-1 hover:text-primary transition-colors">
+                        <Link href={`/resources/${resource.id}`}>
+                            {resource.name}
+                        </Link>
+                    </CardTitle>
                     <CardDescription>{resource.lab} - {resource.type}</CardDescription>
                 </div>
               </CardHeader>
               <CardContent className="flex-grow p-4 pt-0">
-                <p className="text-sm text-muted-foreground mb-3 line-clamp-3">{resource.description}</p>
-                {resource.features && resource.features.length > 0 && (
-                  <div className="mb-2">
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Features</h4>
-                    <div className="flex flex-wrap gap-1">
-                      {resource.features.map(feature => <Badge key={feature} variant="outline" className="text-xs">{feature}</Badge>)}
-                    </div>
-                  </div>
-                )}
-                {(resource.lastCalibration || resource.nextCalibration) && (
-                     <div className="text-xs text-muted-foreground space-y-0.5 mt-2">
-                       {resource.lastCalibration && <p>Last Calibrated: {formatDateSafe(resource.lastCalibration)}</p>}
-                       {resource.nextCalibration && <p>Next Calibration: {formatDateSafe(resource.nextCalibration)}</p>}
-                    </div>
-                  )}
+                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{resource.description}</p>
               </CardContent>
               <CardFooter className="p-4 pt-0">
                 <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
@@ -322,3 +307,5 @@ export default function ResourcesPage() {
     </div>
   );
 }
+
+    
