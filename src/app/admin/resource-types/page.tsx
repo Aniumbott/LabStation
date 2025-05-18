@@ -29,7 +29,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger, // Added AlertDialogTrigger to imports
+  AlertDialogTrigger, 
 } from "@/components/ui/alert-dialog";
 import {
   Dialog,
@@ -38,7 +38,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  // DialogTrigger, // Not explicitly used as trigger is handled by button click
+  DialogTrigger, // Added DialogTrigger
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { ResourceTypeFormDialog, ResourceTypeFormValues } from '@/components/admin/resource-type-form-dialog';
@@ -235,7 +235,7 @@ export default function ResourceTypeManagementPage() {
                       <AlertDialog>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <AlertDialogTrigger asChild> {/* Corrected: Use AlertDialogTrigger directly */}
+                            <AlertDialogTrigger asChild>
                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setTypeToDelete(type)}>
                                   <Trash2 className="h-4 w-4" />
                                   <span className="sr-only">Delete Resource Type</span>
