@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Users as UsersIcon, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX } from 'lucide-react';
+import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX } from 'lucide-react';
 import type { User, RoleName } from '@/types';
 import {
   Table,
@@ -85,8 +85,8 @@ export default function UserManagementPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
   // Active filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterRole, setFilterRole] = useState<RoleName | 'all'>('all');
+  const [activeSearchTerm, setActiveSearchTerm] = useState('');
+  const [activeFilterRole, setActiveFilterRole] = useState<RoleName | 'all'>('all');
 
   // Temporary filters for Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
@@ -95,37 +95,43 @@ export default function UserManagementPage() {
 
   useEffect(() => {
     if (isFilterDialogOpen) {
-      setTempSearchTerm(searchTerm);
-      setTempFilterRole(filterRole);
+      setTempSearchTerm(activeSearchTerm);
+      setTempFilterRole(activeFilterRole);
     }
-  }, [isFilterDialogOpen, searchTerm, filterRole]);
+  }, [isFilterDialogOpen, activeSearchTerm, activeFilterRole]);
 
   const filteredUsers = useMemo(() => {
     let currentUsers = [...users];
-    if (searchTerm) {
+    if (activeSearchTerm) {
       currentUsers = currentUsers.filter(user =>
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+        user.name.toLowerCase().includes(activeSearchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(activeSearchTerm.toLowerCase())
       );
     }
-    if (filterRole !== 'all') {
-      currentUsers = currentUsers.filter(user => user.role === filterRole);
+    if (activeFilterRole !== 'all') {
+      currentUsers = currentUsers.filter(user => user.role === activeFilterRole);
     }
     return currentUsers;
-  }, [users, searchTerm, filterRole]);
+  }, [users, activeSearchTerm, activeFilterRole]);
 
   const handleApplyFilters = () => {
-    setSearchTerm(tempSearchTerm);
-    setFilterRole(tempFilterRole);
+    setActiveSearchTerm(tempSearchTerm);
+    setActiveFilterRole(tempFilterRole);
     setIsFilterDialogOpen(false);
   };
 
-  const resetFilters = () => {
-    setSearchTerm('');
-    setFilterRole('all');
+  const resetFiltersInDialog = () => {
     setTempSearchTerm('');
     setTempFilterRole('all');
-    // setIsFilterDialogOpen(false); // User might want to apply after reset
+  };
+  
+  const resetAllActiveFilters = () => {
+    setActiveSearchTerm('');
+    setActiveFilterRole('all');
+    // Also reset dialog's temp state
+    setTempSearchTerm('');
+    setTempFilterRole('all');
+    setIsFilterDialogOpen(false); // Close dialog if open
   };
 
   const handleOpenNewUserDialog = () => {
@@ -149,7 +155,7 @@ export default function UserManagementPage() {
       const newUser: User = {
         id: `u${users.length + 1 + Date.now()}`,
         ...data,
-        avatarUrl: 'https://placehold.co/100x100.png', // Default avatar for new users
+        avatarUrl: 'https://placehold.co/100x100.png',
         avatarDataAiHint: 'avatar person',
       };
       setUsers([...users, newUser]);
@@ -172,14 +178,14 @@ export default function UserManagementPage() {
     setUserToDelete(null);
   };
 
-  const activeFilterCount = [searchTerm !== '', filterRole !== 'all'].filter(Boolean).length;
+  const activeFilterCount = [activeSearchTerm !== '', activeFilterRole !== 'all'].filter(Boolean).length;
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title="User Management"
+        title="Users"
         description="View, add, and manage user accounts and their roles."
-        icon={UsersIcon}
+        icon={UsersIconLucide}
         actions={
           <div className="flex items-center gap-2">
             <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
@@ -230,8 +236,8 @@ export default function UserManagementPage() {
                   </div>
                 </div>
                 <DialogFooter className="pt-6">
-                  <Button variant="ghost" onClick={resetFilters} className="mr-auto">
-                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                  <Button variant="ghost" onClick={resetFiltersInDialog} className="mr-auto">
+                    <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
                   <Button onClick={handleApplyFilters}>Apply Filters</Button>
@@ -261,7 +267,7 @@ export default function UserManagementPage() {
             </TableHeader>
             <TableBody>
               {filteredUsers.map((user) => {
-                const RoleIcon = roleIcons[user.role] || UsersIcon;
+                const RoleIcon = roleIcons[user.role] || UsersIconLucide;
                 return (
                   <TableRow key={user.id}>
                     <TableCell>
@@ -333,18 +339,18 @@ export default function UserManagementPage() {
         </TooltipProvider>
       ) : (
         <Card className="text-center py-10 text-muted-foreground bg-card rounded-lg border shadow-sm">
-          <UsersIcon className="mx-auto h-12 w-12 mb-4" />
+          <UsersIconLucide className="mx-auto h-12 w-12 mb-4" />
            <p className="text-lg font-medium">
-            {searchTerm || filterRole !== 'all' ? "No Users Match Filters" : "No Users Found"}
+            {activeFilterCount > 0 ? "No Users Match Filters" : "No Users Found"}
           </p>
           <p className="text-sm mb-4">
-            {searchTerm || filterRole !== 'all' 
+            {activeFilterCount > 0
                 ? "Try adjusting your search or filter criteria." 
                 : "There are currently no users in the system. Add one to get started!"
             }
           </p>
-          {searchTerm || filterRole !== 'all' ? (
-             <Button variant="outline" onClick={() => { resetFilters(); handleApplyFilters(); }}>
+          {activeFilterCount > 0 ? (
+             <Button variant="outline" onClick={resetAllActiveFilters}>
                 <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
             </Button>
           ) : (

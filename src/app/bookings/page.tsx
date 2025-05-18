@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, X, Clock, UserCircle, Info, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Calendar as CalendarIcon } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, X, Clock, User, Info, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Calendar as CalendarIcon } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -33,11 +33,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 
 
 const mockResources: Resource[] = [
-  { id: '1', name: 'Electron Microscope Alpha', type: 'Microscope', lab: 'Lab A', status: 'Available', description: '', imageUrl: '' },
-  { id: '2', name: 'BioSafety Cabinet Omega', type: 'Incubator', lab: 'Lab B', status: 'Available', description: '', imageUrl: '' },
-  { id: '3', name: 'HPLC System Zeta', type: 'HPLC System', lab: 'Lab C', status: 'Available', description: '', imageUrl: '' },
-  { id: '4', name: 'High-Speed Centrifuge Pro', type: 'Centrifuge', lab: 'Lab A', status: 'Available', description: '', imageUrl: '' },
-  { id: '5', name: 'Confocal Microscope Zeiss', type: 'Microscope', lab: 'Lab B', status: 'Available', description: '', imageUrl: '' },
+  { id: '1', name: 'Electron Microscope Alpha', resourceTypeId: 'rt1', resourceTypeName: 'Microscope', lab: 'Lab A', status: 'Available', description: '', imageUrl: '' },
+  { id: '2', name: 'BioSafety Cabinet Omega', resourceTypeId: 'rt4', resourceTypeName: 'Incubator', lab: 'Lab B', status: 'Available', description: '', imageUrl: '' },
+  { id: '3', name: 'HPLC System Zeta', resourceTypeId: 'rt3', resourceTypeName: 'HPLC System', lab: 'Lab C', status: 'Available', description: '', imageUrl: '' },
+  { id: '4', name: 'High-Speed Centrifuge Pro', resourceTypeId: 'rt2', resourceTypeName: 'Centrifuge', lab: 'Lab A', status: 'Available', description: '', imageUrl: '' },
+  { id: '5', name: 'Confocal Microscope Zeiss', resourceTypeId: 'rt1', resourceTypeName: 'Microscope', lab: 'Lab B', status: 'Available', description: '', imageUrl: '' },
 ];
 
 const mockCurrentUser = {
@@ -90,6 +90,8 @@ function BookingsPageContent() {
     }
     return undefined; 
   });
+
+  // Active filters for page display
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<BookingStatusFilter>('all');
@@ -97,6 +99,7 @@ function BookingsPageContent() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentBooking, setCurrentBooking] = useState<Partial<Booking> & { resourceId?: string } | null>(null);
   
+  // State for filter dialog
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterResourceId, setTempFilterResourceId] = useState<string>('all');
@@ -121,7 +124,7 @@ function BookingsPageContent() {
     }
      if (dateToSet && (!activeSelectedDate || !isSameDay(activeSelectedDate, dateToSet))) {
         setActiveSelectedDate(dateToSet);
-        setTempSelectedDateInDialog(dateToSet); // For filter dialog
+        setTempSelectedDateInDialog(dateToSet); 
         if (isFilterDialogOpen) setCurrentCalendarMonthInDialog(dateToSet);
     }
 
@@ -144,7 +147,7 @@ function BookingsPageContent() {
       setTempFilterResourceId(activeFilterResourceId);
       setTempFilterStatus(activeFilterStatus);
       setTempSelectedDateInDialog(activeSelectedDate);
-      if (activeSelectedDate) setCurrentCalendarMonthInDialog(activeSelectedDate); else setCurrentCalendarMonthInDialog(startOfDay(new Date()));
+      setCurrentCalendarMonthInDialog(activeSelectedDate || startOfDay(new Date()));
     }
   }, [isFilterDialogOpen, activeSearchTerm, activeFilterResourceId, activeFilterStatus, activeSelectedDate]);
 
@@ -202,7 +205,7 @@ function BookingsPageContent() {
 
     if (bookingToEdit) {
         bookingData = { ...bookingToEdit, startTime: new Date(bookingToEdit.startTime), endTime: new Date(bookingToEdit.endTime), userName: bookingToEdit.userName || mockCurrentUser.name };
-    } else {
+    } else { 
         bookingData = { 
             startTime: defaultStartTime, 
             endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000),
@@ -284,21 +287,26 @@ function BookingsPageContent() {
     setIsFilterDialogOpen(false);
   };
 
-  const resetAllActiveFiltersAndDialog = () => {
-    setActiveSearchTerm('');
-    setActiveFilterResourceId('all');
-    setActiveFilterStatus('all');
-    setActiveSelectedDate(undefined);
-    
+  const resetDialogFilters = () => {
     setTempSearchTerm('');
     setTempFilterResourceId('all');
     setTempFilterStatus('all');
     setTempSelectedDateInDialog(undefined);
     setCurrentCalendarMonthInDialog(startOfDay(new Date()));
+  };
 
+  const resetAllActiveFiltersAndDialog = () => {
+    resetDialogFilters(); // Clear dialog state
+    setActiveSearchTerm('');
+    setActiveFilterResourceId('all');
+    setActiveFilterStatus('all');
+    setActiveSelectedDate(undefined);
+    
     const newSearchParams = new URLSearchParams(searchParams.toString());
     newSearchParams.delete('date');
+    // If other persistent filters are added to URL, clear them here too
     router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
+    setIsFilterDialogOpen(false); // Close dialog if open
   };
   
   if (!isClient) {
@@ -315,7 +323,7 @@ function BookingsPageContent() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Manage My Bookings"
+        title="Bookings"
         description="View, search, filter, and manage your lab resource bookings."
         icon={CalendarDays}
         actions={
@@ -396,8 +404,8 @@ function BookingsPageContent() {
                     </div>
                 </div>
                 <DialogFooter className="pt-6">
-                    <Button variant="ghost" onClick={() => { resetAllActiveFiltersAndDialog(); }} className="mr-auto">
-                        <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                    <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
+                        <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                     </Button>
                     <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
                     <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
@@ -473,15 +481,19 @@ function BookingsPageContent() {
             ) : (
             <div className="text-center py-10 text-muted-foreground px-6">
                 <CalendarDays className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                <p className="font-medium">No bookings match your current filters.</p>
-                <p className="text-sm">Try adjusting your filter criteria.</p>
+                <p className="font-medium">
+                  {activeFilterCount > 0 ? 'No bookings match your current filters.' : 'You have no bookings.'}
+                </p>
+                <p className="text-sm">
+                  {activeFilterCount > 0 ? 'Try adjusting your filter criteria.' : 'Create a new booking to get started.'}
+                </p>
                 {activeFilterCount > 0 && 
-                    <Button variant="outline" onClick={() => { resetAllActiveFiltersAndDialog(); setIsFilterDialogOpen(false); }} className="mt-4">
+                    <Button variant="outline" onClick={resetAllActiveFiltersAndDialog} className="mt-4">
                         <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                     </Button>
                 }
                 {activeFilterCount === 0 && allUserBookings.length === 0 &&
-                     <Button variant="outline" onClick={() => handleOpenForm()} className="mt-4">
+                     <Button onClick={() => handleOpenForm()} className="mt-4">
                         <PlusCircle className="mr-2 h-4 w-4" /> Create Your First Booking
                     </Button>
                 }
@@ -490,7 +502,7 @@ function BookingsPageContent() {
         </CardContent>
          { activeFilterCount > 0 && bookingsToDisplay.length > 0 &&
             <CardFooter className="pt-4 justify-center">
-                <Button variant="link" className="p-0 h-auto text-xs" onClick={() => { resetAllActiveFiltersAndDialog(); setIsFilterDialogOpen(false); }}>
+                <Button variant="link" className="p-0 h-auto text-xs" onClick={resetAllActiveFiltersAndDialog}>
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             </CardFooter>
@@ -509,7 +521,7 @@ function BookingsPageContent() {
                     currentParams.delete('bookingId');
                     paramsModified = true;
                 }
-                if (currentParams.has('resourceId')) {
+                if (currentParams.has('resourceId')) { // Also clear resourceId if it was used for new booking
                     currentParams.delete('resourceId');
                     paramsModified = true;
                 }
@@ -664,7 +676,7 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
               id="bookingFormDate"
               variant="outline"
               className={cn(
-                "w-full justify-start text-left font-normal h-10", // Ensure consistent height
+                "w-full justify-start text-left font-normal h-10", 
                 !formData.startTime && "text-muted-foreground"
               )}
             >
@@ -728,6 +740,3 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     </form>
   );
 }
-
-
-    

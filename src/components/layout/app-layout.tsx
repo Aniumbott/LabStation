@@ -7,12 +7,12 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   CalendarDays,
-  Users,
+  Users as UsersIconLucide, // Renamed to avoid conflict with page component
   UserCog,
   Loader2,
   ListChecks,
   ClipboardList,
-  Building, // Kept for potential future Lab Management
+  Building,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -41,10 +41,10 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/bookings', label: 'Manage Bookings', icon: CalendarDays },
-  { href: '/admin/users', label: 'User Management', icon: Users, admin: true },
+  { href: '/bookings', label: 'Bookings', icon: CalendarDays }, // Changed Label
+  { href: '/admin/users', label: 'Users', icon: UsersIconLucide, admin: true }, // Changed Label
   { href: '/admin/resource-types', label: 'Resource Types', icon: ListChecks, admin: true },
-  { href: '/admin/resources', label: 'Resources', icon: ClipboardList, admin: true }, // Changed Label
+  { href: '/admin/resources', label: 'Resources', icon: ClipboardList, admin: true },
   { href: '/profile', label: 'My Profile', icon: UserCog },
 ];
 
