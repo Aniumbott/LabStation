@@ -11,7 +11,8 @@ import {
   Users,
   UserCog,
   Loader2,
-  ListChecks, // Icon for Resource Types
+  ListChecks,
+  ClipboardList, // Added for Manage Resources
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -35,7 +36,7 @@ interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  admin?: boolean; // To group admin items if needed in future
+  admin?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -44,6 +45,7 @@ const navItems: NavItem[] = [
   { href: '/bookings', label: 'Manage Bookings', icon: CalendarDays },
   { href: '/admin/users', label: 'User Management', icon: Users, admin: true },
   { href: '/admin/resource-types', label: 'Resource Types', icon: ListChecks, admin: true },
+  { href: '/admin/resources', label: 'Manage Resources', icon: ClipboardList, admin: true }, // New Item
   { href: '/profile', label: 'My Profile', icon: UserCog },
 ];
 

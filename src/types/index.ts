@@ -5,14 +5,15 @@ export interface ResourceType {
   description?: string;
 }
 
+export type ResourceStatus = 'Available' | 'Booked' | 'Maintenance';
+
 export interface Resource {
   id: string;
   name: string;
-  // type: 'Microscope' | 'Centrifuge' | 'Spectrometer' | 'Incubator' | 'HPLC System' | 'Fume Hood'; // Replaced
   resourceTypeId: string;
   resourceTypeName: string;
   lab: 'Lab A' | 'Lab B' | 'Lab C' | 'General Lab';
-  status: 'Available' | 'Booked' | 'Maintenance';
+  status: ResourceStatus; // Changed from specific strings to ResourceStatus type
   description: string;
   imageUrl: string;
   dataAiHint?: string;
@@ -28,7 +29,7 @@ export interface Resource {
 }
 
 export interface Booking {
-  id: string;
+  id:string;
   resourceId: string;
   resourceName: string;
   userId: string;
