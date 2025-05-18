@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet" // Added SheetHeader, SheetTitle
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
@@ -163,6 +163,7 @@ const Sidebar = React.forwardRef<
     side?: "left" | "right"
     variant?: "sidebar" | "floating" | "inset"
     collapsible?: "offcanvas" | "icon" | "none"
+    children: React.ReactNode;
   }
 >(
   (
@@ -186,7 +187,7 @@ const Sidebar = React.forwardRef<
     if (!isClient) {
       // Render nothing or a placeholder skeleton on the server and during initial client render
       // This ensures the server output matches the initial client output before hydration.
-      return null; 
+      return null;
     }
 
     if (collapsible === "none") {
@@ -218,7 +219,12 @@ const Sidebar = React.forwardRef<
             }
             side={side}
           >
-            <div className="flex h-full w-full flex-col">{children}</div>
+            <SheetHeader className="p-4 border-b border-sidebar-border">
+              <SheetTitle>LabStation Menu</SheetTitle>
+            </SheetHeader>
+            <div className="flex h-full w-full flex-col overflow-y-auto">
+                {children}
+            </div>
           </SheetContent>
         </Sheet>
       )
@@ -773,5 +779,3 @@ export {
   SidebarTrigger,
   useSidebar,
 }
-
-    
