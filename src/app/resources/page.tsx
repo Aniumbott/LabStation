@@ -167,7 +167,7 @@ export default function ResourcesPage() {
     if (searchTerm) {
       resources = resources.filter(resource =>
         resource.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        resource.description.toLowerCase().includes(searchTerm.toLowerCase())
+        (resource.description && resource.description.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
     if (selectedType && selectedType !== 'all') {
@@ -193,27 +193,32 @@ export default function ResourcesPage() {
     setIsFilterDialogOpen(false);
   };
 
-  const resetFilters = () => {
-    setSearchTerm('');
-    setSelectedType('all');
-    setSelectedLab('all');
-    setSelectedDate(undefined);
+  const resetFiltersInDialog = () => {
     setTempSearchTerm('');
     setTempSelectedType('all');
     setTempSelectedLab('all');
     setTempSelectedDate(undefined);
-    // setIsFilterDialogOpen(false); // Optionally close dialog
   };
+  
+  const resetAllActiveFilters = () => {
+    setSearchTerm('');
+    setSelectedType('all');
+    setSelectedLab('all');
+    setSelectedDate(undefined);
+    // Also reset dialog temp state if it's open
+    resetFiltersInDialog();
+  };
+
 
   const getResourceStatusBadge = (status: Resource['status']) => {
     const baseBadgeClass = "absolute top-2 right-2 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors";
     switch (status) {
       case 'Available':
-        return <Badge className={`${baseBadgeClass} bg-green-500 text-white border-transparent hover:bg-green-600`}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={`${baseBadgeClass} bg-green-500 text-white border-transparent`}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Booked':
-        return <Badge className={`${baseBadgeClass} bg-yellow-500 text-yellow-950 border-transparent hover:bg-yellow-600`}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={`${baseBadgeClass} bg-yellow-500 text-yellow-950 border-transparent`}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Maintenance':
-        return <Badge className={`${baseBadgeClass} bg-orange-500 text-white border-transparent hover:bg-orange-600`}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={`${baseBadgeClass} bg-orange-500 text-white border-transparent`}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       default:
         return <Badge variant="outline" className={baseBadgeClass}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     }
@@ -299,14 +304,16 @@ export default function ResourcesPage() {
                   </div>
                   <div>
                       <Label className="text-sm font-medium mb-1 block">Available On</Label>
-                      <Calendar
-                          mode="single"
-                          selected={tempSelectedDate}
-                          onSelect={setTempSelectedDate}
-                          initialFocus
-                          disabled={(date) => date < addDays(new Date(), -1) }
-                          className="rounded-md border p-2"
-                      />
+                      <div className="flex justify-center">
+                        <Calendar
+                            mode="single"
+                            selected={tempSelectedDate}
+                            onSelect={setTempSelectedDate}
+                            initialFocus
+                            disabled={(date) => date < addDays(new Date(), -1) }
+                            className="rounded-md border p-2" 
+                        />
+                      </div>
                       {tempSelectedDate && (
                            <Button variant="ghost" size="sm" onClick={() => setTempSelectedDate(undefined)} className="mt-1 w-full text-xs">Clear Date Selection</Button>
                       )}
@@ -314,8 +321,8 @@ export default function ResourcesPage() {
                 </div>
                 <Separator className="mt-3 mb-1" />
                 <DialogFooter className="pt-2">
-                  <Button variant="ghost" onClick={resetFilters} className="text-sm mr-auto">
-                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                  <Button variant="ghost" onClick={resetFiltersInDialog} className="text-sm mr-auto">
+                    <FilterX className="mr-2 h-4 w-4" /> Reset Current Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
                   <Button onClick={handleApplyFilters} className="text-sm">Apply Filters</Button>
@@ -344,7 +351,7 @@ export default function ResourcesPage() {
                 </div>
               </CardHeader>
               <CardContent className="flex-grow p-4 pt-0">
-                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{resource.description}</p>
+                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{resource.description || 'No description available.'}</p>
               </CardContent>
               <CardFooter className="p-4 pt-0">
                 <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
@@ -361,10 +368,17 @@ export default function ResourcesPage() {
         <Card className="text-center p-10 col-span-full shadow-lg border">
           <Search className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-xl font-semibold mb-2">No Resources Found</h3>
-          <p className="text-muted-foreground mb-4">Try adjusting your search terms or filters.</p>
-          <Button onClick={resetFilters} variant="outline">Reset All Filters</Button>
+          <p className="text-muted-foreground mb-4">
+            {activeFilterCount > 0 ? "Try adjusting your search terms or filters." : "There are currently no resources to display."}
+          </p>
+          {activeFilterCount > 0 && (
+             <Button onClick={resetAllActiveFilters} variant="outline">
+                <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+            </Button>
+          )}
         </Card>
       )}
     </div>
   );
 }
+
