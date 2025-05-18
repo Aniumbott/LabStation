@@ -46,10 +46,10 @@ const mockCurrentUser = {
 const initialBookings: Booking[] = [
   { id: 'b1', resourceId: '1', resourceName: 'Electron Microscope Alpha', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2, 12, 0), status: 'Confirmed', notes: 'Routine sample analysis.' },
   { id: 'b2', resourceId: '2', resourceName: 'BioSafety Cabinet Omega', userId: 'user2', userName: 'Dr. Charles Babbage', startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 3, 14, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 3, 16, 0), status: 'Pending', notes: 'Cell culture experiment setup.' },
-  { id: 'b3', resourceId: '1', resourceName: 'Electron Microscope Alpha', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1, 14, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1, 15, 0), status: 'Confirmed', notes: 'Quick check.' },
+  { id: 'b3', resourceId: '1', resourceName: 'Electron Microscope Alpha', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1, 14, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1, 15, 0), status: 'Confirmed', notes: 'Quick check. High priority sample requiring immediate imaging for publication deadline. Please ensure instrument is optimally aligned.' },
   { id: 'b4', resourceId: '4', resourceName: 'High-Speed Centrifuge Pro', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 9, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 11, 0), status: 'Confirmed', notes: 'Urgent spin for immediate DNA extraction and subsequent PCR analysis. Please ensure rotor is pre-cooled.' },
   { id: 'b5', resourceId: '3', resourceName: 'HPLC System Zeta', userId: 'user2', userName: 'Dr. Charles Babbage', startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 5, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 5, 13, 0), status: 'Pending' },
-  { id: 'b6', resourceId: '5', resourceName: 'Confocal Microscope Zeiss', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 12, 0), status: 'Confirmed', notes: 'Past booking example for imaging stained tissue samples.' },
+  { id: 'b6', resourceId: '5', resourceName: 'Confocal Microscope Zeiss', userId: mockCurrentUser.id, userName: mockCurrentUser.name, startTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 10, 0), endTime: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 1, 12, 0), status: 'Confirmed', notes: 'Past booking example for imaging stained tissue samples. Need to check Z-stack capabilities.' },
 ];
 
 const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
@@ -360,7 +360,12 @@ function BookingsPageContent() {
                     <TableBody>
                     {bookingsToDisplay.map((booking) => (
                         <TableRow key={booking.id} className={cn(booking.status === 'Cancelled' && 'opacity-60')}>
-                        <TableCell className="font-medium">{booking.resourceName}</TableCell>
+                        <TableCell 
+                            className="font-medium cursor-pointer hover:underline hover:text-primary"
+                            onClick={() => handleOpenDetailsDialog(booking)}
+                        >
+                            {booking.resourceName}
+                        </TableCell>
                         <TableCell>
                             <div>{format(new Date(booking.startTime), 'MMM dd, yyyy')}</div>
                             <div className="text-xs text-muted-foreground">{format(new Date(booking.startTime), 'p')} - {format(new Date(booking.endTime), 'p')}</div>
@@ -376,9 +381,6 @@ function BookingsPageContent() {
                             >{booking.status}</Badge>
                         </TableCell>
                         <TableCell className="text-right space-x-1">
-                            <Button variant="ghost" size="sm" className="h-7 px-2 py-1 text-xs" onClick={() => handleOpenDetailsDialog(booking)}>
-                                <Eye className="mr-1.5 h-3 w-3" /> View
-                            </Button>
                             {booking.status !== 'Cancelled' && (
                             <>
                                 <Button variant="outline" size="sm" className="h-7 px-2 py-1 text-xs" onClick={() => handleOpenForm(booking)}>
