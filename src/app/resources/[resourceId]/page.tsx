@@ -70,7 +70,7 @@ export default function ResourceDetailPage() {
             <p className="text-muted-foreground">The resource with ID "{resourceId}" could not be found.</p>
           </CardContent>
           <CardFooter className="justify-center">
-            <Button onClick={() => router.push('/resources')}>
+            <Button variant="outline" onClick={() => router.push('/resources')}>
               <ArrowLeft className="mr-2 h-4 w-4" /> Back to Resource Search
             </Button>
           </CardFooter>

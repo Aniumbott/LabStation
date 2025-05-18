@@ -116,7 +116,7 @@ export default function EditUserPage() {
                 <p className="text-muted-foreground mt-1">Please check the ID or select a user from the list.</p>
             </CardContent>
             <CardFooter className="justify-center">
-                <Button asChild>
+                <Button variant="outline" asChild>
                     <Link href="/admin/users">
                         <Users className="mr-2 h-4 w-4" /> Go to User List
                     </Link>
