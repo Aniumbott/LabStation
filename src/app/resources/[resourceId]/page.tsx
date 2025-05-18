@@ -5,14 +5,14 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, Thermometer, ChevronRight, Loader2, Tag, Building, WandSparkles, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, Thermometer, ChevronRight, Loader2, Tag, Building, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data'; // Updated imports
-import type { Resource, ResourceType, ResourceStatus } from '@/types'; // Removed RemoteAccessDetails, not directly used here
+import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data';
+import type { Resource, ResourceType, ResourceStatus } from '@/types';
 import { format, parseISO, isValid, startOfToday } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,15 +26,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-// labsList, resourceStatusesList, initialMockResourceTypes are now imported from lib/mock-data
-
 function ResourceDetailPageSkeleton() {
   return (
     <div className="space-y-8">
       <PageHeader
         title={<Skeleton className="h-8 w-3/4 rounded-md bg-muted" />}
         description={<Skeleton className="h-4 w-1/2 rounded-md bg-muted mt-1" />}
-        icon={Tag}
+        icon={Archive} // Updated Icon
         actions={<Skeleton className="h-9 w-24 rounded-md bg-muted" />}
       />
       <div className="grid md:grid-cols-3 gap-6 items-start">
@@ -89,7 +87,7 @@ function ResourceDetailPageSkeleton() {
   );
 }
 
-const getResourceStatusBadgeStyle = (status: Resource['status'], className?: string) => {
+const getResourceStatusBadge = (status: Resource['status'], className?: string) => {
     const baseClasses = `inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors ${className || ''}`;
     switch (status) {
       case 'Available':
@@ -255,7 +253,7 @@ export default function ResourceDetailPage() {
       <PageHeader
         title={resource.name}
         description={`Detailed information for ${resource.resourceTypeName} in ${resource.lab}.`}
-        icon={Tag}
+        icon={Archive} // Updated Icon
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" asChild>
@@ -351,7 +349,7 @@ export default function ResourceDetailPage() {
             <CardHeader>
                 <div className="flex justify-between items-start">
                     <CardTitle className="text-2xl">{resource.name}</CardTitle>
-                    {getResourceStatusBadgeStyle(resource.status)}
+                    {getResourceStatusBadge(resource.status)}
                 </div>
               <CardDescription>Type: {resource.resourceTypeName} | Lab: {resource.lab}</CardDescription>
             </CardHeader>
@@ -359,7 +357,7 @@ export default function ResourceDetailPage() {
               <p className="text-base text-foreground leading-relaxed">{resource.description}</p>
 
               <Separator className="my-4" />
-              <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><WandSparkles className="text-primary h-5 w-5"/> Specifications</h3>
+              <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><SlidersHorizontal className="text-primary h-5 w-5"/> Specifications</h3>
               <div className="space-y-1">
                 <DetailItem icon={Building} label="Manufacturer" value={resource.manufacturer} />
                 <DetailItem icon={Tag} label="Model" value={resource.model} />
