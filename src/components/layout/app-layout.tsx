@@ -12,7 +12,6 @@ import {
   Loader2,
   ListChecks,
   ClipboardList,
-  Building, // Kept Building icon for labs if re-added
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -39,13 +38,14 @@ interface NavItem {
   admin?: boolean;
 }
 
+// Updated order of navigation items
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/admin/resources', label: 'Resources', icon: ClipboardList }, // Moved up
   { href: '/bookings', label: 'Bookings', icon: CalendarDays },
-  { href: '/admin/users', label: 'Users', icon: UsersIconLucide, admin: true },
-  { href: '/admin/resource-types', label: 'Resource Types', icon: ListChecks, admin: true }, // Changed Label
-  { href: '/admin/resources', label: 'Resources', icon: ClipboardList, admin: true },
   { href: '/profile', label: 'My Profile', icon: UserCog },
+  { href: '/admin/users', label: 'Users', icon: UsersIconLucide, admin: true },
+  { href: '/admin/resource-types', label: 'Resource Types', icon: ListChecks, admin: true },
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {
