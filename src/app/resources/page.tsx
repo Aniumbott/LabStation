@@ -175,7 +175,7 @@ export default function ResourcesPage() {
       case 'Available':
         return <Badge className={`${baseBadgeClass} bg-green-500 text-white border-transparent hover:bg-green-600`}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Booked':
-        return <Badge className={`${baseBadgeClass} bg-yellow-400 text-yellow-900 border-transparent hover:bg-yellow-500`}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={`${baseBadgeClass} bg-yellow-500 text-yellow-950 border-transparent hover:bg-yellow-600`}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Maintenance':
         return <Badge className={`${baseBadgeClass} bg-orange-500 text-white border-transparent hover:bg-orange-600`}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       default:
@@ -271,7 +271,7 @@ export default function ResourcesPage() {
             <Card key={resource.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
               <CardHeader className="p-0">
                 <div className="relative w-full h-48 rounded-t-lg overflow-hidden">
-                  <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint} />
+                  <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint || 'lab equipment'} />
                    {getResourceStatusBadge(resource.status)}
                 </div>
                 <div className="p-4">

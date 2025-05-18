@@ -29,7 +29,7 @@ const mockResources: Resource[] = [
     description: 'High-resolution electron microscope for advanced material analysis and detailed imaging of various samples. Includes EDX spectroscopy capabilities.',
     imageUrl: 'https://placehold.co/600x400.png',
     dataAiHint: 'microscope electronics',
-    features: ['SEM', 'TEM', 'EDX'],
+    features: ['SEM', 'TEM', 'EDX', 'Cryo-EM', 'FIB'],
     lastCalibration: '2023-12-01',
     nextCalibration: '2024-06-01',
     availability: [{ date: 'Today', slots: ['14:00-16:00'] }, { date: 'Tomorrow', slots: ['10:00-12:00'] }],
@@ -43,7 +43,7 @@ const mockResources: Resource[] = [
     description: 'Class II Type A2 biosafety cabinet for sterile work with cell cultures and other sensitive biological materials.',
     imageUrl: 'https://placehold.co/600x400.png',
     dataAiHint: 'lab cabinet',
-    features: ['HEPA Filtered', 'UV Sterilization'],
+    features: ['HEPA Filtered', 'UV Sterilization', 'Ergonomic Design'],
     lastCalibration: '2024-01-15',
     nextCalibration: '2024-07-15',
     availability: [{ date: 'Tomorrow', slots: ['09:00-11:00'] }],
@@ -57,7 +57,7 @@ const mockResources: Resource[] = [
     description: 'High-performance liquid chromatography system for precise compound separation and quantification.',
     imageUrl: 'https://placehold.co/600x400.png',
     dataAiHint: 'hplc chemistry',
-    features: ['Autosampler', 'UV Detector', 'Diode Array Detector'],
+    features: ['Autosampler', 'UV Detector', 'Diode Array Detector', 'Mass Spec Interface'],
     lastCalibration: '2023-11-10',
     nextCalibration: 'N/A',
   },
@@ -113,7 +113,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="flex-grow space-y-3">
                   <div className="relative w-full h-40 rounded-md overflow-hidden mb-2">
-                    <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint} />
+                    <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint || 'lab equipment'} />
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{resource.description}</p>
                    {resource.features && resource.features.length > 0 && (
@@ -185,7 +185,7 @@ export default function DashboardPage() {
                       <TableCell>
                         <Badge 
                             className={cn(
-                                "border-transparent", // Base styles for padding/font are from Badge component itself
+                                "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
                                 booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
                                 booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
                                 booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500'

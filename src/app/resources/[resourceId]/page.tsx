@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { allMockResources } from '../page'; // Import mock data
 import type { Resource } from '@/types';
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid, startOfToday } from 'date-fns';
 
 const getResourceStatusBadge = (status: Resource['status'], className?: string) => {
     const baseBadgeClass = `inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors ${className || ''}`;
@@ -21,7 +21,7 @@ const getResourceStatusBadge = (status: Resource['status'], className?: string) 
       case 'Available':
         return <Badge className={`${baseBadgeClass} bg-green-500 text-white border-transparent hover:bg-green-600`}><CheckCircle className="mr-2 h-4 w-4" />{status}</Badge>;
       case 'Booked':
-        return <Badge className={`${baseBadgeClass} bg-yellow-400 text-yellow-900 border-transparent hover:bg-yellow-500`}><AlertTriangle className="mr-2 h-4 w-4" />{status}</Badge>;
+        return <Badge className={`${baseBadgeClass} bg-yellow-500 text-yellow-950 border-transparent hover:bg-yellow-600`}><AlertTriangle className="mr-2 h-4 w-4" />{status}</Badge>;
       case 'Maintenance':
         return <Badge className={`${baseBadgeClass} bg-orange-500 text-white border-transparent hover:bg-orange-600`}><Construction className="mr-2 h-4 w-4" />{status}</Badge>;
       default:
@@ -80,6 +80,17 @@ export default function ResourceDetailPage() {
     );
   }
 
+  const today = startOfToday();
+  const upcomingAvailability = resource.availability?.filter(avail => {
+      try {
+          const availDate = parseISO(avail.date);
+          return isValid(availDate) && availDate >= today;
+      } catch (e) {
+          return false; // Invalid date string
+      }
+  }) || [];
+
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -98,7 +109,7 @@ export default function ResourceDetailPage() {
             <Card className="shadow-lg">
                 <CardContent className="p-0">
                     <div className="relative w-full h-64 md:h-80 rounded-t-lg overflow-hidden">
-                        <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint} />
+                        <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint={resource.dataAiHint || 'lab equipment'} />
                     </div>
                 </CardContent>
                 <CardFooter className="p-4">
@@ -160,7 +171,7 @@ export default function ResourceDetailPage() {
             </Card>
           )}
 
-          {resource.availability && resource.availability.length > 0 && (
+          {upcomingAvailability.length > 0 && (
              <Card className="shadow-lg">
                 <CardHeader>
                     <CardTitle className="text-xl flex items-center gap-2"><CalendarDays className="text-primary" /> Upcoming Availability</CardTitle>
@@ -168,18 +179,7 @@ export default function ResourceDetailPage() {
                 </CardHeader>
                 <CardContent>
                     <ul className="space-y-2">
-                    {resource.availability
-                        .filter(avail => {
-                            try {
-                                // Ensure date is valid and not in the past
-                                const availDate = parseISO(avail.date);
-                                const today = new Date();
-                                today.setHours(0,0,0,0); // Compare dates only
-                                return isValid(availDate) && availDate >= today;
-                            } catch (e) {
-                                return false; // Invalid date string
-                            }
-                        })
+                    {upcomingAvailability
                         .slice(0, 5) // Limit to 5 entries
                         .map((avail, index) => (
                         <li key={index} className="text-sm p-2 border-b last:border-b-0">
@@ -190,14 +190,7 @@ export default function ResourceDetailPage() {
                         </li>
                     ))}
                     </ul>
-                    {resource.availability.filter(avail => {
-                        try {
-                           const availDate = parseISO(avail.date);
-                           const today = new Date();
-                           today.setHours(0,0,0,0);
-                           return isValid(availDate) && availDate >= today;
-                        } catch(e) { return false; }
-                    }).length > 5 && (
+                    {upcomingAvailability.length > 5 && (
                          <p className="text-xs text-muted-foreground mt-2">More dates available...</p>
                     )}
                 </CardContent>
