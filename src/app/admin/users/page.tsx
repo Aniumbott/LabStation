@@ -1,6 +1,10 @@
 
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { Users as UsersIcon, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Eye } from 'lucide-react';
+import { Users as UsersIcon, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, AlertTriangle } from 'lucide-react';
 import type { User } from '@/types';
 import {
   Table,
@@ -13,20 +17,31 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from '@/components/ui/button';
-import Link from 'next/link';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useToast } from '@/hooks/use-toast';
 
 const mockUsers: User[] = [
   { id: 'u1', name: 'Dr. Admin First', email: 'admin.first@labstation.com', role: 'Admin', avatarUrl: 'https://placehold.co/100x100.png', avatarDataAiHint: 'avatar person' },
   { id: 'u2', name: 'Dr. Manager Second', email: 'manager.second@labstation.com', role: 'Lab Manager', avatarUrl: 'https://placehold.co/100x100.png', avatarDataAiHint: 'avatar person' },
   { id: 'u3', name: 'Tech Third', email: 'tech.third@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png', avatarDataAiHint: 'avatar person' },
   { id: 'u4', name: 'Researcher Fourth', email: 'researcher.fourth@labstation.com', role: 'Researcher', avatarUrl: 'https://placehold.co/100x100.png', avatarDataAiHint: 'avatar person' },
-  { id: 'u5', name: 'Admin Alpha', email: 'admin.alpha@labstation.com', role: 'Admin', avatarDataAiHint: 'avatar person' }, // Avatar will use fallback
+  { id: 'u5', name: 'Admin Alpha', email: 'admin.alpha@labstation.com', role: 'Admin', avatarDataAiHint: 'avatar person' },
 ];
 
 const roleIcons: Record<User['role'], React.ElementType> = {
@@ -45,6 +60,23 @@ const roleBadgeVariant: Record<User['role'], "default" | "secondary" | "destruct
 
 
 export default function UserManagementPage() {
+  const { toast } = useToast();
+  const [users, setUsers] = useState<User[]>(mockUsers); // Manage users in state for potential deletion
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+
+  const handleDeleteUser = (userId: string) => {
+    // In a real app, you would make an API call here.
+    // For now, we just filter the user out of the local state.
+    setUsers(currentUsers => currentUsers.filter(user => user.id !== userId));
+    const deletedUser = mockUsers.find(u => u.id === userId);
+    toast({
+      title: "User Deleted (Mock)",
+      description: `User "${deletedUser?.name}" has been "deleted".`,
+      variant: "destructive"
+    });
+    setUserToDelete(null); // Close dialog
+  };
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -60,7 +92,7 @@ export default function UserManagementPage() {
         }
       />
 
-      {mockUsers.length > 0 ? (
+      {users.length > 0 ? (
         <TooltipProvider>
         <div className="overflow-x-auto rounded-lg border shadow-sm">
           <Table>
@@ -74,7 +106,7 @@ export default function UserManagementPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mockUsers.map((user) => {
+              {users.map((user) => {
                 const RoleIcon = roleIcons[user.role] || UsersIcon;
                 return (
                   <TableRow key={user.id}>
@@ -106,17 +138,39 @@ export default function UserManagementPage() {
                           <p>Edit User</p>
                         </TooltipContent>
                       </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                           <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8">
-                              <Trash2 className="h-4 w-4" />
-                              <span className="sr-only">Delete User</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                           <p>Delete User</p>
-                        </TooltipContent>
-                      </Tooltip>
+                      
+                      <AlertDialog>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <AlertDialogTrigger asChild>
+                               <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToDelete(user)}>
+                                  <Trash2 className="h-4 w-4" />
+                                  <span className="sr-only">Delete User</span>
+                              </Button>
+                            </AlertDialogTrigger>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                             <p>Delete User</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        {userToDelete && userToDelete.id === user.id && (
+                            <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete the user account for 
+                                <span className="font-semibold"> {userToDelete.name}</span>.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteUser(userToDelete.id)} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                                Delete User
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                            </AlertDialogContent>
+                        )}
+                      </AlertDialog>
                     </TableCell>
                   </TableRow>
                 );
@@ -140,4 +194,3 @@ export default function UserManagementPage() {
     </div>
   );
 }
-
