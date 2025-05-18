@@ -22,7 +22,7 @@ import { allAdminMockResources, initialBookings, mockCurrentUser } from '@/lib/m
 
 
 export default function DashboardPage() {
-  const frequentlyUsedResources = allAdminMockResources.slice(0, 2); // Use resources from admin page
+  const frequentlyUsedResources = allAdminMockResources.slice(0, 2); 
 
   const getResourceStatusBadge = (status: Resource['status']) => {
     switch (status) {
@@ -55,7 +55,14 @@ export default function DashboardPage() {
       />
 
       <section>
-        <h2 className="text-2xl font-semibold mb-4">Frequently Used Resources</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-semibold">Frequently Used Resources</h2>
+          {allAdminMockResources.length > 2 && frequentlyUsedResources.length > 0 && (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin/resources">View All <ChevronRight className="ml-1.5 h-4 w-4" /></Link>
+            </Button>
+          )}
+        </div>
         {frequentlyUsedResources.length > 0 ? (
           <div className="grid gap-6 md:grid-cols-2">
             {frequentlyUsedResources.map((resource) => (
@@ -92,13 +99,6 @@ export default function DashboardPage() {
           <Card className="p-6 text-center shadow-lg">
             <p className="text-muted-foreground">No frequently used resources configured. Explore resources via <Link href="/admin/resources" className="text-primary hover:underline">Resources</Link>.</p>
           </Card>
-        )}
-        {allAdminMockResources.length > 2 && frequentlyUsedResources.length > 0 && (
-            <div className="mt-4 text-right">
-                <Button variant="outline" asChild>
-                    <Link href="/admin/resources">View All Resources <ChevronRight className="ml-2 h-4 w-4" /></Link>
-                </Button>
-            </div>
         )}
       </section>
 
