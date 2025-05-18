@@ -25,6 +25,7 @@ import {
   SidebarMenuButton,
   SidebarInset,
 } from '@/components/ui/sidebar';
+import { Separator } from '@/components/ui/separator'; // Import Separator
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/icons/logo';
 import { MobileSidebarToggle } from './MobileSidebarToggle';
@@ -62,10 +63,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider defaultOpen>
-      <Sidebar> 
+      <Sidebar>
         <SidebarHeader className="p-4">
           <Logo />
         </SidebarHeader>
+        <Separator className="mx-2 my-1 bg-sidebar-border" /> {/* Added Separator */}
         <SidebarContent>
           <SidebarMenu>
             {navItems.map((item) => (
@@ -89,8 +91,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </Sidebar>
 
       <SidebarInset className="flex flex-col relative p-4 md:p-6 lg:p-8">
-        <MobileSidebarToggle /> 
-        {children} 
+        <MobileSidebarToggle />
+        {children}
       </SidebarInset>
     </SidebarProvider>
   );
