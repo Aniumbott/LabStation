@@ -116,3 +116,34 @@
     /* Default font family is set by Geist Sans in layout.tsx, removing explicit body font-family */
   }
 }
+
+/* Style for the dot indicator on booked calendar days */
+@layer components {
+  .day-booked-dot {
+    position: relative;
+  }
+  .day-booked-dot::after {
+    content: '';
+    position: absolute;
+    bottom: 4px; /* Adjust as needed */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px; /* Size of the dot */
+    height: 6px; /* Size of the dot */
+    border-radius: 50%;
+    background-color: hsl(var(--primary)); /* Use primary color for the dot */
+    /* If the day is also selected, make the dot more visible */
+  }
+  
+  /* Ensure dot is visible on selected day (which has primary background) */
+  .rdp-day_selected.day-booked-dot::after {
+     background-color: hsl(var(--primary-foreground)); /* White dot on red background */
+  }
+   /* Ensure dot is visible on today's day (which has accent background) */
+  .rdp-day_today.day-booked-dot::after {
+    background-color: hsl(var(--accent-foreground)); /* Primary red dot on accent background */
+  }
+
+}
+
+    

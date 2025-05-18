@@ -4,8 +4,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { Users as UsersIcon, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, AlertTriangle } from 'lucide-react';
-import type { User } from '@/types';
+import { Users as UsersIcon, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, AlertTriangle, UserPlus } from 'lucide-react';
+import type { User, RoleName } from '@/types';
 import {
   Table,
   TableBody,
@@ -32,9 +32,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger, // Added AlertDialogTrigger
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
+import { UserFormDialog, UserFormValues } from '@/components/admin/user-form-dialog';
 
 const initialMockUsers: User[] = [
   { id: 'u1', name: 'Dr. Admin First', email: 'admin.first@labstation.com', role: 'Admin', avatarUrl: 'https://placehold.co/100x100.png', avatarDataAiHint: 'avatar person' },
@@ -51,29 +52,66 @@ const roleIcons: Record<User['role'], React.ElementType> = {
   'Researcher': UserCheck,
 };
 
-const roleBadgeVariant: Record<User['role'], "default" | "secondary" | "destructive" | "outline"> = {
-    'Admin': 'destructive', 
-    'Lab Manager': 'default', 
-    'Technician': 'secondary',
-    'Researcher': 'outline', 
+const getRoleBadgeVariant = (role: RoleName): "default" | "secondary" | "destructive" | "outline" => {
+    switch (role) {
+      case 'Admin': return 'destructive';
+      case 'Lab Manager': return 'default'; // Primary color for Lab Manager
+      case 'Technician': return 'secondary';
+      case 'Researcher': return 'outline';
+      default: return 'outline';
+    }
 };
-
 
 export default function UserManagementPage() {
   const { toast } = useToast();
-  const [users, setUsers] = useState<User[]>(initialMockUsers); 
+  const [users, setUsers] = useState<User[]>(initialMockUsers);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+
+  const handleOpenNewUserDialog = () => {
+    setEditingUser(null);
+    setIsFormDialogOpen(true);
+  };
+
+  const handleOpenEditUserDialog = (user: User) => {
+    setEditingUser(user);
+    setIsFormDialogOpen(true);
+  };
+
+  const handleSaveUser = (data: UserFormValues) => {
+    if (editingUser) {
+      // Update existing user
+      setUsers(users.map(u => u.id === editingUser.id ? { ...editingUser, ...data } : u));
+      toast({
+        title: 'User Updated',
+        description: `User ${data.name} has been updated.`,
+      });
+    } else {
+      // Create new user
+      const newUser: User = {
+        id: `u${users.length + 1 + Date.now()}`, // Simple unique ID
+        ...data,
+        // avatarUrl and avatarDataAiHint can be added here if needed, or generated
+      };
+      setUsers([...users, newUser]);
+      toast({
+        title: 'User Created',
+        description: `User ${data.name} with role ${data.role} has been created.`,
+      });
+    }
+    setIsFormDialogOpen(false);
+  };
 
   const handleDeleteUser = (userId: string) => {
     const deletedUser = users.find(u => u.id === userId);
     setUsers(currentUsers => currentUsers.filter(user => user.id !== userId));
-    
     toast({
       title: "User Deleted",
-      description: `User "${deletedUser?.name}" has been removed from the list.`,
+      description: `User "${deletedUser?.name}" has been removed.`,
       variant: "destructive"
     });
-    setUserToDelete(null); 
+    setUserToDelete(null);
   };
 
   return (
@@ -83,10 +121,8 @@ export default function UserManagementPage() {
         description="View, add, and manage user accounts and their roles."
         icon={UsersIcon}
         actions={
-          <Button asChild>
-            <Link href="/admin/users/new">
-              <PlusCircle className="mr-2 h-4 w-4" /> Add New User
-            </Link>
+          <Button onClick={handleOpenNewUserDialog}>
+            <PlusCircle className="mr-2 h-4 w-4" /> Add New User
           </Button>
         }
       />
@@ -118,7 +154,7 @@ export default function UserManagementPage() {
                     <TableCell className="font-medium">{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      <Badge variant={roleBadgeVariant[user.role]} className="capitalize">
+                      <Badge variant={getRoleBadgeVariant(user.role)} className="capitalize">
                          <RoleIcon className="mr-1 h-3.5 w-3.5" />
                         {user.role}
                       </Badge>
@@ -126,11 +162,9 @@ export default function UserManagementPage() {
                     <TableCell className="text-right space-x-1">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button variant="outline" size="icon" asChild className="h-8 w-8">
-                            <Link href={`/admin/users/edit/${user.id}`}>
-                              <Edit className="h-4 w-4" />
-                              <span className="sr-only">Edit User</span>
-                            </Link>
+                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditUserDialog(user)}>
+                            <Edit className="h-4 w-4" />
+                            <span className="sr-only">Edit User</span>
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
@@ -159,7 +193,6 @@ export default function UserManagementPage() {
                                 <AlertDialogDescription>
                                 This action cannot be undone. This will remove the user 
                                 <span className="font-semibold"> {userToDelete.name}</span> from the list.
-                                (Note: In this demo, this only affects the current view.)
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -184,13 +217,19 @@ export default function UserManagementPage() {
           <UsersIcon className="mx-auto h-12 w-12 mb-4" />
           <p className="text-lg font-medium">No Users Found</p>
           <p className="text-sm mb-4">There are currently no users in the system. Add one to get started!</p>
-          <Button asChild>
-            <Link href="/admin/users/new">
+          <Button onClick={handleOpenNewUserDialog}>
              <PlusCircle className="mr-2 h-4 w-4" /> Add First User
-            </Link>
           </Button>
         </div>
       )}
+      <UserFormDialog
+        open={isFormDialogOpen}
+        onOpenChange={setIsFormDialogOpen}
+        initialUser={editingUser}
+        onSave={handleSaveUser}
+      />
     </div>
   );
 }
+
+    
