@@ -1,5 +1,6 @@
+
 import { PageHeader } from '@/components/layout/page-header';
-import { UserCog, Mail, Shield, Edit3, KeyRound, Image as ImageIcon } from 'lucide-react';
+import { UserCog, Shield, Edit3, KeyRound, Image as ImageIcon, Save, Mail } from 'lucide-react';
 import type { User } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -28,33 +29,38 @@ export default function ProfilePage() {
       />
 
       <Card className="max-w-2xl mx-auto shadow-lg">
-        <CardHeader className="text-center">
-          <Avatar className="w-32 h-32 mx-auto mb-4 border-4 border-primary/20 shadow-md">
-            <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} data-ai-hint={currentUser.avatarDataAiHint} />
-            <AvatarFallback className="text-4xl">{currentUser.name.split(' ').map(n => n[0]).join('').toUpperCase()}</AvatarFallback>
-          </Avatar>
-          <Button variant="outline" size="sm" className="mx-auto">
-            <ImageIcon className="mr-2 h-4 w-4" /> Change Avatar
-          </Button>
-          <CardTitle className="text-2xl mt-4">{currentUser.name}</CardTitle>
-          <CardDescription className="flex items-center justify-center gap-2">
+        <CardHeader className="items-center text-center p-6">
+          <div className="relative group mb-4">
+            <Avatar className="w-32 h-32 mx-auto border-4 border-primary/20 shadow-md group-hover:opacity-80 transition-opacity">
+              <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} data-ai-hint={currentUser.avatarDataAiHint} />
+              <AvatarFallback className="text-4xl">{currentUser.name.split(' ').map(n => n[0]).join('').toUpperCase()}</AvatarFallback>
+            </Avatar>
+            <Button variant="outline" size="sm" className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <ImageIcon className="mr-2 h-4 w-4" /> Change
+            </Button>
+          </div>
+          
+          <CardTitle className="text-2xl">{currentUser.name}</CardTitle>
+          <CardDescription className="flex items-center justify-center gap-1 text-base">
             <Shield className="h-4 w-4 text-muted-foreground" /> {currentUser.role}
           </CardDescription>
         </CardHeader>
+        <Separator />
         <CardContent className="space-y-6 p-6">
           <div>
-            <h3 className="text-lg font-semibold mb-3">Account Information</h3>
+            <h3 className="text-lg font-semibold mb-4 text-primary">Account Information</h3>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="profileName" className="text-muted-foreground">Full Name</Label>
-                <Input id="profileName" defaultValue={currentUser.name} readOnly className="mt-1 bg-muted/30"/>
+                <Label htmlFor="profileName" className="font-medium">Full Name</Label>
+                <Input id="profileName" defaultValue={currentUser.name} className="mt-1 bg-muted/50" />
               </div>
               <div>
-                <Label htmlFor="profileEmail" className="text-muted-foreground">Email Address</Label>
+                <Label htmlFor="profileEmail" className="font-medium">Email Address</Label>
                 <div className="flex items-center mt-1">
-                  <Input id="profileEmail" type="email" defaultValue={currentUser.email} readOnly className="bg-muted/30"/>
-                  <Button variant="ghost" size="sm" className="ml-2">
+                  <Input id="profileEmail" type="email" defaultValue={currentUser.email} className="bg-muted/50"/>
+                  <Button variant="ghost" size="icon" className="ml-2 text-muted-foreground hover:text-primary">
                     <Edit3 className="h-4 w-4" />
+                     <span className="sr-only">Edit Email</span>
                   </Button>
                 </div>
               </div>
@@ -62,14 +68,17 @@ export default function ProfilePage() {
           </div>
           <Separator />
            <div>
-            <h3 className="text-lg font-semibold mb-3">Security</h3>
+            <h3 className="text-lg font-semibold mb-4 text-primary">Security</h3>
              <Button variant="outline">
                 <KeyRound className="mr-2 h-4 w-4" /> Change Password
              </Button>
            </div>
         </CardContent>
-        <CardFooter className="p-6 border-t">
-          <Button className="w-full sm:w-auto ml-auto">Save Changes</Button>
+        <Separator />
+        <CardFooter className="p-6 justify-end">
+          <Button>
+            <Save className="mr-2 h-4 w-4" /> Save Changes
+          </Button>
         </CardFooter>
       </Card>
     </div>
