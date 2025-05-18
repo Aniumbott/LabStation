@@ -29,8 +29,6 @@ import {
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
-// Button import was unused in Header, can be removed if not used elsewhere in this file.
-// import { Button } from '@/components/ui/button'; 
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/icons/logo';
 
@@ -44,12 +42,22 @@ const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/resources', label: 'Resource Search', icon: Search },
   { href: '/bookings', label: 'Booking Calendar', icon: CalendarDays },
-  { href: '/admin/users', label: 'User Management', icon: Users }, // New: User Management
-  { href: '/profile', label: 'My Profile', icon: UserCog }, // New: My Profile
+  { href: '/admin/users', label: 'User Management', icon: Users }, 
+  { href: '/profile', label: 'My Profile', icon: UserCog },
 ];
 
-function Header() {
-  // Renamed isMobile from useSidebar to sidebarIsMobile to avoid conflict with any potential local isMobile variable
+// Helper function to find the best matching NavItem for header context
+function getHeaderNavItem(pathname: string): NavItem | undefined {
+  // Prioritize longer matches (more specific routes) first for section context
+  const potentialMatches = navItems
+    .filter(item => pathname.startsWith(item.href))
+    .sort((a, b) => b.href.length - a.href.length); 
+
+  return potentialMatches[0]; // The most specific parent route
+}
+
+
+function Header({ currentSectionNavItem }: { currentSectionNavItem?: NavItem }) {
   const { isMobile: sidebarIsMobile } = useSidebar(); 
   const [isClient, setIsClient] = useState(false);
 
@@ -57,13 +65,20 @@ function Header() {
     setIsClient(true);
   }, []);
 
+  const SectionIcon = currentSectionNavItem?.icon;
+
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6 shadow-sm">
-      {/* Only render SidebarTrigger on the client and if it's determined to be mobile view */}
       {isClient && sidebarIsMobile && <SidebarTrigger className="md:hidden -ml-2" />}
-      {/* Logo removed from here to avoid duplication. It's now only in SidebarHeader. */}
-      <div className="flex-1 text-center md:text-left">
-        {/* Could add breadcrumbs or page title here if needed */}
+      <div className="flex-1 flex items-center gap-3">
+        {currentSectionNavItem && SectionIcon && (
+          <SectionIcon className="h-6 w-6 text-primary flex-shrink-0" />
+        )}
+        {currentSectionNavItem && (
+          <h1 className="text-xl font-semibold text-foreground">
+            {currentSectionNavItem.label}
+          </h1>
+        )}
       </div>
       {/* User/Auth section can be added here */}
     </header>
@@ -79,10 +94,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
     setIsMounted(true);
   }, []);
 
-  // Common layout for Header and main content, used by both SSR and client post-mount.
+  const currentSectionNavItem = getHeaderNavItem(pathname);
+
   const mainContentLayout = (
     <>
-      <Header />
+      <Header currentSectionNavItem={currentSectionNavItem} />
       <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-background">
         {children}
       </main>
@@ -90,8 +106,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
   );
 
   if (!isMounted) {
-    // SSR and initial client render: Render SidebarProvider with a simpler content structure.
-    // This avoids rendering Sidebar and SidebarInset which cause hydration issues.
     return (
       <SidebarProvider defaultOpen>
         <div className="flex flex-col min-h-svh bg-background">
@@ -101,7 +115,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // Client-side after mount: Render the full layout with Sidebar and SidebarInset.
   return (
     <SidebarProvider defaultOpen>
       <Sidebar>
@@ -114,7 +127,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <SidebarMenuItem key={item.label}>
                 <Link href={item.href} passHref legacyBehavior>
                   <SidebarMenuButton
-                    isActive={pathname.startsWith(item.href)}
+                    isActive={pathname.startsWith(item.href)} // Active state based on starting path
                     tooltip={item.label}
                     className={cn(
                       pathname.startsWith(item.href) && 'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
@@ -128,7 +141,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
             ))}
           </SidebarMenu>
         </SidebarContent>
-        {/* <SidebarFooter>Optional Footer Content</SidebarFooter> */}
       </Sidebar>
       <SidebarInset className="flex flex-col">
         {mainContentLayout}
