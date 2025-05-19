@@ -1,10 +1,12 @@
 
 'use client';
 
-import type { User } from '@/types';
-import { mockLoginUser, mockSignupUser } from '@/lib/mock-data';
+import type { User, RoleName } from '@/types'; // Added RoleName for future use if needed
+import { mockLoginUser, mockSignupUser, initialMockUsers, pendingSignups, addNotification } from '@/lib/mock-data';
 import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
+
+const LOCAL_STORAGE_USER_KEY = 'labstation_currentUser';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -18,29 +20,45 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Start with loading true
 
   useEffect(() => {
-    // Simulate checking for a logged-in user on mount (e.g., from localStorage in a real app)
-    // For this mock, we'll start with no user logged in. User has to explicitly log in.
-    // You could uncomment the below to auto-login an admin for easier dev:
-    // const adminUser = mockLoginUser('admin@labstation.com', 'password');
-    // if (adminUser) {
-    //     setCurrentUser(adminUser);
-    // }
+    // Try to load user from localStorage on initial mount
+    try {
+      const storedUserString = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
+      if (storedUserString) {
+        const storedUser: User = JSON.parse(storedUserString);
+        // Optional: Re-validate user against mock data in case it changed
+        // For this mock, we'll trust localStorage, but in a real app, you'd validate a token.
+        const validatedUser = initialMockUsers.find(u => u.id === storedUser.id && u.email === storedUser.email);
+        if (validatedUser && validatedUser.status === 'active') {
+          setCurrentUser(validatedUser);
+        } else {
+          // User from localStorage is no longer valid or not active
+          localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading user from localStorage:", error);
+      localStorage.removeItem(LOCAL_STORAGE_USER_KEY); // Clear corrupted data
+    }
     setIsLoading(false);
   }, []);
 
   const login = async (email: string, password?: string): Promise<{ success: boolean; message?: string }> => {
-    setIsLoading(true);
+    // setIsLoading(true); // No need to set loading here, login is quick
     const user = mockLoginUser(email, password);
     if (user) {
       setCurrentUser(user);
-      setIsLoading(false);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
+      } catch (error) {
+        console.error("Error saving user to localStorage:", error);
+      }
+      // setIsLoading(false);
       return { success: true };
     } else {
-      setIsLoading(false);
-      // Refine message for clarity
+      // setIsLoading(false);
       const existingUser = initialMockUsers.find(u => u.email === email) || pendingSignups.find(u => u.email === email);
       if (existingUser?.status === 'pending_approval') {
         return { success: false, message: 'Account pending approval. Please wait for an admin.' };
@@ -51,24 +69,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setCurrentUser(null);
-    // In a real app, also clear token from localStorage, etc.
-    // For mock, we can also redirect to login page after logout for clarity
-    // This would typically be handled by the component calling logout.
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+    } catch (error) {
+      console.error("Error removing user from localStorage:", error);
+    }
   };
 
   const signup = async (name: string, email: string, password?: string): Promise<{ success: boolean; message: string; userId?: string }> => {
+    // mockSignupUser already handles adding to pendingSignups and notifying admin
     return mockSignupUser(name, email, password);
   };
 
   return (
     <AuthContext.Provider value={{ currentUser, isLoading, login, logout, signup }}>
-      {!isLoading ? children : (
-        <div className="flex flex-col items-center justify-center min-h-svh bg-background text-muted-foreground">
-          {/* You can put a global loader here if needed while auth is checked */}
-          {/* For now, rendering children directly or a minimal loader if children depend on auth state */}
-          {children} 
-        </div>
-      )}
+      {children}
     </AuthContext.Provider>
   );
 }
@@ -80,6 +95,3 @@ export function useAuth() {
   }
   return context;
 }
-
-// Need to import initialMockUsers for login check message
-import { initialMockUsers, pendingSignups } from '@/lib/mock-data';
