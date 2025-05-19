@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react'; // Added useMemo here
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -46,14 +46,13 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
       const currentAvailability = resource.availability?.find(avail => avail.date === dateStr);
       if (currentAvailability) {
         setAvailabilitySlots(currentAvailability.slots.join(', '));
-        setIsUnavailable(currentAvailability.slots.length === 0 && currentAvailability.slots.join(', ') === ''); // Explicitly unavailable
+        // Ensure isUnavailable is true if slots array is empty, even if it has other non-string values from bad data
+        setIsUnavailable(currentAvailability.slots.length === 0);
       } else {
-        // If no specific availability, default to empty slots (meaning needs setup)
         setAvailabilitySlots('');
         setIsUnavailable(false);
       }
     } else if (open && !selectedDate) {
-      // If dialog opens without a date somehow, ensure defaults
       setSelectedDate(startOfDay(new Date()));
       setAvailabilitySlots('');
       setIsUnavailable(false);
@@ -75,28 +74,59 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
     let finalSlots: string[] = [];
 
     if (isUnavailable) {
-      // Explicitly setting as unavailable means empty slots array
       finalSlots = [];
     } else {
-      // Process input string into an array of slots
       finalSlots = availabilitySlots
         .split(',')
         .map(s => s.trim())
-        .filter(s => s !== ''); // Remove empty strings resulting from multiple commas or trailing comma
-
-      // Optional: Add validation for slot format (e.g., HH:mm-HH:mm) here if needed
-      // For now, we assume valid format if not marked unavailable and input is provided
+        .filter(s => {
+          // Basic validation for slot format HH:mm-HH:mm
+          const slotRegex = /^\d{2}:\d{2}-\d{2}:\d{2}$/;
+          if (s === '' || !slotRegex.test(s)) {
+            if (s !== '') { // Only toast if there was an attempt at a slot
+                 toast({
+                    title: "Invalid Slot Format",
+                    description: `Slot "${s}" is not in HH:mm-HH:mm format and will be ignored.`,
+                    variant: "destructive",
+                    duration: 5000
+                });
+            }
+            return false;
+          }
+          // Further validation: start time < end time
+          try {
+            const [startStr, endStr] = s.split('-');
+            const [startH, startM] = startStr.split(':').map(Number);
+            const [endH, endM] = endStr.split(':').map(Number);
+            if (startH > endH || (startH === endH && startM >= endM)) {
+                 toast({
+                    title: "Invalid Slot Time",
+                    description: `In slot "${s}", start time must be before end time. It will be ignored.`,
+                    variant: "destructive",
+                    duration: 5000
+                });
+                return false;
+            }
+          } catch (e) {
+            // Catch parsing errors just in case, though regex should prevent most
+             toast({
+                title: "Slot Parsing Error",
+                description: `Error parsing slot "${s}". It will be ignored.`,
+                variant: "destructive",
+                duration: 5000
+            });
+            return false;
+          }
+          return true;
+        });
+      
       if (finalSlots.length === 0 && availabilitySlots.trim() !== '') {
-        toast({ title: "Warning", description: "Input for slots was provided but resulted in no valid slots after processing. Check format. Saving as unavailable for now if not intended.", variant: "default" });
-         // If input string was not empty but processing resulted in zero slots,
-         // treat it as unavailable to avoid ambiguity.
-         // Or, you could alert the user and prevent saving.
-         // For this iteration, we save it as effectively unavailable if string was present but parsed to nothing.
+        toast({ title: "No Valid Slots", description: "No valid time slots were entered after processing. Please check the format (HH:mm-HH:mm) and ensure start time is before end time for each slot. Saving as unavailable for now.", variant: "default", duration: 7000 });
       }
     }
     
     onSave(dateStr, finalSlots);
-    onOpenChange(false); // Close dialog on save
+    // onOpenChange(false); // Dialog is typically closed by the parent page after successful save
   };
   
   const currentSavedSlotsForDate = useMemo(() => {
@@ -129,7 +159,7 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
                 selected={selectedDate}
                 onSelect={handleDateSelect}
                 className="rounded-md border"
-                disabled={(date) => date < startOfDay(new Date())} // Optional: disable past dates
+                disabled={(date) => date < startOfDay(new Date())} 
               />
             </div>
             <div className="space-y-4">
@@ -187,3 +217,4 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
     </Dialog>
   );
 }
+
