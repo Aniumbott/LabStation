@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense, useMemo, useCallback } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, X, Clock, User as UserIconLucide, Info, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Calendar as CalendarIcon } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, X, Clock, User as UserIconLucide, Info, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Calendar as CalendarIcon, StickyNote } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -32,7 +32,10 @@ import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { allAdminMockResources, initialBookings, mockCurrentUser } from '@/lib/mock-data';
-import { Form, useForm } from 'react-hook-form';
+import { useForm, FormProvider } from 'react-hook-form'; // Updated import
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 
 
 const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
@@ -109,8 +112,8 @@ function BookingsPageContent() {
     if (bookingToEdit) {
         bookingData = {
           ...bookingToEdit,
-          startTime: new Date(bookingToEdit.startTime),
-          endTime: new Date(bookingToEdit.endTime),
+          startTime: new Date(bookingToEdit.startTime), // Ensure it's a Date object
+          endTime: new Date(bookingToEdit.endTime),     // Ensure it's a Date object
           userName: bookingToEdit.userName || mockCurrentUser.name
         };
     } else {
@@ -134,7 +137,7 @@ function BookingsPageContent() {
   }, []);
 
   useEffect(() => {
-    if (!isClient) return; // Only run this effect on the client after initial mount
+    if (!isClient) return; 
 
     const resourceIdParam = searchParams.get('resourceId');
     const dateParam = searchParams.get('date');
@@ -151,7 +154,7 @@ function BookingsPageContent() {
     if (dateToSetFromUrl && (!activeSelectedDate || !isSameDay(activeSelectedDate, dateToSetFromUrl))) {
       setActiveSelectedDate(dateToSetFromUrl);
     }
-
+    
     const shouldOpenFormForEdit = bookingIdParam && (!isFormOpen || (currentBooking?.id !== bookingIdParam));
     const shouldOpenFormForNewWithResourceAndDate = resourceIdParam && dateToSetFromUrl && (!isFormOpen || currentBooking?.id || currentBooking?.resourceId !== resourceIdParam || (currentBooking?.startTime && !isSameDay(new Date(currentBooking.startTime), dateToSetFromUrl)));
     const shouldOpenFormForNewWithResourceOnly = resourceIdParam && !dateToSetFromUrl && (!isFormOpen || currentBooking?.id || currentBooking?.resourceId !== resourceIdParam);
@@ -167,7 +170,7 @@ function BookingsPageContent() {
       handleOpenForm(undefined, resourceIdParam);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, allUserBookings, isClient, handleOpenForm]); // Added isClient and handleOpenForm
+  }, [searchParams, allUserBookings, isClient, handleOpenForm]); 
 
 
   useEffect(() => {
@@ -376,19 +379,19 @@ function BookingsPageContent() {
     let keyParts = ['new'];
     if (currentBooking?.resourceId) keyParts.push(currentBooking.resourceId);
     else keyParts.push('no-resource-selected');
-
+    
     const dateForFormKey = (currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime)))
       ? startOfDay(new Date(currentBooking.startTime))
-      : (activeSelectedDate && isValidDate(activeSelectedDate))
+      : (activeSelectedDate && isValidDate(activeSelectedDate)) 
         ? startOfDay(activeSelectedDate)
         : startOfDay(new Date());
-
+        
     keyParts.push(format(dateForFormKey, 'yyyy-MM-dd'));
 
     if (currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime))) {
-        keyParts.push(new Date(currentBooking.startTime).toISOString().substring(11)); // Add time part for uniqueness
+        keyParts.push(new Date(currentBooking.startTime).toISOString().substring(11)); 
     }
-
+    
     return keyParts.join(':');
   }, [currentBooking, activeSelectedDate]);
 
@@ -396,7 +399,8 @@ function BookingsPageContent() {
   const dialogHeaderDateString = useMemo(() => {
     if (currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime))) {
       return format(new Date(currentBooking.startTime), "PPP");
-    } else if (!currentBooking?.id && activeSelectedDate && isValidDate(activeSelectedDate)) {
+    } 
+    else if (!currentBooking?.id && activeSelectedDate && isValidDate(activeSelectedDate)) {
       return format(activeSelectedDate, "PPP");
     }
     return null;
@@ -626,11 +630,11 @@ function BookingsPageContent() {
                     currentParams.delete('bookingId');
                     paramsModified = true;
                 }
-                if (currentParams.has('resourceId')) {
+                if (currentParams.has('resourceId')) { // Also clear resourceId if it was used to open
                     currentParams.delete('resourceId');
                      paramsModified = true;
                 }
-
+                
                 if (paramsModified) {
                     router.push(`${pathname}?${currentParams.toString()}`, { scroll: false });
                 }
@@ -645,16 +649,10 @@ function BookingsPageContent() {
             </DialogDescription>
           </DialogHeader>
           <BookingForm
-            key={formKey}
+            key={formKey} // Critical for re-initializing form on context change
             initialData={currentBooking}
             onSave={handleSaveBooking}
-            onCancel={() => setIsFormOpen(false)}
-            selectedDateProp={(currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime)))
-                ? startOfDay(new Date(currentBooking.startTime))
-                : (activeSelectedDate && isValidDate(activeSelectedDate))
-                    ? startOfDay(activeSelectedDate)
-                    : startOfDay(new Date())
-            }
+            onCancel={() => setIsFormOpen(false)} // Dialog's onOpenChange will handle cleanup
             currentUserFullName={mockCurrentUser.name}
           />
         </DialogContent>
@@ -678,208 +676,241 @@ export default function BookingsPage() {
   );
 }
 
+const bookingFormSchema = z.object({
+  resourceId: z.string().min(1, "Please select a resource."),
+  bookingDate: z.date({ required_error: "Please select a date." }),
+  startTime: z.string().min(1, "Please select a start time."),
+  endTime: z.string().min(1, "Please select an end time."),
+  status: z.enum(bookingStatuses).optional(),
+  notes: z.string().optional(),
+}).refine(data => {
+  const startDateTime = set(data.bookingDate, {
+    hours: parseInt(data.startTime.split(':')[0]),
+    minutes: parseInt(data.startTime.split(':')[1])
+  });
+  const endDateTime = set(data.bookingDate, {
+    hours: parseInt(data.endTime.split(':')[0]),
+    minutes: parseInt(data.endTime.split(':')[1])
+  });
+  return endDateTime > startDateTime;
+}, {
+  message: "End time must be after start time.",
+  path: ["endTime"],
+});
+
+type BookingFormValues = z.infer<typeof bookingFormSchema>;
+
+
 interface BookingFormProps {
   initialData?: Partial<Booking> & { resourceId?: string } | null;
   onSave: (data: Partial<Booking>) => void;
   onCancel: () => void;
-  selectedDateProp: Date;
   currentUserFullName: string;
 }
 
-function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentUserFullName }: BookingFormProps) {
-  const form = useForm();
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-
-  const [formData, setFormData] = useState<Partial<Booking>>(() => {
-    let initialResourceId = initialData?.resourceId;
-    if (!initialData?.id && !initialResourceId && allAdminMockResources.length > 0) {
-      initialResourceId = allAdminMockResources.find(r => r.status === 'Available')?.id || allAdminMockResources[0].id;
-    }
-
-    let initialStartTime: Date;
-    let initialEndTime: Date;
-
-    if (initialData?.startTime && isValidDate(new Date(initialData.startTime))) {
-        initialStartTime = new Date(initialData.startTime);
-    } else {
-        const baseDate = (selectedDateProp && isValidDate(selectedDateProp))
-                            ? startOfDay(selectedDateProp)
-                            : startOfDay(new Date());
-        initialStartTime = set(new Date(baseDate), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 });
-    }
-
-    if (initialData?.endTime && isValidDate(new Date(initialData.endTime)) && new Date(initialData.endTime) > initialStartTime) {
-        initialEndTime = new Date(initialData.endTime);
-    } else {
-        initialEndTime = new Date(initialStartTime.getTime() + 2 * 60 * 60 * 1000); // Default 2 hour duration
-    }
-
-    return {
-        id: initialData?.id,
-        resourceId: initialResourceId,
-        userName: currentUserFullName,
-        userId: initialData?.userId || mockCurrentUser.id,
-        startTime: initialStartTime,
-        endTime: initialEndTime,
-        status: initialData?.id ? (initialData?.status || 'Pending') : 'Pending',
-        notes: initialData?.notes || '',
-    };
+function BookingForm({ initialData, onSave, onCancel, currentUserFullName }: BookingFormProps) {
+  const form = useForm<BookingFormValues>({
+    resolver: zodResolver(bookingFormSchema),
+    defaultValues: {
+      resourceId: initialData?.resourceId || (allAdminMockResources.length > 0 ? allAdminMockResources.find(r => r.status === 'Available')?.id || allAdminMockResources[0].id : ''),
+      bookingDate: initialData?.startTime ? startOfDay(new Date(initialData.startTime)) : startOfDay(new Date()),
+      startTime: initialData?.startTime ? format(new Date(initialData.startTime), 'HH:mm') : '09:00',
+      endTime: initialData?.endTime ? format(new Date(initialData.endTime), 'HH:mm') : '11:00',
+      status: initialData?.id ? (initialData.status || 'Pending') : 'Pending',
+      notes: initialData?.notes || '',
+    },
   });
 
-  const handleDateChangeFromPicker = (newDate: Date | undefined) => {
-    if (!newDate || !isValidDate(newDate)) return;
-    const selectedDay = startOfDay(newDate);
-    setFormData(prev => {
-      const currentStartTimeHours = prev.startTime ? getHours(new Date(prev.startTime)) : 9;
-      const currentStartTimeMinutes = prev.startTime ? getMinutes(new Date(prev.startTime)) : 0;
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const watchBookingDate = form.watch('bookingDate');
+  const watchStartTime = form.watch('startTime');
 
-      const newStartTime = set(selectedDay, {
-        hours: currentStartTimeHours,
-        minutes: currentStartTimeMinutes,
-        seconds: 0,
-        milliseconds: 0
-      });
-
-      let duration = (prev.endTime && prev.startTime) ? (new Date(prev.endTime).getTime() - new Date(prev.startTime).getTime()) : (2 * 60 * 60 * 1000);
-      if (duration <= 0) duration = 2 * 60 * 60 * 1000;
-
-      const newEndTime = new Date(newStartTime.getTime() + duration);
-
-      return { ...prev, startTime: newStartTime, endTime: newEndTime };
-    });
-    setIsCalendarOpen(false);
-  };
-
-  const handleChange = (field: keyof Booking | 'resourceId', value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleTimeChange = (field: 'startTime' | 'endTime', timeString: string) => {
-    const [hours, minutes] = timeString.split(':').map(Number);
-    if (isNaN(hours) || isNaN(minutes)) return;
-
-
-    let baseDateForTimeChange: Date;
-    if (formData.startTime && isValidDate(new Date(formData.startTime!))) {
-        baseDateForTimeChange = new Date(formData.startTime);
-    } else {
-        baseDateForTimeChange = selectedDateProp && isValidDate(selectedDateProp) ? selectedDateProp : startOfDay(new Date());
-    }
-
-    const newDate = setHours(setMinutes(startOfDay(baseDateForTimeChange), minutes), hours);
-    handleChange(field, newDate);
-
-    if (field === 'startTime') {
-        const currentStartTime = newDate;
-        let duration = 2 * 60 * 60 * 1000;
-        if (formData.startTime && formData.endTime && isValidDate(new Date(formData.startTime)) && isValidDate(new Date(formData.endTime))) {
-            const existingDuration = new Date(formData.endTime).getTime() - new Date(formData.startTime).getTime();
-             if (existingDuration > 0) duration = existingDuration;
+  // Auto-update endTime when startTime or bookingDate changes, to maintain a 2-hour duration for new bookings
+  useEffect(() => {
+    if (!initialData?.id) { // Only for new bookings
+        const currentStartTimeHours = parseInt(watchStartTime.split(':')[0]);
+        const currentStartTimeMinutes = parseInt(watchStartTime.split(':')[1]);
+        
+        if (!isNaN(currentStartTimeHours) && !isNaN(currentStartTimeMinutes) && watchBookingDate) {
+            const newStartTime = set(watchBookingDate, { hours: currentStartTimeHours, minutes: currentStartTimeMinutes });
+            const newEndTime = new Date(newStartTime.getTime() + 2 * 60 * 60 * 1000);
+            form.setValue('endTime', format(newEndTime, 'HH:mm'));
         }
-        let newAutoEndTime = new Date(currentStartTime.getTime() + duration);
-        newAutoEndTime = set(newAutoEndTime, {
-            year: currentStartTime.getFullYear(),
-            month: currentStartTime.getMonth(),
-            date: currentStartTime.getDate()
-        });
-        handleChange('endTime', newAutoEndTime);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchStartTime, watchBookingDate, initialData?.id, form.setValue]);
 
-  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); onSave(formData); };
+
+  function handleRHFSubmit(data: BookingFormValues) {
+    const finalStartTime = set(data.bookingDate, {
+      hours: parseInt(data.startTime.split(':')[0]),
+      minutes: parseInt(data.startTime.split(':')[1]),
+      seconds: 0, milliseconds: 0
+    });
+    const finalEndTime = set(data.bookingDate, {
+      hours: parseInt(data.endTime.split(':')[0]),
+      minutes: parseInt(data.endTime.split(':')[1]),
+      seconds: 0, milliseconds: 0
+    });
+
+    onSave({
+      id: initialData?.id,
+      resourceId: data.resourceId,
+      userId: initialData?.userId || mockCurrentUser.id,
+      userName: currentUserFullName,
+      startTime: finalStartTime,
+      endTime: finalEndTime,
+      status: data.status || 'Pending',
+      notes: data.notes,
+    });
+  }
+  
 
   return (
-    <Form {...form}>
-    <form onSubmit={handleSubmit} className="space-y-4 py-4">
-      <div>
-        <Label htmlFor="bookingFormDialogDate">Date</Label>
-        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              id="bookingFormDialogDate"
-              variant="outline"
-              className={cn(
-                "w-full justify-start text-left font-normal h-10",
-                !formData.startTime && "text-muted-foreground"
-              )}
-            >
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {formData.startTime && isValidDate(new Date(formData.startTime)) ? format(new Date(formData.startTime), "PPP") : <span>Pick a date</span>}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={formData.startTime && isValidDate(new Date(formData.startTime)) ? new Date(formData.startTime) : undefined}
-              onSelect={handleDateChangeFromPicker}
-              initialFocus
-              disabled={(date) => date < startOfDay(new Date())}
-            />
-          </PopoverContent>
-        </Popover>
-      </div>
-      <div>
-        <Label htmlFor="bookingFormResourceId">Resource</Label>
-        <Select value={formData.resourceId || ''} onValueChange={(value) => handleChange('resourceId', value)} required>
-          <SelectTrigger id="bookingFormResourceId"><SelectValue placeholder="Select a resource" /></SelectTrigger>
-          <SelectContent>
-            {allAdminMockResources.map(resource => (
-              <SelectItem key={resource.id} value={resource.id} disabled={resource.status !== 'Available' && resource.id !== initialData?.resourceId}>
-                {resource.name} ({resource.status === 'Available' ? 'Available' : resource.status})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label htmlFor="bookingFormUserName">Booked By</Label>
-        <Input id="bookingFormUserName" value={formData.userName || ''} readOnly className="bg-muted/50"/>
-         <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Info size={12} /> This is automatically set for the logged-in user.</p>
-      </div>
+    <FormProvider {...form}>
+    <form onSubmit={form.handleSubmit(handleRHFSubmit)} className="space-y-4 py-4">
+      <FormField
+        control={form.control}
+        name="bookingDate"
+        render={({ field }) => (
+          <FormItem className="flex flex-col">
+            <FormLabel>Date</FormLabel>
+            <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+              <PopoverTrigger asChild>
+                <FormControl>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal h-10",
+                      !field.value && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </FormControl>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={field.value}
+                  onSelect={(date) => {
+                    field.onChange(date);
+                    setIsCalendarOpen(false);
+                  }}
+                  disabled={(date) => date < startOfDay(new Date()) && !initialData?.id} // Allow past dates for viewing/editing existing, but not new
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="resourceId"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Resource</FormLabel>
+            <Select onValueChange={field.onChange} value={field.value}>
+              <FormControl>
+                <SelectTrigger><SelectValue placeholder="Select a resource" /></SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {allAdminMockResources.map(resource => (
+                  <SelectItem key={resource.id} value={resource.id} disabled={resource.status !== 'Available' && resource.id !== initialData?.resourceId}>
+                    {resource.name} ({resource.status === 'Available' ? 'Available' : resource.status})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      
+      <FormItem>
+        <FormLabel htmlFor="bookingFormUserName">Booked By</FormLabel>
+        <Input id="bookingFormUserName" value={currentUserFullName} readOnly className="bg-muted/50"/>
+         <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Info size={12} /> This is automatically set.</p>
+      </FormItem>
+
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="bookingFormStartTime">Start Time</Label>
-           <Select value={formData.startTime && isValidDate(new Date(formData.startTime)) ? format(new Date(formData.startTime), 'HH:mm') : ''} onValueChange={(value) => handleTimeChange('startTime', value)} required>
-            <SelectTrigger id="bookingFormStartTime"><SelectValue placeholder="Select start time" /></SelectTrigger>
-            <SelectContent>{timeSlots.map(slot => <SelectItem key={`start-${slot}`} value={slot}>{slot}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="bookingFormEndTime">End Time</Label>
-          <Select value={formData.endTime && isValidDate(new Date(formData.endTime)) ? format(new Date(formData.endTime), 'HH:mm') : ''} onValueChange={(value) => handleTimeChange('endTime', value)} required>
-            <SelectTrigger id="bookingFormEndTime"><SelectValue placeholder="Select end time" /></SelectTrigger>
-            <SelectContent>{timeSlots.map(slot => <SelectItem key={`end-${slot}`} value={slot}>{slot}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
+        <FormField
+            control={form.control}
+            name="startTime"
+            render={({ field }) => (
+            <FormItem>
+                <FormLabel>Start Time</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                    <SelectTrigger><SelectValue placeholder="Select start time" /></SelectTrigger>
+                </FormControl>
+                <SelectContent>{timeSlots.map(slot => <SelectItem key={`start-${slot}`} value={slot}>{slot}</SelectItem>)}</SelectContent>
+                </Select>
+                <FormMessage />
+            </FormItem>
+            )}
+        />
+        <FormField
+            control={form.control}
+            name="endTime"
+            render={({ field }) => (
+            <FormItem>
+                <FormLabel>End Time</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                    <SelectTrigger><SelectValue placeholder="Select end time" /></SelectTrigger>
+                </FormControl>
+                <SelectContent>{timeSlots.map(slot => <SelectItem key={`end-${slot}`} value={slot}>{slot}</SelectItem>)}</SelectContent>
+                </Select>
+                <FormMessage />
+            </FormItem>
+            )}
+        />
       </div>
       {initialData?.id && (
-        <div>
-          <Label htmlFor="bookingFormStatus">Status</Label>
-          <Select
-            value={formData.status || 'Pending'}
-            onValueChange={(value) => handleChange('status', value as Booking['status'])}
-          >
-            <SelectTrigger id="bookingFormStatus"><SelectValue placeholder="Select status" /></SelectTrigger>
-            <SelectContent>
-              {bookingStatuses.map(statusVal => (
-                <SelectItem key={statusVal} value={statusVal}>{statusVal}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-           <p className="text-xs text-muted-foreground mt-1">Status can only be changed by Admins or Lab Managers during editing.</p>
-        </div>
+        <FormField
+            control={form.control}
+            name="status"
+            render={({ field }) => (
+            <FormItem>
+            <FormLabel>Status</FormLabel>
+            <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                    <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                {bookingStatuses.map(statusVal => (
+                    <SelectItem key={statusVal} value={statusVal}>{statusVal}</SelectItem>
+                ))}
+                </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">Status can only be changed by Admins or Lab Managers during editing.</p>
+            <FormMessage />
+            </FormItem>
+            )}
+        />
       )}
-       <div>
-        <Label htmlFor="bookingFormNotes">Notes (Optional)</Label>
-        <Textarea id="bookingFormNotes" value={formData.notes || ''} onChange={(e) => handleChange('notes', e.target.value)} placeholder="Any specific requirements or purpose of booking..."/>
-      </div>
+       <FormField
+            control={form.control}
+            name="notes"
+            render={({ field }) => (
+            <FormItem>
+            <FormLabel>Notes (Optional)</FormLabel>
+            <FormControl>
+                <Textarea placeholder="Any specific requirements or purpose of booking..." {...field} />
+            </FormControl>
+            <FormMessage />
+            </FormItem>
+            )}
+        />
       <DialogFooter className="pt-2">
         <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button type="submit">{initialData?.id ? "Save Changes" : "Create Booking"}</Button>
+        <Button type="submit" disabled={form.formState.isSubmitting}>{initialData?.id ? "Save Changes" : "Create Booking"}</Button>
       </DialogFooter>
     </form>
-    </Form>
+    </FormProvider>
   );
 }
-
-    
