@@ -49,12 +49,14 @@ export interface Resource {
 }
 
 export interface BookingUsageDetails {
-  actualStartTime?: string; // ISO string, if different from scheduled
-  actualEndTime?: string;   // ISO string, if different from scheduled
+  actualStartTime?: string; // ISO string
+  actualEndTime?: string;   // ISO string
   outcome?: 'Success' | 'Failure' | 'Interrupted' | 'Not Applicable';
-  dataStorageLocation?: string; // e.g., path to results, lab notebook ID
+  dataStorageLocation?: string;
   usageComments?: string;
 }
+export const BookingUsageOutcomes: Array<BookingUsageDetails['outcome']> = ['Success', 'Failure', 'Interrupted', 'Not Applicable'];
+
 
 export interface Booking {
   id:string;
