@@ -199,8 +199,10 @@ export default function MaintenanceRequestsPage() {
         dateReported: new Date().toISOString(),
         dateResolved: (data.status === 'Resolved' || data.status === 'Closed') ? new Date().toISOString() : undefined,
       };
-      setRequests([newRequest, ...requests]);
+      setRequests(prevRequests => [newRequest, ...prevRequests].sort((a, b) => new Date(b.dateReported).getTime() - new Date(a.dateReported).getTime()));
       initialMaintenanceRequests.unshift(newRequest); 
+      initialMaintenanceRequests.sort((a, b) => new Date(b.dateReported).getTime() - new Date(a.dateReported).getTime());
+
       toast({ title: 'Request Logged', description: `New maintenance request for "${resource.name}" has been logged.` });
       
       const targetTechnicianId = newRequest.assignedTechnicianId || (technicians.length > 0 ? technicians[0].id : 'u1'); // Notify first tech or admin
@@ -221,6 +223,9 @@ export default function MaintenanceRequestsPage() {
     activeFilterResourceId !== 'all',
     activeFilterTechnicianId !== 'all',
   ].filter(Boolean).length;
+
+  const canEditMaintenanceRequest = mockCurrentUser.role === 'Admin' || mockCurrentUser.role === 'Lab Manager' || mockCurrentUser.role === 'Technician';
+
 
   return (
     <TooltipProvider>
@@ -332,7 +337,7 @@ export default function MaintenanceRequestsPage() {
                       <TableHead>Date Reported</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Assigned To</TableHead>
-                      <TableHead className="text-right w-[100px]">Actions</TableHead>
+                      {canEditMaintenanceRequest && <TableHead className="text-right w-[100px]">Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -346,17 +351,19 @@ export default function MaintenanceRequestsPage() {
                         </TableCell>
                         <TableCell>{getStatusBadge(request.status)}</TableCell>
                         <TableCell>{request.assignedTechnicianName || <span className="text-xs italic text-muted-foreground">Unassigned</span>}</TableCell>
-                        <TableCell className="text-right space-x-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDialog(request)}>
-                                <Edit className="h-4 w-4" />
-                                <span className="sr-only">Edit Request</span>
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Edit Request</p></TooltipContent>
-                          </Tooltip>
-                        </TableCell>
+                        {canEditMaintenanceRequest && (
+                          <TableCell className="text-right space-x-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDialog(request)}>
+                                  <Edit className="h-4 w-4" />
+                                  <span className="sr-only">Edit Request</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent><p>Edit Request</p></TooltipContent>
+                            </Tooltip>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -396,5 +403,3 @@ export default function MaintenanceRequestsPage() {
     </TooltipProvider>
   );
 }
-
-    

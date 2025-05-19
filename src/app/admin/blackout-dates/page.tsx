@@ -39,6 +39,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -66,7 +67,6 @@ export default function BlackoutDatesPage() {
   const [isRecurringFormDialogOpen, setIsRecurringFormDialogOpen] = useState(false);
   const [editingRecurringRule, setEditingRecurringRule] = useState<RecurringBlackoutRule | null>(null);
   const [ruleToDelete, setRuleToDelete] = useState<RecurringBlackoutRule | null>(null);
-  // Add search/filter state for recurring rules if needed in future
 
 
   useEffect(() => {
@@ -259,7 +259,7 @@ export default function BlackoutDatesPage() {
                           type="search"
                           placeholder="e.g., Holiday, Maintenance, May 20..."
                           value={tempDateSearchTerm}
-                          onChange={(e) => setTempDateSearchTerm(e.target.value)}
+                          onChange={(e) => setTempDateSearchTerm(e.target.value.toLowerCase())}
                           className="h-9 pl-8"
                         />
                       </div>

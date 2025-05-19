@@ -124,8 +124,10 @@ export default function ResourceTypesPage() {
         id: `rt${resourceTypes.length + 1 + Date.now()}`,
         ...data,
       };
-      setResourceTypes([...resourceTypes, newType]);
+      setResourceTypes(prevTypes => [...prevTypes, newType].sort((a, b) => a.name.localeCompare(b.name)));
       initialMockResourceTypes.push(newType); 
+      initialMockResourceTypes.sort((a, b) => a.name.localeCompare(b.name));
+
 
       toast({
         title: 'Resource Type Created',
@@ -152,6 +154,8 @@ export default function ResourceTypesPage() {
 
   const activeFilterCount = [activeSearchTerm !== ''].filter(Boolean).length;
   const canAddResourceTypes = mockCurrentUser.role === 'Admin';
+  const canManageResourceTypes = mockCurrentUser.role === 'Admin';
+
 
   return (
     <div className="space-y-8">
@@ -191,7 +195,7 @@ export default function ResourceTypesPage() {
                         type="search"
                         placeholder="Keyword..."
                         value={tempSearchTerm}
-                        onChange={(e) => setTempSearchTerm(e.target.value)}
+                        onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
                         className="h-9 pl-8"
                         />
                     </div>
@@ -223,7 +227,7 @@ export default function ResourceTypesPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead className="text-right w-[100px]">Actions</TableHead>
+                {canManageResourceTypes && <TableHead className="text-right w-[100px]">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -231,49 +235,51 @@ export default function ResourceTypesPage() {
                   <TableRow key={type.id}>
                     <TableCell className="font-medium">{type.name}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{type.description || 'N/A'}</TableCell>
-                    <TableCell className="text-right space-x-1">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDialog(type)}>
-                            <Edit className="h-4 w-4" />
-                            <span className="sr-only">Edit Resource Type</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent><p>Edit Resource Type</p></TooltipContent>
-                      </Tooltip>
-
-                      <AlertDialog>
+                    {canManageResourceTypes && (
+                      <TableCell className="text-right space-x-1">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <AlertDialogTrigger asChild>
-                               <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setTypeToDelete(type)}>
-                                  <Trash2 className="h-4 w-4" />
-                                  <span className="sr-only">Delete Resource Type</span>
-                              </Button>
-                            </AlertDialogTrigger>
+                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDialog(type)}>
+                              <Edit className="h-4 w-4" />
+                              <span className="sr-only">Edit Resource Type</span>
+                            </Button>
                           </TooltipTrigger>
-                          <TooltipContent><p>Delete Resource Type</p></TooltipContent>
+                          <TooltipContent><p>Edit Resource Type</p></TooltipContent>
                         </Tooltip>
-                        {typeToDelete && typeToDelete.id === type.id && (
-                            <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                This action cannot be undone. This will remove the resource type
-                                <span className="font-semibold"> "{typeToDelete.name}"</span>.
-                                This might affect existing resources categorized under this type.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel onClick={() => setTypeToDelete(null)}>Cancel</AlertDialogCancel>
-                                <AlertDialogAction variant="destructive" onClick={() => handleDeleteType(typeToDelete.id)}>
-                                Delete Resource Type
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                            </AlertDialogContent>
-                        )}
-                      </AlertDialog>
-                    </TableCell>
+
+                        <AlertDialog>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setTypeToDelete(type)}>
+                                    <Trash2 className="h-4 w-4" />
+                                    <span className="sr-only">Delete Resource Type</span>
+                                </Button>
+                              </AlertDialogTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Delete Resource Type</p></TooltipContent>
+                          </Tooltip>
+                          {typeToDelete && typeToDelete.id === type.id && (
+                              <AlertDialogContent>
+                              <AlertDialogHeader>
+                                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                  This action cannot be undone. This will remove the resource type
+                                  <span className="font-semibold"> "{typeToDelete.name}"</span>.
+                                  This might affect existing resources categorized under this type.
+                                  </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                  <AlertDialogCancel onClick={() => setTypeToDelete(null)}>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction variant="destructive" onClick={() => handleDeleteType(typeToDelete.id)}>
+                                  Delete Resource Type
+                                  </AlertDialogAction>
+                              </AlertDialogFooter>
+                              </AlertDialogContent>
+                          )}
+                        </AlertDialog>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
             </TableBody>
@@ -316,5 +322,3 @@ export default function ResourceTypesPage() {
     </div>
   );
 }
-
-    

@@ -154,8 +154,9 @@ export default function UsersPage() {
         ...data,
         avatarUrl: 'https://placehold.co/100x100.png', // Default avatar for new users
       };
-      setUsers([...users, newUser]);
+      setUsers(prevUsers => [...prevUsers, newUser].sort((a, b) => a.name.localeCompare(b.name)));
       initialMockUsers.push(newUser); 
+      initialMockUsers.sort((a, b) => a.name.localeCompare(b.name));
 
       toast({
         title: 'User Created',
@@ -182,6 +183,8 @@ export default function UsersPage() {
 
   const activeFilterCount = [activeSearchTerm !== '', activeFilterRole !== 'all'].filter(Boolean).length;
   const canAddUsers = mockCurrentUser.role === 'Admin';
+  const canManageUsers = mockCurrentUser.role === 'Admin';
+
 
   return (
     <div className="space-y-8">
@@ -221,7 +224,7 @@ export default function UsersPage() {
                         type="search"
                         placeholder="Name or email..."
                         value={tempSearchTerm}
-                        onChange={(e) => setTempSearchTerm(e.target.value)}
+                        onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
                         className="h-9 pl-8"
                         />
                     </div>
@@ -269,7 +272,7 @@ export default function UsersPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead className="text-right w-[100px]">Actions</TableHead>
+                {canManageUsers && <TableHead className="text-right w-[100px]">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -291,52 +294,54 @@ export default function UsersPage() {
                         {user.role}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right space-x-1">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditUserDialog(user)}>
-                            <Edit className="h-4 w-4" />
-                            <span className="sr-only">Edit User</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Edit User</p>
-                        </TooltipContent>
-                      </Tooltip>
-                      
-                      <AlertDialog>
+                    {canManageUsers && (
+                      <TableCell className="text-right space-x-1">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <AlertDialogTrigger asChild>
-                               <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToDelete(user)}>
-                                  <Trash2 className="h-4 w-4" />
-                                  <span className="sr-only">Delete User</span>
-                              </Button>
-                            </AlertDialogTrigger>
+                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditUserDialog(user)}>
+                              <Edit className="h-4 w-4" />
+                              <span className="sr-only">Edit User</span>
+                            </Button>
                           </TooltipTrigger>
                           <TooltipContent>
-                             <p>Delete User</p>
+                            <p>Edit User</p>
                           </TooltipContent>
                         </Tooltip>
-                        {userToDelete && userToDelete.id === user.id && (
-                            <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                This action cannot be undone. This will remove the user 
-                                <span className="font-semibold"> {userToDelete.name}</span> from the list.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
-                                <AlertDialogAction variant="destructive" onClick={() => handleDeleteUser(userToDelete.id)}>
-                                Delete User
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                            </AlertDialogContent>
-                        )}
-                      </AlertDialog>
-                    </TableCell>
+                        
+                        <AlertDialog>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToDelete(user)}>
+                                    <Trash2 className="h-4 w-4" />
+                                    <span className="sr-only">Delete User</span>
+                                </Button>
+                              </AlertDialogTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Delete User</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          {userToDelete && userToDelete.id === user.id && (
+                              <AlertDialogContent>
+                              <AlertDialogHeader>
+                                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                  This action cannot be undone. This will remove the user 
+                                  <span className="font-semibold"> {userToDelete.name}</span> from the list.
+                                  </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                  <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction variant="destructive" onClick={() => handleDeleteUser(userToDelete.id)}>
+                                  Delete User
+                                  </AlertDialogAction>
+                              </AlertDialogFooter>
+                              </AlertDialogContent>
+                          )}
+                        </AlertDialog>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}
@@ -380,5 +385,3 @@ export default function UsersPage() {
     </div>
   );
 }
-
-    
