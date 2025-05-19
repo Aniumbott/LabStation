@@ -5,14 +5,14 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, Building, ChevronRight, CalendarCog, CalendarX } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, Building, ChevronRight, CalendarCog, CalendarX, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList, initialBookings } from '@/lib/mock-data';
-import { useAuth } from '@/components/auth-context'; // Import useAuth
+import { useAuth } from '@/components/auth-context';
 import type { Resource, ResourceType, ResourceStatus, Booking, UnavailabilityPeriod } from '@/types';
 import { format, parseISO, isValid, startOfToday, isPast, startOfDay as fnsStartOfDay, isWithinInterval, isSameDay } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -52,23 +52,22 @@ function ResourceDetailPageSkeleton() {
               <Skeleton className="w-full h-80 rounded-t-lg" />
             </CardContent>
           </Card>
+           <Card className="shadow-lg">
+            <CardHeader><Skeleton className="h-6 w-3/4 rounded-md" /></CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-4 w-full rounded-md" />
+              <Skeleton className="h-4 w-5/6 rounded-md" />
+            </CardContent>
+          </Card>
+           <Card className="shadow-lg">
+            <CardHeader><Skeleton className="h-6 w-3/4 rounded-md" /></CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-4 w-full rounded-md" />
+              <Skeleton className="h-4 w-5/6 rounded-md" />
+            </CardContent>
+          </Card>
           <Card className="shadow-lg">
             <CardHeader><Skeleton className="h-6 w-1/2 rounded-md" /></CardHeader>
-            <CardContent className="space-y-2">
-              <Skeleton className="h-4 w-full rounded-md" />
-              <Skeleton className="h-4 w-5/6 rounded-md" />
-              <Skeleton className="h-4 w-full rounded-md" />
-            </CardContent>
-          </Card>
-           <Card className="shadow-lg">
-            <CardHeader><Skeleton className="h-6 w-3/4 rounded-md" /></CardHeader>
-            <CardContent className="space-y-2">
-              <Skeleton className="h-4 w-full rounded-md" />
-              <Skeleton className="h-4 w-5/6 rounded-md" />
-            </CardContent>
-          </Card>
-           <Card className="shadow-lg">
-            <CardHeader><Skeleton className="h-6 w-3/4 rounded-md" /></CardHeader>
             <CardContent className="space-y-2">
               <Skeleton className="h-4 w-full rounded-md" />
               <Skeleton className="h-4 w-5/6 rounded-md" />
@@ -153,12 +152,11 @@ const DetailItem = ({ icon: Icon, label, value, isLink = false }: { icon: React.
 };
 
 export default function ResourceDetailPage() {
+  // All hooks are called at the top level
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  const { currentUser } = useAuth(); 
-  const resourceId = params.resourceId as string;
-
+  const { currentUser } = useAuth();
   const [resource, setResource] = useState<Resource | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
@@ -166,11 +164,12 @@ export default function ResourceDetailPage() {
   const [isAvailabilityDialogOpen, setIsAvailabilityDialogOpen] = useState(false);
   const [isUnavailabilityDialogOpen, setIsUnavailabilityDialogOpen] = useState(false);
 
+  const resourceId = params.resourceId as string;
 
   useEffect(() => {
     if (resourceId) {
       setIsLoading(true);
-      setTimeout(() => { 
+      setTimeout(() => {
         const foundResource = allAdminMockResources.find(r => r.id === resourceId);
         setResource(foundResource || null);
         setIsLoading(false);
@@ -182,16 +181,27 @@ export default function ResourceDetailPage() {
   }, [resourceId]);
 
   const userPastBookingsForResource = useMemo(() => {
-    if (!resource || !currentUser) return []; 
+    if (!resource || !currentUser) return [];
     return initialBookings
       .filter(booking =>
         booking.resourceId === resource.id &&
-        booking.userId === currentUser.id && 
-        isValid(booking.startTime) && isPast(booking.startTime) &&
+        booking.userId === currentUser.id &&
+        booking.startTime && isValid(new Date(booking.startTime)) && isPast(new Date(booking.startTime)) &&
         booking.status !== 'Cancelled'
       )
       .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
-  }, [resource, currentUser]); 
+  }, [resource, currentUser]);
+
+  const sortedUnavailabilityPeriods = useMemo(() => {
+    if (!resource || !resource.unavailabilityPeriods) { // Guard against null resource or missing unavailabilityPeriods
+      return [];
+    }
+    return [...resource.unavailabilityPeriods].sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime());
+  }, [resource]); // Dependency is now the whole resource object
+
+  // Non-hook definitions
+  const canManageResource = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
+  const canBookResource = resource ? resource.status === 'Available' : false; // Handles null resource
 
   const handleSaveResource = (data: ResourceFormValues) => {
     if (resource) {
@@ -200,7 +210,7 @@ export default function ResourceDetailPage() {
             toast({ title: "Error", description: "Selected resource type not found.", variant: "destructive"});
             return;
         }
-        const updatedResource: Resource = {
+        const updatedResourceData: Resource = {
             ...resource,
             ...data,
             imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
@@ -221,9 +231,9 @@ export default function ResourceDetailPage() {
 
         const resourceIndexInGlobalArray = allAdminMockResources.findIndex(r => r.id === resource.id);
         if (resourceIndexInGlobalArray !== -1) {
-            allAdminMockResources[resourceIndexInGlobalArray] = updatedResource;
+            allAdminMockResources[resourceIndexInGlobalArray] = updatedResourceData;
         }
-        setResource(updatedResource);
+        setResource(updatedResourceData);
         toast({
             title: 'Resource Updated',
             description: `Resource "${data.name}" has been updated.`,
@@ -261,23 +271,19 @@ export default function ResourceDetailPage() {
         }
       } else {
         if (dateIndex !== -1) {
-          updatedAvailability[dateIndex].slots = []; // Ensure it's an empty array if unavailable
+          updatedAvailability[dateIndex].slots = [];
         } else {
-           // If marking as unavailable and no prior entry, create one with empty slots
            updatedAvailability.push({ date, slots: [] });
         }
       }
-
+      
       updatedAvailability.sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
-
       const updatedResource = { ...resource, availability: updatedAvailability };
-
       const globalIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
       if (globalIndex !== -1) {
         allAdminMockResources[globalIndex] = updatedResource;
       }
-
-      setResource(updatedResource); // Update local state to refresh UI
+      setResource(updatedResource);
       toast({
         title: 'Availability Updated',
         description: `Daily slots for ${resource.name} on ${format(parseISO(date), 'PPP')} have been updated.`,
@@ -300,8 +306,7 @@ export default function ResourceDetailPage() {
     }
   };
 
-  const canManageResource = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
-
+  // Conditional returns after all hooks have been called
   if (isLoading) {
     return <ResourceDetailPageSkeleton />;
   }
@@ -341,13 +346,7 @@ export default function ResourceDetailPage() {
     }
   }).sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime()) || [];
 
-  const canBookResource = resource.status === 'Available';
-
-  const sortedUnavailabilityPeriods = useMemo(() => {
-    return [...(resource.unavailabilityPeriods || [])].sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime());
-  }, [resource.unavailabilityPeriods]);
-
-
+  // JSX Render
   return (
     <TooltipProvider>
     <div className="space-y-8">
@@ -384,7 +383,10 @@ export default function ResourceDetailPage() {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" onClick={() => setIsFormDialogOpen(true)}>
+                    <Button variant="outline" size="icon" onClick={() => {
+                      // setResource(resource); // No need to setResource here, initialResource prop handles it
+                      setIsFormDialogOpen(true);
+                    }}>
                       <Edit className="h-4 w-4" />
                       <span className="sr-only">Edit Resource</span>
                     </Button>
@@ -645,4 +647,3 @@ export default function ResourceDetailPage() {
   );
 }
 
-    
