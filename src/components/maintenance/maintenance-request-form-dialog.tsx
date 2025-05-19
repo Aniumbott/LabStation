@@ -19,8 +19,8 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Save, X, PlusCircle } from 'lucide-react';
-import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource } from '@/types';
-import { maintenanceRequestStatuses, mockCurrentUser } from '@/lib/mock-data';
+import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource, RoleName } from '@/types';
+import { maintenanceRequestStatuses } from '@/lib/mock-data';
 
 const UNASSIGNED_TECHNICIAN_VALUE = "--unassigned--";
 
@@ -49,11 +49,12 @@ interface MaintenanceRequestFormDialogProps {
   onSave: (data: MaintenanceRequestFormValues) => void;
   technicians: User[];
   resources: Resource[];
+  currentUserRole?: RoleName;
 }
 
 
 export function MaintenanceRequestFormDialog({
-    open, onOpenChange, initialRequest, onSave, technicians, resources
+    open, onOpenChange, initialRequest, onSave, technicians, resources, currentUserRole
 }: MaintenanceRequestFormDialogProps) {
   const form = useForm<MaintenanceRequestFormValues>({
     resolver: zodResolver(maintenanceRequestFormSchema),
@@ -98,7 +99,7 @@ export function MaintenanceRequestFormDialog({
     onSave(dataToSave);
   }
 
-  const canEditSensitiveFields = mockCurrentUser.role === 'Admin' || mockCurrentUser.role === 'Lab Manager' || mockCurrentUser.role === 'Technician';
+  const canEditSensitiveFields = currentUserRole && (currentUserRole === 'Admin' || currentUserRole === 'Lab Manager' || currentUserRole === 'Technician');
 
 
   return (
@@ -228,3 +229,5 @@ export function MaintenanceRequestFormDialog({
     </Dialog>
   );
 }
+
+    

@@ -5,7 +5,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Wrench, PlusCircle, Edit, Filter as FilterIcon, FilterX, Search as SearchIcon, ListFilter, CheckCircle, AlertCircle, PenToolIcon } from 'lucide-react';
 import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource } from '@/types';
-import { initialMaintenanceRequests, maintenanceRequestStatuses, initialMockUsers, allAdminMockResources, addNotification, mockCurrentUser } from '@/lib/mock-data';
+import { initialMaintenanceRequests, maintenanceRequestStatuses, initialMockUsers, allAdminMockResources, addNotification } from '@/lib/mock-data';
+import { useAuth } from '@/components/auth-context'; // Import useAuth
 import {
   Table,
   TableBody,
@@ -58,6 +59,7 @@ const getStatusBadge = (status: MaintenanceRequestStatus) => {
 
 export default function MaintenanceRequestsPage() {
   const { toast } = useToast();
+  const { currentUser } = useAuth(); 
   const [requests, setRequests] = useState<MaintenanceRequest[]>(() => JSON.parse(JSON.stringify(initialMaintenanceRequests)));
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<MaintenanceRequest | null>(null);
@@ -88,13 +90,13 @@ export default function MaintenanceRequestsPage() {
 
   const filteredRequests = useMemo(() => {
     let currentRequests = [...requests];
+    const lowerSearchTerm = activeSearchTerm.toLowerCase();
     if (activeSearchTerm) {
-      const lowerSearch = activeSearchTerm.toLowerCase();
       currentRequests = currentRequests.filter(req =>
-        req.resourceName.toLowerCase().includes(lowerSearch) ||
-        req.reportedByUserName.toLowerCase().includes(lowerSearch) ||
-        req.issueDescription.toLowerCase().includes(lowerSearch) ||
-        (req.assignedTechnicianName && req.assignedTechnicianName.toLowerCase().includes(lowerSearch))
+        req.resourceName.toLowerCase().includes(lowerSearchTerm) ||
+        req.reportedByUserName.toLowerCase().includes(lowerSearchTerm) ||
+        req.issueDescription.toLowerCase().includes(lowerSearchTerm) ||
+        (req.assignedTechnicianName && req.assignedTechnicianName.toLowerCase().includes(lowerSearchTerm))
       );
     }
     if (activeFilterStatus !== 'all') {
@@ -133,11 +135,15 @@ export default function MaintenanceRequestsPage() {
     setActiveFilterStatus('all');
     setActiveFilterResourceId('all');
     setActiveFilterTechnicianId('all');
-    resetDialogFilters();
+    resetDialogFilters(); 
     setIsFilterDialogOpen(false);
   };
 
   const handleOpenNewDialog = () => {
+    if (!currentUser) {
+      toast({ title: "Login Required", description: "You must be logged in to log a maintenance request.", variant: "destructive" });
+      return;
+    }
     setEditingRequest(null);
     setIsFormDialogOpen(true);
   };
@@ -169,7 +175,7 @@ export default function MaintenanceRequestsPage() {
       if (globalIndex !== -1) initialMaintenanceRequests[globalIndex] = updatedRequest;
       toast({ title: 'Request Updated', description: `Maintenance request for "${resource.name}" has been updated.` });
       
-      if (updatedRequest.status === 'Resolved' && editingRequest.status !== 'Resolved') {
+      if (updatedRequest.status === 'Resolved' && editingRequest.status !== 'Resolved' && updatedRequest.reportedByUserId) {
         addNotification(
           updatedRequest.reportedByUserId,
           'Maintenance Resolved',
@@ -188,7 +194,10 @@ export default function MaintenanceRequestsPage() {
       }
 
     } else {
-      const currentUser = initialMockUsers.find(u => u.id === mockCurrentUser.id) || initialMockUsers[0]; // Fallback if current user not found
+      if (!currentUser) {
+        toast({ title: "Error", description: "You must be logged in to log a request.", variant: "destructive"});
+        return;
+      }
       const newRequest: MaintenanceRequest = {
         id: `mr${requests.length + 1 + Date.now()}`,
         ...data,
@@ -205,14 +214,16 @@ export default function MaintenanceRequestsPage() {
 
       toast({ title: 'Request Logged', description: `New maintenance request for "${resource.name}" has been logged.` });
       
-      const targetTechnicianId = newRequest.assignedTechnicianId || (technicians.length > 0 ? technicians[0].id : 'u1'); // Notify first tech or admin
-      addNotification(
-        targetTechnicianId,
-        'New Maintenance Request',
-        `New request for ${resource.name}: ${newRequest.issueDescription.substring(0, 50)}...`,
-        'maintenance_new',
-        '/maintenance'
-      );
+      const targetTechnicianId = newRequest.assignedTechnicianId || (technicians.length > 0 ? technicians[0].id : 'u1'); 
+      if(targetTechnicianId){
+        addNotification(
+            targetTechnicianId,
+            'New Maintenance Request',
+            `New request for ${resource.name}: ${newRequest.issueDescription.substring(0, 50)}...`,
+            'maintenance_new',
+            '/maintenance'
+        );
+      }
     }
     setIsFormDialogOpen(false);
   };
@@ -224,7 +235,7 @@ export default function MaintenanceRequestsPage() {
     activeFilterTechnicianId !== 'all',
   ].filter(Boolean).length;
 
-  const canEditMaintenanceRequest = mockCurrentUser.role === 'Admin' || mockCurrentUser.role === 'Lab Manager' || mockCurrentUser.role === 'Technician';
+  const canEditMaintenanceRequest = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager' || currentUser.role === 'Technician');
 
 
   return (
@@ -399,7 +410,10 @@ export default function MaintenanceRequestsPage() {
         onSave={handleSaveRequest}
         technicians={technicians}
         resources={allAdminMockResources}
+        currentUserRole={currentUser?.role}
       />
     </TooltipProvider>
   );
 }
+
+    

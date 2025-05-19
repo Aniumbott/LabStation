@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from '@/components/layout/page-header';
-import { UserCog, Shield, Edit3, KeyRound, Image as ImageIcon, Save } from 'lucide-react';
+import { UserCog, Shield, Edit3, KeyRound, Image as ImageIcon, Save, Info } from 'lucide-react';
 import type { User } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -16,10 +16,35 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { mockCurrentUser } from '@/lib/mock-data'; // Use centralized mock user
+import { useAuth } from '@/components/auth-context'; // Import useAuth
+import { useRouter } from 'next/navigation';
 
 export default function ProfilePage() {
-  const currentUser: User = mockCurrentUser; // Use the imported mock user
+  const { currentUser } = useAuth(); // Get currentUser from AuthContext
+  const router = useRouter();
+
+  if (!currentUser) {
+    // Handle case where no user is logged in
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          title="My Profile"
+          description="Please log in to view your profile."
+          icon={UserCog}
+        />
+        <Card className="max-w-2xl mx-auto shadow-lg text-center py-10">
+          <CardContent>
+            <Info className="mx-auto h-12 w-12 mb-4 text-muted-foreground opacity-50" />
+            <p className="text-lg font-medium text-muted-foreground">Login Required</p>
+            <p className="text-sm text-muted-foreground mb-4">
+              You need to be logged in to view your profile information.
+            </p>
+            <Button onClick={() => router.push('/login')}>Go to Login</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
