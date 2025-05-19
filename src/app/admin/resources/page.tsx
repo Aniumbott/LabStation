@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
 import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon } from 'lucide-react';
 import type { Resource, ResourceStatus } from '@/types';
-import { allAdminMockResources, initialMockResourceTypes, labsList } from '@/lib/mock-data';
+import { allAdminMockResources, initialMockResourceTypes, labsList, mockCurrentUser } from '@/lib/mock-data';
 import {
   Table,
   TableBody,
@@ -159,7 +159,8 @@ export default function ResourcesPage() {
         } : undefined,
         availability: editingResource.availability || [],
       };
-      setResources(prevResources => prevResources.map(r => r.id === editingResource.id ? updatedResource : r));
+      const updatedResources = resources.map(r => r.id === editingResource.id ? updatedResource : r);
+      setResources(updatedResources);
       const globalIndex = allAdminMockResources.findIndex(r => r.id === editingResource.id);
       if (globalIndex !== -1) allAdminMockResources[globalIndex] = updatedResource;
 
@@ -202,6 +203,7 @@ export default function ResourcesPage() {
   };
 
   const activeFilterCount = [activeSearchTerm !== '', activeFilterTypeId !== 'all', activeFilterLab !== 'all', activeSelectedDate !== undefined].filter(Boolean).length;
+  const canAddResources = mockCurrentUser.role === 'Admin' || mockCurrentUser.role === 'Lab Manager';
 
   return (
     <div className="space-y-8">
@@ -310,9 +312,11 @@ export default function ResourcesPage() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            <Button onClick={handleOpenNewDialog}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add
-            </Button>
+            {canAddResources && (
+                <Button onClick={handleOpenNewDialog}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Add
+                </Button>
+            )}
           </div>
         }
       />
@@ -388,9 +392,11 @@ export default function ResourcesPage() {
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             ) : (
+              canAddResources && (
                 <Button onClick={handleOpenNewDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource
                 </Button>
+              )
             )}
           </CardContent>
         </Card>

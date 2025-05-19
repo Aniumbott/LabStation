@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon } from 'lucide-react';
 import type { ResourceType } from '@/types';
-import { initialMockResourceTypes } from '@/lib/mock-data';
+import { initialMockResourceTypes, mockCurrentUser } from '@/lib/mock-data';
 import {
   Table,
   TableBody,
@@ -153,6 +153,7 @@ export default function ResourceTypesPage() {
   };
 
   const activeFilterCount = [activeSearchTerm !== ''].filter(Boolean).length;
+  const canAddResourceTypes = mockCurrentUser.role === 'Admin';
 
   return (
     <div className="space-y-8">
@@ -207,10 +208,11 @@ export default function ResourceTypesPage() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-
-            <Button onClick={handleOpenNewDialog}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add
-            </Button>
+            {canAddResourceTypes && (
+              <Button onClick={handleOpenNewDialog}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Add
+              </Button>
+            )}
           </div>
         }
       />
@@ -298,9 +300,11 @@ export default function ResourceTypesPage() {
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             ) : (
+              canAddResourceTypes && (
                 <Button onClick={handleOpenNewDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource Type
                 </Button>
+              )
             )}
           </CardContent>
         </Card>

@@ -125,8 +125,8 @@ function BookingsPageContent() {
     } else {
         const initialResourceId = resourceIdForNew || (allAdminMockResources.length > 0 ? allAdminMockResources.find(r => r.status === 'Available')?.id || allAdminMockResources[0].id : '');
         bookingData = {
-            startTime: defaultStartTime, // This will be the source for BookingForm's initial date
-            endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000), // Default 2 hour duration
+            startTime: defaultStartTime, 
+            endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000), 
             userName: mockCurrentUser.name,
             userId: mockCurrentUser.id,
             resourceId: initialResourceId,
@@ -157,10 +157,9 @@ function BookingsPageContent() {
       }
     }
     
-    // Update activeSelectedDate only if the URL date is different from current activeSelectedDate
     if (dateToSetFromUrl && (!activeSelectedDate || !isSameDay(activeSelectedDate, dateToSetFromUrl))) {
       setActiveSelectedDate(dateToSetFromUrl);
-      setCurrentCalendarMonth(dateToSetFromUrl); // Sync main calendar month
+      setCurrentCalendarMonth(dateToSetFromUrl); 
     }
 
 
@@ -177,11 +176,10 @@ function BookingsPageContent() {
     } else if (shouldOpenFormForNewWithResourceAndDate) {
       handleOpenForm(undefined, resourceIdParam, dateToSetFromUrl);
     } else if (shouldOpenFormForNewWithResourceOnly) {
-      // If only resourceId is given, open form with today's date or activeSelectedDate
       handleOpenForm(undefined, resourceIdParam, activeSelectedDate || new Date());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, allUserBookings, isClient, handleOpenForm]); // Removed isFormOpen and currentBooking
+  }, [searchParams, allUserBookings, isClient, handleOpenForm]); 
 
 
   useEffect(() => {
@@ -189,7 +187,7 @@ function BookingsPageContent() {
       setTempSearchTerm(activeSearchTerm);
       setTempFilterResourceId(activeFilterResourceId);
       setTempFilterStatus(activeFilterStatus);
-      setTempSelectedDateInDialog(activeSelectedDate); // Sync dialog date with active page date
+      setTempSelectedDateInDialog(activeSelectedDate); 
       setCurrentCalendarMonthInDialog(activeSelectedDate || startOfDay(new Date()));
     }
   }, [isFilterDialogOpen, activeSearchTerm, activeFilterResourceId, activeFilterStatus, activeSelectedDate]);
@@ -279,7 +277,7 @@ function BookingsPageContent() {
     const conflictingBooking = initialBookings.find(existingBooking => {
         if (existingBooking.resourceId !== formData.resourceId) return false;
         if (existingBooking.status === 'Cancelled') return false;
-        if (currentBooking && currentBooking.id && existingBooking.id === currentBooking.id) return false; // Exclude self when editing
+        if (currentBooking && currentBooking.id && existingBooking.id === currentBooking.id) return false; 
 
         const existingStartTime = new Date(existingBooking.startTime);
         const existingEndTime = new Date(existingBooking.endTime);
@@ -294,7 +292,7 @@ function BookingsPageContent() {
 
     const isNewBooking = !currentBooking?.id;
     const newBookingData: Booking = {
-        ...(currentBooking || {}), // Spread existing data if editing
+        ...(currentBooking || {}), 
         ...formData,
         id: currentBooking?.id || `b${initialBookings.length + 1 + Date.now()}`,
         userId: mockCurrentUser.id,
@@ -302,7 +300,7 @@ function BookingsPageContent() {
         startTime: proposedStartTime,
         endTime: proposedEndTime,
         resourceName: resource.name,
-        status: isNewBooking ? 'Pending' : (formData.status || currentBooking?.status || 'Pending'), // Ensure status is set
+        status: isNewBooking ? 'Pending' : (formData.status || currentBooking?.status || 'Pending'), 
     } as Booking;
 
 
@@ -315,9 +313,8 @@ function BookingsPageContent() {
       setAllUserBookings(prev => [...prev, newBookingData]);
       initialBookings.push(newBookingData);
       toast({ title: "Success", description: "Booking created and submitted for approval."});
-       // Notify Admin/Manager (e.g., user 'u1' or 'u2')
       addNotification(
-        'u1', // Target Admin/Manager ID
+        'u1', 
         'New Booking Request',
         `Booking for ${resource.name} by ${mockCurrentUser.name} on ${format(proposedStartTime, 'MMM dd, HH:mm')} needs approval.`,
         'booking_pending_approval',
@@ -378,7 +375,7 @@ function BookingsPageContent() {
     newSearchParams.delete('bookingId');
     newSearchParams.delete('resourceId');
     router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
-    setIsFilterDialogOpen(false); // Close dialog if open
+    setIsFilterDialogOpen(false); 
   };
 
   const bookedDatesForCalendar = useMemo(() => {
@@ -424,12 +421,11 @@ function BookingsPageContent() {
 
 
   const dialogHeaderDateString = useMemo(() => {
-    const bookingFormSchemaDate = currentBooking?.startTime ? startOfDay(new Date(currentBooking.startTime)) : (tempSelectedDateInDialog ? startOfDay(tempSelectedDateInDialog) : null);
-    if (bookingFormSchemaDate && isValidDate(bookingFormSchemaDate)) {
-      return format(bookingFormSchemaDate, "PPP");
+    if (isFormOpen && currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime))) {
+      return format(new Date(currentBooking.startTime), "PPP");
     }
     return null;
-  }, [currentBooking?.startTime, tempSelectedDateInDialog]);
+  }, [isFormOpen, currentBooking?.startTime]);
 
 
   if (!isClient) {
@@ -508,7 +504,7 @@ function BookingsPageContent() {
                         <Calendar
                           mode="single" selected={tempSelectedDateInDialog} onSelect={setTempSelectedDateInDialog}
                           month={currentCalendarMonthInDialog} onMonthChange={setCurrentCalendarMonthInDialog}
-                          disabled={(date) => date < startOfDay(addDays(new Date(), -90))} // Example: allow up to 90 days in past
+                          disabled={(date) => date < startOfDay(addDays(new Date(), -90))} 
                           modifiers={{ booked: bookedDatesForCalendar }}
                           modifiersClassNames={{ booked: 'day-booked-dot' }}
                           footer={
@@ -654,7 +650,7 @@ function BookingsPageContent() {
                     currentParams.delete('bookingId');
                     paramsModified = true;
                 }
-                if (currentParams.has('resourceId')) { // Also clear resourceId from URL when dialog closes
+                if (currentParams.has('resourceId')) { 
                     currentParams.delete('resourceId');
                      paramsModified = true;
                 }
@@ -709,7 +705,7 @@ const bookingFormSchema = z.object({
   status: z.enum(bookingStatusesForForm).optional(),
   notes: z.string().optional(),
 }).refine(data => {
-  if (!data.bookingDate || !data.startTime || !data.endTime) return true; // Skip if date/time not fully set
+  if (!data.bookingDate || !data.startTime || !data.endTime) return true; 
   const startDateTime = set(data.bookingDate, {
     hours: parseInt(data.startTime.split(':')[0]),
     minutes: parseInt(data.startTime.split(':')[1])
@@ -732,7 +728,7 @@ interface BookingFormProps {
   onSave: (data: Partial<Booking>) => void;
   onCancel: () => void;
   currentUserFullName: string;
-  selectedDateProp?: Date; // Date from main calendar, for new bookings
+  selectedDateProp?: Date; 
 }
 
 function BookingForm({ initialData, onSave, onCancel, currentUserFullName, selectedDateProp }: BookingFormProps) {
@@ -765,13 +761,13 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, selec
 
 
   useEffect(() => {
-    if (!initialData?.id) { // Only auto-update endTime for new bookings
+    if (!initialData?.id) { 
         const currentStartTimeHours = parseInt(watchStartTime.split(':')[0]);
         const currentStartTimeMinutes = parseInt(watchStartTime.split(':')[1]);
 
         if (!isNaN(currentStartTimeHours) && !isNaN(currentStartTimeMinutes) && watchBookingDate) {
             const newStartTime = set(watchBookingDate, { hours: currentStartTimeHours, minutes: currentStartTimeMinutes });
-            let newEndTime = new Date(newStartTime.getTime() + 2 * 60 * 60 * 1000); // Default 2 hours
+            let newEndTime = new Date(newStartTime.getTime() + 2 * 60 * 60 * 1000); 
 
             const maxEndTime = set(watchBookingDate, { hours: 17, minutes: 30 });
             if (newEndTime > maxEndTime) {
@@ -785,7 +781,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, selec
             }
             
             const formattedNewEndTime = format(newEndTime, 'HH:mm');
-            if(form.getValues('endTime') !== formattedNewEndTime){ // Only set if different
+            if(form.getValues('endTime') !== formattedNewEndTime){ 
                 form.setValue('endTime', formattedNewEndTime, { shouldValidate: true });
             }
         }
@@ -817,6 +813,8 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, selec
       notes: data.notes,
     });
   }
+
+  const canEditStatus = mockCurrentUser.role === 'Admin' || mockCurrentUser.role === 'Lab Manager';
 
 
   return (
@@ -932,17 +930,17 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, selec
                 render={({ field }) => (
                 <FormItem>
                 <FormLabel>Status</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value} disabled={!canEditStatus}>
                     <FormControl>
                         <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                     </FormControl>
                     <SelectContent>
                     {bookingStatusesForForm.map(statusVal => ( 
-                        <SelectItem key={statusVal} value={statusVal} disabled={statusVal === "Confirmed" && mockCurrentUser.role !== 'Admin' && mockCurrentUser.role !== 'Lab Manager'}>{statusVal}</SelectItem>
+                        <SelectItem key={statusVal} value={statusVal}>{statusVal}</SelectItem>
                     ))}
                     </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground mt-1">Status can only be changed by Admins or Lab Managers during editing.</p>
+                {!canEditStatus && <p className="text-xs text-muted-foreground mt-1">Status can only be changed by Admins or Lab Managers.</p>}
                 <FormMessage />
                 </FormItem>
                 )}
@@ -971,4 +969,3 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, selec
     </FormProvider>
   );
 }
-

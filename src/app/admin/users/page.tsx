@@ -49,7 +49,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { initialMockUsers } from '@/lib/mock-data';
+import { initialMockUsers, mockCurrentUser } from '@/lib/mock-data';
 
 const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
 
@@ -183,6 +183,7 @@ export default function UsersPage() {
   };
 
   const activeFilterCount = [activeSearchTerm !== '', activeFilterRole !== 'all'].filter(Boolean).length;
+  const canAddUsers = mockCurrentUser.role === 'Admin';
 
   return (
     <div className="space-y-8">
@@ -251,10 +252,11 @@ export default function UsersPage() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-
-            <Button onClick={handleOpenNewUserDialog}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add
-            </Button>
+            {canAddUsers && (
+              <Button onClick={handleOpenNewUserDialog}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Add
+              </Button>
+            )}
           </div>
         }
       />
@@ -362,9 +364,11 @@ export default function UsersPage() {
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             ) : (
+              canAddUsers && (
                 <Button onClick={handleOpenNewUserDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First User
                 </Button>
+              )
             )}
           </CardContent>
         </Card>

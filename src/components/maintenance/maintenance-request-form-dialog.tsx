@@ -20,14 +20,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Save, X, PlusCircle } from 'lucide-react';
 import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource } from '@/types';
-import { maintenanceRequestStatuses } from '@/lib/mock-data';
+import { maintenanceRequestStatuses, mockCurrentUser } from '@/lib/mock-data';
 
 const UNASSIGNED_TECHNICIAN_VALUE = "--unassigned--";
 
 const maintenanceRequestFormSchema = z.object({
   resourceId: z.string().min(1, { message: 'Please select a resource.' }),
   issueDescription: z.string().min(10, { message: 'Issue description must be at least 10 characters.' }).max(1000, { message: 'Description cannot exceed 1000 characters.' }),
-  status: z.enum(maintenanceRequestStatuses as [string, ...string[]], { required_error: 'Please select a status.'}),
+  status: z.enum(maintenanceRequestStatuses as [MaintenanceRequestStatus, ...MaintenanceRequestStatus[]], { required_error: 'Please select a status.'}),
   assignedTechnicianId: z.string().optional().or(z.literal('')),
   resolutionNotes: z.string().max(1000).optional().or(z.literal('')),
 }).refine(data => {
@@ -98,6 +98,9 @@ export function MaintenanceRequestFormDialog({
     onSave(dataToSave);
   }
 
+  const canEditSensitiveFields = mockCurrentUser.role === 'Admin' || mockCurrentUser.role === 'Lab Manager' || mockCurrentUser.role === 'Technician';
+
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -120,7 +123,7 @@ export function MaintenanceRequestFormDialog({
                         <Select
                             onValueChange={field.onChange}
                             value={field.value || ''}
-                            disabled={!!initialRequest}
+                            disabled={!!initialRequest} 
                         >
                             <FormControl><SelectTrigger><SelectValue placeholder="Select a resource" /></SelectTrigger></FormControl>
                             <SelectContent>
@@ -152,7 +155,7 @@ export function MaintenanceRequestFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Status</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || 'Open'}>
+                            <Select onValueChange={field.onChange} value={field.value || 'Open'} disabled={!canEditSensitiveFields && !!initialRequest}>
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
                                 <SelectContent>
                                 {maintenanceRequestStatuses.map(statusVal => (
@@ -160,6 +163,7 @@ export function MaintenanceRequestFormDialog({
                                 ))}
                                 </SelectContent>
                             </Select>
+                            {!canEditSensitiveFields && !!initialRequest && <FormDescription>Status can only be changed by authorized personnel.</FormDescription>}
                             <FormMessage />
                             </FormItem>
                         )}
@@ -173,6 +177,7 @@ export function MaintenanceRequestFormDialog({
                             <Select
                                 onValueChange={(value) => field.onChange(value === UNASSIGNED_TECHNICIAN_VALUE ? '' : value)}
                                 value={field.value || UNASSIGNED_TECHNICIAN_VALUE}
+                                disabled={!canEditSensitiveFields && !!initialRequest}
                             >
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select a technician" /></SelectTrigger></FormControl>
                                 <SelectContent>
@@ -182,6 +187,7 @@ export function MaintenanceRequestFormDialog({
                                 ))}
                                 </SelectContent>
                             </Select>
+                            {!canEditSensitiveFields && !!initialRequest && <FormDescription>Technician assignment can only be changed by authorized personnel.</FormDescription>}
                             <FormMessage />
                             </FormItem>
                         )}
@@ -194,8 +200,10 @@ export function MaintenanceRequestFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Resolution Notes {watchStatus === 'Resolved' || watchStatus === 'Closed' ? <span className="text-destructive">*</span> : ''}</FormLabel>
-                            <FormControl><Textarea placeholder="Describe the resolution steps taken..." {...field} value={field.value || ''} rows={4} /></FormControl>
-                             <FormDescription>Required if status is Resolved or Closed.</FormDescription>
+                            <FormControl><Textarea placeholder="Describe the resolution steps taken..." {...field} value={field.value || ''} rows={4} disabled={!canEditSensitiveFields && !!initialRequest} /></FormControl>
+                             <FormDescription>Required if status is Resolved or Closed.
+                             {!canEditSensitiveFields && !!initialRequest && " Only authorized personnel can add resolution notes."}
+                             </FormDescription>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -207,7 +215,7 @@ export function MaintenanceRequestFormDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
+              <Button type="submit" disabled={form.formState.isSubmitting || (!canEditSensitiveFields && !!initialRequest && initialRequest.status !== 'Open')}>
                 {form.formState.isSubmitting
                   ? (initialRequest ? 'Saving...' : 'Logging Request...')
                   : (initialRequest ? <><Save className="mr-2 h-4 w-4" /> Save Changes</> : <><PlusCircle className="mr-2 h-4 w-4" /> Log Request</>)

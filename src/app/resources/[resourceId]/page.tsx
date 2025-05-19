@@ -65,7 +65,7 @@ function ResourceDetailPageSkeleton() {
               <Skeleton className="h-4 w-5/6 rounded-md" />
             </CardContent>
           </Card>
-           <Card className="shadow-lg"> {/* Added skeleton for Your Past Bookings */}
+           <Card className="shadow-lg"> 
             <CardHeader><Skeleton className="h-6 w-3/4 rounded-md" /></CardHeader>
             <CardContent className="space-y-2">
               <Skeleton className="h-4 w-full rounded-md" />
@@ -96,7 +96,7 @@ function ResourceDetailPageSkeleton() {
                 <Skeleton className="h-10 w-1/3 rounded-md" />
             </CardFooter>
           </Card>
-          <Card className="shadow-lg"> {/* Skeleton for Remote Access or Availability */}
+          <Card className="shadow-lg"> 
             <CardHeader><Skeleton className="h-6 w-1/2 rounded-md" /></CardHeader>
             <CardContent className="space-y-2">
               <Skeleton className="h-4 w-full rounded-md" />
@@ -280,6 +280,8 @@ export default function ResourceDetailPage() {
     }
   };
 
+  const canManageResource = mockCurrentUser.role === 'Admin' || mockCurrentUser.role === 'Lab Manager';
+
   if (isLoading) {
     return <ResourceDetailPageSkeleton />;
   }
@@ -308,7 +310,7 @@ export default function ResourceDetailPage() {
     );
   }
 
-  const today = fnsStartOfDay(new Date()); // aliased import
+  const today = fnsStartOfDay(new Date()); 
   const upcomingAvailability = resource.availability?.filter(avail => {
     if (!avail || !avail.date) return false;
     try {
@@ -336,54 +338,58 @@ export default function ResourceDetailPage() {
                     <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
                 </Link>
             </Button>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={() => setIsAvailabilityDialogOpen(true)}>
-                  <CalendarCog className="h-4 w-4" />
-                  <span className="sr-only">Manage Availability</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent><p>Manage Availability</p></TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={() => setIsFormDialogOpen(true)}>
-                  <Edit className="h-4 w-4" />
-                  <span className="sr-only">Edit Resource</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent><p>Edit Resource</p></TooltipContent>
-            </Tooltip>
-            <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                   <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="icon">
-                          <Trash2 className="h-4 w-4" />
-                          <span className="sr-only">Delete Resource</span>
-                      </Button>
-                    </AlertDialogTrigger>
-                </TooltipTrigger>
-                <TooltipContent><p>Delete Resource</p></TooltipContent>
-              </Tooltip>
-              {isAlertOpen && (
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete the resource
-                        <span className="font-semibold"> "{resource.name}"</span>.
-                    </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => setIsAlertOpen(false)}>Cancel</AlertDialogCancel>
-                    <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
-                        Delete
-                    </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-              )}
-            </AlertDialog>
+            {canManageResource && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="icon" onClick={() => setIsAvailabilityDialogOpen(true)}>
+                      <CalendarCog className="h-4 w-4" />
+                      <span className="sr-only">Manage Availability</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Manage Availability</p></TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="icon" onClick={() => setIsFormDialogOpen(true)}>
+                      <Edit className="h-4 w-4" />
+                      <span className="sr-only">Edit Resource</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Edit Resource</p></TooltipContent>
+                </Tooltip>
+                <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                       <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="icon">
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Delete Resource</span>
+                          </Button>
+                        </AlertDialogTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Delete Resource</p></TooltipContent>
+                  </Tooltip>
+                  {isAlertOpen && (
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the resource
+                            <span className="font-semibold"> "{resource.name}"</span>.
+                        </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setIsAlertOpen(false)}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
+                            Delete
+                        </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                  )}
+                </AlertDialog>
+              </>
+            )}
           </div>
         }
       />
@@ -430,7 +436,7 @@ export default function ResourceDetailPage() {
                   </ul>
                 </CardContent>
               </Card>
-            )}
+             )}
              {userPastBookingsForResource.length === 0 && (
                  <Card className="shadow-lg">
                      <CardHeader>
@@ -543,11 +549,13 @@ export default function ResourceDetailPage() {
                     No specific availability slots defined for upcoming dates. This resource might be generally available or its schedule needs to be set up.
                   </p>
                 </CardContent>
-                <CardFooter className="justify-center border-t pt-4">
-                  <Button variant="outline" onClick={() => setIsAvailabilityDialogOpen(true)}>
-                    <CalendarCog className="mr-2 h-4 w-4" /> Define Availability
-                  </Button>
-                </CardFooter>
+                {canManageResource && (
+                    <CardFooter className="justify-center border-t pt-4">
+                    <Button variant="outline" onClick={() => setIsAvailabilityDialogOpen(true)}>
+                        <CalendarCog className="mr-2 h-4 w-4" /> Define Availability
+                    </Button>
+                    </CardFooter>
+                )}
               </Card>
            )}
         </div>
