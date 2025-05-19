@@ -3,9 +3,9 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { CalendarOff, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon } from 'lucide-react';
-import type { BlackoutDate } from '@/types';
-import { initialBlackoutDates, mockCurrentUser } from '@/lib/mock-data';
+import { CalendarOff, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Repeat } from 'lucide-react';
+import type { BlackoutDate, RecurringBlackoutRule, RoleName } from '@/types';
+import { initialBlackoutDates, mockCurrentUser, initialRecurringBlackoutRules } from '@/lib/mock-data';
 import {
   Table,
   TableBody,
@@ -48,47 +48,53 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { BlackoutDateFormDialog, BlackoutDateFormValues } from '@/components/admin/blackout-date-form-dialog';
+import { RecurringBlackoutRuleFormDialog, RecurringBlackoutRuleFormValues } from '@/components/admin/recurring-blackout-rule-form-dialog'; // New import
 
 export default function BlackoutDatesPage() {
   const { toast } = useToast();
+  // Single Dates
   const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>(() => JSON.parse(JSON.stringify(initialBlackoutDates)));
-  const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
+  const [isDateFormDialogOpen, setIsDateFormDialogOpen] = useState(false);
   const [editingBlackoutDate, setEditingBlackoutDate] = useState<BlackoutDate | null>(null);
   const [dateToDelete, setDateToDelete] = useState<BlackoutDate | null>(null);
+  const [tempDateSearchTerm, setTempDateSearchTerm] = useState('');
+  const [activeDateSearchTerm, setActiveDateSearchTerm] = useState('');
+  const [isDateFilterDialogOpen, setIsDateFilterDialogOpen] = useState(false);
 
-  // Filter Dialog State
-  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-  const [tempSearchTerm, setTempSearchTerm] = useState('');
-  
-  // Active filter state
-  const [activeSearchTerm, setActiveSearchTerm] = useState('');
+  // Recurring Rules
+  const [recurringRules, setRecurringRules] = useState<RecurringBlackoutRule[]>(() => JSON.parse(JSON.stringify(initialRecurringBlackoutRules)));
+  const [isRecurringFormDialogOpen, setIsRecurringFormDialogOpen] = useState(false);
+  const [editingRecurringRule, setEditingRecurringRule] = useState<RecurringBlackoutRule | null>(null);
+  const [ruleToDelete, setRuleToDelete] = useState<RecurringBlackoutRule | null>(null);
+  // Add search/filter state for recurring rules if needed in future
+
 
   useEffect(() => {
-    if (isFilterDialogOpen) {
-      setTempSearchTerm(activeSearchTerm);
+    if (isDateFilterDialogOpen) {
+      setTempDateSearchTerm(activeDateSearchTerm);
     }
-  }, [isFilterDialogOpen, activeSearchTerm]);
+  }, [isDateFilterDialogOpen, activeDateSearchTerm]);
 
   const filteredBlackoutDates = useMemo(() => {
     let currentDates = [...blackoutDates];
-    if (activeSearchTerm) {
-      const lowerSearchTerm = activeSearchTerm.toLowerCase();
+    if (activeDateSearchTerm) {
+      const lowerSearchTerm = activeDateSearchTerm.toLowerCase();
       currentDates = currentDates.filter(bd =>
         (bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm)) ||
         format(parseISO(bd.date), 'PPP').toLowerCase().includes(lowerSearchTerm)
       );
     }
     return currentDates.sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
-  }, [blackoutDates, activeSearchTerm]);
+  }, [blackoutDates, activeDateSearchTerm]);
 
-  const handleOpenNewDialog = () => {
+  const handleOpenNewDateDialog = () => {
     setEditingBlackoutDate(null);
-    setIsFormDialogOpen(true);
+    setIsDateFormDialogOpen(true);
   };
 
-  const handleOpenEditDialog = (blackoutDate: BlackoutDate) => {
+  const handleOpenEditDateDialog = (blackoutDate: BlackoutDate) => {
     setEditingBlackoutDate(blackoutDate);
-    setIsFormDialogOpen(true);
+    setIsDateFormDialogOpen(true);
   };
 
   const handleSaveBlackoutDate = (data: BlackoutDateFormValues) => {
@@ -117,7 +123,7 @@ export default function BlackoutDatesPage() {
         description: `Blackout date for ${format(data.date, 'PPP')} has been added.`,
       });
     }
-    setIsFormDialogOpen(false);
+    setIsDateFormDialogOpen(false);
   };
 
   const handleDeleteBlackoutDate = (blackoutDateId: string) => {
@@ -135,42 +141,104 @@ export default function BlackoutDatesPage() {
     setDateToDelete(null);
   };
   
-  const handleApplyFilters = () => {
-    setActiveSearchTerm(tempSearchTerm);
-    setIsFilterDialogOpen(false);
+  const handleApplyDateFilters = () => {
+    setActiveDateSearchTerm(tempDateSearchTerm);
+    setIsDateFilterDialogOpen(false);
   };
 
-  const resetDialogFilters = () => {
-    setTempSearchTerm('');
+  const resetDateDialogFilters = () => {
+    setTempDateSearchTerm('');
   };
 
-  const resetAllActiveFilters = () => {
-    setActiveSearchTerm('');
-    resetDialogFilters();
-    setIsFilterDialogOpen(false);
+  const resetAllActiveDateFilters = () => {
+    setActiveDateSearchTerm('');
+    resetDateDialogFilters();
+    setIsDateFilterDialogOpen(false);
   };
   
-  const activeFilterCount = [activeSearchTerm !== ''].filter(Boolean).length;
-  const canManageBlackouts = mockCurrentUser.role === 'Admin' || mockCurrentUser.role === 'Lab Manager';
+  const activeDateFilterCount = [activeDateSearchTerm !== ''].filter(Boolean).length;
+  
+  // Recurring Rules Handlers
+  const handleOpenNewRecurringDialog = () => {
+    setEditingRecurringRule(null);
+    setIsRecurringFormDialogOpen(true);
+  };
 
+  const handleOpenEditRecurringDialog = (rule: RecurringBlackoutRule) => {
+    setEditingRecurringRule(rule);
+    setIsRecurringFormDialogOpen(true);
+  };
+
+  const handleSaveRecurringRule = (data: RecurringBlackoutRuleFormValues) => {
+    if (editingRecurringRule) {
+      const updatedRules = recurringRules.map(r =>
+        r.id === editingRecurringRule.id ? { ...editingRecurringRule, ...data } : r
+      );
+      setRecurringRules(updatedRules);
+      const globalIndex = initialRecurringBlackoutRules.findIndex(r => r.id === editingRecurringRule.id);
+      if (globalIndex !== -1) initialRecurringBlackoutRules[globalIndex] = { ...initialRecurringBlackoutRules[globalIndex], ...data };
+      toast({
+        title: 'Recurring Rule Updated',
+        description: `Recurring rule "${data.name}" has been updated.`,
+      });
+    } else {
+      const newRule: RecurringBlackoutRule = {
+        id: `rb${recurringRules.length + 1 + Date.now()}`,
+        ...data,
+      };
+      setRecurringRules(prev => [...prev, newRule].sort((a,b) => a.name.localeCompare(b.name)));
+      initialRecurringBlackoutRules.push(newRule);
+      initialRecurringBlackoutRules.sort((a,b) => a.name.localeCompare(b.name));
+      toast({
+        title: 'Recurring Rule Added',
+        description: `Recurring rule "${data.name}" has been added.`,
+      });
+    }
+    setIsRecurringFormDialogOpen(false);
+  };
+
+  const handleDeleteRecurringRule = (ruleId: string) => {
+    const deletedRule = recurringRules.find(r => r.id === ruleId);
+    setRecurringRules(currentRules => currentRules.filter(r => r.id !== ruleId));
+    
+    const globalIndex = initialRecurringBlackoutRules.findIndex(r => r.id === ruleId);
+    if (globalIndex !== -1) initialRecurringBlackoutRules.splice(globalIndex, 1);
+
+    toast({
+      title: "Recurring Rule Removed",
+      description: `Recurring rule "${deletedRule?.name}" has been removed.`,
+      variant: "destructive"
+    });
+    setRuleToDelete(null);
+  };
+  
+  const canManageBlackouts = mockCurrentUser.role === 'Admin' || mockCurrentUser.role === 'Lab Manager';
 
   return (
     <TooltipProvider>
       <div className="space-y-8">
         <PageHeader
-          title="Lab Blackout Dates"
-          description="Define and manage dates when the entire lab is closed or unavailable."
+          title="Lab Blackout Dates & Recurring Closures"
+          description="Define specific dates and recurring rules when the entire lab is closed or unavailable."
           icon={CalendarOff}
-          actions={
+        />
+
+        {/* Single Blackout Dates Section */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Specific Blackout Dates</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">Manage individual lab closure dates.</p>
+            </div>
             <div className="flex items-center gap-2">
-              <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+              <Dialog open={isDateFilterDialogOpen} onOpenChange={setIsDateFilterDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="outline">
+                  <Button variant="outline" size="sm">
                     <FilterIcon className="mr-2 h-4 w-4" />
-                    Filters
-                    {activeFilterCount > 0 && (
+                    Filter Dates
+                    {activeDateFilterCount > 0 && (
                       <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
-                        {activeFilterCount}
+                        {activeDateFilterCount}
                       </Badge>
                     )}
                   </Button>
@@ -178,9 +246,7 @@ export default function BlackoutDatesPage() {
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
                     <DialogTitle>Filter Blackout Dates</DialogTitle>
-                    <DialogDescription>
-                      Refine the list of blackout dates by keyword (reason or date).
-                    </DialogDescription>
+                    <DialogDescription>Refine the list of blackout dates by keyword (reason or date).</DialogDescription>
                   </DialogHeader>
                   <Separator className="my-4" />
                   <div className="space-y-4">
@@ -192,37 +258,31 @@ export default function BlackoutDatesPage() {
                           id="blackoutSearchDialog"
                           type="search"
                           placeholder="e.g., Holiday, Maintenance, May 20..."
-                          value={tempSearchTerm}
-                          onChange={(e) => setTempSearchTerm(e.target.value)}
+                          value={tempDateSearchTerm}
+                          onChange={(e) => setTempDateSearchTerm(e.target.value)}
                           className="h-9 pl-8"
                         />
                       </div>
                     </div>
                   </div>
                   <DialogFooter className="pt-6 border-t">
-                    <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
+                    <Button variant="ghost" onClick={resetDateDialogFilters} className="mr-auto">
                       <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                     </Button>
-                    <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleApplyFilters}>Apply Filters</Button>
+                    <Button variant="outline" onClick={() => setIsDateFilterDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleApplyDateFilters}>Apply Filters</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
               {canManageBlackouts && (
-                <Button onClick={handleOpenNewDialog}>
+                <Button onClick={handleOpenNewDateDialog} size="sm">
                   <PlusCircle className="mr-2 h-4 w-4" /> Add Blackout Date
                 </Button>
               )}
             </div>
-          }
-        />
-
-        {filteredBlackoutDates.length > 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Defined Blackout Dates ({filteredBlackoutDates.length})</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
+          </CardHeader>
+          <CardContent>
+            {filteredBlackoutDates.length > 0 ? (
               <div className="overflow-x-auto rounded-lg border shadow-sm">
                 <Table>
                   <TableHeader>
@@ -241,7 +301,7 @@ export default function BlackoutDatesPage() {
                           <TableCell className="text-right space-x-1">
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDialog(bd)}>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDateDialog(bd)}>
                                   <Edit className="h-4 w-4" />
                                   <span className="sr-only">Edit Blackout Date</span>
                                 </Button>
@@ -286,45 +346,133 @@ export default function BlackoutDatesPage() {
                   </TableBody>
                 </Table>
               </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
-            <CardContent>
-              <CalendarOff className="mx-auto h-12 w-12 mb-4 opacity-50" />
-              <p className="text-lg font-medium">
-                {activeSearchTerm ? "No Blackout Dates Match Filter" : "No Lab Blackout Dates Defined"}
-              </p>
-              <p className="text-sm mb-4">
-                {activeSearchTerm
-                  ? "Try adjusting your search criteria."
-                  : "Add lab-wide closure dates or holidays here."}
-              </p>
-              {activeSearchTerm ? (
-                <Button variant="outline" onClick={resetAllActiveFilters}>
-                  <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
-                </Button>
-              ) : (
-                canManageBlackouts && (
-                  <Button onClick={handleOpenNewDialog}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add First Blackout Date
+            ) : (
+              <div className="text-center py-10 text-muted-foreground">
+                <CalendarOff className="mx-auto h-10 w-10 mb-3 opacity-50" />
+                <p className="font-medium">
+                  {activeDateSearchTerm ? "No Blackout Dates Match Filter" : "No Specific Blackout Dates Defined"}
+                </p>
+                <p className="text-xs mb-3">
+                  {activeDateSearchTerm ? "Try adjusting your search criteria." : "Add individual lab-wide closure dates here."}
+                </p>
+                {activeDateSearchTerm && (
+                  <Button variant="outline" size="sm" onClick={resetAllActiveDateFilters}>
+                    <FilterX className="mr-2 h-4 w-4" /> Reset Date Filters
                   </Button>
-                )
-              )}
-            </CardContent>
-          </Card>
-        )}
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Separator className="my-8" />
+
+        {/* Recurring Blackout Rules Section */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+             <div>
+              <CardTitle>Recurring Lab Closures</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">Manage weekly or other recurring unavailability rules.</p>
+            </div>
+            {canManageBlackouts && (
+              <Button onClick={handleOpenNewRecurringDialog} size="sm">
+                <PlusCircle className="mr-2 h-4 w-4" /> Add Recurring Rule
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent>
+            {recurringRules.length > 0 ? (
+              <div className="overflow-x-auto rounded-lg border shadow-sm">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Rule Name</TableHead>
+                      <TableHead>Days of Week</TableHead>
+                      <TableHead>Reason</TableHead>
+                      {canManageBlackouts && <TableHead className="text-right w-[100px]">Actions</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recurringRules.map((rule) => (
+                      <TableRow key={rule.id}>
+                        <TableCell className="font-medium">{rule.name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{rule.daysOfWeek.join(', ')}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{rule.reason || 'N/A'}</TableCell>
+                        {canManageBlackouts && (
+                          <TableCell className="text-right space-x-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditRecurringDialog(rule)}>
+                                  <Edit className="h-4 w-4" />
+                                  <span className="sr-only">Edit Recurring Rule</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent><p>Edit Recurring Rule</p></TooltipContent>
+                            </Tooltip>
+                            <AlertDialog>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setRuleToDelete(rule)}>
+                                      <Trash2 className="h-4 w-4" />
+                                      <span className="sr-only">Delete Recurring Rule</span>
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Delete Recurring Rule</p></TooltipContent>
+                              </Tooltip>
+                              {ruleToDelete && ruleToDelete.id === rule.id && (
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This action cannot be undone. This will remove the recurring rule
+                                      <span className="font-semibold"> "{ruleToDelete.name}"</span>.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel onClick={() => setRuleToDelete(null)}>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction variant="destructive" onClick={() => handleDeleteRecurringRule(ruleToDelete.id)}>
+                                      Delete Recurring Rule
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              )}
+                            </AlertDialog>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <div className="text-center py-10 text-muted-foreground">
+                <Repeat className="mx-auto h-10 w-10 mb-3 opacity-50" />
+                <p className="font-medium">No Recurring Lab Closure Rules Defined</p>
+                <p className="text-xs">Add rules for regular closures like weekends or weekly maintenance.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
       {canManageBlackouts && (
-        <BlackoutDateFormDialog
-            open={isFormDialogOpen}
-            onOpenChange={setIsFormDialogOpen}
-            initialBlackoutDate={editingBlackoutDate}
-            onSave={handleSaveBlackoutDate}
-        />
+        <>
+          <BlackoutDateFormDialog
+              open={isDateFormDialogOpen}
+              onOpenChange={setIsDateFormDialogOpen}
+              initialBlackoutDate={editingBlackoutDate}
+              onSave={handleSaveBlackoutDate}
+          />
+          <RecurringBlackoutRuleFormDialog
+            open={isRecurringFormDialogOpen}
+            onOpenChange={setIsRecurringFormDialogOpen}
+            initialRule={editingRecurringRule}
+            onSave={handleSaveRecurringRule}
+          />
+        </>
       )}
     </TooltipProvider>
   );
 }
-
-    

@@ -122,3 +122,14 @@ export interface BlackoutDate {
   date: string; // YYYY-MM-DD format
   reason?: string;
 }
+
+export type DayOfWeek = 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
+export const daysOfWeekArray: DayOfWeek[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+
+export interface RecurringBlackoutRule {
+  id: string;
+  name: string; 
+  daysOfWeek: DayOfWeek[]; 
+  reason?: string;
+}

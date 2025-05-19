@@ -1,5 +1,5 @@
 
-import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType, BlackoutDate } from '@/types';
+import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType, BlackoutDate, RecurringBlackoutRule, DayOfWeek } from '@/types';
 import { format, addDays, set, subDays, parseISO } from 'date-fns';
 
 const today = new Date();
@@ -430,4 +430,10 @@ export function addNotification(
 export let initialBlackoutDates: BlackoutDate[] = [
   { id: 'bo1', date: format(addDays(today, 25), 'yyyy-MM-dd'), reason: 'Lab Deep Cleaning Day' },
   { id: 'bo2', date: format(addDays(today, 60), 'yyyy-MM-dd'), reason: 'Public Holiday - Lab Closed' },
+];
+
+// Recurring Lab-wide Blackout Rules
+export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = [
+  { id: 'rb1', name: 'Weekend Closure', daysOfWeek: ['Saturday', 'Sunday'], reason: 'Lab closed on weekends' },
+  { id: 'rb2', name: 'Weekly Maintenance Window', daysOfWeek: ['Wednesday'], reason: 'Scheduled lab maintenance 2-4 PM' }, // Example
 ];
