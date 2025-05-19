@@ -3,7 +3,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -16,7 +16,6 @@ import {
   Bell,
   CalendarOff,
   Loader2,
-  // Building, // Removed as Lab Management was skipped
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
@@ -45,8 +44,7 @@ interface NavItem {
   allowedRoles?: RoleName[];
 }
 
-// Define public routes - these routes are accessible without authentication
-const PUBLIC_ROUTES = ['/login', '/signup']; // Add '/signup' if/when it's created
+const PUBLIC_ROUTES = ['/login', '/signup'];
 
 const ALL_NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -79,6 +77,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
     icon: ListChecks,
     allowedRoles: ['Admin'],
   },
+  // Add new admin link for signup requests later
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {
@@ -92,23 +91,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }, []);
 
   const visibleNavItems = useMemo(() => {
-    if (!isMounted || authIsLoading) return [];
-
-    if (!currentUser) {
-      // For unauthenticated users, no sidebar items are typically shown in the main app layout.
-      // If we had public navigation items meant for the sidebar, they'd be filtered here.
-      return [];
+    if (!currentUser) { // Only filter based on currentUser if they exist
+        return ALL_NAV_ITEMS.filter(item => !item.allowedRoles || item.allowedRoles.length === 0);
     }
-
     return ALL_NAV_ITEMS.filter(item => {
       if (!item.allowedRoles || item.allowedRoles.length === 0) {
-        return true; // Accessible to all authenticated users
+        return true;
       }
       return item.allowedRoles.includes(currentUser.role);
     });
-  }, [currentUser, isMounted, authIsLoading]);
+  }, [currentUser]);
 
-  // Client-side redirection logic
   useEffect(() => {
     if (isMounted && !authIsLoading && !currentUser && !PUBLIC_ROUTES.includes(pathname)) {
       router.push('/login');
