@@ -40,15 +40,15 @@ export default function DashboardPage() {
 
   const upcomingUserBookings = initialBookings
     .filter(b => {
-        const startTime = new Date(b.startTime);
+        const startTime = parseISO(b.startTime.toString()); // Ensure startTime is parsed
         return isValid(startTime) && !isPast(startTime) && b.status !== 'Cancelled' && b.userId === mockCurrentUser.id;
     })
-    .sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+    .sort((a,b) => parseISO(a.startTime.toString()).getTime() - parseISO(b.startTime.toString()).getTime())
     .slice(0, 5);
 
 
   return (
-    <div className="space-y-8"> {/* Removed max-w-5xl w-full mx-auto from here */}
+    <div className="space-y-8">
       <PageHeader
         title="Dashboard"
         description="Overview of lab resources and your bookings."
@@ -65,9 +65,9 @@ export default function DashboardPage() {
           )}
         </div>
         {frequentlyUsedResources.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid w-fit gap-6 md:grid-cols-2"> {/* Added w-fit here */}
             {frequentlyUsedResources.map((resource) => (
-              <Card key={resource.id} className="w-full md:max-w-lg flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300"> {/* Added md:max-w-lg */}
+              <Card key={resource.id} className="w-full md:max-w-lg flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <CardHeader className="p-4">
                   <div className="flex justify-between items-start">
                     <CardTitle className="text-lg hover:text-primary transition-colors">
@@ -81,7 +81,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="p-4 pt-0 flex-grow space-y-3">
                   <div className="relative w-full h-40 rounded-md overflow-hidden">
-                    <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint="microscope electronics" />
+                    <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" />
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{resource.description}</p>
                 </CardContent>
@@ -105,12 +105,12 @@ export default function DashboardPage() {
 
       <Separator />
 
-      <section> {/* This section will now be wider by default */}
+      <section>
         <h2 className="text-2xl font-semibold mb-4">Your Upcoming Bookings</h2>
         {upcomingUserBookings.length > 0 ? (
           <Card className="shadow-lg">
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto rounded-lg">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -125,8 +125,8 @@ export default function DashboardPage() {
                     {upcomingUserBookings.map((booking) => (
                       <TableRow key={booking.id}>
                         <TableCell className="font-medium">{booking.resourceName}</TableCell>
-                        <TableCell>{format(new Date(booking.startTime), 'MMM dd, yyyy')}</TableCell>
-                        <TableCell>{format(new Date(booking.startTime), 'p')} - {format(new Date(booking.endTime), 'p')}</TableCell>
+                        <TableCell>{format(parseISO(booking.startTime.toString()), 'MMM dd, yyyy')}</TableCell>
+                        <TableCell>{format(parseISO(booking.startTime.toString()), 'p')} - {format(parseISO(booking.endTime.toString()), 'p')}</TableCell>
                         <TableCell>
                           <Badge
                               className={cn(
@@ -141,7 +141,7 @@ export default function DashboardPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="sm" asChild>
-                            <Link href={`/bookings?bookingId=${booking.id}&date=${format(new Date(booking.startTime), 'yyyy-MM-dd')}`}>View/Edit</Link>
+                            <Link href={`/bookings?bookingId=${booking.id}&date=${format(parseISO(booking.startTime.toString()), 'yyyy-MM-dd')}`}>View/Edit</Link>
                           </Button>
                         </TableCell>
                       </TableRow>
