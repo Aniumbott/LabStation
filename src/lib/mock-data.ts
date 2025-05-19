@@ -1,5 +1,5 @@
 
-import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus } from '@/types';
+import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification } from '@/types';
 import { format, addDays, set, subDays } from 'date-fns';
 
 // For Resource Availability
@@ -213,72 +213,72 @@ export const mockCurrentUser: User = initialMockUsers[3]; // Researcher Fourth
 
 // Initial Bookings (used across Bookings, Resource Details, Dashboard)
 // Some bookings made by mockCurrentUser, some by others, some pending.
-export const initialBookings: Booking[] = [
-  { 
-    id: 'b1', 
-    resourceId: 'res1', 
-    resourceName: 'Keysight MSOX3054T Oscilloscope', 
-    userId: mockCurrentUser.id, 
-    userName: mockCurrentUser.name, 
-    startTime: set(addDays(today, 2), { hours: 10, minutes: 0 }), 
-    endTime: set(addDays(today, 2), { hours: 12, minutes: 0 }), 
-    status: 'Confirmed', 
-    notes: 'Debugging SPI communication on custom MCU board.' 
+export let initialBookings: Booking[] = [
+  {
+    id: 'b1',
+    resourceId: 'res1',
+    resourceName: 'Keysight MSOX3054T Oscilloscope',
+    userId: mockCurrentUser.id,
+    userName: mockCurrentUser.name,
+    startTime: set(addDays(today, 2), { hours: 10, minutes: 0 }),
+    endTime: set(addDays(today, 2), { hours: 12, minutes: 0 }),
+    status: 'Confirmed',
+    notes: 'Debugging SPI communication on custom MCU board.'
   },
-  { 
-    id: 'b2', 
-    resourceId: 'res2', 
-    resourceName: 'Rigol DP832 Programmable Power Supply', 
+  {
+    id: 'b2',
+    resourceId: 'res2',
+    resourceName: 'Rigol DP832 Programmable Power Supply',
     userId: 'u2', // Dr. Manager Second
-    userName: initialMockUsers[1].name, 
-    startTime: set(addDays(today, 3), { hours: 14, minutes: 0 }), 
-    endTime: set(addDays(today, 3), { hours: 16, minutes: 0 }), 
-    status: 'Pending', 
-    notes: 'Powering up prototype device for thermal testing.' 
-  },
-  { 
-    id: 'b3', 
-    resourceId: 'res1', 
-    resourceName: 'Keysight MSOX3054T Oscilloscope', 
-    userId: mockCurrentUser.id, 
-    userName: mockCurrentUser.name, 
-    startTime: set(addDays(today, 1), { hours: 14, minutes: 0 }), 
-    endTime: set(addDays(today, 1), { hours: 15, minutes: 0 }), 
+    userName: initialMockUsers[1].name,
+    startTime: set(addDays(today, 3), { hours: 14, minutes: 0 }),
+    endTime: set(addDays(today, 3), { hours: 16, minutes: 0 }),
     status: 'Pending',
-    notes: 'Quick check of clock signal jitter. High priority for RF module.' 
+    notes: 'Powering up prototype device for thermal testing.'
   },
-  { 
-    id: 'b4', 
-    resourceId: 'res4', 
-    resourceName: 'Rohde & Schwarz FPC1500 Spectrum Analyzer', 
-    userId: mockCurrentUser.id, 
-    userName: mockCurrentUser.name, 
-    startTime: set(today, { hours: 9, minutes: 0 }), 
-    endTime: set(today, { hours: 11, minutes: 0 }), 
-    status: 'Confirmed', 
-    notes: 'Antenna matching and S11 parameter measurement for new design.' 
+  {
+    id: 'b3',
+    resourceId: 'res1',
+    resourceName: 'Keysight MSOX3054T Oscilloscope',
+    userId: mockCurrentUser.id,
+    userName: mockCurrentUser.name,
+    startTime: set(addDays(today, 1), { hours: 14, minutes: 0 }),
+    endTime: set(addDays(today, 1), { hours: 15, minutes: 0 }),
+    status: 'Pending',
+    notes: 'Quick check of clock signal jitter. High priority for RF module.'
   },
-  { 
-    id: 'b5', 
-    resourceId: 'res5', 
-    resourceName: 'Weller WE1010NA Digital Soldering Station', 
+  {
+    id: 'b4',
+    resourceId: 'res4',
+    resourceName: 'Rohde & Schwarz FPC1500 Spectrum Analyzer',
+    userId: mockCurrentUser.id,
+    userName: mockCurrentUser.name,
+    startTime: set(today, { hours: 9, minutes: 0 }),
+    endTime: set(today, { hours: 11, minutes: 0 }),
+    status: 'Confirmed',
+    notes: 'Antenna matching and S11 parameter measurement for new design.'
+  },
+  {
+    id: 'b5',
+    resourceId: 'res5',
+    resourceName: 'Weller WE1010NA Digital Soldering Station',
     userId: 'u2', // Dr. Manager Second
-    userName: initialMockUsers[1].name, 
-    startTime: set(addDays(today, 5), { hours: 10, minutes: 0 }), 
-    endTime: set(addDays(today, 5), { hours: 13, minutes: 0 }), 
-    status: 'Pending', 
-    notes: 'Reworking BGA component on development board.' 
+    userName: initialMockUsers[1].name,
+    startTime: set(addDays(today, 5), { hours: 10, minutes: 0 }),
+    endTime: set(addDays(today, 5), { hours: 13, minutes: 0 }),
+    status: 'Pending',
+    notes: 'Reworking BGA component on development board.'
   },
-  { 
-    id: 'b6', 
-    resourceId: 'res1', 
-    resourceName: 'Keysight MSOX3054T Oscilloscope', 
-    userId: mockCurrentUser.id, 
-    userName: mockCurrentUser.name, 
-    startTime: set(subDays(today, 1), { hours: 10, minutes: 0 }), 
-    endTime: set(subDays(today, 1), { hours: 12, minutes: 0 }), 
-    status: 'Confirmed', 
-    notes: 'Past booking: Verifying I2C signals between sensor and MCU.' 
+  {
+    id: 'b6',
+    resourceId: 'res1',
+    resourceName: 'Keysight MSOX3054T Oscilloscope',
+    userId: mockCurrentUser.id,
+    userName: mockCurrentUser.name,
+    startTime: set(subDays(today, 1), { hours: 10, minutes: 0 }),
+    endTime: set(subDays(today, 1), { hours: 12, minutes: 0 }),
+    status: 'Confirmed',
+    notes: 'Past booking: Verifying I2C signals between sensor and MCU.'
   },
   {
     id: 'b7',
@@ -333,5 +333,50 @@ export const initialMaintenanceRequests: MaintenanceRequest[] = [
     dateReported: subDays(today, 10).toISOString(),
     dateResolved: subDays(today, 8).toISOString(),
     resolutionNotes: 'Replaced heating element and thermocouple. Tested and verified working correctly.'
+  },
+];
+
+
+// Mock Notifications
+export const initialNotifications: Notification[] = [
+  {
+    id: 'n1',
+    userId: mockCurrentUser.id,
+    title: 'Booking Confirmed: Keysight Scope',
+    message: 'Your booking for Keysight MSOX3054T Oscilloscope on ' + format(set(addDays(today, 2), { hours: 10, minutes: 0 }), 'MMM dd, HH:mm') + ' has been confirmed.',
+    type: 'booking_confirmed',
+    isRead: false,
+    createdAt: subDays(today, 0).toISOString(),
+    linkTo: `/bookings?bookingId=b1&date=${format(set(addDays(today, 2), { hours: 10, minutes: 0 }), 'yyyy-MM-dd')}`,
+  },
+  {
+    id: 'n2',
+    userId: mockCurrentUser.id,
+    title: 'Maintenance Update: Siglent SDG2042X',
+    message: 'Maintenance request for Siglent SDG2042X Function Generator (Channel 2 output unstable) is now "In Progress". Technician Third assigned.',
+    type: 'maintenance_assigned',
+    isRead: true,
+    createdAt: subDays(today, 1).toISOString(),
+    linkTo: '/maintenance', // Could link to specific request later
+  },
+  {
+    id: 'n3',
+    userId: mockCurrentUser.id,
+    title: 'Booking Pending: Spectrum Analyzer',
+    message: 'Your booking request for Rohde & Schwarz FPC1500 Spectrum Analyzer on ' + format(set(today, { hours: 9, minutes: 0 }), 'MMM dd, HH:mm') + ' is awaiting approval.',
+    type: 'booking_pending_approval',
+    isRead: false,
+    createdAt: subDays(today, 2).toISOString(),
+    linkTo: `/bookings?bookingId=b4&date=${format(set(today, { hours: 9, minutes: 0 }), 'yyyy-MM-dd')}`,
+  },
+  {
+    id: 'n4',
+    userId: mockCurrentUser.id,
+    title: 'New Maintenance Request Logged',
+    message: 'A new maintenance request for Keysight MSOX3054T Oscilloscope (touchscreen unresponsive) has been logged.',
+    type: 'maintenance_new',
+    isRead: true,
+    createdAt: subDays(today, 3).toISOString(),
+    linkTo: '/maintenance',
   },
 ];

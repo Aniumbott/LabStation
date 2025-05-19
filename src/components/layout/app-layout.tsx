@@ -14,6 +14,7 @@ import {
   ClipboardList,
   CheckSquare, // For Booking Approvals
   Wrench, // For Maintenance
+  Bell, // For Notifications
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -40,12 +41,12 @@ interface NavItem {
   admin?: boolean; // If true, consider this for an "Admin" section or for RBAC later
 }
 
-// Updated order of navigation items
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/resources', label: 'Resources', icon: ClipboardList },
   { href: '/bookings', label: 'Bookings', icon: CalendarDays },
   { href: '/maintenance', label: 'Maintenance', icon: Wrench },
+  { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/profile', label: 'My Profile', icon: UserCog },
   { href: '/admin/booking-approvals', label: 'Booking Approvals', icon: CheckSquare, admin: true },
   { href: '/admin/users', label: 'Users', icon: UsersIconLucide, admin: true },

@@ -62,14 +62,33 @@ export type MaintenanceRequestStatus = 'Open' | 'In Progress' | 'Resolved' | 'Cl
 export interface MaintenanceRequest {
   id: string;
   resourceId: string;
-  resourceName: string; 
+  resourceName: string;
   reportedByUserId: string;
-  reportedByUserName: string; 
+  reportedByUserName: string;
   issueDescription: string;
   status: MaintenanceRequestStatus;
   assignedTechnicianId?: string;
-  assignedTechnicianName?: string; 
+  assignedTechnicianName?: string;
   dateReported: string; // ISO string
   dateResolved?: string; // ISO string
   resolutionNotes?: string;
+}
+
+export type NotificationType =
+  | 'booking_confirmed'
+  | 'booking_pending_approval'
+  | 'booking_rejected'
+  | 'maintenance_new'
+  | 'maintenance_assigned'
+  | 'maintenance_resolved';
+
+export interface Notification {
+  id: string;
+  userId: string; // For whom the notification is
+  title: string;
+  message: string;
+  type: NotificationType;
+  isRead: boolean;
+  createdAt: string; // ISO string
+  linkTo?: string; // Optional link for action, e.g., to view the specific booking
 }
