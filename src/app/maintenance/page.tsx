@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Wrench, PlusCircle, Edit, Filter as FilterIcon, FilterX, Search as SearchIcon, ListFilter, CheckCircle, AlertCircle, PenToolIcon } from 'lucide-react';
 import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource } from '@/types';
-import { initialMaintenanceRequests, maintenanceRequestStatuses, initialMockUsers, allAdminMockResources } from '@/lib/mock-data';
+import { initialMaintenanceRequests, maintenanceRequestStatuses, initialMockUsers, allAdminMockResources, addNotification, mockCurrentUser } from '@/lib/mock-data';
 import {
   Table,
   TableBody,
@@ -104,7 +104,11 @@ export default function MaintenanceRequestsPage() {
       currentRequests = currentRequests.filter(req => req.resourceId === activeFilterResourceId);
     }
     if (activeFilterTechnicianId !== 'all') {
-      currentRequests = currentRequests.filter(req => req.assignedTechnicianId === activeFilterTechnicianId);
+       if (activeFilterTechnicianId === 'unassigned') {
+         currentRequests = currentRequests.filter(req => !req.assignedTechnicianId);
+       } else {
+        currentRequests = currentRequests.filter(req => req.assignedTechnicianId === activeFilterTechnicianId);
+       }
     }
     return currentRequests.sort((a, b) => new Date(b.dateReported).getTime() - new Date(a.dateReported).getTime());
   }, [requests, activeSearchTerm, activeFilterStatus, activeFilterResourceId, activeFilterTechnicianId]);
@@ -146,8 +150,7 @@ export default function MaintenanceRequestsPage() {
   const handleSaveRequest = (data: MaintenanceRequestFormValues) => {
     const resource = allAdminMockResources.find(r => r.id === data.resourceId);
     const technician = technicians.find(t => t.id === data.assignedTechnicianId);
-    const currentUser = initialMockUsers.find(u => u.id === 'u4'); // Using 'Researcher Fourth' as current user for reporting new issues
-
+    
     if (!resource) {
       toast({ title: "Error", description: "Selected resource not found.", variant: "destructive" });
       return;
@@ -165,20 +168,49 @@ export default function MaintenanceRequestsPage() {
       const globalIndex = initialMaintenanceRequests.findIndex(r => r.id === editingRequest.id);
       if (globalIndex !== -1) initialMaintenanceRequests[globalIndex] = updatedRequest;
       toast({ title: 'Request Updated', description: `Maintenance request for "${resource.name}" has been updated.` });
+      
+      if (updatedRequest.status === 'Resolved' && editingRequest.status !== 'Resolved') {
+        addNotification(
+          updatedRequest.reportedByUserId,
+          'Maintenance Resolved',
+          `The issue reported for ${resource.name} has been resolved.`,
+          'maintenance_resolved',
+          '/maintenance'
+        );
+      } else if (updatedRequest.assignedTechnicianId && updatedRequest.assignedTechnicianId !== editingRequest.assignedTechnicianId) {
+         addNotification(
+          updatedRequest.assignedTechnicianId,
+          'Maintenance Task Assigned',
+          `You have been assigned a maintenance task for ${resource.name}: ${updatedRequest.issueDescription.substring(0,50)}...`,
+          'maintenance_assigned',
+          '/maintenance'
+        );
+      }
+
     } else {
+      const currentUser = initialMockUsers.find(u => u.id === mockCurrentUser.id) || initialMockUsers[0]; // Fallback if current user not found
       const newRequest: MaintenanceRequest = {
         id: `mr${requests.length + 1 + Date.now()}`,
         ...data,
         resourceName: resource.name,
-        reportedByUserId: currentUser?.id || 'unknownUser',
-        reportedByUserName: currentUser?.name || 'Unknown User',
+        reportedByUserId: currentUser.id,
+        reportedByUserName: currentUser.name,
         assignedTechnicianName: technician?.name,
         dateReported: new Date().toISOString(),
         dateResolved: (data.status === 'Resolved' || data.status === 'Closed') ? new Date().toISOString() : undefined,
       };
       setRequests([newRequest, ...requests]);
-      initialMaintenanceRequests.unshift(newRequest); // Add to the global mock array for persistence during session
+      initialMaintenanceRequests.unshift(newRequest); 
       toast({ title: 'Request Logged', description: `New maintenance request for "${resource.name}" has been logged.` });
+      
+      const targetTechnicianId = newRequest.assignedTechnicianId || (technicians.length > 0 ? technicians[0].id : 'u1'); // Notify first tech or admin
+      addNotification(
+        targetTechnicianId,
+        'New Maintenance Request',
+        `New request for ${resource.name}: ${newRequest.issueDescription.substring(0, 50)}...`,
+        'maintenance_new',
+        '/maintenance'
+      );
     }
     setIsFormDialogOpen(false);
   };
@@ -290,7 +322,7 @@ export default function MaintenanceRequestsPage() {
               <CardTitle>Active Requests ({filteredRequests.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto rounded-lg">
+              <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -364,3 +396,4 @@ export default function MaintenanceRequestsPage() {
     </TooltipProvider>
   );
 }
+

@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter } from 'lucide-react';
 import type { Booking } from '@/types';
-import { initialBookings, allAdminMockResources } from '@/lib/mock-data';
+import { initialBookings, allAdminMockResources, addNotification, mockCurrentUser } from '@/lib/mock-data';
 import {
   Table,
   TableBody,
@@ -43,7 +43,7 @@ import { Separator } from '@/components/ui/separator';
 
 export default function BookingApprovalsPage() {
   const { toast } = useToast();
-  const [allBookings, setAllBookings] = useState<Booking[]>(() => JSON.parse(JSON.stringify(initialBookings)));
+  const [allBookingsState, setAllBookingsState] = useState<Booking[]>(() => JSON.parse(JSON.stringify(initialBookings)));
 
   // Active filters for the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
@@ -57,11 +57,11 @@ export default function BookingApprovalsPage() {
   useEffect(() => {
     // For this mock setup, re-filter if initialBookings (the global array) were to somehow change.
     // In a real app, this might involve re-fetching or subscribing to updates.
-    setAllBookings(JSON.parse(JSON.stringify(initialBookings)));
+    setAllBookingsState(JSON.parse(JSON.stringify(initialBookings)));
   }, []); 
 
   const pendingBookings = useMemo(() => {
-    let filtered = allBookings.filter(b => b.status === 'Pending');
+    let filtered = allBookingsState.filter(b => b.status === 'Pending');
     
     if (activeSearchTerm) {
       const lowerSearch = activeSearchTerm.toLowerCase();
@@ -82,15 +82,16 @@ export default function BookingApprovalsPage() {
         if (!isValidDate(dateA) || !isValidDate(dateB)) return 0;
         return dateA.getTime() - dateB.getTime();
     });
-  }, [allBookings, activeSearchTerm, activeFilterResourceId]);
+  }, [allBookingsState, activeSearchTerm, activeFilterResourceId]);
 
 
   const handleApproveBooking = (bookingId: string) => {
-    const bookingIndex = allBookings.findIndex(b => b.id === bookingId);
+    const bookingIndex = allBookingsState.findIndex(b => b.id === bookingId);
     if (bookingIndex !== -1) {
-      const updatedBookings = [...allBookings];
-      updatedBookings[bookingIndex].status = 'Confirmed';
-      setAllBookings(updatedBookings);
+      const updatedBookings = [...allBookingsState];
+      const approvedBooking = { ...updatedBookings[bookingIndex], status: 'Confirmed' as Booking['status']};
+      updatedBookings[bookingIndex] = approvedBooking;
+      setAllBookingsState(updatedBookings);
 
       const globalBookingIndex = initialBookings.findIndex(b => b.id === bookingId);
       if (globalBookingIndex !== -1) {
@@ -98,17 +99,25 @@ export default function BookingApprovalsPage() {
       }
       toast({
         title: 'Booking Approved',
-        description: `Booking for "${updatedBookings[bookingIndex].resourceName}" by ${updatedBookings[bookingIndex].userName} has been confirmed.`,
+        description: `Booking for "${approvedBooking.resourceName}" by ${approvedBooking.userName} has been confirmed.`,
       });
+      addNotification(
+        approvedBooking.userId,
+        'Booking Confirmed',
+        `Your booking for ${approvedBooking.resourceName} on ${format(new Date(approvedBooking.startTime), 'MMM dd, HH:mm')} has been confirmed.`,
+        'booking_confirmed',
+        `/bookings?bookingId=${approvedBooking.id}`
+      );
     }
   };
 
   const handleRejectBooking = (bookingId: string) => {
-    const bookingIndex = allBookings.findIndex(b => b.id === bookingId);
+    const bookingIndex = allBookingsState.findIndex(b => b.id === bookingId);
     if (bookingIndex !== -1) {
-      const updatedBookings = [...allBookings];
-      updatedBookings[bookingIndex].status = 'Cancelled'; 
-      setAllBookings(updatedBookings);
+      const updatedBookings = [...allBookingsState];
+      const rejectedBooking = { ...updatedBookings[bookingIndex], status: 'Cancelled' as Booking['status']};
+      updatedBookings[bookingIndex] = rejectedBooking;
+      setAllBookingsState(updatedBookings);
 
       const globalBookingIndex = initialBookings.findIndex(b => b.id === bookingId);
       if (globalBookingIndex !== -1) {
@@ -116,9 +125,16 @@ export default function BookingApprovalsPage() {
       }
       toast({
         title: 'Booking Rejected',
-        description: `Booking for "${updatedBookings[bookingIndex].resourceName}" by ${updatedBookings[bookingIndex].userName} has been cancelled.`,
+        description: `Booking for "${rejectedBooking.resourceName}" by ${rejectedBooking.userName} has been cancelled.`,
         variant: 'destructive',
       });
+      addNotification(
+        rejectedBooking.userId,
+        'Booking Rejected',
+        `Your booking for ${rejectedBooking.resourceName} on ${format(new Date(rejectedBooking.startTime), 'MMM dd, HH:mm')} has been rejected.`,
+        'booking_rejected',
+        `/bookings?bookingId=${rejectedBooking.id}`
+      );
     }
   };
   
@@ -136,8 +152,8 @@ export default function BookingApprovalsPage() {
   const resetAllActiveFilters = () => {
     setActiveSearchTerm('');
     setActiveFilterResourceId('all');
-    resetDialogFilters(); // Also reset temp values in dialog
-    setIsFilterDialogOpen(false); // Close dialog if open
+    resetDialogFilters(); 
+    setIsFilterDialogOpen(false); 
   };
 
   const activeFilterCount = [
@@ -205,8 +221,7 @@ export default function BookingApprovalsPage() {
                           <SelectTrigger id="approvalResourceDialog" className="h-9"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
                           <SelectContent>
                               <SelectItem value="all">All Resources</SelectItem>
-                              {/* Get unique resource names from pending bookings for filter options */}
-                              {Array.from(new Set(allBookings.filter(b => b.status === 'Pending').map(b => b.resourceId)))
+                              {Array.from(new Set(allBookingsState.filter(b => b.status === 'Pending').map(b => b.resourceId)))
                                   .map(resourceId => {
                                       const resource = allAdminMockResources.find(r => r.id === resourceId);
                                       return resource ? <SelectItem key={resource.id} value={resource.id}>{resource.name}</SelectItem> : null;
@@ -310,3 +325,4 @@ export default function BookingApprovalsPage() {
     </TooltipProvider>
   );
 }
+

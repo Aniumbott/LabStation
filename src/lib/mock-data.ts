@@ -1,6 +1,6 @@
 
-import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification } from '@/types';
-import { format, addDays, set, subDays } from 'date-fns';
+import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType } from '@/types';
+import { format, addDays, set, subDays, parseISO } from 'date-fns';
 
 // For Resource Availability
 const today = new Date();
@@ -28,7 +28,7 @@ export const initialMockResourceTypes: ResourceType[] = [
 export const labsList: Array<Resource['lab']> = ['Electronics Lab 1', 'RF Lab', 'Prototyping Lab', 'General Test Area'];
 export const resourceStatusesList: ResourceStatus[] = ['Available', 'Booked', 'Maintenance'];
 
-export const allAdminMockResources: Resource[] = [
+export let allAdminMockResources: Resource[] = [
   {
     id: 'res1',
     name: 'Keysight MSOX3054T Oscilloscope',
@@ -41,11 +41,11 @@ export const allAdminMockResources: Resource[] = [
     serialNumber: 'MY58012345',
     purchaseDate: '2022-08-15T00:00:00.000Z',
     description: 'Mixed Signal Oscilloscope with 500 MHz bandwidth, 4 analog channels, and 16 digital channels. Includes built-in waveform generator and serial protocol analysis capabilities. Ideal for debugging embedded systems and mixed-signal designs.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['500 MHz Bandwidth', '4 Analog Channels', '16 Digital Channels', 'WaveGen', 'Serial Decode'],
     availability: [
       { date: todayStr, slots: ['14:00-16:00', '16:00-18:00'] },
-      { date: tomorrowStr, slots: ['10:00-12:00'] }
+      { date: tomorrowStr, slots: ['10:00-12:00', '09:00-17:00'] }
     ],
     notes: 'Standard probe set included. High-voltage differential probe in cabinet 3.',
     remoteAccess: {
@@ -66,7 +66,7 @@ export const allAdminMockResources: Resource[] = [
     serialNumber: 'DP8C198765',
     purchaseDate: '2023-01-20T00:00:00.000Z',
     description: 'Triple output programmable DC power supply. CH1: 0-30V/0-3A, CH2: 0-30V/0-3A, CH3: 0-5V/0-3A. High resolution and remote sense capabilities.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['3 Channels', 'Programmable', 'Overvoltage Protection', 'LAN Interface'],
     availability: [
       { date: tomorrowStr, slots: ['09:00-11:00', '11:00-13:00'] },
@@ -86,7 +86,7 @@ export const allAdminMockResources: Resource[] = [
     serialNumber: 'SDG2XABC001',
     purchaseDate: '2021-05-10T00:00:00.000Z',
     description: 'Dual-channel Arbitrary Waveform Generator, 40 MHz bandwidth, 1.2 GSa/s sampling rate. Generates sine, square, ramp, pulse, noise, and arbitrary waveforms.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['40 MHz Bandwidth', 'Dual Channel', 'Arbitrary Waveforms', 'IQ Modulation'],
     availability: [],
     notes: 'Output amplifier stage under repair. Expected back online next week.'
@@ -103,7 +103,7 @@ export const allAdminMockResources: Resource[] = [
     serialNumber: 'RS-FPC-987',
     purchaseDate: '2023-06-05T00:00:00.000Z',
     description: 'Spectrum analyzer with frequency range from 5 kHz to 1 GHz (upgradable to 3 GHz). Includes tracking generator and internal VSWR bridge.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['1 GHz Base Frequency', 'Tracking Generator', 'One-Port Vector Network Analyzer'],
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },
@@ -122,7 +122,7 @@ export const allAdminMockResources: Resource[] = [
     serialNumber: 'WEL-WE-007A',
     purchaseDate: '2022-11-01T00:00:00.000Z',
     description: '70W digital soldering station with temperature control and standby mode. Suitable for general purpose and fine pitch soldering work.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['70 Watt Power', 'Digital Temperature Control', 'ESD Safe', 'Interchangeable Tips'],
     availability: [
         { date: todayStr, slots: ['10:00-17:00'] },
@@ -136,16 +136,16 @@ export const allAdminMockResources: Resource[] = [
     resourceTypeId: 'rt5',
     resourceTypeName: 'Digital Multimeter (DMM)',
     lab: 'General Test Area',
-    status: 'Booked',
+    status: 'Booked', // Intentionally booked for testing dashboard
     manufacturer: 'Fluke Corporation',
     model: '87V',
     serialNumber: 'FLUKE-87V-011',
     purchaseDate: '2023-03-10T00:00:00.000Z',
     description: 'True-RMS industrial digital multimeter for accurate measurements on non-linear signals. Measures AC/DC voltage and current, resistance, capacitance, frequency.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['True-RMS AC Voltage/Current', 'Temperature Measurement (with probe)', 'CAT III 1000V, CAT IV 600V Safety Rating'],
     availability: [
-      { date: dayAfterTomorrowStr, slots: ['Full Day Booked'] } // Example of a fully booked day
+      { date: dayAfterTomorrowStr, slots: ['09:00-17:00'] }
     ],
     notes: 'Includes standard test leads and thermocouple probe.'
   },
@@ -161,7 +161,7 @@ export const allAdminMockResources: Resource[] = [
     serialNumber: 'XALV-U250-001',
     purchaseDate: '2023-09-01T00:00:00.000Z',
     description: 'High-performance FPGA development node for hardware acceleration and prototyping complex digital systems.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['High-Speed Transceivers', 'Large Logic Capacity', 'PCIe Gen3 x16'],
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },
@@ -189,7 +189,7 @@ export const allAdminMockResources: Resource[] = [
     serialNumber: 'FLMS12345',
     purchaseDate: '2022-07-20T00:00:00.000Z',
     description: 'Compact spectrometer for VIS-NIR measurements (350-1000 nm). Ideal for absorbance, transmittance, and irradiance.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['350-1000 nm Range', 'High Resolution', 'USB Interface', 'Compact Size'],
     availability: [
       { date: threeDaysLaterStr, slots: ['10:00-12:00', '13:00-16:00'] },
@@ -211,8 +211,7 @@ export const initialMockUsers: User[] = [
 // Mock Current User (used across Bookings, Resource Details, Dashboard)
 export const mockCurrentUser: User = initialMockUsers[3]; // Researcher Fourth
 
-// Initial Bookings (used across Bookings, Resource Details, Dashboard)
-// Some bookings made by mockCurrentUser, some by others, some pending.
+// Initial Bookings
 export let initialBookings: Booking[] = [
   {
     id: 'b1',
@@ -220,8 +219,8 @@ export let initialBookings: Booking[] = [
     resourceName: 'Keysight MSOX3054T Oscilloscope',
     userId: mockCurrentUser.id,
     userName: mockCurrentUser.name,
-    startTime: set(addDays(today, 2), { hours: 10, minutes: 0 }),
-    endTime: set(addDays(today, 2), { hours: 12, minutes: 0 }),
+    startTime: set(addDays(today, 2), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
+    endTime: set(addDays(today, 2), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Confirmed',
     notes: 'Debugging SPI communication on custom MCU board.'
   },
@@ -231,8 +230,8 @@ export let initialBookings: Booking[] = [
     resourceName: 'Rigol DP832 Programmable Power Supply',
     userId: 'u2', // Dr. Manager Second
     userName: initialMockUsers[1].name,
-    startTime: set(addDays(today, 3), { hours: 14, minutes: 0 }),
-    endTime: set(addDays(today, 3), { hours: 16, minutes: 0 }),
+    startTime: set(addDays(today, 3), { hours: 14, minutes: 0, seconds: 0, milliseconds: 0 }),
+    endTime: set(addDays(today, 3), { hours: 16, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Pending',
     notes: 'Powering up prototype device for thermal testing.'
   },
@@ -242,8 +241,8 @@ export let initialBookings: Booking[] = [
     resourceName: 'Keysight MSOX3054T Oscilloscope',
     userId: mockCurrentUser.id,
     userName: mockCurrentUser.name,
-    startTime: set(addDays(today, 1), { hours: 14, minutes: 0 }),
-    endTime: set(addDays(today, 1), { hours: 15, minutes: 0 }),
+    startTime: set(addDays(today, 1), { hours: 14, minutes: 0, seconds: 0, milliseconds: 0 }),
+    endTime: set(addDays(today, 1), { hours: 15, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Pending',
     notes: 'Quick check of clock signal jitter. High priority for RF module.'
   },
@@ -253,8 +252,8 @@ export let initialBookings: Booking[] = [
     resourceName: 'Rohde & Schwarz FPC1500 Spectrum Analyzer',
     userId: mockCurrentUser.id,
     userName: mockCurrentUser.name,
-    startTime: set(today, { hours: 9, minutes: 0 }),
-    endTime: set(today, { hours: 11, minutes: 0 }),
+    startTime: set(today, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }),
+    endTime: set(today, { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Confirmed',
     notes: 'Antenna matching and S11 parameter measurement for new design.'
   },
@@ -264,8 +263,8 @@ export let initialBookings: Booking[] = [
     resourceName: 'Weller WE1010NA Digital Soldering Station',
     userId: 'u2', // Dr. Manager Second
     userName: initialMockUsers[1].name,
-    startTime: set(addDays(today, 5), { hours: 10, minutes: 0 }),
-    endTime: set(addDays(today, 5), { hours: 13, minutes: 0 }),
+    startTime: set(addDays(today, 5), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
+    endTime: set(addDays(today, 5), { hours: 13, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Pending',
     notes: 'Reworking BGA component on development board.'
   },
@@ -275,8 +274,8 @@ export let initialBookings: Booking[] = [
     resourceName: 'Keysight MSOX3054T Oscilloscope',
     userId: mockCurrentUser.id,
     userName: mockCurrentUser.name,
-    startTime: set(subDays(today, 1), { hours: 10, minutes: 0 }),
-    endTime: set(subDays(today, 1), { hours: 12, minutes: 0 }),
+    startTime: set(subDays(today, 1), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
+    endTime: set(subDays(today, 1), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Confirmed',
     notes: 'Past booking: Verifying I2C signals between sensor and MCU.'
   },
@@ -286,8 +285,8 @@ export let initialBookings: Booking[] = [
     resourceName: 'FPGA Dev Node Alpha',
     userId: mockCurrentUser.id,
     userName: mockCurrentUser.name,
-    startTime: set(addDays(today, 4), { hours: 11, minutes: 0 }),
-    endTime: set(addDays(today, 4), { hours: 15, minutes: 30 }),
+    startTime: set(addDays(today, 4), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
+    endTime: set(addDays(today, 4), { hours: 15, minutes: 30, seconds: 0, milliseconds: 0 }),
     status: 'Pending',
     notes: 'Need to test new HDL core for signal processing acceleration.'
   },
@@ -296,7 +295,7 @@ export let initialBookings: Booking[] = [
 // Mock Maintenance Requests
 export const maintenanceRequestStatuses: MaintenanceRequestStatus[] = ['Open', 'In Progress', 'Resolved', 'Closed'];
 
-export const initialMaintenanceRequests: MaintenanceRequest[] = [
+export let initialMaintenanceRequests: MaintenanceRequest[] = [
   {
     id: 'mr1',
     resourceId: 'res3', // Siglent SDG2042X Function Generator
@@ -338,7 +337,7 @@ export const initialMaintenanceRequests: MaintenanceRequest[] = [
 
 
 // Mock Notifications
-export const initialNotifications: Notification[] = [
+export let initialNotifications: Notification[] = [
   {
     id: 'n1',
     userId: mockCurrentUser.id,
@@ -357,12 +356,12 @@ export const initialNotifications: Notification[] = [
     type: 'maintenance_assigned',
     isRead: true,
     createdAt: subDays(today, 1).toISOString(),
-    linkTo: '/maintenance', // Could link to specific request later
+    linkTo: '/maintenance',
   },
   {
     id: 'n3',
     userId: mockCurrentUser.id,
-    title: 'Booking Pending: Spectrum Analyzer',
+    title: 'Booking Request: Spectrum Analyzer',
     message: 'Your booking request for Rohde & Schwarz FPC1500 Spectrum Analyzer on ' + format(set(today, { hours: 9, minutes: 0 }), 'MMM dd, HH:mm') + ' is awaiting approval.',
     type: 'booking_pending_approval',
     isRead: false,
@@ -371,12 +370,34 @@ export const initialNotifications: Notification[] = [
   },
   {
     id: 'n4',
-    userId: mockCurrentUser.id,
+    userId: 'u1', // For Admin User
     title: 'New Maintenance Request Logged',
-    message: 'A new maintenance request for Keysight MSOX3054T Oscilloscope (touchscreen unresponsive) has been logged.',
+    message: 'A new maintenance request for Keysight MSOX3054T Oscilloscope (touchscreen unresponsive) has been logged by Dr. Manager Second.',
     type: 'maintenance_new',
     isRead: true,
     createdAt: subDays(today, 3).toISOString(),
     linkTo: '/maintenance',
   },
 ];
+
+
+// Helper function to add notifications
+export function addNotification(
+  userId: string,
+  title: string,
+  message: string,
+  type: NotificationType,
+  linkTo?: string
+) {
+  const newNotification: Notification = {
+    id: `n${initialNotifications.length + 1 + Date.now()}`,
+    userId,
+    title,
+    message,
+    type,
+    isRead: false,
+    createdAt: new Date().toISOString(),
+    linkTo,
+  };
+  initialNotifications.unshift(newNotification); // Add to the beginning of the array
+}
