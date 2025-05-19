@@ -16,14 +16,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format, isValid, parseISO, isPast } from 'date-fns';
+import { format, isValid, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { allAdminMockResources, initialBookings, mockCurrentUser } from '@/lib/mock-data';
 
 
 export default function DashboardPage() {
   // Simulate frequently used by taking the first few resources for demo
-  const frequentlyUsedResources = allAdminMockResources.slice(0, 2); 
+  const frequentlyUsedResources = allAdminMockResources.slice(0, 2);
 
   const getResourceStatusBadge = (status: Resource['status']) => {
     switch (status) {
@@ -40,10 +40,10 @@ export default function DashboardPage() {
 
   const upcomingUserBookings = initialBookings
     .filter(b => {
-        const startTime = parseISO(b.startTime.toString()); // Ensure startTime is parsed
-        return isValid(startTime) && !isPast(startTime) && b.status !== 'Cancelled' && b.userId === mockCurrentUser.id;
+        // b.startTime is already a Date object from mock-data
+        return isValid(b.startTime) && !isPast(b.startTime) && b.status !== 'Cancelled' && b.userId === mockCurrentUser.id;
     })
-    .sort((a,b) => parseISO(a.startTime.toString()).getTime() - parseISO(b.startTime.toString()).getTime())
+    .sort((a,b) => a.startTime.getTime() - b.startTime.getTime())
     .slice(0, 5);
 
 
@@ -54,7 +54,6 @@ export default function DashboardPage() {
         description="Overview of lab resources and your bookings."
         icon={LayoutDashboard}
       />
-
       <section>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-semibold">Frequently Used Resources</h2>
@@ -65,10 +64,10 @@ export default function DashboardPage() {
           )}
         </div>
         {frequentlyUsedResources.length > 0 ? (
-          <div className="grid w-fit gap-6 md:grid-cols-2"> {/* Added w-fit here */}
+          <div className="grid w-fit gap-6 md:grid-cols-2">
             {frequentlyUsedResources.map((resource) => (
-              <Card key={resource.id} className="w-full md:max-w-lg flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <CardHeader className="p-4">
+              <Card key={resource.id} className="w-full md:max-w-lg flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300 p-4">
+                <CardHeader className="p-0 pb-3">
                   <div className="flex justify-between items-start">
                     <CardTitle className="text-lg hover:text-primary transition-colors">
                         <Link href={`/resources/${resource.id}`}>
@@ -79,13 +78,13 @@ export default function DashboardPage() {
                   </div>
                   <CardDescription>{resource.lab} - {resource.resourceTypeName}</CardDescription>
                 </CardHeader>
-                <CardContent className="p-4 pt-0 flex-grow space-y-3">
+                <CardContent className="p-0 flex-grow space-y-3">
                   <div className="relative w-full h-40 rounded-md overflow-hidden">
                     <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" />
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{resource.description}</p>
                 </CardContent>
-                <CardFooter className="p-4 pt-0">
+                <CardFooter className="p-0 pt-3">
                   <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
                     <Link href={`/bookings?resourceId=${resource.id}`}>
                       <CalendarPlus className="mr-2 h-4 w-4" />
@@ -110,7 +109,7 @@ export default function DashboardPage() {
         {upcomingUserBookings.length > 0 ? (
           <Card className="shadow-lg">
             <CardContent className="p-0">
-              <div className="overflow-x-auto rounded-lg">
+              <div className="overflow-x-auto rounded-lg border shadow-sm">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -125,8 +124,8 @@ export default function DashboardPage() {
                     {upcomingUserBookings.map((booking) => (
                       <TableRow key={booking.id}>
                         <TableCell className="font-medium">{booking.resourceName}</TableCell>
-                        <TableCell>{format(parseISO(booking.startTime.toString()), 'MMM dd, yyyy')}</TableCell>
-                        <TableCell>{format(parseISO(booking.startTime.toString()), 'p')} - {format(parseISO(booking.endTime.toString()), 'p')}</TableCell>
+                        <TableCell>{format(booking.startTime, 'MMM dd, yyyy')}</TableCell>
+                        <TableCell>{format(booking.startTime, 'p')} - {format(booking.endTime, 'p')}</TableCell>
                         <TableCell>
                           <Badge
                               className={cn(
@@ -141,7 +140,7 @@ export default function DashboardPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="sm" asChild>
-                            <Link href={`/bookings?bookingId=${booking.id}&date=${format(parseISO(booking.startTime.toString()), 'yyyy-MM-dd')}`}>View/Edit</Link>
+                            <Link href={`/bookings?bookingId=${booking.id}&date=${format(booking.startTime, 'yyyy-MM-dd')}`}>View/Edit</Link>
                           </Button>
                         </TableCell>
                       </TableRow>
