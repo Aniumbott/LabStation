@@ -7,7 +7,8 @@ import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
 import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon } from 'lucide-react';
 import type { Resource, ResourceStatus } from '@/types';
-import { allAdminMockResources, initialMockResourceTypes, labsList, mockCurrentUser } from '@/lib/mock-data';
+import { allAdminMockResources, initialMockResourceTypes, labsList } from '@/lib/mock-data';
+import { useAuth } from '@/components/auth-context'; // Import useAuth
 import {
   Table,
   TableBody,
@@ -53,6 +54,7 @@ const getStatusBadge = (status: ResourceStatus) => {
 
 export default function ResourcesPage() {
   const { toast } = useToast();
+  const { currentUser } = useAuth(); // Get currentUser from AuthContext
   const [resources, setResources] = useState<Resource[]>(() => JSON.parse(JSON.stringify(allAdminMockResources)));
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
@@ -93,7 +95,10 @@ export default function ResourcesPage() {
       );
     }
     if (activeFilterTypeId !== 'all') {
-      currentResources = currentResources.filter(resource => resource.resourceTypeId === activeFilterTypeId);
+      const selectedType = initialMockResourceTypes.find(type => type.id === activeFilterTypeId);
+      if (selectedType) {
+         currentResources = currentResources.filter(resource => resource.resourceTypeName === selectedType.name);
+      }
     }
     if (activeFilterLab !== 'all') {
       currentResources = currentResources.filter(resource => resource.lab === activeFilterLab);
@@ -170,7 +175,7 @@ export default function ResourcesPage() {
         purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : editingResource.purchaseDate,
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
           ...data.remoteAccess,
-          port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
+          port: data.remoteAccess.port && String(data.remoteAccess.port).trim() !== '' ? Number(data.remoteAccess.port) : undefined,
         } : undefined,
         availability: editingResource.availability || [],
         unavailabilityPeriods: editingResource.unavailabilityPeriods || [],
@@ -187,7 +192,6 @@ export default function ResourcesPage() {
     } else {
       const newResource: Resource = {
         id: `res${resources.length + 1 + Date.now()}`,
-        ...data,
         name: data.name,
         resourceTypeId: data.resourceTypeId,
         resourceTypeName: resourceType.name,
@@ -204,12 +208,13 @@ export default function ResourcesPage() {
         availability: [], 
         unavailabilityPeriods: [],
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
-          ...data.remoteAccess,
-          port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
+           ...data.remoteAccess,
+           port: data.remoteAccess.port && String(data.remoteAccess.port).trim() !== '' ? Number(data.remoteAccess.port) : undefined,
         } : undefined,
       };
-      setResources(prevResources => [...prevResources, newResource]);
+      setResources(prevResources => [...prevResources, newResource].sort((a,b) => a.name.localeCompare(b.name)));
       allAdminMockResources.push(newResource); 
+      allAdminMockResources.sort((a,b) => a.name.localeCompare(b.name));
       toast({
         title: 'Resource Created',
         description: `Resource "${data.name}" has been created.`,
@@ -220,7 +225,7 @@ export default function ResourcesPage() {
   };
 
   const activeFilterCount = [activeSearchTerm !== '', activeFilterTypeId !== 'all', activeFilterLab !== 'all', activeSelectedDate !== undefined].filter(Boolean).length;
-  const canAddResources = mockCurrentUser.role === 'Admin' || mockCurrentUser.role === 'Lab Manager';
+  const canAddResources = currentUser?.role === 'Admin' || currentUser?.role === 'Lab Manager';
 
   return (
     <div className="space-y-8">
@@ -261,7 +266,7 @@ export default function ResourcesPage() {
                         type="search"
                         placeholder="Name, manufacturer, model..."
                         value={tempSearchTerm}
-                        onChange={(e) => setTempSearchTerm(e.target.value)}
+                        onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
                         className="h-9 pl-8"
                         />
                     </div>
