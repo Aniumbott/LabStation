@@ -12,12 +12,13 @@ import {
   Loader2,
   ListChecks,
   ClipboardList,
-  CheckSquare, // For Booking Approvals
-  Wrench, // For Maintenance
-  Bell, // For Notifications
+  CheckSquare,
+  Wrench,
+  Bell,
+  Building, // Kept for consistency, though Lab Management was removed
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react'; // Added useMemo
 
 import {
   SidebarProvider,
@@ -33,24 +34,41 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/icons/logo';
 import { MobileSidebarToggle } from './MobileSidebarToggle';
+import type { RoleName } from '@/types';
+import { mockCurrentUser } from '@/lib/mock-data';
 
 interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  admin?: boolean; // If true, consider this for an "Admin" section or for RBAC later
+  allowedRoles?: RoleName[]; // Roles allowed to see this item. If undefined, all roles can see.
 }
 
-const navItems: NavItem[] = [
+const ALL_NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/resources', label: 'Resources', icon: ClipboardList },
   { href: '/bookings', label: 'Bookings', icon: CalendarDays },
   { href: '/maintenance', label: 'Maintenance', icon: Wrench },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/profile', label: 'My Profile', icon: UserCog },
-  { href: '/admin/booking-approvals', label: 'Booking Approvals', icon: CheckSquare, admin: true },
-  { href: '/admin/users', label: 'Users', icon: UsersIconLucide, admin: true },
-  { href: '/admin/resource-types', label: 'Resource Types', icon: ListChecks, admin: true },
+  {
+    href: '/admin/booking-approvals',
+    label: 'Booking Approvals',
+    icon: CheckSquare,
+    allowedRoles: ['Admin', 'Lab Manager'],
+  },
+  {
+    href: '/admin/users',
+    label: 'Users',
+    icon: UsersIconLucide,
+    allowedRoles: ['Admin'],
+  },
+  {
+    href: '/admin/resource-types',
+    label: 'Resource Types',
+    icon: ListChecks,
+    allowedRoles: ['Admin'],
+  },
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {
@@ -60,6 +78,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  const visibleNavItems = useMemo(() => {
+    return ALL_NAV_ITEMS.filter(item => {
+      if (!item.allowedRoles) {
+        return true; // Accessible to all if no specific roles are defined
+      }
+      return item.allowedRoles.includes(mockCurrentUser.role);
+    });
+  }, [mockCurrentUser.role]); // Re-calculate if user role changes
 
   if (!isMounted) {
     return (
@@ -79,7 +106,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <Separator className="my-1 bg-sidebar-border" />
         <SidebarContent>
           <SidebarMenu>
-            {navItems.map((item) => (
+            {visibleNavItems.map((item) => (
               <SidebarMenuItem key={item.label}>
                 <Link href={item.href} passHref legacyBehavior>
                   <SidebarMenuButton
