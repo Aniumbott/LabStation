@@ -11,7 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList, initialBookings, mockCurrentUser } from '@/lib/mock-data';
+import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList, initialBookings } from '@/lib/mock-data';
+import { useAuth } from '@/components/auth-context'; // Import useAuth
 import type { Resource, ResourceType, ResourceStatus, Booking, UnavailabilityPeriod } from '@/types';
 import { format, parseISO, isValid, startOfToday, isPast, startOfDay as fnsStartOfDay, isWithinInterval, isSameDay } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -66,7 +67,7 @@ function ResourceDetailPageSkeleton() {
               <Skeleton className="h-4 w-5/6 rounded-md" />
             </CardContent>
           </Card>
-           <Card className="shadow-lg"> 
+           <Card className="shadow-lg">
             <CardHeader><Skeleton className="h-6 w-3/4 rounded-md" /></CardHeader>
             <CardContent className="space-y-2">
               <Skeleton className="h-4 w-full rounded-md" />
@@ -97,7 +98,7 @@ function ResourceDetailPageSkeleton() {
                 <Skeleton className="h-10 w-1/3 rounded-md" />
             </CardFooter>
           </Card>
-          <Card className="shadow-lg"> 
+          <Card className="shadow-lg">
             <CardHeader><Skeleton className="h-6 w-1/2 rounded-md" /></CardHeader>
             <CardContent className="space-y-2">
               <Skeleton className="h-4 w-full rounded-md" />
@@ -155,6 +156,7 @@ export default function ResourceDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
+  const { currentUser } = useAuth(); 
   const resourceId = params.resourceId as string;
 
   const [resource, setResource] = useState<Resource | null>(null);
@@ -168,7 +170,7 @@ export default function ResourceDetailPage() {
   useEffect(() => {
     if (resourceId) {
       setIsLoading(true);
-      setTimeout(() => { // Simulate fetch delay
+      setTimeout(() => { 
         const foundResource = allAdminMockResources.find(r => r.id === resourceId);
         setResource(foundResource || null);
         setIsLoading(false);
@@ -180,16 +182,16 @@ export default function ResourceDetailPage() {
   }, [resourceId]);
 
   const userPastBookingsForResource = useMemo(() => {
-    if (!resource || !mockCurrentUser) return [];
+    if (!resource || !currentUser) return []; 
     return initialBookings
       .filter(booking =>
         booking.resourceId === resource.id &&
-        booking.userId === mockCurrentUser.id &&
+        booking.userId === currentUser.id && 
         isValid(booking.startTime) && isPast(booking.startTime) &&
         booking.status !== 'Cancelled'
       )
-      .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
-  }, [resource]);
+      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  }, [resource, currentUser]); 
 
   const handleSaveResource = (data: ResourceFormValues) => {
     if (resource) {
@@ -201,7 +203,7 @@ export default function ResourceDetailPage() {
         const updatedResource: Resource = {
             ...resource,
             ...data,
-            imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
+            imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
             resourceTypeName: resourceType.name,
             features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
             purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : resource.purchaseDate,
@@ -213,15 +215,15 @@ export default function ResourceDetailPage() {
               port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
               notes: data.remoteAccess.notes || undefined,
             } : undefined,
-            availability: resource.availability || [], 
+            availability: resource.availability || [],
             unavailabilityPeriods: resource.unavailabilityPeriods || [],
         };
-        
+
         const resourceIndexInGlobalArray = allAdminMockResources.findIndex(r => r.id === resource.id);
         if (resourceIndexInGlobalArray !== -1) {
             allAdminMockResources[resourceIndexInGlobalArray] = updatedResource;
         }
-        setResource(updatedResource); 
+        setResource(updatedResource);
         toast({
             title: 'Resource Updated',
             description: `Resource "${data.name}" has been updated.`,
@@ -234,7 +236,7 @@ export default function ResourceDetailPage() {
     if (resource) {
       const resourceIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
         if (resourceIndex !== -1) {
-            allAdminMockResources.splice(resourceIndex, 1); 
+            allAdminMockResources.splice(resourceIndex, 1);
         }
       toast({
         title: "Resource Deleted",
@@ -250,31 +252,32 @@ export default function ResourceDetailPage() {
     if (resource) {
       const updatedAvailability = resource.availability ? [...resource.availability] : [];
       const dateIndex = updatedAvailability.findIndex(avail => avail.date === date);
-      
-      if (newSlots.length > 0) { 
+
+      if (newSlots.length > 0) {
         if (dateIndex !== -1) {
           updatedAvailability[dateIndex].slots = newSlots;
         } else {
           updatedAvailability.push({ date, slots: newSlots });
         }
-      } else { 
+      } else {
         if (dateIndex !== -1) {
-          updatedAvailability[dateIndex].slots = []; // Ensure slots becomes empty array if no new slots
+          updatedAvailability[dateIndex].slots = []; // Ensure it's an empty array if unavailable
         } else {
-           updatedAvailability.push({ date, slots: [] }); // If date didn't exist, add it with empty slots
+           // If marking as unavailable and no prior entry, create one with empty slots
+           updatedAvailability.push({ date, slots: [] });
         }
       }
-      
-      updatedAvailability.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      updatedAvailability.sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
 
       const updatedResource = { ...resource, availability: updatedAvailability };
-      
+
       const globalIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
       if (globalIndex !== -1) {
         allAdminMockResources[globalIndex] = updatedResource;
       }
-      
-      setResource(updatedResource); 
+
+      setResource(updatedResource); // Update local state to refresh UI
       toast({
         title: 'Availability Updated',
         description: `Daily slots for ${resource.name} on ${format(parseISO(date), 'PPP')} have been updated.`,
@@ -297,7 +300,7 @@ export default function ResourceDetailPage() {
     }
   };
 
-  const canManageResource = mockCurrentUser.role === 'Admin' || mockCurrentUser.role === 'Lab Manager';
+  const canManageResource = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
 
   if (isLoading) {
     return <ResourceDetailPageSkeleton />;
@@ -327,16 +330,16 @@ export default function ResourceDetailPage() {
     );
   }
 
-  const today = fnsStartOfDay(new Date()); 
+  const today = fnsStartOfDay(new Date());
   const upcomingAvailability = resource.availability?.filter(avail => {
     if (!avail || !avail.date) return false;
     try {
         const availDate = parseISO(avail.date);
-        return isValid(availDate) && availDate >= today && avail.slots.length > 0; 
+        return isValid(availDate) && availDate >= today && avail.slots.length > 0;
     } catch (e) {
         return false;
     }
-  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) || [];
+  }).sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime()) || [];
 
   const canBookResource = resource.status === 'Available';
 
@@ -429,7 +432,7 @@ export default function ResourceDetailPage() {
             <Card className="shadow-lg">
                 <CardContent className="p-0">
                     <div className="relative w-full h-64 md:h-80 rounded-t-lg overflow-hidden">
-                        <Image src={resource.imageUrl || 'https://placehold.co/300x200.png'} alt={resource.name} layout="fill" objectFit="cover" />
+                        <Image src={resource.imageUrl || 'https://placehold.co/600x400.png'} alt={resource.name} layout="fill" objectFit="cover" />
                     </div>
                 </CardContent>
             </Card>
@@ -448,7 +451,7 @@ export default function ResourceDetailPage() {
                     </CardContent>
                 </Card>
             )}
-            
+
             {sortedUnavailabilityPeriods.length > 0 && (
               <Card className="shadow-lg">
                 <CardHeader>
@@ -471,7 +474,6 @@ export default function ResourceDetailPage() {
               </Card>
             )}
 
-
             {userPastBookingsForResource.length > 0 && (
               <Card className="shadow-lg">
                 <CardHeader>
@@ -481,7 +483,7 @@ export default function ResourceDetailPage() {
                   <ul className="space-y-3 text-sm">
                     {userPastBookingsForResource.slice(0,5).map((booking) => (
                       <li key={booking.id} className="pb-2 border-b border-dashed last:border-b-0 last:pb-0">
-                        <p className="font-medium text-foreground">{format(booking.startTime, 'PPP, p')}</p>
+                        <p className="font-medium text-foreground">{format(new Date(booking.startTime), 'PPP, p')}</p>
                         {booking.notes && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">Notes: {booking.notes}</p>}
                       </li>
                     ))}
@@ -490,7 +492,7 @@ export default function ResourceDetailPage() {
                 </CardContent>
               </Card>
              )}
-             {userPastBookingsForResource.length === 0 && (
+             {currentUser && userPastBookingsForResource.length === 0 && (
                  <Card className="shadow-lg">
                      <CardHeader>
                          <CardTitle className="text-xl flex items-center gap-2"><History className="text-primary h-5 w-5" /> Your Past Bookings</CardTitle>
@@ -642,3 +644,5 @@ export default function ResourceDetailPage() {
     </TooltipProvider>
   );
 }
+
+    
