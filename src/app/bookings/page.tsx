@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { BookingDetailsDialog } from '@/components/bookings/booking-details-dialog';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { allAdminMockResources, initialBookings, mockCurrentUser } from '@/lib/mock-data';
 import { Form, useForm } from 'react-hook-form';
 
@@ -58,7 +59,7 @@ function BookingsPageContent() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
-  const [allUserBookings, setAllUserBookings] = useState<Booking[]>(() => initialBookings.filter(b => b.userId === mockCurrentUser.id));
+  const [allUserBookings, setAllUserBookings] = useState<Booking[]>(() => JSON.parse(JSON.stringify(initialBookings.filter(b => b.userId === mockCurrentUser.id))));
 
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(() => {
     const dateParam = searchParams.get('date');
@@ -108,7 +109,11 @@ function BookingsPageContent() {
       setActiveSelectedDate(dateToSetFromUrl);
       setTempSelectedDateInDialog(dateToSetFromUrl); 
       setCurrentCalendarMonthInDialog(dateToSetFromUrl);
+    } else if (!dateParam && activeSelectedDate !== undefined) { // If date param removed, clear active date
+        // This case is typically handled when dialog closes and clears URL.
+        // However, if URL is cleared externally, this helps sync.
     }
+
 
     const shouldOpenFormForEdit = bookingIdParam && (!isFormOpen || (currentBooking?.id !== bookingIdParam));
     const shouldOpenFormForNewWithResourceAndDate = resourceIdParam && dateToSetFromUrl && (!isFormOpen || currentBooking?.id || currentBooking?.resourceId !== resourceIdParam || (currentBooking?.startTime && !isSameDay(new Date(currentBooking.startTime), dateToSetFromUrl)));
@@ -206,7 +211,6 @@ function BookingsPageContent() {
 
     if (proposedEndTime <= proposedStartTime) { toast({ title: "Invalid Time", description: "End time must be after start time.", variant: "destructive" }); return; }
 
-    // Granular conflict check against resource.availability.slots
     const proposedDateStr = format(proposedStartTime, 'yyyy-MM-dd');
     const resourceDayAvailability = resource.availability?.find(avail => avail.date === proposedDateStr);
 
@@ -215,12 +219,21 @@ function BookingsPageContent() {
         return;
     }
     
-    // Check if the proposed booking time is within any defined available slot
     let isWithinAvailableSlot = false;
     for (const slot of resourceDayAvailability.slots) {
         const [slotStartStr, slotEndStr] = slot.split('-');
-        const slotStartTime = set(proposedStartTime, { hours: parseInt(slotStartStr.split(':')[0]), minutes: parseInt(slotStartStr.split(':')[1]) });
-        const slotEndTime = set(proposedStartTime, { hours: parseInt(slotEndStr.split(':')[0]), minutes: parseInt(slotEndStr.split(':')[1]) });
+        if (!slotStartStr || !slotEndStr) continue; // Skip malformed slots
+
+        const slotStartHours = parseInt(slotStartStr.split(':')[0]);
+        const slotStartMinutes = parseInt(slotStartStr.split(':')[1]);
+        const slotEndHours = parseInt(slotEndStr.split(':')[0]);
+        const slotEndMinutes = parseInt(slotEndStr.split(':')[1]);
+
+        if (isNaN(slotStartHours) || isNaN(slotStartMinutes) || isNaN(slotEndHours) || isNaN(slotEndMinutes)) continue;
+
+
+        const slotStartTime = set(new Date(proposedStartTime), { hours: slotStartHours, minutes: slotStartMinutes, seconds: 0, milliseconds: 0 });
+        const slotEndTime = set(new Date(proposedStartTime), { hours: slotEndHours, minutes: slotEndMinutes, seconds: 0, milliseconds: 0 });
 
         if (proposedStartTime >= slotStartTime && proposedEndTime <= slotEndTime) {
             isWithinAvailableSlot = true;
@@ -238,15 +251,16 @@ function BookingsPageContent() {
         if (existingBooking.resourceId !== formData.resourceId) return false;
         if (existingBooking.status === 'Cancelled') return false;
         if (currentBooking && currentBooking.id && existingBooking.id === currentBooking.id) return false; 
-        if(format(new Date(existingBooking.startTime), 'yyyy-MM-dd') !== format(proposedStartTime, 'yyyy-MM-dd')) return false;
         
         const existingStartTime = new Date(existingBooking.startTime);
         const existingEndTime = new Date(existingBooking.endTime);
-        return proposedStartTime < existingEndTime && proposedEndTime > existingStartTime;
+        
+        // Check if the proposed booking overlaps with an existing booking
+        return (proposedStartTime < existingEndTime && proposedEndTime > existingStartTime);
     });
 
     if (conflictingBooking) {
-        toast({ title: "Booking Conflict", description: `${resource.name} is already booked by ${conflictingBooking.userName} from ${format(new Date(conflictingBooking.startTime), 'p')} to ${format(new Date(conflictingBooking.endTime), 'p')}.`, variant: "destructive", duration: 7000 });
+        toast({ title: "Booking Conflict", description: `${resource.name} is already booked by ${conflictingBooking.userName} from ${format(new Date(conflictingBooking.startTime), 'p')} to ${format(new Date(conflictingBooking.endTime), 'p')} on ${format(new Date(conflictingBooking.startTime), 'PPP')}.`, variant: "destructive", duration: 7000 });
         return;
     }
 
@@ -309,7 +323,7 @@ function BookingsPageContent() {
     setTempSearchTerm('');
     setTempFilterResourceId('all');
     setTempFilterStatus('all');
-    setTempSelectedDateInDialog(undefined);
+    setTempSelectedDateInDialog(undefined); // Also reset date in dialog
     setCurrentCalendarMonthInDialog(startOfDay(new Date()));
   };
 
@@ -317,15 +331,15 @@ function BookingsPageContent() {
     setActiveSearchTerm('');
     setActiveFilterResourceId('all');
     setActiveFilterStatus('all');
-    setActiveSelectedDate(undefined);
-    resetDialogFilters();
+    setActiveSelectedDate(undefined); // Clear the active page date filter
+    resetDialogFilters(); // Resets temp dialog state
 
     const newSearchParams = new URLSearchParams(searchParams.toString());
     newSearchParams.delete('date');
     newSearchParams.delete('bookingId');
     newSearchParams.delete('resourceId');
     router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
-    setIsFilterDialogOpen(false);
+    setIsFilterDialogOpen(false); // Close dialog if it was open
   };
   
   const bookedDatesForCalendar = useMemo(() => {
@@ -338,53 +352,46 @@ function BookingsPageContent() {
     return Array.from(dates).map(dateStr => parseISO(dateStr));
   }, [allUserBookings]);
 
-  const handleDateSelectFromPageCalendar = (date?: Date) => { // Renamed to avoid conflict
-    const newSelectedDate = date ? startOfDay(date) : undefined;
-    setActiveSelectedDate(newSelectedDate);
-    setTempSelectedDateInDialog(newSelectedDate); 
-    setCurrentCalendarMonthInDialog(newSelectedDate || startOfDay(new Date()));
-
-
-    const currentParams = new URLSearchParams(searchParams.toString());
-    if (newSelectedDate) {
-      currentParams.set('date', format(newSelectedDate, 'yyyy-MM-dd'));
-    } else {
-      currentParams.delete('date');
-    }
-    router.push(`${pathname}?${currentParams.toString()}`, { scroll: false });
-  };
-
-
-  if (!isClient) {
-    return <BookingsPageLoader />;
-  }
 
   const activeFilterCount = [
     activeSearchTerm !== '',
     activeFilterResourceId !== 'all',
     activeFilterStatus !== 'all',
-    activeSelectedDate !== undefined,
+    activeSelectedDate !== undefined, // Consider date as an active filter
   ].filter(Boolean).length;
 
 
   const getFormKey = () => {
-    if (currentBooking?.id) return currentBooking.id; 
-
-    let keyParts = ['new']; 
-    if (currentBooking?.resourceId) keyParts.push(currentBooking.resourceId); else keyParts.push('no-resource');
+    // Key based on booking ID if editing
+    if (currentBooking?.id) return `edit-${currentBooking.id}`;
+  
+    // Key based on resource and selected date if creating
+    let keyParts = ['new'];
+    if (currentBooking?.resourceId) keyParts.push(currentBooking.resourceId);
+    else keyParts.push('no-resource');
     
-    const formDataStartTime = currentBooking?.startTime;
-    const datePart = (formDataStartTime && isValidDate(new Date(formDataStartTime))) 
-                        ? format(startOfDay(new Date(formDataStartTime)), 'yyyy-MM-dd') 
-                        : 'no-date';
-    keyParts.push(datePart);
+    // Use date from currentBooking's startTime if available, else from activeSelectedDate
+    const dateForFormKey = currentBooking?.startTime 
+      ? startOfDay(new Date(currentBooking.startTime)) 
+      : activeSelectedDate 
+        ? startOfDay(activeSelectedDate) 
+        : startOfDay(new Date()); // Fallback to today if no date context
+  
+    keyParts.push(format(dateForFormKey, 'yyyy-MM-dd'));
     
-    if (formDataStartTime && isValidDate(new Date(formDataStartTime))) {
-        keyParts.push(new Date(formDataStartTime).toISOString());
+    // Include timestamp to ensure re-render if form is opened for same resource/date but was previously closed
+    // Or if booking data like start time within the form changes explicitly for a new booking.
+    if (currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime))) {
+        keyParts.push(new Date(currentBooking.startTime).toISOString());
     }
+    
     return keyParts.join(':');
   };
   const formKey = getFormKey();
+
+  if (!isClient) {
+    return <BookingsPageLoader />;
+  }
 
 
   return (
@@ -606,10 +613,23 @@ function BookingsPageContent() {
                     currentParams.delete('bookingId');
                     paramsModified = true;
                 }
-                if (currentParams.has('resourceId')) { 
+                // Keep resourceId if it was used to open the form, 
+                // but clear it if dialog is closed and it wasn't for an existing booking
+                if (currentParams.has('resourceId') && (!currentBooking || !currentBooking.id)) { 
                     currentParams.delete('resourceId');
-                    paramsModified = true;
+                     paramsModified = true;
                 }
+                // Also clear date param if dialog was explicitly opened for a new booking via URL with a date
+                 if (currentParams.has('date') && (!currentBooking || !currentBooking.id)) {
+                    // This part can be tricky, as date can also be from activeSelectedDate.
+                    // Generally, if the form for a NEW booking is closed, any guiding URL params for it should be cleared.
+                    // Let's clear date only if it was part of a new booking flow (resourceId was present and no bookingId)
+                    if(currentParams.has('resourceId') && !currentParams.has('bookingId')) {
+                        currentParams.delete('date');
+                        paramsModified = true;
+                    }
+                }
+
                 if (paramsModified) {
                     router.push(`${pathname}?${currentParams.toString()}`, { scroll: false });
                 }
@@ -678,9 +698,11 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
             ? new Date(initialData.endTime) 
             : new Date(initialStartTime.getTime() + 2 * 60 * 60 * 1000); 
     } else {
-        const baseDate = (selectedDateProp && isValidDate(selectedDateProp)) 
-                         ? selectedDateProp 
-                         : startOfDay(new Date());
+        const baseDate = (initialData?.startTime && isValidDate(new Date(initialData.startTime))) // If initialData has a valid startTime use its date part
+                            ? startOfDay(new Date(initialData.startTime))
+                            : (selectedDateProp && isValidDate(selectedDateProp)) // Else, if selectedDateProp is valid use it
+                                ? startOfDay(selectedDateProp) 
+                                : startOfDay(new Date()); // Fallback to today
         initialStartTime = set(new Date(baseDate), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 });
         initialEndTime = new Date(initialStartTime.getTime() + 2 * 60 * 60 * 1000);
     }
@@ -733,13 +755,13 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     const [hours, minutes] = timeString.split(':').map(Number);
 
     let baseDateForTimeChange: Date;
-    if (formData.startTime && isValidDate(new Date(formData.startTime!))) { // Use startTime as the base date
+    if (formData.startTime && isValidDate(new Date(formData.startTime!))) { 
         baseDateForTimeChange = new Date(formData.startTime);
     } else {
-        baseDateForTimeChange = selectedDateProp || startOfDay(new Date()); // Fallback if startTime is not set
+        baseDateForTimeChange = selectedDateProp || startOfDay(new Date()); 
     }
 
-    const newDate = setHours(setMinutes(baseDateForTimeChange, minutes), hours);
+    const newDate = setHours(setMinutes(startOfDay(baseDateForTimeChange), minutes), hours); // Ensure it's for the correct day
     handleChange(field, newDate);
 
     if (field === 'startTime') {
@@ -786,7 +808,7 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
               selected={formData.startTime && isValidDate(new Date(formData.startTime)) ? new Date(formData.startTime) : undefined}
               onSelect={handleDateChangeFromPicker}
               initialFocus
-              disabled={(date) => date < startOfDay(addDays(new Date(), -90))}
+              disabled={(date) => date < startOfDay(new Date())} // Allow today, disable past
             />
           </PopoverContent>
         </Popover>
@@ -854,4 +876,3 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     </Form>
   );
 }
-

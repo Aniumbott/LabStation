@@ -35,6 +35,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, startOfDay, isSameDay, parseISO, isValid, addDays } from 'date-fns';
 
 const getStatusBadge = (status: ResourceStatus) => {
@@ -76,7 +77,7 @@ export default function ResourcesPage() {
       setTempFilterTypeId(activeFilterTypeId);
       setTempFilterLab(activeFilterLab);
       setTempSelectedDate(activeSelectedDate);
-      if (activeSelectedDate) setCurrentMonthInDialog(activeSelectedDate); else setCurrentMonthInDialog(startOfDay(new Date()));
+      if (activeSelectedDate) setCurrentMonthInDialog(startOfDay(activeSelectedDate)); else setCurrentMonthInDialog(startOfDay(new Date()));
     }
   }, [isFilterDialogOpen, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
 
@@ -100,7 +101,7 @@ export default function ResourcesPage() {
     if (activeSelectedDate) {
       const dateStrToFilter = format(activeSelectedDate, 'yyyy-MM-dd');
       currentResources = currentResources.filter(resource =>
-        resource.availability?.some(avail => avail.date === dateStrToFilter && avail.slots.length > 0 && !avail.slots.includes('Full Day Booked')) && resource.status === 'Available'
+        resource.availability?.some(avail => avail.date === dateStrToFilter && avail.slots.length > 0) && resource.status === 'Available'
       );
     }
     return currentResources.sort((a,b) => a.name.localeCompare(b.name));
@@ -145,28 +146,24 @@ export default function ResourcesPage() {
     }
 
     if (editingResource) {
-      setResources(prevResources => prevResources.map(r => r.id === editingResource.id ? {
+      const updatedResource: Resource = {
         ...editingResource,
         ...data,
-        name: data.name,
-        resourceTypeId: data.resourceTypeId,
         resourceTypeName: resourceType.name,
-        lab: data.lab,
-        status: data.status,
-        description: data.description || '',
-        imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
-        manufacturer: data.manufacturer || undefined,
-        model: data.model || undefined,
-        serialNumber: data.serialNumber || undefined,
-        purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : undefined,
-        notes: data.notes || undefined,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-        availability: editingResource.availability, // Keep existing availability
+        purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : editingResource.purchaseDate,
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
           ...data.remoteAccess,
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
         } : undefined,
-      } : r));
+        // Keep existing availability if not explicitly managed here
+        availability: editingResource.availability || [],
+      };
+      setResources(prevResources => prevResources.map(r => r.id === editingResource.id ? updatedResource : r));
+      // Also update the global mock array
+      const globalIndex = allAdminMockResources.findIndex(r => r.id === editingResource.id);
+      if (globalIndex !== -1) allAdminMockResources[globalIndex] = updatedResource;
+
       toast({
         title: 'Resource Updated',
         description: `Resource "${data.name}" has been updated.`,
@@ -195,6 +192,7 @@ export default function ResourcesPage() {
         } : undefined,
       };
       setResources(prevResources => [...prevResources, newResource]);
+      allAdminMockResources.push(newResource); // Add to global mock array
       toast({
         title: 'Resource Created',
         description: `Resource "${data.name}" has been created.`,
@@ -234,7 +232,8 @@ export default function ResourcesPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <Separator className="my-4" />
-                <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2">
+                <ScrollArea className="max-h-[65vh] pr-2">
+                <div className="space-y-6 py-1">
                   <div>
                     <Label htmlFor="resourceSearchDialog" className="text-sm font-medium mb-1 block">Search by Name/Keyword</Label>
                     <div className="relative">
@@ -286,7 +285,7 @@ export default function ResourcesPage() {
                             onSelect={setTempSelectedDate}
                             month={currentMonthInDialog}
                             onMonthChange={setCurrentMonthInDialog}
-                            disabled={(date) => date < startOfDay(addDays(new Date(), -90)) }
+                            disabled={(date) => date < startOfDay(new Date()) } // Only allow today and future dates
                             footer={ tempSelectedDate &&
                                 <Button
                                     variant="ghost"
@@ -302,6 +301,7 @@ export default function ResourcesPage() {
                       </div>
                   </div>
                 </div>
+                </ScrollArea>
                 <DialogFooter className="pt-6 border-t">
                    <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters

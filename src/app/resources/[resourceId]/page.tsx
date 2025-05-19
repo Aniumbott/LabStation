@@ -167,6 +167,7 @@ export default function ResourceDetailPage() {
   useEffect(() => {
     if (resourceId) {
       setIsLoading(true);
+      // Simulating data fetching
       setTimeout(() => {
         const foundResource = allAdminMockResources.find(r => r.id === resourceId);
         setResource(foundResource || null);
@@ -211,11 +212,14 @@ export default function ResourceDetailPage() {
               port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
               notes: data.remoteAccess.notes || undefined,
             } : undefined,
+            // Keep existing availability unless explicitly managed
+            availability: resource.availability || [], 
         };
         
-        const resourceIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
-        if (resourceIndex !== -1) {
-            allAdminMockResources[resourceIndex] = updatedResource;
+        // Update in the global mock array (for demo persistence)
+        const resourceIndexInGlobalArray = allAdminMockResources.findIndex(r => r.id === resource.id);
+        if (resourceIndexInGlobalArray !== -1) {
+            allAdminMockResources[resourceIndexInGlobalArray] = updatedResource;
         }
         setResource(updatedResource); // Update local state for immediate UI reflection
         toast({
@@ -244,28 +248,43 @@ export default function ResourceDetailPage() {
 
   const handleSaveAvailability = (date: string, newSlots: string[]) => {
     if (resource) {
-      const updatedAvailability = [...(resource.availability || [])];
+      const updatedAvailability = resource.availability ? [...resource.availability] : [];
       const dateIndex = updatedAvailability.findIndex(avail => avail.date === date);
-      if (dateIndex !== -1) {
-        updatedAvailability[dateIndex].slots = newSlots;
-      } else {
-        updatedAvailability.push({ date, slots: newSlots });
-      }
-      // Filter out days with no slots if that's the desired behavior for "unavailable"
-      const finalAvailability = updatedAvailability.filter(avail => avail.slots.length > 0);
-
-      const updatedResource = { ...resource, availability: finalAvailability };
       
-      const resourceIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
-      if (resourceIndex !== -1) {
-          allAdminMockResources[resourceIndex] = updatedResource;
+      if (newSlots.length > 0) { // If there are slots, update or add
+        if (dateIndex !== -1) {
+          updatedAvailability[dateIndex].slots = newSlots;
+        } else {
+          updatedAvailability.push({ date, slots: newSlots });
+        }
+      } else { // If newSlots is empty, it means mark as unavailable for this date
+        if (dateIndex !== -1) {
+          // If you want to keep the date entry but with empty slots:
+          updatedAvailability[dateIndex].slots = [];
+          // If you want to remove the date entry entirely if it becomes unavailable:
+          // updatedAvailability.splice(dateIndex, 1);
+        } else {
+          // If marking a new date as unavailable, add it with empty slots
+           updatedAvailability.push({ date, slots: [] });
+        }
       }
-      setResource(updatedResource);
+      
+      // Sort availability by date for consistent display
+      updatedAvailability.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      const updatedResource = { ...resource, availability: updatedAvailability };
+      
+      // Update in global mock array
+      const globalIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
+      if (globalIndex !== -1) {
+        allAdminMockResources[globalIndex] = updatedResource;
+      }
+      
+      setResource(updatedResource); // Update local state for UI refresh
       toast({
         title: 'Availability Updated',
         description: `Availability for ${resource.name} on ${format(parseISO(date), 'PPP')} has been updated.`,
       });
-      setIsAvailabilityDialogOpen(false);
     }
   };
 
@@ -302,11 +321,14 @@ export default function ResourceDetailPage() {
     if (!avail || !avail.date) return false;
     try {
         const availDate = parseISO(avail.date);
-        return isValid(availDate) && availDate >= today;
+        return isValid(availDate) && availDate >= today && avail.slots.length > 0; // Only show if slots are defined
     } catch (e) {
         return false;
     }
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) || [];
+
+  const canBookResource = resource.status === 'Available';
+
 
   return (
     <TooltipProvider>
@@ -476,7 +498,7 @@ export default function ResourceDetailPage() {
               )}
             </CardContent>
             <CardFooter className="border-t pt-6">
-                 <Button asChild className="w-full sm:w-auto" disabled={resource.status !== 'Available'}>
+                 <Button asChild className="w-full sm:w-auto" disabled={!canBookResource}>
                     <Link href={`/bookings?resourceId=${resource.id}`}>
                         <CalendarPlus className="mr-2 h-4 w-4" />
                         Book This Resource
@@ -498,8 +520,8 @@ export default function ResourceDetailPage() {
                         .map((avail, index) => (
                         <li key={index} className="text-sm p-2 border-b last:border-b-0">
                             <span className="font-medium text-foreground">{isValid(parseISO(avail.date)) ? format(parseISO(avail.date), 'PPP') : 'Invalid Date'}</span>:
-                            <span className="text-muted-foreground ml-2">
-                                {avail.slots.join(', ').length > 50 ? 'Multiple slots available' : avail.slots.join(', ')}
+                            <span className="text-muted-foreground ml-2 break-all">
+                                {avail.slots.join(', ').length > 70 ? 'Multiple slots available' : avail.slots.join(', ')}
                             </span>
                         </li>
                     ))}
@@ -561,4 +583,3 @@ export default function ResourceDetailPage() {
     </TooltipProvider>
   );
 }
-
