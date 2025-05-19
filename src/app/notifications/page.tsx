@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { Bell, Check, Trash2, CalendarCheck2, Wrench, AlertTriangle, CircleEllipsis, CircleCheck, Info } from 'lucide-react';
+import { Bell, Check, Trash2, CalendarCheck2, Wrench, AlertTriangle, CircleEllipsis, CircleCheck, Info, ShieldAlert } from 'lucide-react';
 import type { Notification } from '@/types';
 import { initialNotifications, mockCurrentUser } from '@/lib/mock-data';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -19,6 +19,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useToast } from '@/hooks/use-toast';
 
 const getNotificationIcon = (type: Notification['type']) => {
   switch (type) {
@@ -41,6 +53,8 @@ const getNotificationIcon = (type: Notification['type']) => {
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isClearAllAlertOpen, setIsClearAllAlertOpen] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     // Simulate fetching notifications for the current user
@@ -60,12 +74,32 @@ export default function NotificationsPage() {
 
   const handleMarkAllAsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    toast({
+      title: "All Read",
+      description: "All notifications have been marked as read.",
+    });
     // In a real app, you'd also send this update to the backend
   };
   
   const handleDeleteNotification = (id: string) => {
      setNotifications(prev => prev.filter(n => n.id !== id));
+     toast({
+      title: "Notification Deleted",
+      description: "The notification has been removed.",
+      variant: "destructive"
+    });
      // In a real app, you'd also send this delete request to the backend
+  };
+
+  const handleDeleteAllNotifications = () => {
+    setNotifications([]);
+    toast({
+      title: "All Notifications Cleared",
+      description: "All your notifications have been deleted.",
+      variant: "destructive"
+    });
+    setIsClearAllAlertOpen(false);
+    // In a real app, you'd also send this delete request to the backend
   };
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
@@ -87,10 +121,35 @@ export default function NotificationsPage() {
         description="Stay updated with important alerts and messages."
         icon={Bell}
         actions={
-          notifications.length > 0 && unreadCount > 0 ? (
-            <Button onClick={handleMarkAllAsRead} variant="outline">
-              <Check className="mr-2 h-4 w-4" /> Mark All as Read ({unreadCount})
-            </Button>
+          notifications.length > 0 ? (
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <Button onClick={handleMarkAllAsRead} variant="outline">
+                  <Check className="mr-2 h-4 w-4" /> Mark All as Read ({unreadCount})
+                </Button>
+              )}
+              <AlertDialog open={isClearAllAlertOpen} onOpenChange={setIsClearAllAlertOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive">
+                    <Trash2 className="mr-2 h-4 w-4" /> Clear All
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete all your notifications.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteAllNotifications} variant="destructive">
+                      Yes, Clear All
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           ) : null
         }
       />
