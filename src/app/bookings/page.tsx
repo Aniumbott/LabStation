@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
@@ -59,8 +58,14 @@ function BookingsPageContent() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
-  const [allUserBookings, setAllUserBookings] = useState<Booking[]>(() => JSON.parse(JSON.stringify(initialBookings.filter(b => b.userId === mockCurrentUser.id))));
+  const [allUserBookings, setAllUserBookings] = useState<Booking[]>(() => {
+    return JSON.parse(JSON.stringify(initialBookings.filter(b => b.userId === mockCurrentUser.id)));
+  });
 
+  // Active page filters
+  const [activeSearchTerm, setActiveSearchTerm] = useState('');
+  const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
+  const [activeFilterStatus, setActiveFilterStatus] = useState<BookingStatusFilter>('all');
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(() => {
     const dateParam = searchParams.get('date');
     if (dateParam) {
@@ -69,11 +74,6 @@ function BookingsPageContent() {
     }
     return undefined;
   });
-
-  // Active page filters for dialog
-  const [activeSearchTerm, setActiveSearchTerm] = useState('');
-  const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
-  const [activeFilterStatus, setActiveFilterStatus] = useState<BookingStatusFilter>('all');
 
   // Booking Form Dialog state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -97,7 +97,7 @@ function BookingsPageContent() {
     const dateParam = searchParams.get('date');
     const bookingIdParam = searchParams.get('bookingId');
 
-    let dateToSetFromUrl = activeSelectedDate;
+    let dateToSetFromUrl: Date | undefined = undefined;
     if (dateParam) {
       const parsedQueryDate = parseISO(dateParam);
       if (isValidDate(parsedQueryDate)) {
@@ -107,10 +107,6 @@ function BookingsPageContent() {
     
     if (dateToSetFromUrl && (!activeSelectedDate || !isSameDay(activeSelectedDate, dateToSetFromUrl))) {
       setActiveSelectedDate(dateToSetFromUrl);
-      // No need to set tempSelectedDateInDialog here, it will be synced when filter dialog opens.
-    } else if (!dateParam && activeSelectedDate !== undefined) { 
-        // If URL date is cleared (e.g. by filter dialog closing), ensure activeSelectedDate is also cleared
-        // setActiveSelectedDate(undefined); // This might be too aggressive, handled by apply/reset filter logic
     }
 
 
@@ -393,6 +389,16 @@ function BookingsPageContent() {
     return <BookingsPageLoader />;
   }
 
+  const dialogHeaderDateString = useMemo(() => {
+    if (currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime))) {
+      return format(new Date(currentBooking.startTime), "PPP");
+    } else if (!currentBooking?.id && activeSelectedDate && isValidDate(activeSelectedDate)) {
+      // This case handles new bookings when a date is pre-selected on the main calendar
+      return format(activeSelectedDate, "PPP");
+    }
+    return null;
+  }, [currentBooking?.startTime, activeSelectedDate, currentBooking?.id]);
+
 
   return (
     <div className="space-y-8">
@@ -617,10 +623,8 @@ function BookingsPageContent() {
                     currentParams.delete('resourceId');
                      paramsModified = true;
                 }
-                if (currentParams.has('date')) {
-                    currentParams.delete('date');
-                    paramsModified = true;
-                }
+                // Do not delete 'date' param here, user might want to create another booking for the same date.
+                // It will be naturally handled/overridden if they pick a new date in calendar or open for different resource.
 
                 if (paramsModified) {
                     router.push(`${pathname}?${currentParams.toString()}`, { scroll: false });
@@ -632,7 +636,7 @@ function BookingsPageContent() {
             <DialogTitle>{currentBooking?.id ? 'Edit Booking' : 'Create New Booking'}</DialogTitle>
             <DialogDescription>
               Fill in the details below to {currentBooking?.id ? 'update your' : 'schedule a new'} booking.
-              {formDataStartTimeString && ` For date: ${formDataStartTimeString}`}
+              {dialogHeaderDateString && ` For date: ${dialogHeaderDateString}`}
             </DialogDescription>
           </DialogHeader>
           <BookingForm
