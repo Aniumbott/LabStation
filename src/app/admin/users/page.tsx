@@ -139,7 +139,12 @@ export default function UsersPage() {
 
   const handleSaveUser = (data: UserFormValues) => {
     if (editingUser) {
-      setUsers(users.map(u => u.id === editingUser.id ? { ...editingUser, ...data, avatarUrl: u.avatarUrl || 'https://placehold.co/100x100.png' } : u));
+      const updatedUsers = users.map(u => u.id === editingUser.id ? { ...editingUser, ...data, avatarUrl: u.avatarUrl || 'https://placehold.co/100x100.png' } : u);
+      setUsers(updatedUsers);
+      // Also update the global mock array
+      const globalIndex = initialMockUsers.findIndex(u => u.id === editingUser.id);
+      if (globalIndex !== -1) initialMockUsers[globalIndex] = { ...initialMockUsers[globalIndex], ...data, avatarUrl: initialMockUsers[globalIndex].avatarUrl || 'https://placehold.co/100x100.png' };
+
       toast({
         title: 'User Updated',
         description: `User ${data.name} has been updated.`,
@@ -151,6 +156,8 @@ export default function UsersPage() {
         avatarUrl: 'https://placehold.co/100x100.png',
       };
       setUsers([...users, newUser]);
+      initialMockUsers.push(newUser); // Add to global mock array
+
       toast({
         title: 'User Created',
         description: `User ${data.name} with role ${data.role} has been created.`,
@@ -162,6 +169,11 @@ export default function UsersPage() {
   const handleDeleteUser = (userId: string) => {
     const deletedUser = users.find(u => u.id === userId);
     setUsers(currentUsers => currentUsers.filter(user => user.id !== userId));
+    
+    // Remove from global mock array
+    const globalIndex = initialMockUsers.findIndex(u => u.id === userId);
+    if (globalIndex !== -1) initialMockUsers.splice(globalIndex, 1);
+
     toast({
       title: "User Deleted",
       description: `User "${deletedUser?.name}" has been removed.`,
@@ -334,25 +346,27 @@ export default function UsersPage() {
         </TooltipProvider>
       ) : (
         <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
-          <UsersIconLucide className="mx-auto h-12 w-12 mb-4 opacity-50" />
-           <p className="text-lg font-medium">
-            {activeFilterCount > 0 ? "No Users Match Filters" : "No Users Found"}
-          </p>
-          <p className="text-sm mb-4">
-            {activeFilterCount > 0
-                ? "Try adjusting your search or filter criteria." 
-                : "There are currently no users in the system. Add one to get started!"
-            }
-          </p>
-          {activeFilterCount > 0 ? (
-             <Button variant="outline" onClick={resetAllActiveFilters}>
-                <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
-            </Button>
-          ) : (
-            <Button onClick={handleOpenNewUserDialog}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Add First User
-            </Button>
-          )}
+          <CardContent>
+            <UsersIconLucide className="mx-auto h-12 w-12 mb-4 opacity-50" />
+            <p className="text-lg font-medium">
+                {activeFilterCount > 0 ? "No Users Match Filters" : "No Users Found"}
+            </p>
+            <p className="text-sm mb-4">
+                {activeFilterCount > 0
+                    ? "Try adjusting your search or filter criteria." 
+                    : "There are currently no users in the system. Add one to get started!"
+                }
+            </p>
+            {activeFilterCount > 0 ? (
+                <Button variant="outline" onClick={resetAllActiveFilters}>
+                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                </Button>
+            ) : (
+                <Button onClick={handleOpenNewUserDialog}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add First User
+                </Button>
+            )}
+          </CardContent>
         </Card>
       )}
       <UserFormDialog

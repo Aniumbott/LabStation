@@ -1,4 +1,6 @@
 
+'use client';
+
 import { PageHeader } from '@/components/layout/page-header';
 import { UserCog, Shield, Edit3, KeyRound, Image as ImageIcon, Save } from 'lucide-react';
 import type { User } from '@/types';
@@ -14,17 +16,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-// Mock current user data - in a real app, this would come from an auth context
-const currentUser: User = {
-  id: 'u4',
-  name: 'Dr. Researcher Fourth',
-  email: 'researcher.fourth@labstation.com',
-  role: 'Researcher',
-  avatarUrl: 'https://placehold.co/128x128.png',
-};
+import { mockCurrentUser } from '@/lib/mock-data'; // Use centralized mock user
 
 export default function ProfilePage() {
+  const currentUser: User = mockCurrentUser; // Use the imported mock user
+
   return (
     <div className="space-y-8">
       <PageHeader

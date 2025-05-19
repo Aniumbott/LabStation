@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react'; // Added useMemo here
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,7 +15,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Resource } from '@/types';
-import { format, startOfDay, isValid, parseISO } from 'date-fns';
+import { format, startOfDay, isValid, parseISO, addDays } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '../ui/separator';
 import { ScrollArea } from '../ui/scroll-area';
@@ -46,14 +46,15 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
       const currentAvailability = resource.availability?.find(avail => avail.date === dateStr);
       if (currentAvailability) {
         setAvailabilitySlots(currentAvailability.slots.join(', '));
-        // Ensure isUnavailable is true if slots array is empty, even if it has other non-string values from bad data
         setIsUnavailable(currentAvailability.slots.length === 0);
       } else {
-        setAvailabilitySlots('');
+        setAvailabilitySlots(''); // Default to available with no specific slots or set a default like "09:00-17:00"
         setIsUnavailable(false);
       }
     } else if (open && !selectedDate) {
-      setSelectedDate(startOfDay(new Date()));
+      // If dialog opens without a date (should not happen if initialized correctly)
+      // Set a default selectedDate to ensure controlled components are happy
+      setSelectedDate(startOfDay(new Date())); 
       setAvailabilitySlots('');
       setIsUnavailable(false);
     }
@@ -80,10 +81,9 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
         .split(',')
         .map(s => s.trim())
         .filter(s => {
-          // Basic validation for slot format HH:mm-HH:mm
           const slotRegex = /^\d{2}:\d{2}-\d{2}:\d{2}$/;
           if (s === '' || !slotRegex.test(s)) {
-            if (s !== '') { // Only toast if there was an attempt at a slot
+            if (s !== '') { 
                  toast({
                     title: "Invalid Slot Format",
                     description: `Slot "${s}" is not in HH:mm-HH:mm format and will be ignored.`,
@@ -93,7 +93,6 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
             }
             return false;
           }
-          // Further validation: start time < end time
           try {
             const [startStr, endStr] = s.split('-');
             const [startH, startM] = startStr.split(':').map(Number);
@@ -108,7 +107,6 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
                 return false;
             }
           } catch (e) {
-            // Catch parsing errors just in case, though regex should prevent most
              toast({
                 title: "Slot Parsing Error",
                 description: `Error parsing slot "${s}". It will be ignored.`,
@@ -120,8 +118,8 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
           return true;
         });
       
-      if (finalSlots.length === 0 && availabilitySlots.trim() !== '') {
-        toast({ title: "No Valid Slots", description: "No valid time slots were entered after processing. Please check the format (HH:mm-HH:mm) and ensure start time is before end time for each slot. Saving as unavailable for now.", variant: "default", duration: 7000 });
+      if (finalSlots.length === 0 && availabilitySlots.trim() !== '' && !isUnavailable) {
+        toast({ title: "No Valid Slots", description: "No valid time slots were entered. Please check format (HH:mm-HH:mm) and times. Saving as unavailable for now.", variant: "default", duration: 7000 });
       }
     }
     

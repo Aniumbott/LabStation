@@ -37,7 +37,7 @@ const maintenanceRequestFormSchema = z.object({
   return true;
 }, {
   message: 'Resolution notes are required when status is Resolved or Closed.',
-  path: ['resolutionNotes'], // Path to the field to which the error will be attached
+  path: ['resolutionNotes'], 
 });
 
 export type MaintenanceRequestFormValues = z.infer<typeof maintenanceRequestFormSchema>;
@@ -140,7 +140,7 @@ export function MaintenanceRequestFormDialog({
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Issue Description</FormLabel>
-                        <FormControl><Textarea placeholder="Detailed description of the problem..." {...field} rows={5} /></FormControl>
+                        <FormControl><Textarea placeholder="Detailed description of the problem..." {...field} value={field.value || ''} rows={5} /></FormControl>
                         <FormMessage />
                         </FormItem>
                     )}

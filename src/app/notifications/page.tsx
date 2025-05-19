@@ -69,37 +69,49 @@ export default function NotificationsPage() {
     setNotifications(prev =>
       prev.map(n => (n.id === id ? { ...n, isRead: true } : n))
     );
-    // In a real app, you'd also send this update to the backend
+    const notificationIndex = initialNotifications.findIndex(n => n.id === id);
+    if (notificationIndex !== -1) {
+      initialNotifications[notificationIndex].isRead = true;
+    }
   };
 
   const handleMarkAllAsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    initialNotifications.forEach(n => {
+      if (n.userId === mockCurrentUser.id) n.isRead = true;
+    });
     toast({
       title: "All Read",
       description: "All notifications have been marked as read.",
     });
-    // In a real app, you'd also send this update to the backend
   };
   
   const handleDeleteNotification = (id: string) => {
      setNotifications(prev => prev.filter(n => n.id !== id));
+     const notificationIndex = initialNotifications.findIndex(n => n.id === id);
+     if (notificationIndex !== -1) {
+       initialNotifications.splice(notificationIndex, 1);
+     }
      toast({
       title: "Notification Deleted",
       description: "The notification has been removed.",
       variant: "destructive"
     });
-     // In a real app, you'd also send this delete request to the backend
   };
 
   const handleDeleteAllNotifications = () => {
     setNotifications([]);
+    // Filter out notifications for the current user from the global array
+    const remainingNotifications = initialNotifications.filter(n => n.userId !== mockCurrentUser.id);
+    initialNotifications.length = 0; // Clear the array
+    initialNotifications.push(...remainingNotifications); // Add back other users' notifications
+
     toast({
       title: "All Notifications Cleared",
       description: "All your notifications have been deleted.",
       variant: "destructive"
     });
     setIsClearAllAlertOpen(false);
-    // In a real app, you'd also send this delete request to the backend
   };
 
   const unreadCount = notifications.filter(n => !n.isRead).length;

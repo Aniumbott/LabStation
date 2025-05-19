@@ -110,7 +110,12 @@ export default function ResourceTypesPage() {
 
   const handleSaveType = (data: ResourceTypeFormValues) => {
     if (editingType) {
-      setResourceTypes(resourceTypes.map(rt => rt.id === editingType.id ? { ...editingType, ...data } : rt));
+      const updatedTypes = resourceTypes.map(rt => rt.id === editingType.id ? { ...editingType, ...data } : rt);
+      setResourceTypes(updatedTypes);
+      // Also update the global mock array
+      const globalIndex = initialMockResourceTypes.findIndex(rt => rt.id === editingType.id);
+      if (globalIndex !== -1) initialMockResourceTypes[globalIndex] = { ...initialMockResourceTypes[globalIndex], ...data };
+
       toast({
         title: 'Resource Type Updated',
         description: `Resource Type "${data.name}" has been updated.`,
@@ -121,6 +126,8 @@ export default function ResourceTypesPage() {
         ...data,
       };
       setResourceTypes([...resourceTypes, newType]);
+      initialMockResourceTypes.push(newType); // Add to global mock array
+
       toast({
         title: 'Resource Type Created',
         description: `Resource Type "${data.name}" has been created.`,
@@ -132,6 +139,11 @@ export default function ResourceTypesPage() {
   const handleDeleteType = (typeId: string) => {
     const deletedType = resourceTypes.find(rt => rt.id === typeId);
     setResourceTypes(currentTypes => currentTypes.filter(type => type.id !== typeId));
+    
+    // Remove from global mock array
+    const globalIndex = initialMockResourceTypes.findIndex(rt => rt.id === typeId);
+    if (globalIndex !== -1) initialMockResourceTypes.splice(globalIndex, 1);
+
     toast({
       title: "Resource Type Deleted",
       description: `Resource Type "${deletedType?.name}" has been removed.`,
@@ -270,25 +282,27 @@ export default function ResourceTypesPage() {
         </TooltipProvider>
       ) : (
         <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
-          <ListChecks className="mx-auto h-12 w-12 mb-4 opacity-50" />
-           <p className="text-lg font-medium">
-            {activeSearchTerm ? "No Resource Types Match Filter" : "No Resource Types Defined"}
-          </p>
-          <p className="text-sm mb-4">
-            {activeSearchTerm
-                ? "Try adjusting your search criteria."
-                : "Add resource types to categorize your lab equipment and assets."
-            }
-          </p>
-          {activeSearchTerm ? (
-             <Button variant="outline" onClick={resetAllActiveFilters}>
-                <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
-            </Button>
-          ) : (
-            <Button onClick={handleOpenNewDialog}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource Type
-            </Button>
-          )}
+          <CardContent>
+            <ListChecks className="mx-auto h-12 w-12 mb-4 opacity-50" />
+            <p className="text-lg font-medium">
+                {activeSearchTerm ? "No Resource Types Match Filter" : "No Resource Types Defined"}
+            </p>
+            <p className="text-sm mb-4">
+                {activeSearchTerm
+                    ? "Try adjusting your search criteria."
+                    : "Add resource types to categorize your lab equipment and assets."
+                }
+            </p>
+            {activeSearchTerm ? (
+                <Button variant="outline" onClick={resetAllActiveFilters}>
+                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                </Button>
+            ) : (
+                <Button onClick={handleOpenNewDialog}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource Type
+                </Button>
+            )}
+          </CardContent>
         </Card>
       )}
       <ResourceTypeFormDialog

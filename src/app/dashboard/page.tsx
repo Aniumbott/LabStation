@@ -1,4 +1,6 @@
 
+'use client'; // Added 'use client' for useState, useEffect
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Construction } from 'lucide-react';
@@ -19,11 +21,27 @@ import {
 import { format, isValid, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { allAdminMockResources, initialBookings, mockCurrentUser } from '@/lib/mock-data';
+import { useState, useEffect } from 'react'; // Added useEffect, useState
 
 
 export default function DashboardPage() {
-  // Simulate frequently used by taking the first few resources for demo
-  const frequentlyUsedResources = allAdminMockResources.slice(0, 2);
+  const [frequentlyUsedResources, setFrequentlyUsedResources] = useState<Resource[]>([]);
+  const [upcomingUserBookings, setUpcomingUserBookings] = useState<Booking[]>([]);
+
+  useEffect(() => {
+    // Simulate fetching or processing data that might only be available client-side
+    // or to ensure data is fresh for this client session if it were dynamic.
+    setFrequentlyUsedResources(allAdminMockResources.slice(0, 2));
+    
+    const filteredBookings = initialBookings
+      .filter(b => {
+          return isValid(b.startTime) && !isPast(b.startTime) && b.status !== 'Cancelled' && b.userId === mockCurrentUser.id;
+      })
+      .sort((a,b) => a.startTime.getTime() - b.startTime.getTime())
+      .slice(0, 5);
+    setUpcomingUserBookings(filteredBookings);
+  }, []);
+
 
   const getResourceStatusBadge = (status: Resource['status']) => {
     switch (status) {
@@ -37,15 +55,6 @@ export default function DashboardPage() {
         return <Badge variant="outline"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     }
   };
-
-  const upcomingUserBookings = initialBookings
-    .filter(b => {
-        // b.startTime is already a Date object from mock-data
-        return isValid(b.startTime) && !isPast(b.startTime) && b.status !== 'Cancelled' && b.userId === mockCurrentUser.id;
-    })
-    .sort((a,b) => a.startTime.getTime() - b.startTime.getTime())
-    .slice(0, 5);
-
 
   return (
     <div className="space-y-8">
@@ -124,8 +133,8 @@ export default function DashboardPage() {
                     {upcomingUserBookings.map((booking) => (
                       <TableRow key={booking.id}>
                         <TableCell className="font-medium">{booking.resourceName}</TableCell>
-                        <TableCell>{format(booking.startTime, 'MMM dd, yyyy')}</TableCell>
-                        <TableCell>{format(booking.startTime, 'p')} - {format(booking.endTime, 'p')}</TableCell>
+                        <TableCell>{isValid(booking.startTime) ? format(booking.startTime, 'MMM dd, yyyy') : 'Invalid Date'}</TableCell>
+                        <TableCell>{isValid(booking.startTime) && isValid(booking.endTime) ? `${format(booking.startTime, 'p')} - ${format(booking.endTime, 'p')}` : 'Invalid Time'}</TableCell>
                         <TableCell>
                           <Badge
                               className={cn(

@@ -149,6 +149,7 @@ export function ResourceFormDialog({
   function onSubmit(data: ResourceFormValues) {
     const dataToSave: ResourceFormValues = {
         ...data,
+        imageUrl: data.imageUrl || 'https://placehold.co/300x200.png', // Default if empty
         purchaseDate: data.purchaseDate ? data.purchaseDate : undefined,
         remoteAccess: data.remoteAccess ? {
             ...data.remoteAccess,
@@ -185,7 +186,7 @@ export function ResourceFormDialog({
                 render={({ field }) => (
                     <FormItem>
                     <FormLabel>Resource Name</FormLabel>
-                    <FormControl><Input placeholder="e.g., Quantum Spectrometer X1" {...field} /></FormControl>
+                    <FormControl><Input placeholder="e.g., Keysight Oscilloscope MSOX3054T" {...field} /></FormControl>
                     <FormMessage />
                     </FormItem>
                 )}
@@ -235,7 +236,7 @@ export function ResourceFormDialog({
                 render={({ field }) => (
                     <FormItem>
                     <FormLabel>Description</FormLabel>
-                    <FormControl><Textarea placeholder="Detailed description of the resource..." {...field} rows={3} /></FormControl>
+                    <FormControl><Textarea placeholder="Detailed description of the resource..." {...field} value={field.value || ''} rows={3} /></FormControl>
                     <FormMessage />
                     </FormItem>
                 )}
@@ -247,7 +248,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Image URL</FormLabel>
-                            <FormControl><Input type="url" placeholder="https://placehold.co/300x200.png" {...field} /></FormControl>
+                            <FormControl><Input type="url" placeholder="https://placehold.co/300x200.png" {...field} value={field.value || ''} /></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -260,7 +261,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Manufacturer (Optional)</FormLabel>
-                            <FormControl><Input placeholder="e.g., Thermo Fisher" {...field} /></FormControl>
+                            <FormControl><Input placeholder="e.g., Keysight" {...field} value={field.value || ''} /></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -271,7 +272,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Model (Optional)</FormLabel>
-                            <FormControl><Input placeholder="e.g., Spectron 5000" {...field} /></FormControl>
+                            <FormControl><Input placeholder="e.g., MSOX3054T" {...field} value={field.value || ''} /></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -282,7 +283,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Serial Number (Optional)</FormLabel>
-                            <FormControl><Input placeholder="e.g., SN-12345XYZ" {...field} /></FormControl>
+                            <FormControl><Input placeholder="e.g., MY58012345" {...field} value={field.value || ''} /></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -325,7 +326,7 @@ export function ResourceFormDialog({
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Features (Optional)</FormLabel>
-                        <FormControl><Textarea placeholder="e.g., High Resolution, Auto Sampler, WiFi Enabled" {...field} rows={2}/></FormControl>
+                        <FormControl><Textarea placeholder="e.g., 500 MHz Bandwidth, 4 Analog Channels, 16 Digital Channels" {...field} value={field.value || ''} rows={2}/></FormControl>
                         <FormDescription>Enter comma-separated values.</FormDescription>
                         <FormMessage />
                         </FormItem>
@@ -337,7 +338,7 @@ export function ResourceFormDialog({
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>General Notes (Optional)</FormLabel>
-                        <FormControl><Textarea placeholder="Any additional notes or special instructions..." {...field} rows={2}/></FormControl>
+                        <FormControl><Textarea placeholder="Any additional notes or special instructions..." {...field} value={field.value || ''} rows={2}/></FormControl>
                         <FormMessage />
                         </FormItem>
                     )}
@@ -365,7 +366,7 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Hostname</FormLabel>
-                                    <FormControl><Input placeholder="e.g., server.lab.example.com" {...field} value={field.value || ''} /></FormControl>
+                                    <FormControl><Input placeholder="e.g., scope-01.lab.internal" {...field} value={field.value || ''} /></FormControl>
                                     <FormMessage />
                                     </FormItem>
                                 )}

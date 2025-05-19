@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList, initialBookings, mockCurrentUser } from '@/lib/mock-data';
 import type { Resource, ResourceType, ResourceStatus, Booking } from '@/types';
-import { format, parseISO, isValid, startOfToday, isPast } from 'date-fns';
+import { format, parseISO, isValid, startOfToday, isPast, startOfDay as fnsStartOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
@@ -65,7 +65,7 @@ function ResourceDetailPageSkeleton() {
               <Skeleton className="h-4 w-5/6 rounded-md" />
             </CardContent>
           </Card>
-           <Card className="shadow-lg">
+           <Card className="shadow-lg"> {/* Added skeleton for Your Past Bookings */}
             <CardHeader><Skeleton className="h-6 w-3/4 rounded-md" /></CardHeader>
             <CardContent className="space-y-2">
               <Skeleton className="h-4 w-full rounded-md" />
@@ -96,7 +96,7 @@ function ResourceDetailPageSkeleton() {
                 <Skeleton className="h-10 w-1/3 rounded-md" />
             </CardFooter>
           </Card>
-          <Card className="shadow-lg">
+          <Card className="shadow-lg"> {/* Skeleton for Remote Access or Availability */}
             <CardHeader><Skeleton className="h-6 w-1/2 rounded-md" /></CardHeader>
             <CardContent className="space-y-2">
               <Skeleton className="h-4 w-full rounded-md" />
@@ -167,7 +167,6 @@ export default function ResourceDetailPage() {
   useEffect(() => {
     if (resourceId) {
       setIsLoading(true);
-      // Simulating data fetching
       setTimeout(() => {
         const foundResource = allAdminMockResources.find(r => r.id === resourceId);
         setResource(foundResource || null);
@@ -201,6 +200,7 @@ export default function ResourceDetailPage() {
         const updatedResource: Resource = {
             ...resource,
             ...data,
+            imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
             resourceTypeName: resourceType.name,
             features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
             purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : resource.purchaseDate,
@@ -212,16 +212,14 @@ export default function ResourceDetailPage() {
               port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
               notes: data.remoteAccess.notes || undefined,
             } : undefined,
-            // Keep existing availability unless explicitly managed
             availability: resource.availability || [], 
         };
         
-        // Update in the global mock array (for demo persistence)
         const resourceIndexInGlobalArray = allAdminMockResources.findIndex(r => r.id === resource.id);
         if (resourceIndexInGlobalArray !== -1) {
             allAdminMockResources[resourceIndexInGlobalArray] = updatedResource;
         }
-        setResource(updatedResource); // Update local state for immediate UI reflection
+        setResource(updatedResource); 
         toast({
             title: 'Resource Updated',
             description: `Resource "${data.name}" has been updated.`,
@@ -234,7 +232,7 @@ export default function ResourceDetailPage() {
     if (resource) {
       const resourceIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
         if (resourceIndex !== -1) {
-            allAdminMockResources.splice(resourceIndex, 1); // Remove from mock array
+            allAdminMockResources.splice(resourceIndex, 1); 
         }
       toast({
         title: "Resource Deleted",
@@ -251,36 +249,30 @@ export default function ResourceDetailPage() {
       const updatedAvailability = resource.availability ? [...resource.availability] : [];
       const dateIndex = updatedAvailability.findIndex(avail => avail.date === date);
       
-      if (newSlots.length > 0) { // If there are slots, update or add
+      if (newSlots.length > 0) { 
         if (dateIndex !== -1) {
           updatedAvailability[dateIndex].slots = newSlots;
         } else {
           updatedAvailability.push({ date, slots: newSlots });
         }
-      } else { // If newSlots is empty, it means mark as unavailable for this date
+      } else { 
         if (dateIndex !== -1) {
-          // If you want to keep the date entry but with empty slots:
           updatedAvailability[dateIndex].slots = [];
-          // If you want to remove the date entry entirely if it becomes unavailable:
-          // updatedAvailability.splice(dateIndex, 1);
         } else {
-          // If marking a new date as unavailable, add it with empty slots
            updatedAvailability.push({ date, slots: [] });
         }
       }
       
-      // Sort availability by date for consistent display
       updatedAvailability.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
       const updatedResource = { ...resource, availability: updatedAvailability };
       
-      // Update in global mock array
       const globalIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
       if (globalIndex !== -1) {
         allAdminMockResources[globalIndex] = updatedResource;
       }
       
-      setResource(updatedResource); // Update local state for UI refresh
+      setResource(updatedResource); 
       toast({
         title: 'Availability Updated',
         description: `Availability for ${resource.name} on ${format(parseISO(date), 'PPP')} has been updated.`,
@@ -316,12 +308,12 @@ export default function ResourceDetailPage() {
     );
   }
 
-  const today = startOfToday();
+  const today = fnsStartOfDay(new Date()); // aliased import
   const upcomingAvailability = resource.availability?.filter(avail => {
     if (!avail || !avail.date) return false;
     try {
         const availDate = parseISO(avail.date);
-        return isValid(availDate) && availDate >= today && avail.slots.length > 0; // Only show if slots are defined
+        return isValid(availDate) && availDate >= today && avail.slots.length > 0; 
     } catch (e) {
         return false;
     }

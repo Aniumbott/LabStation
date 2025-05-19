@@ -36,7 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, startOfDay, isSameDay, parseISO, isValid, addDays } from 'date-fns';
+import { format, startOfDay, isValid, parseISO } from 'date-fns';
 
 const getStatusBadge = (status: ResourceStatus) => {
   switch (status) {
@@ -149,6 +149,7 @@ export default function ResourcesPage() {
       const updatedResource: Resource = {
         ...editingResource,
         ...data,
+        imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
         resourceTypeName: resourceType.name,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
         purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : editingResource.purchaseDate,
@@ -156,11 +157,9 @@ export default function ResourcesPage() {
           ...data.remoteAccess,
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
         } : undefined,
-        // Keep existing availability if not explicitly managed here
         availability: editingResource.availability || [],
       };
       setResources(prevResources => prevResources.map(r => r.id === editingResource.id ? updatedResource : r));
-      // Also update the global mock array
       const globalIndex = allAdminMockResources.findIndex(r => r.id === editingResource.id);
       if (globalIndex !== -1) allAdminMockResources[globalIndex] = updatedResource;
 
@@ -185,14 +184,14 @@ export default function ResourcesPage() {
         purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : undefined,
         notes: data.notes || undefined,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-        availability: [], // New resources start with no pre-defined availability
+        availability: [], 
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
           ...data.remoteAccess,
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
         } : undefined,
       };
       setResources(prevResources => [...prevResources, newResource]);
-      allAdminMockResources.push(newResource); // Add to global mock array
+      allAdminMockResources.push(newResource); 
       toast({
         title: 'Resource Created',
         description: `Resource "${data.name}" has been created.`,
@@ -285,7 +284,7 @@ export default function ResourcesPage() {
                             onSelect={setTempSelectedDate}
                             month={currentMonthInDialog}
                             onMonthChange={setCurrentMonthInDialog}
-                            disabled={(date) => date < startOfDay(new Date()) } // Only allow today and future dates
+                            disabled={(date) => date < startOfDay(new Date()) } 
                             footer={ tempSelectedDate &&
                                 <Button
                                     variant="ghost"
