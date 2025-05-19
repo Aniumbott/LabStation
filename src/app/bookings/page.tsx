@@ -23,7 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Booking, Resource, RoleName } from '@/types';
-import { format, parseISO, isValid as isValidDate, startOfDay, isSameDay, set, addDays } from 'date-fns';
+import { format, parseISO, isValid as isValidDate, startOfDay, isSameDay, set, addDays, getHours, getMinutes, setHours, setMinutes } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -69,7 +69,7 @@ function BookingsPageContent() {
     return undefined;
   });
 
-  // Active page filters
+  // Active page filters for dialog
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<BookingStatusFilter>('all');
@@ -206,11 +206,40 @@ function BookingsPageContent() {
 
     if (proposedEndTime <= proposedStartTime) { toast({ title: "Invalid Time", description: "End time must be after start time.", variant: "destructive" }); return; }
 
+    // Granular conflict check against resource.availability.slots
+    const proposedDateStr = format(proposedStartTime, 'yyyy-MM-dd');
+    const resourceDayAvailability = resource.availability?.find(avail => avail.date === proposedDateStr);
+
+    if (!resourceDayAvailability || resourceDayAvailability.slots.length === 0) {
+        toast({ title: "Resource Unavailable", description: `${resource.name} is not scheduled to be available on ${format(proposedStartTime, 'PPP')}.`, variant: "destructive", duration: 7000 });
+        return;
+    }
+    
+    // Check if the proposed booking time is within any defined available slot
+    let isWithinAvailableSlot = false;
+    for (const slot of resourceDayAvailability.slots) {
+        const [slotStartStr, slotEndStr] = slot.split('-');
+        const slotStartTime = set(proposedStartTime, { hours: parseInt(slotStartStr.split(':')[0]), minutes: parseInt(slotStartStr.split(':')[1]) });
+        const slotEndTime = set(proposedStartTime, { hours: parseInt(slotEndStr.split(':')[0]), minutes: parseInt(slotEndStr.split(':')[1]) });
+
+        if (proposedStartTime >= slotStartTime && proposedEndTime <= slotEndTime) {
+            isWithinAvailableSlot = true;
+            break;
+        }
+    }
+
+    if (!isWithinAvailableSlot) {
+        toast({ title: "Time Slot Unavailable", description: `The selected time for ${resource.name} is outside of its defined available slots on ${format(proposedStartTime, 'PPP')}. Available slots: ${resourceDayAvailability.slots.join(', ')}.`, variant: "destructive", duration: 10000 });
+        return;
+    }
+
+
     const conflictingBooking = initialBookings.find(existingBooking => {
         if (existingBooking.resourceId !== formData.resourceId) return false;
         if (existingBooking.status === 'Cancelled') return false;
         if (currentBooking && currentBooking.id && existingBooking.id === currentBooking.id) return false; 
         if(format(new Date(existingBooking.startTime), 'yyyy-MM-dd') !== format(proposedStartTime, 'yyyy-MM-dd')) return false;
+        
         const existingStartTime = new Date(existingBooking.startTime);
         const existingEndTime = new Date(existingBooking.endTime);
         return proposedStartTime < existingEndTime && proposedEndTime > existingStartTime;
@@ -309,10 +338,12 @@ function BookingsPageContent() {
     return Array.from(dates).map(dateStr => parseISO(dateStr));
   }, [allUserBookings]);
 
-  const handleDateSelectFromMainCalendar = (date?: Date) => {
+  const handleDateSelectFromPageCalendar = (date?: Date) => { // Renamed to avoid conflict
     const newSelectedDate = date ? startOfDay(date) : undefined;
     setActiveSelectedDate(newSelectedDate);
     setTempSelectedDateInDialog(newSelectedDate); 
+    setCurrentCalendarMonthInDialog(newSelectedDate || startOfDay(new Date()));
+
 
     const currentParams = new URLSearchParams(searchParams.toString());
     if (newSelectedDate) {
@@ -342,13 +373,14 @@ function BookingsPageContent() {
     let keyParts = ['new']; 
     if (currentBooking?.resourceId) keyParts.push(currentBooking.resourceId); else keyParts.push('no-resource');
     
-    const datePart = (currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime))) 
-                        ? format(startOfDay(new Date(currentBooking.startTime)), 'yyyy-MM-dd') 
+    const formDataStartTime = currentBooking?.startTime;
+    const datePart = (formDataStartTime && isValidDate(new Date(formDataStartTime))) 
+                        ? format(startOfDay(new Date(formDataStartTime)), 'yyyy-MM-dd') 
                         : 'no-date';
     keyParts.push(datePart);
     
-    if (currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime))) {
-        keyParts.push(new Date(currentBooking.startTime).toISOString());
+    if (formDataStartTime && isValidDate(new Date(formDataStartTime))) {
+        keyParts.push(new Date(formDataStartTime).toISOString());
     }
     return keyParts.join(':');
   };
@@ -362,96 +394,98 @@ function BookingsPageContent() {
         description="View, search, filter, and manage your lab resource bookings."
         icon={CalendarDays}
         actions={
-            <div className="flex items-center gap-2">
-                 <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button variant="outline">
-                            <FilterIcon className="mr-2 h-4 w-4" /> Filters
-                            {activeFilterCount > 0 && (
-                                <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
-                                {activeFilterCount}
-                                </Badge>
-                            )}
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-lg">
-                        <DialogHeader>
-                        <DialogTitle>Filter Your Bookings</DialogTitle>
-                        <DialogDescription>
-                            Refine your list of bookings by date, resource, status, or keywords.
-                        </DialogDescription>
-                        </DialogHeader>
-                        <Separator className="my-4" />
-                        <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2">
-                            <div>
-                                <Label htmlFor="bookingSearchDialog" className="text-sm font-medium mb-1 block">Search by Keyword</Label>
-                                <div className="relative">
-                                    <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                    <Input
-                                        id="bookingSearchDialog"
-                                        type="search"
-                                        placeholder="Resource name or notes..."
-                                        className="h-9 pl-8"
-                                        value={tempSearchTerm}
-                                        onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
-                                    />
-                                </div>
+          <div className="flex items-center gap-2">
+            <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <FilterIcon className="mr-2 h-4 w-4" /> Filters
+                  {activeFilterCount > 0 && (
+                    <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
+                      {activeFilterCount}
+                    </Badge>
+                  )}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Filter Your Bookings</DialogTitle>
+                  <DialogDescription>
+                    Refine your list of bookings by date, resource, status, or keywords.
+                  </DialogDescription>
+                </DialogHeader>
+                <Separator className="my-4" />
+                <ScrollArea className="max-h-[65vh] pr-2">
+                  <div className="space-y-6 py-1">
+                    <div>
+                      <Label htmlFor="bookingSearchDialog" className="text-sm font-medium mb-1 block">Search by Keyword</Label>
+                      <div className="relative">
+                        <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          id="bookingSearchDialog"
+                          type="search"
+                          placeholder="Resource name or notes..."
+                          className="h-9 pl-8"
+                          value={tempSearchTerm}
+                          onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
+                        />
+                      </div>
+                    </div>
+                    <Separator />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="bookingResourceDialog" className="text-sm font-medium mb-1 block">Resource</Label>
+                        <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId}>
+                          <SelectTrigger id="bookingResourceDialog" className="h-9"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Resources</SelectItem>
+                            {allAdminMockResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="bookingStatusDialog" className="text-sm font-medium mb-1 block">Status</Label>
+                        <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as BookingStatusFilter)}>
+                          <SelectTrigger id="bookingStatusDialog" className="h-9"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Statuses</SelectItem>
+                            {bookingStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <Separator />
+                    <div>
+                      <Label className="text-sm font-medium mb-2 block">Filter by Date</Label>
+                      <div className="flex justify-center items-center rounded-md border p-2">
+                        <Calendar
+                          mode="single" selected={tempSelectedDateInDialog} onSelect={setTempSelectedDateInDialog}
+                          month={currentCalendarMonthInDialog} onMonthChange={setCurrentCalendarMonthInDialog}
+                          disabled={(date) => date < startOfDay(addDays(new Date(), -90))}
+                          modifiers={{ booked: bookedDatesForCalendar }}
+                          modifiersClassNames={{ booked: 'day-booked-dot' }}
+                          footer={
+                            <div className="flex flex-col gap-2 items-center pt-2">
+                              {tempSelectedDateInDialog && <Button variant="ghost" size="sm" onClick={() => setTempSelectedDateInDialog(undefined)} className="w-full text-xs"><FilterX className="mr-2 h-4 w-4" />Clear Date Selection</Button>}
+                              <p className="text-xs text-muted-foreground">{tempSelectedDateInDialog ? format(tempSelectedDateInDialog, 'PPP') : "No specific date selected"}</p>
                             </div>
-                            <Separator />
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <Label htmlFor="bookingResourceDialog" className="text-sm font-medium mb-1 block">Resource</Label>
-                                    <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId}>
-                                        <SelectTrigger id="bookingResourceDialog" className="h-9"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Resources</SelectItem>
-                                            {allAdminMockResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div>
-                                    <Label htmlFor="bookingStatusDialog" className="text-sm font-medium mb-1 block">Status</Label>
-                                    <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as BookingStatusFilter)}>
-                                        <SelectTrigger id="bookingStatusDialog" className="h-9"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Statuses</SelectItem>
-                                            {bookingStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                            <Separator />
-                            <div>
-                                <Label className="text-sm font-medium mb-2 block">Filter by Date</Label>
-                                <div className="flex justify-center items-center rounded-md border p-2">
-                                    <Calendar
-                                        mode="single" selected={tempSelectedDateInDialog} onSelect={setTempSelectedDateInDialog}
-                                        month={currentCalendarMonthInDialog} onMonthChange={setCurrentCalendarMonthInDialog}
-                                        disabled={(date) => date < startOfDay(addDays(new Date(), -90)) }
-                                        modifiers={{ booked: bookedDatesForCalendar }}
-                                        modifiersClassNames={{ booked: 'day-booked-dot' }}
-                                        footer={
-                                            <div className="flex flex-col gap-2 items-center pt-2">
-                                            {tempSelectedDateInDialog && <Button variant="ghost" size="sm" onClick={() => setTempSelectedDateInDialog(undefined)} className="w-full text-xs"><FilterX className="mr-2 h-4 w-4" />Clear Date Selection</Button>}
-                                            <p className="text-xs text-muted-foreground">{tempSelectedDateInDialog ? format(tempSelectedDateInDialog, 'PPP') : "No specific date selected"}</p>
-                                            </div>
-                                        }
-                                        classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                        <DialogFooter className="pt-6 border-t">
-                            <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
-                                <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
-                            </Button>
-                            <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
-                            <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-                <Button onClick={() => handleOpenForm()}><PlusCircle className="mr-2 h-4 w-4" /> New Booking</Button>
-            </div>
+                          }
+                          classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </ScrollArea>
+                <DialogFooter className="pt-6 border-t">
+                  <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
+                    <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
+                  </Button>
+                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            <Button onClick={() => handleOpenForm()}><PlusCircle className="mr-2 h-4 w-4" /> New Booking</Button>
+          </div>
         }
       />
       
@@ -540,7 +574,7 @@ function BookingsPageContent() {
                         <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                     </Button>
                 ) : activeSelectedDate ? (
-                     <Button onClick={() => handleOpenForm()} className="mt-4">
+                     <Button onClick={() => handleOpenForm(undefined, null, activeSelectedDate)} className="mt-4">
                         <PlusCircle className="mr-2 h-4 w-4" /> Create New Booking
                     </Button>
                 ) : ( allUserBookings.length === 0 &&
@@ -631,7 +665,7 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
 
   const [formData, setFormData] = useState<Partial<Booking>>(() => {
     let initialResourceId = initialData?.resourceId;
-    if (!initialData?.id && !initialResourceId && allAdminMockResources.length > 0) { // Only default for new bookings if no resourceId given
+    if (!initialData?.id && !initialResourceId && allAdminMockResources.length > 0) { 
       initialResourceId = allAdminMockResources.find(r => r.status === 'Available')?.id || allAdminMockResources[0].id;
     }
 
@@ -644,7 +678,7 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
             ? new Date(initialData.endTime) 
             : new Date(initialStartTime.getTime() + 2 * 60 * 60 * 1000); 
     } else {
-        const baseDate = (initialData?.id === undefined && selectedDateProp && isValidDate(selectedDateProp)) 
+        const baseDate = (selectedDateProp && isValidDate(selectedDateProp)) 
                          ? selectedDateProp 
                          : startOfDay(new Date());
         initialStartTime = set(new Date(baseDate), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 });
@@ -671,8 +705,8 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     if (!newDate) return;
     const selectedDay = startOfDay(newDate);
     setFormData(prev => {
-      const currentStartTimeHours = prev.startTime ? new Date(prev.startTime).getHours() : 9;
-      const currentStartTimeMinutes = prev.startTime ? new Date(prev.startTime).getMinutes() : 0;
+      const currentStartTimeHours = prev.startTime ? getHours(new Date(prev.startTime)) : 9;
+      const currentStartTimeMinutes = prev.startTime ? getMinutes(new Date(prev.startTime)) : 0;
       
       const newStartTime = set(selectedDay, {
         hours: currentStartTimeHours,
@@ -699,15 +733,13 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     const [hours, minutes] = timeString.split(':').map(Number);
 
     let baseDateForTimeChange: Date;
-    if (formData[field] && isValidDate(new Date(formData[field]!))) {
-        baseDateForTimeChange = new Date(formData[field]!);
-    } else if (formData.startTime && isValidDate(new Date(formData.startTime))) {
+    if (formData.startTime && isValidDate(new Date(formData.startTime!))) { // Use startTime as the base date
         baseDateForTimeChange = new Date(formData.startTime);
     } else {
-        baseDateForTimeChange = selectedDateProp || startOfDay(new Date());
+        baseDateForTimeChange = selectedDateProp || startOfDay(new Date()); // Fallback if startTime is not set
     }
 
-    const newDate = set(baseDateForTimeChange, { hours, minutes, seconds: 0, milliseconds: 0 });
+    const newDate = setHours(setMinutes(baseDateForTimeChange, minutes), hours);
     handleChange(field, newDate);
 
     if (field === 'startTime') {
@@ -822,3 +854,4 @@ function BookingForm({ initialData, onSave, onCancel, selectedDateProp, currentU
     </Form>
   );
 }
+

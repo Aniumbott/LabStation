@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, Building, ChevronRight } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, Building, ChevronRight, CalendarCog } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ManageAvailabilityDialog } from '@/components/resources/manage-availability-dialog';
 
 function ResourceDetailPageSkeleton() {
   return (
@@ -36,6 +37,7 @@ function ResourceDetailPageSkeleton() {
         actions={
           <div className="flex items-center gap-2">
             <Skeleton className="h-9 w-24 rounded-md bg-muted" />
+            <Skeleton className="h-9 w-9 rounded-md bg-muted" />
             <Skeleton className="h-9 w-9 rounded-md bg-muted" />
             <Skeleton className="h-9 w-9 rounded-md bg-muted" />
           </div>
@@ -56,14 +58,14 @@ function ResourceDetailPageSkeleton() {
               <Skeleton className="h-4 w-full rounded-md" />
             </CardContent>
           </Card>
-           <Card className="shadow-lg"> {/* Skeleton for Past Bookings */}
+           <Card className="shadow-lg">
             <CardHeader><Skeleton className="h-6 w-3/4 rounded-md" /></CardHeader>
             <CardContent className="space-y-2">
               <Skeleton className="h-4 w-full rounded-md" />
               <Skeleton className="h-4 w-5/6 rounded-md" />
             </CardContent>
           </Card>
-           <Card className="shadow-lg"> {/* Skeleton for Remote Access */}
+           <Card className="shadow-lg">
             <CardHeader><Skeleton className="h-6 w-3/4 rounded-md" /></CardHeader>
             <CardContent className="space-y-2">
               <Skeleton className="h-4 w-full rounded-md" />
@@ -94,7 +96,7 @@ function ResourceDetailPageSkeleton() {
                 <Skeleton className="h-10 w-1/3 rounded-md" />
             </CardFooter>
           </Card>
-          <Card className="shadow-lg"> {/* Skeleton for Availability */}
+          <Card className="shadow-lg">
             <CardHeader><Skeleton className="h-6 w-1/2 rounded-md" /></CardHeader>
             <CardContent className="space-y-2">
               <Skeleton className="h-4 w-full rounded-md" />
@@ -159,11 +161,12 @@ export default function ResourceDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const [isAvailabilityDialogOpen, setIsAvailabilityDialogOpen] = useState(false);
+
 
   useEffect(() => {
     if (resourceId) {
       setIsLoading(true);
-      // Simulate API call delay
       setTimeout(() => {
         const foundResource = allAdminMockResources.find(r => r.id === resourceId);
         setResource(foundResource || null);
@@ -181,10 +184,10 @@ export default function ResourceDetailPage() {
       .filter(booking =>
         booking.resourceId === resource.id &&
         booking.userId === mockCurrentUser.id &&
-        isValid(parseISO(booking.startTime.toString())) && isPast(parseISO(booking.startTime.toString())) &&
+        isValid(booking.startTime) && isPast(booking.startTime) &&
         booking.status !== 'Cancelled'
       )
-      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+      .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
   }, [resource]);
 
   const handleSaveResource = (data: ResourceFormValues) => {
@@ -209,15 +212,12 @@ export default function ResourceDetailPage() {
               notes: data.remoteAccess.notes || undefined,
             } : undefined,
         };
-        setResource(updatedResource); // Update local state for immediate UI reflection
-
-        // Note: This updates the mock array in memory.
-        // In a real app, this would be an API call.
-        // This change will persist for the session but not if the app reloads fresh from `allAdminMockResources`.
+        
         const resourceIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
         if (resourceIndex !== -1) {
             allAdminMockResources[resourceIndex] = updatedResource;
         }
+        setResource(updatedResource); // Update local state for immediate UI reflection
         toast({
             title: 'Resource Updated',
             description: `Resource "${data.name}" has been updated.`,
@@ -239,6 +239,33 @@ export default function ResourceDetailPage() {
       });
       setIsAlertOpen(false);
       router.push('/admin/resources');
+    }
+  };
+
+  const handleSaveAvailability = (date: string, newSlots: string[]) => {
+    if (resource) {
+      const updatedAvailability = [...(resource.availability || [])];
+      const dateIndex = updatedAvailability.findIndex(avail => avail.date === date);
+      if (dateIndex !== -1) {
+        updatedAvailability[dateIndex].slots = newSlots;
+      } else {
+        updatedAvailability.push({ date, slots: newSlots });
+      }
+      // Filter out days with no slots if that's the desired behavior for "unavailable"
+      const finalAvailability = updatedAvailability.filter(avail => avail.slots.length > 0);
+
+      const updatedResource = { ...resource, availability: finalAvailability };
+      
+      const resourceIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
+      if (resourceIndex !== -1) {
+          allAdminMockResources[resourceIndex] = updatedResource;
+      }
+      setResource(updatedResource);
+      toast({
+        title: 'Availability Updated',
+        description: `Availability for ${resource.name} on ${format(parseISO(date), 'PPP')} has been updated.`,
+      });
+      setIsAvailabilityDialogOpen(false);
     }
   };
 
@@ -295,6 +322,15 @@ export default function ResourceDetailPage() {
                     <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
                 </Link>
             </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={() => setIsAvailabilityDialogOpen(true)}>
+                  <CalendarCog className="h-4 w-4" />
+                  <span className="sr-only">Manage Availability</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent><p>Manage Availability</p></TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="outline" size="icon" onClick={() => setIsFormDialogOpen(true)}>
@@ -372,7 +408,7 @@ export default function ResourceDetailPage() {
                   <ul className="space-y-3 text-sm">
                     {userPastBookingsForResource.slice(0,5).map((booking) => (
                       <li key={booking.id} className="pb-2 border-b border-dashed last:border-b-0 last:pb-0">
-                        <p className="font-medium text-foreground">{format(parseISO(booking.startTime.toString()), 'PPP, p')}</p>
+                        <p className="font-medium text-foreground">{format(booking.startTime, 'PPP, p')}</p>
                         {booking.notes && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">Notes: {booking.notes}</p>}
                       </li>
                     ))}
@@ -452,8 +488,8 @@ export default function ResourceDetailPage() {
           {upcomingAvailability.length > 0 && (
              <Card className="shadow-lg">
                 <CardHeader>
-                    <CardTitle className="text-xl flex items-center gap-2"><CalendarDays className="text-primary h-5 w-5" /> Availability</CardTitle>
-                    <CardDescription>Check specific time slots and book on the bookings page.</CardDescription>
+                    <CardTitle className="text-xl flex items-center gap-2"><CalendarDays className="text-primary h-5 w-5" /> Upcoming Availability</CardTitle>
+                    <CardDescription>Defined available slots. Check specific time slots and book on the bookings page.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <ul className="space-y-2">
@@ -481,6 +517,25 @@ export default function ResourceDetailPage() {
                  </CardFooter>
              </Card>
           )}
+           {upcomingAvailability.length === 0 && resource.status === 'Available' && (
+              <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <CalendarDays className="text-primary h-5 w-5" /> Upcoming Availability
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    No specific availability slots defined for upcoming dates. This resource might be generally available or its schedule needs to be set up.
+                  </p>
+                </CardContent>
+                <CardFooter className="justify-center border-t pt-4">
+                  <Button variant="outline" onClick={() => setIsAvailabilityDialogOpen(true)}>
+                    <CalendarCog className="mr-2 h-4 w-4" /> Define Availability
+                  </Button>
+                </CardFooter>
+              </Card>
+           )}
         </div>
       </div>
 
@@ -494,7 +549,16 @@ export default function ResourceDetailPage() {
             onSave={handleSaveResource}
         />
       )}
+       {resource && (
+        <ManageAvailabilityDialog
+          resource={resource}
+          open={isAvailabilityDialogOpen}
+          onOpenChange={setIsAvailabilityDialogOpen}
+          onSave={handleSaveAvailability}
+        />
+      )}
     </div>
     </TooltipProvider>
   );
 }
+
