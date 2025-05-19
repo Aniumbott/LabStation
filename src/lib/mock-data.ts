@@ -1,9 +1,11 @@
 
-import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType, UnavailabilityPeriod, AvailabilitySlot } from '@/types';
+import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType, UnavailabilityPeriod, AvailabilitySlot, BookingUsageDetails } from '@/types';
 import { format, addDays, set, subDays, parseISO } from 'date-fns';
 
 const today = new Date();
 const todayStr = format(today, 'yyyy-MM-dd');
+const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
+const twoDaysAgoStr = format(subDays(today, 2), 'yyyy-MM-dd');
 const tomorrowStr = format(addDays(today, 1), 'yyyy-MM-dd');
 const dayAfterTomorrowStr = format(addDays(today, 2), 'yyyy-MM-dd');
 const threeDaysLaterStr = format(addDays(today, 3), 'yyyy-MM-dd');
@@ -235,7 +237,14 @@ export let initialBookings: Booking[] = [
     startTime: set(addDays(today, 2), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 2), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Confirmed',
-    notes: 'Debugging SPI communication on custom MCU board.'
+    notes: 'Debugging SPI communication on custom MCU board for Project Alpha.',
+    usageDetails: { // Example for a future completed booking
+        actualStartTime: set(addDays(today, 2), { hours: 10, minutes: 5, seconds: 0, milliseconds: 0 }).toISOString(),
+        actualEndTime: set(addDays(today, 2), { hours: 11, minutes: 55, seconds: 0, milliseconds: 0 }).toISOString(),
+        outcome: 'Success',
+        dataStorageLocation: '/project_alpha/spi_debug_run1/',
+        usageComments: 'Successfully captured SPI traces. Issue identified in CS line timing.'
+    }
   },
   {
     id: 'b2',
@@ -246,7 +255,7 @@ export let initialBookings: Booking[] = [
     startTime: set(addDays(today, 3), { hours: 14, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 3), { hours: 16, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Pending',
-    notes: 'Powering up prototype device for thermal testing.'
+    notes: 'Powering up prototype device for thermal testing with new heatsink design.'
   },
   {
     id: 'b3',
@@ -257,7 +266,7 @@ export let initialBookings: Booking[] = [
     startTime: set(addDays(today, 1), { hours: 14, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 1), { hours: 15, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Pending',
-    notes: 'Quick check of clock signal jitter. High priority for RF module.'
+    notes: 'Quick check of clock signal jitter for new RF module. High priority.'
   },
   {
     id: 'b4',
@@ -268,7 +277,7 @@ export let initialBookings: Booking[] = [
     startTime: set(today, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(today, { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Confirmed',
-    notes: 'Antenna matching and S11 parameter measurement for new design.'
+    notes: 'Antenna matching and S11 parameter measurement for Project Beta.'
   },
   {
     id: 'b5',
@@ -279,7 +288,7 @@ export let initialBookings: Booking[] = [
     startTime: set(addDays(today, 5), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 5), { hours: 13, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Pending',
-    notes: 'Reworking BGA component on development board.'
+    notes: 'Reworking BGA component on development board Gamma-03.'
   },
   {
     id: 'b6',
@@ -290,7 +299,14 @@ export let initialBookings: Booking[] = [
     startTime: set(subDays(today, 1), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(subDays(today, 1), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Confirmed',
-    notes: 'Past booking: Verifying I2C signals between sensor and MCU.'
+    notes: 'Past booking: Verifying I2C signals between sensor and MCU on Project Delta.',
+    usageDetails: {
+        actualStartTime: set(subDays(today, 1), { hours: 10, minutes: 2, seconds: 0, milliseconds: 0 }).toISOString(),
+        actualEndTime: set(subDays(today, 1), { hours: 11, minutes: 45, seconds: 0, milliseconds: 0 }).toISOString(),
+        outcome: 'Success',
+        dataStorageLocation: 'N/A - visual inspection only',
+        usageComments: 'I2C communication verified. ACK signal present. All good.'
+    }
   },
   {
     id: 'b7',
@@ -301,7 +317,7 @@ export let initialBookings: Booking[] = [
     startTime: set(addDays(today, 4), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 4), { hours: 15, minutes: 30, seconds: 0, milliseconds: 0 }),
     status: 'Pending',
-    notes: 'Need to test new HDL core for signal processing acceleration.'
+    notes: 'Need to test new HDL core for signal processing acceleration. Synthesis complete.'
   },
 ];
 
@@ -314,12 +330,12 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
     resourceName: 'Siglent SDG2042X Function Generator',
     reportedByUserId: 'u4',
     reportedByUserName: initialMockUsers[3].name,
-    issueDescription: 'Channel 2 output is unstable and showing significant noise above 20 MHz. Amplitude is also inconsistent.',
+    issueDescription: 'Channel 2 output is unstable and showing significant noise above 20 MHz. Amplitude is also inconsistent. Suspect faulty output amplifier.',
     status: 'In Progress',
     assignedTechnicianId: 'u3',
     assignedTechnicianName: initialMockUsers[2].name,
     dateReported: subDays(today, 5).toISOString(),
-    resolutionNotes: 'Replaced output amplifier IC for Channel 2. Calibrating now.'
+    resolutionNotes: 'Replaced output amplifier IC (Part# XYZ123) for Channel 2. Currently undergoing post-repair calibration and testing.'
   },
   {
     id: 'mr2',
@@ -327,7 +343,7 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
     resourceName: 'Keysight MSOX3054T Oscilloscope',
     reportedByUserId: 'u2',
     reportedByUserName: initialMockUsers[1].name,
-    issueDescription: 'The touchscreen is unresponsive in the lower-left quadrant. Makes it difficult to access some menus.',
+    issueDescription: 'The touchscreen is unresponsive in the lower-left quadrant. Makes it difficult to access some menus. Restart did not fix.',
     status: 'Open',
     dateReported: subDays(today, 2).toISOString(),
   },
@@ -337,13 +353,13 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
     resourceName: 'Weller WE1010NA Digital Soldering Station',
     reportedByUserId: 'u3',
     reportedByUserName: initialMockUsers[2].name,
-    issueDescription: 'Heating element failed. Station does not heat up to set temperature.',
+    issueDescription: 'Heating element failed. Station does not heat up to set temperature. Error E1 on display.',
     status: 'Resolved',
     assignedTechnicianId: 'u5',
     assignedTechnicianName: initialMockUsers[4].name,
     dateReported: subDays(today, 10).toISOString(),
     dateResolved: subDays(today, 8).toISOString(),
-    resolutionNotes: 'Replaced heating element and thermocouple. Tested and verified working correctly.'
+    resolutionNotes: 'Replaced heating element and thermocouple sensor. Tested temperature accuracy across range. Confirmed working correctly.'
   },
 ];
 

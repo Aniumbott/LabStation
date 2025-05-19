@@ -48,6 +48,14 @@ export interface Resource {
   remoteAccess?: RemoteAccessDetails;
 }
 
+export interface BookingUsageDetails {
+  actualStartTime?: string; // ISO string, if different from scheduled
+  actualEndTime?: string;   // ISO string, if different from scheduled
+  outcome?: 'Success' | 'Failure' | 'Interrupted' | 'Not Applicable';
+  dataStorageLocation?: string; // e.g., path to results, lab notebook ID
+  usageComments?: string;
+}
+
 export interface Booking {
   id:string;
   resourceId: string;
@@ -58,6 +66,7 @@ export interface Booking {
   endTime: Date;
   status: 'Confirmed' | 'Pending' | 'Cancelled';
   notes?: string;
+  usageDetails?: BookingUsageDetails;
 }
 
 export type RoleName = 'Admin' | 'Lab Manager' | 'Technician' | 'Researcher';
