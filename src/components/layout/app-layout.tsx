@@ -3,7 +3,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
 import {
   LayoutDashboard,
   ClipboardList,
@@ -16,6 +16,7 @@ import {
   Bell,
   CalendarOff,
   Loader2,
+  // Building, // Removed as Lab Management was skipped
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
@@ -35,7 +36,7 @@ import { cn } from '@/lib/utils';
 import { Logo } from '@/components/icons/logo';
 import { MobileSidebarToggle } from './MobileSidebarToggle';
 import type { RoleName } from '@/types';
-import { useAuth } from '@/components/auth-context'; // IMPORT useAuth
+import { useAuth } from '@/components/auth-context';
 
 interface NavItem {
   href: string;
@@ -43,6 +44,9 @@ interface NavItem {
   icon: LucideIcon;
   allowedRoles?: RoleName[];
 }
+
+// Define public routes - these routes are accessible without authentication
+const PUBLIC_ROUTES = ['/login', '/signup']; // Add '/signup' if/when it's created
 
 const ALL_NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -79,29 +83,38 @@ const ALL_NAV_ITEMS: NavItem[] = [
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
-  const { currentUser, isLoading: authIsLoading } = useAuth(); // GET currentUser and authIsLoading FROM CONTEXT
+  const { currentUser, isLoading: authIsLoading } = useAuth();
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   const visibleNavItems = useMemo(() => {
-    if (!isMounted) return []; // Don't try to render nav items before client hydration of context
+    if (!isMounted || authIsLoading) return [];
 
-    // If no user is logged in, or auth is still loading, only show items that don't specify allowedRoles (public)
     if (!currentUser) {
-      return ALL_NAV_ITEMS.filter(item => !item.allowedRoles || item.allowedRoles.length === 0);
+      // For unauthenticated users, no sidebar items are typically shown in the main app layout.
+      // If we had public navigation items meant for the sidebar, they'd be filtered here.
+      return [];
     }
 
-    // If a user is logged in, filter based on their role
     return ALL_NAV_ITEMS.filter(item => {
       if (!item.allowedRoles || item.allowedRoles.length === 0) {
-        return true; // Item is accessible to all logged-in users
+        return true; // Accessible to all authenticated users
       }
       return item.allowedRoles.includes(currentUser.role);
     });
-  }, [currentUser, isMounted]);
+  }, [currentUser, isMounted, authIsLoading]);
+
+  // Client-side redirection logic
+  useEffect(() => {
+    if (isMounted && !authIsLoading && !currentUser && !PUBLIC_ROUTES.includes(pathname)) {
+      router.push('/login');
+    }
+  }, [isMounted, authIsLoading, currentUser, pathname, router]);
+
 
   if (!isMounted || authIsLoading) {
     return (
@@ -112,6 +125,23 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
+  // If not authenticated and trying to access a protected route, show a loader while redirecting.
+  if (!currentUser && !PUBLIC_ROUTES.includes(pathname)) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-svh bg-background text-muted-foreground">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="mt-3 text-lg">Redirecting to login...</p>
+      </div>
+    );
+  }
+
+  // If not authenticated but on a public route (e.g., /login page itself),
+  // render only the children (the page content) without the main app layout.
+  if (!currentUser && PUBLIC_ROUTES.includes(pathname)) {
+    return <>{children}</>;
+  }
+  
+  // If we reach here, the user is authenticated, and we render the full AppLayout.
   return (
     <SidebarProvider defaultOpen>
       <Sidebar>
@@ -125,10 +155,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <SidebarMenuItem key={item.label}>
                 <Link href={item.href} passHref legacyBehavior>
                   <SidebarMenuButton
-                    isActive={pathname.startsWith(item.href)}
+                    isActive={pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))}
                     tooltip={item.label}
                     className={cn(
-                      pathname.startsWith(item.href) && 'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
+                      (pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))) && 'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
                     )}
                   >
                     <item.icon />
