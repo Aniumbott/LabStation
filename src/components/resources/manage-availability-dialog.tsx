@@ -48,13 +48,11 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
         setAvailabilitySlots(currentAvailability.slots.join(', '));
         setIsUnavailable(currentAvailability.slots.length === 0);
       } else {
-        setAvailabilitySlots(''); // Default to available with no specific slots or set a default like "09:00-17:00"
+        setAvailabilitySlots('');
         setIsUnavailable(false);
       }
     } else if (open && !selectedDate) {
-      // If dialog opens without a date (should not happen if initialized correctly)
-      // Set a default selectedDate to ensure controlled components are happy
-      setSelectedDate(startOfDay(new Date())); 
+      setSelectedDate(startOfDay(new Date()));
       setAvailabilitySlots('');
       setIsUnavailable(false);
     }
@@ -83,7 +81,7 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
         .filter(s => {
           const slotRegex = /^\d{2}:\d{2}-\d{2}:\d{2}$/;
           if (s === '' || !slotRegex.test(s)) {
-            if (s !== '') { 
+            if (s !== '') {
                  toast({
                     title: "Invalid Slot Format",
                     description: `Slot "${s}" is not in HH:mm-HH:mm format and will be ignored.`,
@@ -97,6 +95,9 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
             const [startStr, endStr] = s.split('-');
             const [startH, startM] = startStr.split(':').map(Number);
             const [endH, endM] = endStr.split(':').map(Number);
+            if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM) || startH < 0 || startH > 23 || startM < 0 || startM > 59 || endH < 0 || endH > 23 || endM < 0 || endM > 59) {
+                 toast({ title: "Invalid Time Value", description: `Slot "${s}" contains invalid hour or minute values. It will be ignored.`, variant: "destructive", duration: 5000 }); return false;
+            }
             if (startH > endH || (startH === endH && startM >= endM)) {
                  toast({
                     title: "Invalid Slot Time",
@@ -117,16 +118,15 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
           }
           return true;
         });
-      
+
       if (finalSlots.length === 0 && availabilitySlots.trim() !== '' && !isUnavailable) {
         toast({ title: "No Valid Slots", description: "No valid time slots were entered. Please check format (HH:mm-HH:mm) and times. Saving as unavailable for now.", variant: "default", duration: 7000 });
       }
     }
-    
+
     onSave(dateStr, finalSlots);
-    // onOpenChange(false); // Dialog is typically closed by the parent page after successful save
   };
-  
+
   const currentSavedSlotsForDate = useMemo(() => {
     if (!selectedDate || !resource.availability) return 'Not defined (assumed generally available or needs setup)';
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -148,7 +148,7 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
           </DialogDescription>
         </DialogHeader>
         <Separator />
-        <ScrollArea className="h-[65vh] pr-4">
+        <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
           <div className="grid md:grid-cols-2 gap-6 py-4">
             <div className="flex flex-col items-center">
               <Label className="mb-2 text-center font-semibold">Select Date</Label>
@@ -157,14 +157,14 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
                 selected={selectedDate}
                 onSelect={handleDateSelect}
                 className="rounded-md border"
-                disabled={(date) => date < startOfDay(new Date())} 
+                disabled={(date) => date < startOfDay(new Date())}
               />
             </div>
             <div className="space-y-4">
               <h3 className="font-semibold text-lg">
                 Set Availability for: {selectedDate ? format(selectedDate, 'PPP') : 'No date selected'}
               </h3>
-              
+
               <div className="space-y-1">
                 <Label htmlFor="availabilitySlots">Available Time Slots</Label>
                 <Textarea
@@ -194,7 +194,7 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
                   Mark entire day as Unavailable
                 </Label>
               </div>
-              
+
               {selectedDate && (
                 <div className="pt-2">
                   <p className="text-sm font-medium text-muted-foreground">Current saved slots for {format(selectedDate, 'PPP')}:</p>
@@ -215,4 +215,3 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
     </Dialog>
   );
 }
-

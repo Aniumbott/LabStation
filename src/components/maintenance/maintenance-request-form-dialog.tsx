@@ -28,7 +28,7 @@ const maintenanceRequestFormSchema = z.object({
   resourceId: z.string().min(1, { message: 'Please select a resource.' }),
   issueDescription: z.string().min(10, { message: 'Issue description must be at least 10 characters.' }).max(1000, { message: 'Description cannot exceed 1000 characters.' }),
   status: z.enum(maintenanceRequestStatuses as [string, ...string[]], { required_error: 'Please select a status.'}),
-  assignedTechnicianId: z.string().optional().or(z.literal('')), 
+  assignedTechnicianId: z.string().optional().or(z.literal('')),
   resolutionNotes: z.string().max(1000).optional().or(z.literal('')),
 }).refine(data => {
   if ((data.status === 'Resolved' || data.status === 'Closed') && (!data.resolutionNotes || data.resolutionNotes.trim() === '')) {
@@ -37,7 +37,7 @@ const maintenanceRequestFormSchema = z.object({
   return true;
 }, {
   message: 'Resolution notes are required when status is Resolved or Closed.',
-  path: ['resolutionNotes'], 
+  path: ['resolutionNotes'],
 });
 
 export type MaintenanceRequestFormValues = z.infer<typeof maintenanceRequestFormSchema>;
@@ -88,7 +88,7 @@ export function MaintenanceRequestFormDialog({
         });
       }
     }
-  }, [open, initialRequest, resources, form.reset]); 
+  }, [open, initialRequest, resources, form.reset]);
 
   function onSubmit(data: MaintenanceRequestFormValues) {
     const dataToSave = {
@@ -109,7 +109,7 @@ export function MaintenanceRequestFormDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
-            <ScrollArea className="h-[60vh] pr-6">
+            <ScrollArea className="max-h-[60vh] overflow-y-auto pr-2">
             <div className="space-y-4 py-2 pb-4">
                 <FormField
                     control={form.control}
@@ -117,9 +117,9 @@ export function MaintenanceRequestFormDialog({
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Resource</FormLabel>
-                        <Select 
-                            onValueChange={field.onChange} 
-                            value={field.value || ''} 
+                        <Select
+                            onValueChange={field.onChange}
+                            value={field.value || ''}
                             disabled={!!initialRequest}
                         >
                             <FormControl><SelectTrigger><SelectValue placeholder="Select a resource" /></SelectTrigger></FormControl>
@@ -170,8 +170,8 @@ export function MaintenanceRequestFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Assign Technician (Optional)</FormLabel>
-                            <Select 
-                                onValueChange={(value) => field.onChange(value === UNASSIGNED_TECHNICIAN_VALUE ? '' : value)} 
+                            <Select
+                                onValueChange={(value) => field.onChange(value === UNASSIGNED_TECHNICIAN_VALUE ? '' : value)}
                                 value={field.value || UNASSIGNED_TECHNICIAN_VALUE}
                             >
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select a technician" /></SelectTrigger></FormControl>

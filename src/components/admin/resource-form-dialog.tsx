@@ -27,13 +27,13 @@ import { parseISO, format, isValid as isValidDate } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
 
 const VALID_REMOTE_PROTOCOLS = ['RDP', 'SSH', 'VNC', 'Other'] as const;
-const NONE_PROTOCOL_VALUE = "--none-protocol--"; 
+const NONE_PROTOCOL_VALUE = "--none-protocol--";
 
 const resourceFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, { message: 'Name cannot exceed 100 characters.' }),
   resourceTypeId: z.string().min(1, { message: 'Please select a resource type.' }),
   lab: z.enum(labsList as [string, ...string[]], { required_error: 'Please select a lab.' }),
-  status: z.enum(resourceStatusesList as [string, ...string[]], { required_error: 'Please select a status.'}),
+  status: z.enum(resourceStatusesList as [ResourceStatus, ...ResourceStatus[]], { required_error: 'Please select a status.'}),
   description: z.string().max(500, { message: 'Description cannot exceed 500 characters.' }).optional().or(z.literal('')),
   imageUrl: z.string().url({ message: 'Please enter a valid URL.' }).optional().or(z.literal('')),
   manufacturer: z.string().max(100).optional().or(z.literal('')),
@@ -86,9 +86,9 @@ export function ResourceFormDialog({
       remoteAccess: {
         ipAddress: '',
         hostname: '',
-        protocol: '', 
+        protocol: '',
         username: '',
-        port: undefined, 
+        port: undefined,
         notes: '',
       }
     },
@@ -133,10 +133,10 @@ export function ResourceFormDialog({
           purchaseDate: '',
           notes: '',
           features: '',
-          remoteAccess: { 
+          remoteAccess: {
             ipAddress: '',
             hostname: '',
-            protocol: '', 
+            protocol: '',
             username: '',
             port: undefined,
             notes: '',
@@ -178,7 +178,7 @@ export function ResourceFormDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
-            <ScrollArea className="h-[65vh] pr-6">
+            <ScrollArea className="max-h-[70vh] overflow-y-auto pr-2">
             <div className="space-y-6 py-2 pb-4">
                 <FormField
                 control={form.control}
