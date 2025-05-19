@@ -4,9 +4,9 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { Bell, Check, Trash2, CalendarCheck2, Wrench, AlertTriangle, CircleEllipsis, CircleCheck, Info, ShieldAlert } from 'lucide-react';
-import type { Notification } from '@/types';
-import { initialNotifications, mockCurrentUser } from '@/lib/mock-data';
+import { Bell, Check, Trash2, CalendarCheck2, Wrench, AlertTriangle, CircleEllipsis, CircleCheck, Info, ShieldAlert, Loader2 } from 'lucide-react';
+import type { Notification, User } from '@/types';
+import { initialNotifications } from '@/lib/mock-data';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +31,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/components/auth-context'; // Import useAuth
 
 const getNotificationIcon = (type: Notification['type']) => {
   switch (type) {
@@ -45,25 +46,34 @@ const getNotificationIcon = (type: Notification['type']) => {
       return <Wrench className="h-5 w-5 text-blue-500" />;
     case 'maintenance_resolved':
       return <CircleCheck className="h-5 w-5 text-green-500" />;
+    case 'signup_approved':
+        return <Check className="h-5 w-5 text-green-500" />;
+    case 'signup_pending_admin':
+        return <ShieldAlert className="h-5 w-5 text-orange-500" />;
     default:
       return <Info className="h-5 w-5 text-gray-500" />;
   }
 };
 
 export default function NotificationsPage() {
+  const { currentUser } = useAuth(); // Use AuthContext
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isClearAllAlertOpen, setIsClearAllAlertOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    // Simulate fetching notifications for the current user
-    const userNotifications = initialNotifications
-      .filter(n => n.userId === mockCurrentUser.id)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    setNotifications(userNotifications);
+    setIsLoading(true);
+    if (currentUser) {
+      const userNotifications = initialNotifications
+        .filter(n => n.userId === currentUser.id)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setNotifications(userNotifications);
+    } else {
+      setNotifications([]); // No user, no notifications
+    }
     setIsLoading(false);
-  }, []);
+  }, [currentUser]);
 
   const handleMarkAsRead = (id: string) => {
     setNotifications(prev =>
@@ -78,7 +88,7 @@ export default function NotificationsPage() {
   const handleMarkAllAsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
     initialNotifications.forEach(n => {
-      if (n.userId === mockCurrentUser.id) n.isRead = true;
+      if (currentUser && n.userId === currentUser.id) n.isRead = true;
     });
     toast({
       title: "All Read",
@@ -100,11 +110,12 @@ export default function NotificationsPage() {
   };
 
   const handleDeleteAllNotifications = () => {
+    if (!currentUser) return;
     setNotifications([]);
     // Filter out notifications for the current user from the global array
-    const remainingNotifications = initialNotifications.filter(n => n.userId !== mockCurrentUser.id);
-    initialNotifications.length = 0; // Clear the array
-    initialNotifications.push(...remainingNotifications); // Add back other users' notifications
+    const remainingNotifications = initialNotifications.filter(n => n.userId !== currentUser.id);
+    initialNotifications.length = 0; 
+    initialNotifications.push(...remainingNotifications); 
 
     toast({
       title: "All Notifications Cleared",
@@ -118,12 +129,28 @@ export default function NotificationsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-full">
-        <Bell className="h-12 w-12 animate-pulse text-primary" />
-        <p className="ml-3 text-muted-foreground">Loading notifications...</p>
+      <div className="flex justify-center items-center min-h-[calc(100vh-200px)] text-muted-foreground">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="ml-3 text-sm">Loading notifications...</p>
       </div>
     );
   }
+  
+  if (!currentUser) {
+    return (
+         <div className="space-y-8">
+            <PageHeader title="Notifications" description="Please log in to view your notifications." icon={Bell} />
+            <Card className="text-center py-10 text-muted-foreground">
+                <CardContent>
+                    <Info className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                    <p className="text-lg font-medium">Login Required</p>
+                    <p className="text-sm mb-4">You need to be logged in to view your notifications.</p>
+                </CardContent>
+            </Card>
+        </div>
+    );
+  }
+
 
   return (
     <TooltipProvider>
@@ -217,7 +244,7 @@ export default function NotificationsPage() {
                     </Tooltip>
                 </div>
               </CardHeader>
-              <CardContent className="px-4 pb-4 ml-[calc(1.25rem+0.75rem)]"> {/* Indent content to align with title */}
+              <CardContent className="px-4 pb-4 ml-[calc(1.25rem+0.75rem)]"> 
                 <p className="text-sm text-muted-foreground">{notification.message}</p>
               </CardContent>
               {notification.linkTo && (
@@ -235,5 +262,3 @@ export default function NotificationsPage() {
     </TooltipProvider>
   );
 }
-
-    
