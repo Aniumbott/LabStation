@@ -82,8 +82,6 @@ function BookingsPageContent() {
   const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<Booking['status'] | 'all'>('all');
   
-  const [currentCalendarMonth, setCurrentCalendarMonth] = useState<Date>(initialDateFromUrl || startOfDay(new Date()));
-
 
   // Booking Form Dialog state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -159,7 +157,6 @@ function BookingsPageContent() {
     
     if (dateToSetFromUrl && (!activeSelectedDate || !isSameDay(activeSelectedDate, dateToSetFromUrl))) {
       setActiveSelectedDate(dateToSetFromUrl);
-      setCurrentCalendarMonth(dateToSetFromUrl); 
       if (!tempSelectedDateInDialog || !isSameDay(tempSelectedDateInDialog, dateToSetFromUrl)){
          setTempSelectedDateInDialog(dateToSetFromUrl);
          setCurrentCalendarMonthInDialog(dateToSetFromUrl);
@@ -385,7 +382,6 @@ function BookingsPageContent() {
     setActiveFilterResourceId(tempFilterResourceId);
     setActiveFilterStatus(tempFilterStatus);
     setActiveSelectedDate(tempSelectedDateInDialog ? startOfDay(tempSelectedDateInDialog) : undefined);
-    if(tempSelectedDateInDialog) setCurrentCalendarMonth(startOfDay(tempSelectedDateInDialog));
 
 
     const newSearchParams = new URLSearchParams(searchParams.toString());
@@ -415,7 +411,6 @@ function BookingsPageContent() {
     setActiveFilterResourceId('all');
     setActiveFilterStatus('all');
     setActiveSelectedDate(undefined);
-    setCurrentCalendarMonth(startOfDay(new Date()));
     resetDialogFilters();
 
     const newSearchParams = new URLSearchParams(searchParams.toString());
@@ -447,7 +442,7 @@ function BookingsPageContent() {
 
   const formKey = useMemo(() => {
     if (!isFormOpen) return 'closed';
-    if (currentBooking?.id) return `edit-${currentBooking.id}`; 
+    if (currentBooking?.id) return `edit-${currentBooking.id}-${new Date(currentBooking.startTime).toISOString()}`; 
     
     let keyParts = ['new'];
     if (currentBooking?.resourceId) keyParts.push(currentBooking.resourceId);
@@ -658,20 +653,20 @@ function BookingsPageContent() {
                    activeSelectedDate ? 'Feel free to create a new booking for this date.' :
                    'Create a new booking to get started.'}
                 </p>
-                {activeFilterCount > 0 && (
+                {activeFilterCount > 0 ? (
                     <Button variant="outline" onClick={resetAllActiveFilters}>
                         <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                     </Button>
-                )}
-                {!activeSelectedDate && allUserBookings.length === 0 && activeFilterCount === 0 && (
-                     <Button onClick={() => handleOpenForm(undefined, null, new Date())} className="mt-4">
-                        <PlusCircle className="mr-2 h-4 w-4" /> Create Your First Booking
-                    </Button>
-                )}
-                 {activeSelectedDate && bookingsToDisplay.length === 0 && activeFilterCount === 0 && (
+                ): (
+                   activeSelectedDate ? (
                      <Button onClick={() => handleOpenForm(undefined, null, activeSelectedDate)} className="mt-4">
                         <PlusCircle className="mr-2 h-4 w-4" /> Create New Booking
                     </Button>
+                   ) : (
+                     <Button onClick={() => handleOpenForm(undefined, null, new Date())} className="mt-4">
+                        <PlusCircle className="mr-2 h-4 w-4" /> Create Your First Booking
+                    </Button>
+                   )
                 )}
             </CardContent>
             )}
@@ -719,6 +714,7 @@ function BookingsPageContent() {
             <BookingForm
                 key={formKey}
                 initialData={currentBooking}
+                selectedDateProp={activeSelectedDate}
                 onSave={handleSaveBooking}
                 onCancel={() => setIsFormOpen(false)}
                 currentUserFullName={mockCurrentUser.name}
@@ -776,19 +772,23 @@ type BookingFormValues = z.infer<typeof bookingFormSchema>;
 
 interface BookingFormProps {
   initialData?: Partial<Booking> & { resourceId?: string } | null;
+  selectedDateProp?: Date; // To initialize date for new bookings
   onSave: (data: Partial<Booking>) => void;
   onCancel: () => void;
   currentUserFullName: string;
 }
 
-function BookingForm({ initialData, onSave, onCancel, currentUserFullName }: BookingFormProps) {
+function BookingForm({ initialData, selectedDateProp, onSave, onCancel, currentUserFullName }: BookingFormProps) {
   
   const getInitialDate = useCallback(() => {
     if (initialData?.startTime && isValidDate(new Date(initialData.startTime))) {
       return startOfDay(new Date(initialData.startTime));
     }
+    if (selectedDateProp && isValidDate(selectedDateProp)) {
+      return startOfDay(selectedDateProp);
+    }
     return startOfDay(new Date());
-  }, [initialData?.startTime]);
+  }, [initialData?.startTime, selectedDateProp]);
 
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
@@ -1015,3 +1015,5 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName }: Boo
     </FormProvider>
   );
 }
+
+    

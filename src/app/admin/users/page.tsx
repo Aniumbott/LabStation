@@ -141,7 +141,6 @@ export default function UsersPage() {
     if (editingUser) {
       const updatedUsers = users.map(u => u.id === editingUser.id ? { ...editingUser, ...data, avatarUrl: u.avatarUrl || 'https://placehold.co/100x100.png' } : u);
       setUsers(updatedUsers);
-      // Also update the global mock array
       const globalIndex = initialMockUsers.findIndex(u => u.id === editingUser.id);
       if (globalIndex !== -1) initialMockUsers[globalIndex] = { ...initialMockUsers[globalIndex], ...data, avatarUrl: initialMockUsers[globalIndex].avatarUrl || 'https://placehold.co/100x100.png' };
 
@@ -153,10 +152,10 @@ export default function UsersPage() {
       const newUser: User = {
         id: `u${users.length + 1 + Date.now()}`,
         ...data,
-        avatarUrl: 'https://placehold.co/100x100.png',
+        avatarUrl: 'https://placehold.co/100x100.png', // Default avatar for new users
       };
       setUsers([...users, newUser]);
-      initialMockUsers.push(newUser); // Add to global mock array
+      initialMockUsers.push(newUser); 
 
       toast({
         title: 'User Created',
@@ -170,7 +169,6 @@ export default function UsersPage() {
     const deletedUser = users.find(u => u.id === userId);
     setUsers(currentUsers => currentUsers.filter(user => user.id !== userId));
     
-    // Remove from global mock array
     const globalIndex = initialMockUsers.findIndex(u => u.id === userId);
     if (globalIndex !== -1) initialMockUsers.splice(globalIndex, 1);
 
@@ -271,7 +269,7 @@ export default function UsersPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead className="text-right w-[120px]">Actions</TableHead>
+                <TableHead className="text-right w-[100px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -382,3 +380,5 @@ export default function UsersPage() {
     </div>
   );
 }
+
+    

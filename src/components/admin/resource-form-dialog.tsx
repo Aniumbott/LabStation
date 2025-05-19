@@ -149,11 +149,11 @@ export function ResourceFormDialog({
   function onSubmit(data: ResourceFormValues) {
     const dataToSave: ResourceFormValues = {
         ...data,
-        imageUrl: data.imageUrl || 'https://placehold.co/300x200.png', // Default if empty
+        imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
         purchaseDate: data.purchaseDate ? data.purchaseDate : undefined,
         remoteAccess: data.remoteAccess ? {
             ...data.remoteAccess,
-            port: data.remoteAccess.port && String(data.remoteAccess.port) !== '' ? Number(data.remoteAccess.port) : undefined,
+            port: data.remoteAccess.port && String(data.remoteAccess.port).trim() !== '' ? Number(data.remoteAccess.port) : undefined,
             protocol: data.remoteAccess.protocol === '' ? undefined : data.remoteAccess.protocol,
             ipAddress: data.remoteAccess.ipAddress || undefined,
             hostname: data.remoteAccess.hostname || undefined,
@@ -401,7 +401,7 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Port</FormLabel>
-                                    <FormControl><Input type="number" placeholder="e.g., 22 (SSH), 3389 (RDP)" {...field} value={field.value === undefined ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} /></FormControl>
+                                    <FormControl><Input type="number" placeholder="e.g., 22 (SSH), 3389 (RDP)" {...field} value={field.value === undefined || field.value === null || String(field.value).trim() === '' ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} /></FormControl>
                                     <FormMessage />
                                     </FormItem>
                                 )}
@@ -453,3 +453,5 @@ export function ResourceFormDialog({
     </Dialog>
   );
 }
+
+    

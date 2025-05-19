@@ -112,7 +112,6 @@ export default function ResourceTypesPage() {
     if (editingType) {
       const updatedTypes = resourceTypes.map(rt => rt.id === editingType.id ? { ...editingType, ...data } : rt);
       setResourceTypes(updatedTypes);
-      // Also update the global mock array
       const globalIndex = initialMockResourceTypes.findIndex(rt => rt.id === editingType.id);
       if (globalIndex !== -1) initialMockResourceTypes[globalIndex] = { ...initialMockResourceTypes[globalIndex], ...data };
 
@@ -126,7 +125,7 @@ export default function ResourceTypesPage() {
         ...data,
       };
       setResourceTypes([...resourceTypes, newType]);
-      initialMockResourceTypes.push(newType); // Add to global mock array
+      initialMockResourceTypes.push(newType); 
 
       toast({
         title: 'Resource Type Created',
@@ -140,7 +139,6 @@ export default function ResourceTypesPage() {
     const deletedType = resourceTypes.find(rt => rt.id === typeId);
     setResourceTypes(currentTypes => currentTypes.filter(type => type.id !== typeId));
     
-    // Remove from global mock array
     const globalIndex = initialMockResourceTypes.findIndex(rt => rt.id === typeId);
     if (globalIndex !== -1) initialMockResourceTypes.splice(globalIndex, 1);
 
@@ -225,7 +223,7 @@ export default function ResourceTypesPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead className="text-right w-[120px]">Actions</TableHead>
+                <TableHead className="text-right w-[100px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -318,3 +316,5 @@ export default function ResourceTypesPage() {
     </div>
   );
 }
+
+    
