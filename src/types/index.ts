@@ -72,13 +72,16 @@ export interface Booking {
 }
 
 export type RoleName = 'Admin' | 'Lab Manager' | 'Technician' | 'Researcher';
+export type UserStatus = 'active' | 'pending_approval' | 'suspended';
 
 export interface User {
   id: string;
   name: string;
   email: string;
+  password?: string; // For mock sign-up, will not be stored securely
   role: RoleName;
   avatarUrl?: string;
+  status: UserStatus;
 }
 
 export type MaintenanceRequestStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed';
@@ -104,7 +107,9 @@ export type NotificationType =
   | 'booking_rejected'
   | 'maintenance_new'
   | 'maintenance_assigned'
-  | 'maintenance_resolved';
+  | 'maintenance_resolved'
+  | 'signup_approved'
+  | 'signup_pending_admin'; // Notification for admin about a new signup
 
 export interface Notification {
   id: string;
@@ -129,7 +134,7 @@ export const daysOfWeekArray: DayOfWeek[] = ['Sunday', 'Monday', 'Tuesday', 'Wed
 
 export interface RecurringBlackoutRule {
   id: string;
-  name: string; 
-  daysOfWeek: DayOfWeek[]; 
+  name: string;
+  daysOfWeek: DayOfWeek[];
   reason?: string;
 }

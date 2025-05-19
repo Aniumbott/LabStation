@@ -1,12 +1,11 @@
+
 import type { Metadata } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import './globals.css';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Toaster } from "@/components/ui/toaster";
-
-const geistSans = GeistSans; // Using the direct import
-const geistMono = GeistMono;
+import { AuthProvider } from '@/components/auth-context';
 
 export const metadata: Metadata = {
   title: 'LabStation',
@@ -19,9 +18,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <AppLayout>{children}</AppLayout>
+    <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
+      <body className="font-sans antialiased">
+        <AuthProvider>
+          <AppLayout>{children}</AppLayout>
+        </AuthProvider>
         <Toaster />
       </body>
     </html>

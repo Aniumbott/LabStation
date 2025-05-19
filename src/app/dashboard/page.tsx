@@ -1,5 +1,5 @@
 
-'use client'; // Added 'use client' for useState, useEffect
+'use client'; // Make it a client component to use hooks
 
 import Image from 'next/image';
 import Link from 'next/link';
@@ -20,27 +20,37 @@ import {
 } from "@/components/ui/table";
 import { format, isValid, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { allAdminMockResources, initialBookings, mockCurrentUser } from '@/lib/mock-data';
-import { useState, useEffect } from 'react'; // Added useEffect, useState
-
+import { allAdminMockResources, initialBookings } from '@/lib/mock-data'; // mockCurrentUser removed
+import { useState, useEffect, useMemo } from 'react';
+import { useAuth } from '@/components/auth-context'; // Import useAuth
 
 export default function DashboardPage() {
+  const { currentUser } = useAuth(); // Get currentUser from AuthContext
   const [frequentlyUsedResources, setFrequentlyUsedResources] = useState<Resource[]>([]);
   const [upcomingUserBookings, setUpcomingUserBookings] = useState<Booking[]>([]);
 
   useEffect(() => {
-    // Simulate fetching or processing data that might only be available client-side
-    // or to ensure data is fresh for this client session if it were dynamic.
+    // Simulate fetching or processing data
     setFrequentlyUsedResources(allAdminMockResources.slice(0, 2));
     
-    const filteredBookings = initialBookings
-      .filter(b => {
-          return isValid(b.startTime) && !isPast(b.startTime) && b.status !== 'Cancelled' && b.userId === mockCurrentUser.id;
-      })
-      .sort((a,b) => a.startTime.getTime() - b.startTime.getTime())
-      .slice(0, 5);
-    setUpcomingUserBookings(filteredBookings);
-  }, []);
+    if (currentUser) {
+      const filteredBookings = initialBookings
+        .filter(b => {
+            // Ensure b.startTime is a Date object before comparison
+            const startTimeDate = typeof b.startTime === 'string' ? new Date(b.startTime) : b.startTime;
+            return isValid(startTimeDate) && !isPast(startTimeDate) && b.status !== 'Cancelled' && b.userId === currentUser.id;
+        })
+        .sort((a,b) => {
+            const timeA = typeof a.startTime === 'string' ? new Date(a.startTime).getTime() : a.startTime.getTime();
+            const timeB = typeof b.startTime === 'string' ? new Date(b.startTime).getTime() : b.startTime.getTime();
+            return timeA - timeB;
+        })
+        .slice(0, 5);
+      setUpcomingUserBookings(filteredBookings);
+    } else {
+      setUpcomingUserBookings([]); // No user, no bookings
+    }
+  }, [currentUser]);
 
 
   const getResourceStatusBadge = (status: Resource['status']) => {
@@ -115,7 +125,7 @@ export default function DashboardPage() {
 
       <section>
         <h2 className="text-2xl font-semibold mb-4">Your Upcoming Bookings</h2>
-        {upcomingUserBookings.length > 0 ? (
+        {currentUser && upcomingUserBookings.length > 0 ? (
           <Card className="shadow-lg">
             <CardContent className="p-0">
               <div className="overflow-x-auto rounded-lg border shadow-sm">
@@ -130,30 +140,34 @@ export default function DashboardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {upcomingUserBookings.map((booking) => (
-                      <TableRow key={booking.id}>
-                        <TableCell className="font-medium">{booking.resourceName}</TableCell>
-                        <TableCell>{isValid(booking.startTime) ? format(booking.startTime, 'MMM dd, yyyy') : 'Invalid Date'}</TableCell>
-                        <TableCell>{isValid(booking.startTime) && isValid(booking.endTime) ? `${format(booking.startTime, 'p')} - ${format(booking.endTime, 'p')}` : 'Invalid Time'}</TableCell>
-                        <TableCell>
-                          <Badge
-                              className={cn(
-                                  "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
-                                  booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
-                                  booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
-                                  booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500'
-                              )}
-                          >
-                              {booking.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" asChild>
-                            <Link href={`/bookings?bookingId=${booking.id}&date=${format(booking.startTime, 'yyyy-MM-dd')}`}>View/Edit</Link>
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {upcomingUserBookings.map((booking) => {
+                      const startTimeDate = typeof booking.startTime === 'string' ? new Date(booking.startTime) : booking.startTime;
+                      const endTimeDate = typeof booking.endTime === 'string' ? new Date(booking.endTime) : booking.endTime;
+                      return (
+                        <TableRow key={booking.id}>
+                          <TableCell className="font-medium">{booking.resourceName}</TableCell>
+                          <TableCell>{isValid(startTimeDate) ? format(startTimeDate, 'MMM dd, yyyy') : 'Invalid Date'}</TableCell>
+                          <TableCell>{isValid(startTimeDate) && isValid(endTimeDate) ? `${format(startTimeDate, 'p')} - ${format(endTimeDate, 'p')}` : 'Invalid Time'}</TableCell>
+                          <TableCell>
+                            <Badge
+                                className={cn(
+                                    "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
+                                    booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
+                                    booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
+                                    booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500'
+                                )}
+                            >
+                                {booking.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" asChild>
+                              <Link href={`/bookings?bookingId=${booking.id}&date=${format(startTimeDate, 'yyyy-MM-dd')}`}>View/Edit</Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -168,10 +182,14 @@ export default function DashboardPage() {
           </Card>
         ) : (
           <Card className="p-6 text-center shadow-lg">
-             <p className="text-muted-foreground">You have no upcoming bookings.</p>
-             <Button asChild className="mt-4">
-                <Link href="/admin/resources">Find Resources to Book</Link>
-             </Button>
+             <p className="text-muted-foreground">
+               {currentUser ? "You have no upcoming bookings." : "Please log in to see your bookings."}
+             </p>
+             {currentUser && (
+                <Button asChild className="mt-4">
+                    <Link href="/admin/resources">Find Resources to Book</Link>
+                </Button>
+             )}
           </Card>
         )}
       </section>

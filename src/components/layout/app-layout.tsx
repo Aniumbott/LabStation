@@ -6,16 +6,16 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
-  CalendarDays,
-  Users as UsersIconLucide,
-  UserCog,
-  Loader2,
-  ListChecks,
   ClipboardList,
+  CalendarDays,
+  UserCog,
+  Users as UsersIconLucide,
+  ListChecks,
   CheckSquare,
   Wrench,
   Bell,
-  CalendarOff, // For Blackout Dates
+  CalendarOff,
+  Loader2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
@@ -35,7 +35,7 @@ import { cn } from '@/lib/utils';
 import { Logo } from '@/components/icons/logo';
 import { MobileSidebarToggle } from './MobileSidebarToggle';
 import type { RoleName } from '@/types';
-import { mockCurrentUser } from '@/lib/mock-data';
+import { useAuth } from '@/components/auth-context'; // IMPORT useAuth
 
 interface NavItem {
   href: string;
@@ -80,21 +80,30 @@ const ALL_NAV_ITEMS: NavItem[] = [
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [isMounted, setIsMounted] = useState(false);
+  const { currentUser, isLoading: authIsLoading } = useAuth(); // GET currentUser and authIsLoading FROM CONTEXT
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   const visibleNavItems = useMemo(() => {
-    return ALL_NAV_ITEMS.filter(item => {
-      if (!item.allowedRoles) {
-        return true;
-      }
-      return item.allowedRoles.includes(mockCurrentUser.role);
-    });
-  }, [mockCurrentUser.role]);
+    if (!isMounted) return []; // Don't try to render nav items before client hydration of context
 
-  if (!isMounted) {
+    // If no user is logged in, or auth is still loading, only show items that don't specify allowedRoles (public)
+    if (!currentUser) {
+      return ALL_NAV_ITEMS.filter(item => !item.allowedRoles || item.allowedRoles.length === 0);
+    }
+
+    // If a user is logged in, filter based on their role
+    return ALL_NAV_ITEMS.filter(item => {
+      if (!item.allowedRoles || item.allowedRoles.length === 0) {
+        return true; // Item is accessible to all logged-in users
+      }
+      return item.allowedRoles.includes(currentUser.role);
+    });
+  }, [currentUser, isMounted]);
+
+  if (!isMounted || authIsLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-svh bg-background text-muted-foreground">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
