@@ -15,10 +15,10 @@ import {
   CheckSquare,
   Wrench,
   Bell,
-  Building, // Kept for consistency, though Lab Management was removed
+  CalendarOff, // For Blackout Dates
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useEffect, useState, useMemo } from 'react'; // Added useMemo
+import { useEffect, useState, useMemo } from 'react';
 
 import {
   SidebarProvider,
@@ -41,7 +41,7 @@ interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  allowedRoles?: RoleName[]; // Roles allowed to see this item. If undefined, all roles can see.
+  allowedRoles?: RoleName[];
 }
 
 const ALL_NAV_ITEMS: NavItem[] = [
@@ -55,6 +55,12 @@ const ALL_NAV_ITEMS: NavItem[] = [
     href: '/admin/booking-approvals',
     label: 'Booking Approvals',
     icon: CheckSquare,
+    allowedRoles: ['Admin', 'Lab Manager'],
+  },
+  {
+    href: '/admin/blackout-dates',
+    label: 'Blackout Dates',
+    icon: CalendarOff,
     allowedRoles: ['Admin', 'Lab Manager'],
   },
   {
@@ -82,11 +88,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const visibleNavItems = useMemo(() => {
     return ALL_NAV_ITEMS.filter(item => {
       if (!item.allowedRoles) {
-        return true; // Accessible to all if no specific roles are defined
+        return true;
       }
       return item.allowedRoles.includes(mockCurrentUser.role);
     });
-  }, [mockCurrentUser.role]); // Re-calculate if user role changes
+  }, [mockCurrentUser.role]);
 
   if (!isMounted) {
     return (

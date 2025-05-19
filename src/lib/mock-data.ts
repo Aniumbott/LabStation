@@ -1,5 +1,5 @@
 
-import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType, UnavailabilityPeriod, AvailabilitySlot, BookingUsageDetails } from '@/types';
+import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType, BlackoutDate } from '@/types';
 import { format, addDays, set, subDays, parseISO } from 'date-fns';
 
 const today = new Date();
@@ -238,7 +238,7 @@ export let initialBookings: Booking[] = [
     endTime: set(addDays(today, 2), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Confirmed',
     notes: 'Debugging SPI communication on custom MCU board for Project Alpha.',
-    usageDetails: { // Example for a future completed booking
+    usageDetails: {
         actualStartTime: set(addDays(today, 2), { hours: 10, minutes: 5, seconds: 0, milliseconds: 0 }).toISOString(),
         actualEndTime: set(addDays(today, 2), { hours: 11, minutes: 55, seconds: 0, milliseconds: 0 }).toISOString(),
         outcome: 'Success',
@@ -386,13 +386,13 @@ export let initialNotifications: Notification[] = [
   },
   {
     id: 'n3',
-    userId: mockCurrentUser.id,
-    title: 'Booking Request: Spectrum Analyzer',
-    message: 'Your booking request for Rohde & Schwarz FPC1500 Spectrum Analyzer on ' + format(set(today, { hours: 9, minutes: 0 }), 'MMM dd, HH:mm') + ' is awaiting approval.',
+    userId: 'u1', // For Admin User
+    title: 'New Booking Request: Rigol DP832',
+    message: `Booking for Rigol DP832 Programmable Power Supply by ${initialMockUsers[1].name} on ${format(set(addDays(today, 3), { hours: 14, minutes: 0 }), 'MMM dd, HH:mm')} needs approval.`,
     type: 'booking_pending_approval',
     isRead: false,
-    createdAt: subDays(today, 2).toISOString(),
-    linkTo: `/bookings?bookingId=b4&date=${format(set(today, { hours: 9, minutes: 0 }), 'yyyy-MM-dd')}`,
+    createdAt: subDays(today, 0).toISOString(),
+    linkTo: '/admin/booking-approvals',
   },
   {
     id: 'n4',
@@ -425,3 +425,9 @@ export function addNotification(
   };
   initialNotifications.unshift(newNotification);
 }
+
+// Lab-wide Blackout Dates
+export let initialBlackoutDates: BlackoutDate[] = [
+  { id: 'bo1', date: format(addDays(today, 25), 'yyyy-MM-dd'), reason: 'Lab Deep Cleaning Day' },
+  { id: 'bo2', date: format(addDays(today, 60), 'yyyy-MM-dd'), reason: 'Public Holiday - Lab Closed' },
+];

@@ -92,7 +92,7 @@ export interface MaintenanceRequest {
   issueDescription: string;
   status: MaintenanceRequestStatus;
   assignedTechnicianId?: string;
-  assignedTechnicianName?: string;
+  assignedTechnicianName?: string; // Denormalized
   dateReported: string; // ISO string
   dateResolved?: string; // ISO string
   resolutionNotes?: string;
@@ -108,11 +108,17 @@ export type NotificationType =
 
 export interface Notification {
   id: string;
-  userId: string;
+  userId: string; // For whom the notification is
   title: string;
   message: string;
   type: NotificationType;
   isRead: boolean;
   createdAt: string; // ISO string
-  linkTo?: string;
+  linkTo?: string; // Optional link for action, e.g., to view the specific booking
+}
+
+export interface BlackoutDate {
+  id: string;
+  date: string; // YYYY-MM-DD format
+  reason?: string;
 }

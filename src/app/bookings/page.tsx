@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense, useMemo, useCallback } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, X, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Calendar as CalendarIcon, StickyNote } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, X, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Calendar as CalendarIcon, Info } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -31,7 +31,7 @@ import { BookingDetailsDialog } from '@/components/bookings/booking-details-dial
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { allAdminMockResources, initialBookings, mockCurrentUser, addNotification } from '@/lib/mock-data';
+import { allAdminMockResources, initialBookings, mockCurrentUser, addNotification, initialBlackoutDates } from '@/lib/mock-data';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -118,7 +118,7 @@ function BookingsPageContent() {
     if (bookingToEdit) {
         bookingData = {
           ...bookingToEdit,
-          startTime: new Date(bookingToEdit.startTime), // Ensure these are Date objects
+          startTime: new Date(bookingToEdit.startTime),
           endTime: new Date(bookingToEdit.endTime),
           userName: bookingToEdit.userName || mockCurrentUser.name
         };
@@ -135,7 +135,7 @@ function BookingsPageContent() {
     }
     setCurrentBooking(bookingData);
     setIsFormOpen(true);
-  }, [activeSelectedDate, setCurrentBooking, setIsFormOpen]);
+  }, [activeSelectedDate]);
 
 
   useEffect(() => {
@@ -160,7 +160,6 @@ function BookingsPageContent() {
     if (dateToSetFromUrl && (!activeSelectedDate || !isSameDay(activeSelectedDate, dateToSetFromUrl))) {
       setActiveSelectedDate(dateToSetFromUrl);
       setCurrentCalendarMonth(dateToSetFromUrl); 
-      // Also set temp date for filter dialog if it's not aligned
       if (!tempSelectedDateInDialog || !isSameDay(tempSelectedDateInDialog, dateToSetFromUrl)){
          setTempSelectedDateInDialog(dateToSetFromUrl);
          setCurrentCalendarMonthInDialog(dateToSetFromUrl);
@@ -237,10 +236,22 @@ function BookingsPageContent() {
 
     if (proposedEndTime <= proposedStartTime) { toast({ title: "Invalid Time", description: "End time must be after start time.", variant: "destructive" }); return; }
     
+    const proposedDateOnlyStr = format(proposedStartTime, 'yyyy-MM-dd');
+    const isBlackout = initialBlackoutDates.find(bd => bd.date === proposedDateOnlyStr);
+    if (isBlackout) {
+      toast({ 
+        title: "Lab Closed", 
+        description: `The lab is closed on ${format(proposedStartTime, 'PPP')}${isBlackout.reason ? ` due to: ${isBlackout.reason}` : '.'}. Please select a different date.`, 
+        variant: "destructive", 
+        duration: 7000 
+      });
+      return;
+    }
+
     if (resource.unavailabilityPeriods && resource.unavailabilityPeriods.length > 0) {
       for (const period of resource.unavailabilityPeriods) {
         const unavailabilityStart = startOfDay(parseISO(period.startDate));
-        const unavailabilityEnd = addDays(startOfDay(parseISO(period.endDate)),1); // Period ends at start of next day
+        const unavailabilityEnd = addDays(startOfDay(parseISO(period.endDate)),1); 
 
         if (
           (proposedStartTime >= unavailabilityStart && proposedStartTime < unavailabilityEnd) || 
@@ -337,7 +348,7 @@ function BookingsPageContent() {
       toast({ title: "Success", description: "Booking updated successfully."});
     } else {
       setAllUserBookings(prev => [...prev, newBookingData]);
-      initialBookings.push(newBookingData); // Add to global mock array
+      initialBookings.push(newBookingData); 
       toast({ title: "Success", description: "Booking created and submitted for approval."});
       addNotification(
         'u1', 
@@ -363,7 +374,6 @@ function BookingsPageContent() {
   };
   
   const handleBookingUpdateInDetails = (updatedBooking: Booking) => {
-    // This function will be called from BookingDetailsDialog if usage details are saved
     setAllUserBookings(prev => prev.map(b => b.id === updatedBooking.id ? updatedBooking : b));
     if (selectedBookingForDetails && selectedBookingForDetails.id === updatedBooking.id) {
       setSelectedBookingForDetails(updatedBooking);
@@ -384,9 +394,7 @@ function BookingsPageContent() {
     } else {
         newSearchParams.delete('date');
     }
-    // Clean up bookingId and resourceId if we are just applying general filters
     newSearchParams.delete('bookingId');
-    // Keep resourceId if it was part of the tempFilterResourceId
     if(tempFilterResourceId === 'all') newSearchParams.delete('resourceId');
     else newSearchParams.set('resourceId', tempFilterResourceId);
 
@@ -438,10 +446,9 @@ function BookingsPageContent() {
 
 
   const formKey = useMemo(() => {
-    if (!isFormOpen) return 'closed'; // Key when form is closed
-    if (currentBooking?.id) return `edit-${currentBooking.id}`; // Key for editing an existing booking
+    if (!isFormOpen) return 'closed';
+    if (currentBooking?.id) return `edit-${currentBooking.id}`; 
     
-    // Key for a new booking, ensuring it changes if relevant pre-fill info changes
     let keyParts = ['new'];
     if (currentBooking?.resourceId) keyParts.push(currentBooking.resourceId);
     else keyParts.push('no-resource-set');
@@ -452,9 +459,6 @@ function BookingsPageContent() {
         ? startOfDay(activeSelectedDate)
         : startOfDay(new Date());
     keyParts.push(format(dateForFormKey, 'yyyy-MM-dd'));
-
-    // Add a timestamp or random element to ensure re-mount if other context changes.
-    // This is aggressive but helps if complex pre-fill logic might not trigger other key changes.
     keyParts.push(Date.now().toString()); 
 
     return keyParts.join(':');
@@ -469,12 +473,6 @@ function BookingsPageContent() {
   }, [isFormOpen, currentBooking?.startTime]);
 
 
-  useEffect(() => {
-    // Effect to run once on mount
-    setIsClient(true);
-  }, []);
-
-
   if (!isClient) {
     return <BookingsPageLoader />;
   }
@@ -482,7 +480,7 @@ function BookingsPageContent() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Manage Bookings"
+        title="Bookings"
         description="View, search, filter, and manage your lab resource bookings."
         icon={CalendarDays}
         actions={
@@ -518,7 +516,7 @@ function BookingsPageContent() {
                           placeholder="Resource name or notes..."
                           className="h-9 pl-8"
                           value={tempSearchTerm}
-                          onChange={(e) => setTempSearchTerm(e.target.value)}
+                          onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
                         />
                       </div>
                     </div>
@@ -692,14 +690,13 @@ function BookingsPageContent() {
         onOpenChange={(isOpen) => {
             setIsFormOpen(isOpen);
             if (!isOpen) {
-                setCurrentBooking(null); // Clear current booking context when dialog closes
+                setCurrentBooking(null); 
                 const currentParams = new URLSearchParams(searchParams.toString());
                 let paramsModified = false;
                 if (currentParams.has('bookingId')) {
                     currentParams.delete('bookingId');
                     paramsModified = true;
                 }
-                 // Only remove resourceId if it wasn't an active filter
                 if (currentParams.has('resourceId') && activeFilterResourceId === 'all') { 
                     currentParams.delete('resourceId');
                      paramsModified = true;
@@ -718,14 +715,13 @@ function BookingsPageContent() {
               {dialogHeaderDateString && ` For date: ${dialogHeaderDateString}`}
             </DialogDescription>
           </DialogHeader>
-          {isFormOpen && // Conditionally render the form to ensure it re-initializes with new key
+          {isFormOpen && 
             <BookingForm
                 key={formKey}
                 initialData={currentBooking}
                 onSave={handleSaveBooking}
                 onCancel={() => setIsFormOpen(false)}
                 currentUserFullName={mockCurrentUser.name}
-                // selectedDateProp is derived from currentBooking or activeSelectedDate within BookingForm now
             />
           }
         </DialogContent>
@@ -791,7 +787,6 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName }: Boo
     if (initialData?.startTime && isValidDate(new Date(initialData.startTime))) {
       return startOfDay(new Date(initialData.startTime));
     }
-    // selectedDateProp is no longer passed directly, derive from initialData or default
     return startOfDay(new Date());
   }, [initialData?.startTime]);
 
@@ -899,7 +894,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName }: Boo
                       mode="single"
                       selected={field.value}
                       onSelect={(date) => {
-                        if (date) field.onChange(date);
+                        if (date) field.onChange(startOfDay(date));
                         setIsCalendarOpen(false);
                       }}
                       disabled={(date) => isBefore(date, startOfDay(new Date())) && !initialData?.id }
