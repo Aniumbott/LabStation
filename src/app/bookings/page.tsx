@@ -23,7 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Booking, Resource, RoleName } from '@/types';
-import { format, parseISO, isValid as isValidDate, startOfDay, isSameDay, set, addDays, getHours, getMinutes, setHours, setMinutes } from 'date-fns';
+import { format, parseISO, isValid as isValidDate, startOfDay, isSameDay, set, addDays, getHours, getMinutes, setHours, setMinutes, isWithinInterval, isBefore } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -178,7 +178,6 @@ function BookingsPageContent() {
     } else if (shouldOpenFormForNewWithResourceOnly) {
       handleOpenForm(undefined, resourceIdParam, activeSelectedDate || new Date());
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, allUserBookings, isClient, handleOpenForm]); 
 
 
@@ -220,7 +219,7 @@ function BookingsPageContent() {
   }, [allUserBookings, activeSelectedDate, activeSearchTerm, activeFilterResourceId, activeFilterStatus]);
 
 
-  const handleSaveBooking = (formData: Partial<Booking>) => {
+  function handleSaveBooking(formData: Partial<Booking>) {
     if (!formData.resourceId || !formData.startTime || !formData.endTime || !formData.userName) {
       toast({ title: "Error", description: "Please fill all required fields.", variant: "destructive" });
       return;
@@ -232,6 +231,33 @@ function BookingsPageContent() {
     const proposedEndTime = new Date(formData.endTime);
 
     if (proposedEndTime <= proposedStartTime) { toast({ title: "Invalid Time", description: "End time must be after start time.", variant: "destructive" }); return; }
+    
+    // Check against resource unavailability periods
+    if (resource.unavailabilityPeriods && resource.unavailabilityPeriods.length > 0) {
+      for (const period of resource.unavailabilityPeriods) {
+        const unavailabilityStart = startOfDay(parseISO(period.startDate));
+        const unavailabilityEnd = startOfDay(parseISO(period.endDate)); // Use end of day for period end
+
+        // Check if any part of the proposed booking overlaps with an unavailability period
+        // A booking starts within an unavailability period OR a booking ends within an unavailability period
+        // OR an unavailability period is entirely within the booking period (for multi-day bookings not yet implemented but good to consider)
+        // OR the booking is entirely within an unavailability period
+        if (
+          (proposedStartTime >= unavailabilityStart && proposedStartTime <= unavailabilityEnd) || // Starts within
+          (proposedEndTime >= unavailabilityStart && proposedEndTime <= unavailabilityEnd) ||     // Ends within
+          (proposedStartTime <= unavailabilityStart && proposedEndTime >= unavailabilityEnd)       // Encompasses
+        ) {
+          toast({ 
+            title: "Resource Unavailable", 
+            description: `${resource.name} is scheduled to be unavailable from ${format(unavailabilityStart, 'PPP')} to ${format(unavailabilityEnd, 'PPP')}${period.reason ? ` due to: ${period.reason}` : '.'}. Please select a different date or time.`, 
+            variant: "destructive", 
+            duration: 10000 
+          });
+          return;
+        }
+      }
+    }
+
 
     const proposedDateStr = format(proposedStartTime, 'yyyy-MM-dd');
     const resourceDayAvailability = resource.availability?.find(avail => avail.date === proposedDateStr);
@@ -311,10 +337,10 @@ function BookingsPageContent() {
       toast({ title: "Success", description: "Booking updated successfully."});
     } else {
       setAllUserBookings(prev => [...prev, newBookingData]);
-      initialBookings.push(newBookingData);
+      initialBookings.push(newBookingData); // Add to global mock array
       toast({ title: "Success", description: "Booking created and submitted for approval."});
       addNotification(
-        'u1', 
+        'u1', // Notify Admin User (or relevant manager)
         'New Booking Request',
         `Booking for ${resource.name} by ${mockCurrentUser.name} on ${format(proposedStartTime, 'MMM dd, HH:mm')} needs approval.`,
         'booking_pending_approval',
@@ -322,7 +348,7 @@ function BookingsPageContent() {
       );
     }
     setIsFormOpen(false);
-  };
+  }
 
   const handleCancelBookingLocal = (bookingId: string) => {
     setAllUserBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'Cancelled' } : b));
@@ -399,23 +425,22 @@ function BookingsPageContent() {
 
   const formKey = useMemo(() => {
     if (currentBooking?.id) return `edit-${currentBooking.id}`;
-
     let keyParts = ['new'];
     if (currentBooking?.resourceId) keyParts.push(currentBooking.resourceId);
-    else keyParts.push('no-resource-selected');
-
+    else keyParts.push('no-resource');
+    
     const dateForFormKey = (currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime)))
       ? startOfDay(new Date(currentBooking.startTime))
       : (activeSelectedDate && isValidDate(activeSelectedDate))
         ? startOfDay(activeSelectedDate)
         : startOfDay(new Date());
-
     keyParts.push(format(dateForFormKey, 'yyyy-MM-dd'));
 
     if (currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime))) {
-        keyParts.push(new Date(currentBooking.startTime).toISOString().substring(11));
+        keyParts.push(new Date(currentBooking.startTime).toISOString().substring(11, 16)); // HH:mm
+    } else {
+        keyParts.push("09:00"); // Default start time if none set
     }
-
     return keyParts.join(':');
   }, [currentBooking, activeSelectedDate]);
 
@@ -786,8 +811,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, selec
             }
         }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchStartTime, watchBookingDate, initialData?.id, form.setValue, form.getValues]);
+  }, [watchStartTime, watchBookingDate, initialData?.id, form, timeSlots]);
 
 
   function handleRHFSubmit(data: BookingFormValues) {
@@ -848,7 +872,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, selec
                       mode="single"
                       selected={field.value}
                       onSelect={(date) => {
-                        field.onChange(date);
+                        if (date) field.onChange(date);
                         setIsCalendarOpen(false);
                       }}
                       disabled={(date) => date < startOfDay(new Date()) && !initialData?.id }

@@ -29,14 +29,14 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, startOfDay, isValid, parseISO } from 'date-fns';
+import { format, startOfDay, isValid, parseISO, isSameDay, isWithinInterval } from 'date-fns';
 
 const getStatusBadge = (status: ResourceStatus) => {
   switch (status) {
@@ -99,10 +99,25 @@ export default function ResourcesPage() {
       currentResources = currentResources.filter(resource => resource.lab === activeFilterLab);
     }
     if (activeSelectedDate) {
-      const dateStrToFilter = format(activeSelectedDate, 'yyyy-MM-dd');
-      currentResources = currentResources.filter(resource =>
-        resource.availability?.some(avail => avail.date === dateStrToFilter && avail.slots.length > 0) && resource.status === 'Available'
-      );
+      const dateToFilter = startOfDay(activeSelectedDate);
+      currentResources = currentResources.filter(resource => {
+        if (resource.status !== 'Available') return false;
+
+        // Check unavailability periods
+        if (resource.unavailabilityPeriods && resource.unavailabilityPeriods.length > 0) {
+          const isUnavailable = resource.unavailabilityPeriods.some(period => {
+            const periodStart = startOfDay(parseISO(period.startDate));
+            const periodEnd = startOfDay(parseISO(period.endDate));
+            return isSameDay(dateToFilter, periodStart) || isSameDay(dateToFilter, periodEnd) || isWithinInterval(dateToFilter, { start: periodStart, end: periodEnd });
+          });
+          if (isUnavailable) return false;
+        }
+        
+        // Check daily availability slots
+        const dateStrToFilter = format(dateToFilter, 'yyyy-MM-dd');
+        const dayAvailability = resource.availability?.find(avail => avail.date === dateStrToFilter);
+        return dayAvailability && dayAvailability.slots.length > 0;
+      });
     }
     return currentResources.sort((a,b) => a.name.localeCompare(b.name));
   }, [resources, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
@@ -158,6 +173,7 @@ export default function ResourcesPage() {
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,
         } : undefined,
         availability: editingResource.availability || [],
+        unavailabilityPeriods: editingResource.unavailabilityPeriods || [],
       };
       const updatedResources = resources.map(r => r.id === editingResource.id ? updatedResource : r);
       setResources(updatedResources);
@@ -186,6 +202,7 @@ export default function ResourcesPage() {
         notes: data.notes || undefined,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
         availability: [], 
+        unavailabilityPeriods: [],
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
           ...data.remoteAccess,
           port: data.remoteAccess.port ? Number(data.remoteAccess.port) : undefined,

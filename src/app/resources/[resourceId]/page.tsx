@@ -5,15 +5,15 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, Building, ChevronRight, CalendarCog } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, CheckCircle, AlertTriangle, Construction, CalendarDays, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, Building, ChevronRight, CalendarCog, CalendarX } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { allAdminMockResources, initialMockResourceTypes, labsList, resourceStatusesList, initialBookings, mockCurrentUser } from '@/lib/mock-data';
-import type { Resource, ResourceType, ResourceStatus, Booking } from '@/types';
-import { format, parseISO, isValid, startOfToday, isPast, startOfDay as fnsStartOfDay } from 'date-fns';
+import type { Resource, ResourceType, ResourceStatus, Booking, UnavailabilityPeriod } from '@/types';
+import { format, parseISO, isValid, startOfToday, isPast, startOfDay as fnsStartOfDay, isWithinInterval, isSameDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
@@ -26,6 +26,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ManageAvailabilityDialog } from '@/components/resources/manage-availability-dialog';
+import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavailability-dialog';
 
 function ResourceDetailPageSkeleton() {
   return (
@@ -110,16 +111,15 @@ function ResourceDetailPageSkeleton() {
 }
 
 const getResourceStatusBadge = (status: Resource['status'], className?: string) => {
-    const baseClasses = `inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors ${className || ''}`;
     switch (status) {
       case 'Available':
-        return <Badge className={`${baseClasses} bg-green-500 text-white border-transparent hover:bg-green-600`}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={cn("bg-green-500 hover:bg-green-600 text-white border-transparent", className)}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Booked':
-        return <Badge className={`${baseClasses} bg-yellow-500 text-yellow-950 border-transparent hover:bg-yellow-600`}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={cn("bg-yellow-500 hover:bg-yellow-600 text-yellow-950 border-transparent", className)}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Maintenance':
-        return <Badge className={`${baseClasses} bg-orange-500 text-white border-transparent hover:bg-orange-600`}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={cn("bg-orange-500 hover:bg-orange-600 text-white border-transparent", className)}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       default:
-        return <Badge variant="outline" className={baseClasses}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge variant="outline" className={className}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     }
 };
 
@@ -162,12 +162,13 @@ export default function ResourceDetailPage() {
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [isAvailabilityDialogOpen, setIsAvailabilityDialogOpen] = useState(false);
+  const [isUnavailabilityDialogOpen, setIsUnavailabilityDialogOpen] = useState(false);
 
 
   useEffect(() => {
     if (resourceId) {
       setIsLoading(true);
-      setTimeout(() => {
+      setTimeout(() => { // Simulate fetch delay
         const foundResource = allAdminMockResources.find(r => r.id === resourceId);
         setResource(foundResource || null);
         setIsLoading(false);
@@ -213,6 +214,7 @@ export default function ResourceDetailPage() {
               notes: data.remoteAccess.notes || undefined,
             } : undefined,
             availability: resource.availability || [], 
+            unavailabilityPeriods: resource.unavailabilityPeriods || [],
         };
         
         const resourceIndexInGlobalArray = allAdminMockResources.findIndex(r => r.id === resource.id);
@@ -257,9 +259,9 @@ export default function ResourceDetailPage() {
         }
       } else { 
         if (dateIndex !== -1) {
-          updatedAvailability[dateIndex].slots = [];
+          updatedAvailability[dateIndex].slots = []; // Ensure slots becomes empty array if no new slots
         } else {
-           updatedAvailability.push({ date, slots: [] });
+           updatedAvailability.push({ date, slots: [] }); // If date didn't exist, add it with empty slots
         }
       }
       
@@ -275,7 +277,22 @@ export default function ResourceDetailPage() {
       setResource(updatedResource); 
       toast({
         title: 'Availability Updated',
-        description: `Availability for ${resource.name} on ${format(parseISO(date), 'PPP')} has been updated.`,
+        description: `Daily slots for ${resource.name} on ${format(parseISO(date), 'PPP')} have been updated.`,
+      });
+    }
+  };
+
+  const handleSaveUnavailability = (updatedPeriods: UnavailabilityPeriod[]) => {
+    if (resource) {
+      const updatedResource = { ...resource, unavailabilityPeriods: updatedPeriods };
+      const globalIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
+      if (globalIndex !== -1) {
+        allAdminMockResources[globalIndex] = updatedResource;
+      }
+      setResource(updatedResource);
+      toast({
+        title: 'Unavailability Updated',
+        description: `Unavailability periods for ${resource.name} have been updated.`,
       });
     }
   };
@@ -323,6 +340,10 @@ export default function ResourceDetailPage() {
 
   const canBookResource = resource.status === 'Available';
 
+  const sortedUnavailabilityPeriods = useMemo(() => {
+    return [...(resource.unavailabilityPeriods || [])].sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime());
+  }, [resource.unavailabilityPeriods]);
+
 
   return (
     <TooltipProvider>
@@ -342,12 +363,21 @@ export default function ResourceDetailPage() {
               <>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" onClick={() => setIsAvailabilityDialogOpen(true)}>
-                      <CalendarCog className="h-4 w-4" />
-                      <span className="sr-only">Manage Availability</span>
+                    <Button variant="outline" size="icon" onClick={() => setIsUnavailabilityDialogOpen(true)}>
+                      <CalendarX className="h-4 w-4" />
+                      <span className="sr-only">Set Unavailability Periods</span>
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent><p>Manage Availability</p></TooltipContent>
+                  <TooltipContent><p>Set Unavailability Periods</p></TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="icon" onClick={() => setIsAvailabilityDialogOpen(true)}>
+                      <CalendarCog className="h-4 w-4" />
+                      <span className="sr-only">Manage Daily Availability</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Manage Daily Availability</p></TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -418,6 +448,29 @@ export default function ResourceDetailPage() {
                     </CardContent>
                 </Card>
             )}
+            
+            {sortedUnavailabilityPeriods.length > 0 && (
+              <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-xl flex items-center gap-2"><CalendarX className="text-destructive h-5 w-5" /> Defined Unavailability</CardTitle>
+                   <CardDescription>This resource is scheduled to be unavailable during these periods.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                   <ul className="space-y-2 text-sm">
+                    {sortedUnavailabilityPeriods.slice(0,5).map((period) => (
+                      <li key={period.id} className="pb-2 border-b border-dashed last:border-b-0 last:pb-0">
+                        <p className="font-medium text-foreground">
+                          {format(parseISO(period.startDate), 'MMM dd, yyyy')} - {format(parseISO(period.endDate), 'MMM dd, yyyy')}
+                        </p>
+                        {period.reason && <p className="text-xs text-muted-foreground mt-0.5">Reason: {period.reason}</p>}
+                      </li>
+                    ))}
+                    {sortedUnavailabilityPeriods.length > 5 && <p className="text-xs text-muted-foreground mt-2">...and more periods defined.</p>}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
+
 
             {userPastBookingsForResource.length > 0 && (
               <Card className="shadow-lg">
@@ -447,8 +500,6 @@ export default function ResourceDetailPage() {
                      </CardContent>
                  </Card>
              )}
-
-
         </div>
 
         <div className="md:col-span-2 space-y-6">
@@ -508,8 +559,8 @@ export default function ResourceDetailPage() {
           {upcomingAvailability.length > 0 && (
              <Card className="shadow-lg">
                 <CardHeader>
-                    <CardTitle className="text-xl flex items-center gap-2"><CalendarDays className="text-primary h-5 w-5" /> Upcoming Availability</CardTitle>
-                    <CardDescription>Defined available slots. Check specific time slots and book on the bookings page.</CardDescription>
+                    <CardTitle className="text-xl flex items-center gap-2"><CalendarDays className="text-primary h-5 w-5" /> Upcoming Daily Availability</CardTitle>
+                    <CardDescription>Defined available slots for specific days. Check full calendar for all options.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <ul className="space-y-2">
@@ -541,18 +592,18 @@ export default function ResourceDetailPage() {
               <Card className="shadow-lg">
                 <CardHeader>
                   <CardTitle className="text-xl flex items-center gap-2">
-                    <CalendarDays className="text-primary h-5 w-5" /> Upcoming Availability
+                    <CalendarDays className="text-primary h-5 w-5" /> Upcoming Daily Availability
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground">
-                    No specific availability slots defined for upcoming dates. This resource might be generally available or its schedule needs to be set up.
+                    No specific daily availability slots defined for upcoming dates. Resource might be generally available or its schedule needs to be set up. Check defined unavailability periods.
                   </p>
                 </CardContent>
                 {canManageResource && (
                     <CardFooter className="justify-center border-t pt-4">
                     <Button variant="outline" onClick={() => setIsAvailabilityDialogOpen(true)}>
-                        <CalendarCog className="mr-2 h-4 w-4" /> Define Availability
+                        <CalendarCog className="mr-2 h-4 w-4" /> Define Daily Slots
                     </Button>
                     </CardFooter>
                 )}
@@ -577,6 +628,14 @@ export default function ResourceDetailPage() {
           open={isAvailabilityDialogOpen}
           onOpenChange={setIsAvailabilityDialogOpen}
           onSave={handleSaveAvailability}
+        />
+      )}
+      {resource && (
+        <ManageUnavailabilityDialog
+          resource={resource}
+          open={isUnavailabilityDialogOpen}
+          onOpenChange={setIsUnavailabilityDialogOpen}
+          onSaveUnavailability={handleSaveUnavailability}
         />
       )}
     </div>

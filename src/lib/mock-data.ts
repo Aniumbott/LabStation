@@ -1,14 +1,16 @@
 
-import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType } from '@/types';
+import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType, UnavailabilityPeriod, AvailabilitySlot } from '@/types';
 import { format, addDays, set, subDays, parseISO } from 'date-fns';
 
-// For Resource Availability
 const today = new Date();
 const todayStr = format(today, 'yyyy-MM-dd');
 const tomorrowStr = format(addDays(today, 1), 'yyyy-MM-dd');
 const dayAfterTomorrowStr = format(addDays(today, 2), 'yyyy-MM-dd');
 const threeDaysLaterStr = format(addDays(today, 3), 'yyyy-MM-dd');
 const fourDaysLaterStr = format(addDays(today, 4), 'yyyy-MM-dd');
+const nextWeekStr = format(addDays(today, 7), 'yyyy-MM-dd');
+const tenDaysLaterStr = format(addDays(today, 10), 'yyyy-MM-dd');
+
 
 export const initialMockResourceTypes: ResourceType[] = [
   { id: 'rt1', name: 'Oscilloscope', description: 'For visualizing voltage signals over time.' },
@@ -47,6 +49,9 @@ export let allAdminMockResources: Resource[] = [
       { date: todayStr, slots: ['14:00-16:00', '16:00-18:00'] },
       { date: tomorrowStr, slots: ['10:00-12:00', '09:00-17:00'] }
     ],
+    unavailabilityPeriods: [
+      { id: 'unavail1-1', startDate: format(addDays(today, 15), 'yyyy-MM-dd'), endDate: format(addDays(today, 20), 'yyyy-MM-dd'), reason: 'Annual Calibration' }
+    ],
     notes: 'Standard probe set included. High-voltage differential probe in cabinet 3.',
     remoteAccess: {
       hostname: 'scope-01.lab.internal',
@@ -72,6 +77,7 @@ export let allAdminMockResources: Resource[] = [
       { date: tomorrowStr, slots: ['09:00-11:00', '11:00-13:00'] },
       { date: dayAfterTomorrowStr, slots: ['10:00-17:00'] }
     ],
+    unavailabilityPeriods: [],
     notes: 'Ensure load is disconnected before changing voltage settings.'
   },
    {
@@ -89,6 +95,9 @@ export let allAdminMockResources: Resource[] = [
     imageUrl: 'https://placehold.co/600x400.png',
     features: ['40 MHz Bandwidth', 'Dual Channel', 'Arbitrary Waveforms', 'IQ Modulation'],
     availability: [],
+    unavailabilityPeriods: [
+       { id: 'unavail3-1', startDate: todayStr, endDate: nextWeekStr, reason: 'Output Amplifier Repair' }
+    ],
     notes: 'Output amplifier stage under repair. Expected back online next week.'
   },
   {
@@ -108,7 +117,8 @@ export let allAdminMockResources: Resource[] = [
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },
       { date: dayAfterTomorrowStr, slots: ['10:00-12:00', '14:00-16:00'] }
-    ]
+    ],
+    unavailabilityPeriods: [],
   },
   {
     id: 'res5',
@@ -128,6 +138,7 @@ export let allAdminMockResources: Resource[] = [
         { date: todayStr, slots: ['10:00-17:00'] },
         { date: tomorrowStr, slots: ['10:00-17:00'] },
     ],
+    unavailabilityPeriods: [],
     notes: 'Variety of tips available in the labeled drawer. Please clean tip after use.'
   },
   {
@@ -136,7 +147,7 @@ export let allAdminMockResources: Resource[] = [
     resourceTypeId: 'rt5',
     resourceTypeName: 'Digital Multimeter (DMM)',
     lab: 'General Test Area',
-    status: 'Booked', // Intentionally booked for testing dashboard
+    status: 'Booked',
     manufacturer: 'Fluke Corporation',
     model: '87V',
     serialNumber: 'FLUKE-87V-011',
@@ -147,6 +158,7 @@ export let allAdminMockResources: Resource[] = [
     availability: [
       { date: dayAfterTomorrowStr, slots: ['09:00-17:00'] }
     ],
+    unavailabilityPeriods: [],
     notes: 'Includes standard test leads and thermocouple probe.'
   },
   {
@@ -166,6 +178,9 @@ export let allAdminMockResources: Resource[] = [
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },
       { date: tomorrowStr, slots: ['09:00-13:00', '14:00-17:00'] }
+    ],
+    unavailabilityPeriods: [
+      { id: 'unavail7-1', startDate: tenDaysLaterStr, endDate: format(addDays(today, 12), 'yyyy-MM-dd'), reason: 'Firmware Upgrade Window' }
     ],
     notes: 'Requires Vivado Design Suite. Remote access configured.',
     remoteAccess: {
@@ -195,11 +210,11 @@ export let allAdminMockResources: Resource[] = [
       { date: threeDaysLaterStr, slots: ['10:00-12:00', '13:00-16:00'] },
       { date: fourDaysLaterStr, slots: ['09:00-17:00'] }
     ],
+    unavailabilityPeriods: [],
     notes: 'OceanView software installed on connected PC. Fiber optic cables in drawer.'
   }
 ];
 
-// Mock Users
 export const initialMockUsers: User[] = [
   { id: 'u1', name: 'Admin User', email: 'admin@labstation.com', role: 'Admin', avatarUrl: 'https://placehold.co/100x100.png' },
   { id: 'u2', name: 'Dr. Manager Second', email: 'manager.second@labstation.com', role: 'Lab Manager', avatarUrl: 'https://placehold.co/100x100.png' },
@@ -208,10 +223,8 @@ export const initialMockUsers: User[] = [
   { id: 'u5', name: 'Lead Technician Fifth', email: 'lead.tech@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png' },
 ];
 
-// Mock Current User (used across Bookings, Resource Details, Dashboard)
 export const mockCurrentUser: User = initialMockUsers[3]; // Researcher Fourth
 
-// Initial Bookings
 export let initialBookings: Booking[] = [
   {
     id: 'b1',
@@ -292,28 +305,27 @@ export let initialBookings: Booking[] = [
   },
 ];
 
-// Mock Maintenance Requests
 export const maintenanceRequestStatuses: MaintenanceRequestStatus[] = ['Open', 'In Progress', 'Resolved', 'Closed'];
 
 export let initialMaintenanceRequests: MaintenanceRequest[] = [
   {
     id: 'mr1',
-    resourceId: 'res3', // Siglent SDG2042X Function Generator
+    resourceId: 'res3',
     resourceName: 'Siglent SDG2042X Function Generator',
-    reportedByUserId: 'u4', // Researcher Fourth
+    reportedByUserId: 'u4',
     reportedByUserName: initialMockUsers[3].name,
     issueDescription: 'Channel 2 output is unstable and showing significant noise above 20 MHz. Amplitude is also inconsistent.',
     status: 'In Progress',
-    assignedTechnicianId: 'u3', // Technician Third
+    assignedTechnicianId: 'u3',
     assignedTechnicianName: initialMockUsers[2].name,
     dateReported: subDays(today, 5).toISOString(),
     resolutionNotes: 'Replaced output amplifier IC for Channel 2. Calibrating now.'
   },
   {
     id: 'mr2',
-    resourceId: 'res1', // Keysight MSOX3054T Oscilloscope
+    resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    reportedByUserId: 'u2', // Dr. Manager Second
+    reportedByUserId: 'u2',
     reportedByUserName: initialMockUsers[1].name,
     issueDescription: 'The touchscreen is unresponsive in the lower-left quadrant. Makes it difficult to access some menus.',
     status: 'Open',
@@ -321,13 +333,13 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
   },
   {
     id: 'mr3',
-    resourceId: 'res5', // Weller WE1010NA Digital Soldering Station
+    resourceId: 'res5',
     resourceName: 'Weller WE1010NA Digital Soldering Station',
-    reportedByUserId: 'u3', // Technician Third
+    reportedByUserId: 'u3',
     reportedByUserName: initialMockUsers[2].name,
     issueDescription: 'Heating element failed. Station does not heat up to set temperature.',
     status: 'Resolved',
-    assignedTechnicianId: 'u5', // Lead Technician Fifth
+    assignedTechnicianId: 'u5',
     assignedTechnicianName: initialMockUsers[4].name,
     dateReported: subDays(today, 10).toISOString(),
     dateResolved: subDays(today, 8).toISOString(),
@@ -335,8 +347,6 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
   },
 ];
 
-
-// Mock Notifications
 export let initialNotifications: Notification[] = [
   {
     id: 'n1',
@@ -380,8 +390,6 @@ export let initialNotifications: Notification[] = [
   },
 ];
 
-
-// Helper function to add notifications
 export function addNotification(
   userId: string,
   title: string,
@@ -399,5 +407,5 @@ export function addNotification(
     createdAt: new Date().toISOString(),
     linkTo,
   };
-  initialNotifications.unshift(newNotification); // Add to the beginning of the array
+  initialNotifications.unshift(newNotification);
 }

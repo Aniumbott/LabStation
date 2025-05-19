@@ -16,6 +16,18 @@ export interface RemoteAccessDetails {
   notes?: string;
 }
 
+export interface AvailabilitySlot {
+  date: string; // YYYY-MM-DD
+  slots: string[]; // e.g., ["09:00-12:00", "13:00-17:00"]
+}
+
+export interface UnavailabilityPeriod {
+  id: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
+  reason?: string;
+}
+
 export interface Resource {
   id: string;
   name: string;
@@ -26,7 +38,8 @@ export interface Resource {
   description: string;
   imageUrl: string;
   features?: string[];
-  availability?: { date: string; slots: string[] }[];
+  availability?: AvailabilitySlot[];
+  unavailabilityPeriods?: UnavailabilityPeriod[];
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
@@ -43,7 +56,7 @@ export interface Booking {
   userName: string;
   startTime: Date;
   endTime: Date;
-  status: 'Confirmed' | 'Pending' | 'Cancelled'; // 'Pending' will mean pending approval
+  status: 'Confirmed' | 'Pending' | 'Cancelled';
   notes?: string;
 }
 
@@ -84,11 +97,11 @@ export type NotificationType =
 
 export interface Notification {
   id: string;
-  userId: string; // For whom the notification is
+  userId: string;
   title: string;
   message: string;
   type: NotificationType;
   isRead: boolean;
   createdAt: string; // ISO string
-  linkTo?: string; // Optional link for action, e.g., to view the specific booking
+  linkTo?: string;
 }
