@@ -40,6 +40,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger, // Added DialogTrigger
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { UserFormDialog, UserFormValues } from '@/components/admin/user-form-dialog';
@@ -167,7 +168,9 @@ export default function UsersPage() {
   const handleSaveUser = (data: UserFormValues) => {
     if (editingUser) { 
       const updatedUser = { ...editingUser, ...data, avatarUrl: editingUser.avatarUrl || 'https://placehold.co/100x100.png' };
-      setUsers(users.map(u => u.id === editingUser.id ? updatedUser : u));
+      const updatedUsersList = users.map(u => u.id === editingUser.id ? updatedUser : u);
+      setUsers(updatedUsersList);
+      
       const globalIndex = initialMockUsers.findIndex(u => u.id === editingUser.id);
       if (globalIndex !== -1) initialMockUsers[globalIndex] = updatedUser;
 
@@ -180,9 +183,10 @@ export default function UsersPage() {
         id: `u${initialMockUsers.length + 1 + Date.now()}`,
         ...data,
         avatarUrl: 'https://placehold.co/100x100.png',
-        status: 'active', // New users created by admin are active by default
+        status: 'active', 
       };
-      setUsers(prevUsers => [newUser, ...prevUsers].sort((a, b) => a.name.localeCompare(b.name)));
+      const updatedUsersList = [newUser, ...users].sort((a, b) => a.name.localeCompare(b.name));
+      setUsers(updatedUsersList);
       initialMockUsers.push(newUser); 
       initialMockUsers.sort((a, b) => {
         if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
