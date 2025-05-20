@@ -18,6 +18,7 @@ import {
   Building,
   Loader2,
   UserCheck2,
+  BarChart3,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
@@ -31,8 +32,8 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarInset,
+  SidebarSeparator,
 } from '@/components/ui/sidebar';
-import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/icons/logo';
 import { MobileSidebarToggle } from './MobileSidebarToggle';
@@ -50,11 +51,11 @@ const PUBLIC_ROUTES = ['/login', '/signup'];
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/admin/resources', label: 'Resources', icon: ClipboardList, allowedRoles: ['Admin', 'Lab Manager', 'Technician', 'Researcher']},
-  { href: '/bookings', label: 'Bookings', icon: CalendarDays, allowedRoles: ['Admin', 'Lab Manager', 'Technician', 'Researcher']},
-  { href: '/notifications', label: 'Notifications', icon: Bell, allowedRoles: ['Admin', 'Lab Manager', 'Technician', 'Researcher']},
-  { href: '/profile', label: 'My Profile', icon: UserCog, allowedRoles: ['Admin', 'Lab Manager', 'Technician', 'Researcher'] },
-  { href: '/maintenance', label: 'Maintenance', icon: Wrench, allowedRoles: ['Admin', 'Lab Manager', 'Technician', 'Researcher']},
+  { href: '/admin/resources', label: 'Resources', icon: ClipboardList},
+  { href: '/bookings', label: 'Bookings', icon: CalendarDays},
+  { href: '/notifications', label: 'Notifications', icon: Bell },
+  { href: '/profile', label: 'My Profile', icon: UserCog },
+  { href: '/maintenance', label: 'Maintenance', icon: Wrench},
   {
     href: '/admin/booking-requests',
     label: 'Booking Requests',
@@ -79,6 +80,12 @@ const navItems: NavItem[] = [
     icon: ListChecks,
     allowedRoles: ['Admin'],
   },
+  {
+    href: '/admin/reports',
+    label: 'Reports',
+    icon: BarChart3,
+    allowedRoles: ['Admin', 'Lab Manager'],
+  },
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {
@@ -93,9 +100,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const visibleNavItems = useMemo(() => {
     if (!currentUser) {
-      // For unauthenticated users, only show items without specific allowedRoles
-      // or items explicitly for non-logged-in states if we had them.
-      // For now, this likely means an empty list or specific public nav items if any were defined.
       return navItems.filter(item => !item.allowedRoles || item.allowedRoles.length === 0);
     }
     return navItems.filter(item => {
@@ -122,15 +126,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // If not authenticated but on a public route (e.g., /login page itself),
-  // render only the children (the page content) without the main app layout.
   if (!currentUser && PUBLIC_ROUTES.includes(pathname)) {
     return <>{children}</>;
   }
 
-  // If not authenticated and not on a public route, the useEffect above should have redirected.
-  // If for some reason redirection is pending or currentUser is null when not expected,
-  // showing a loader or minimal message might be better than rendering a broken layout.
   if (!currentUser && !PUBLIC_ROUTES.includes(pathname)) {
      return (
       <div className="flex flex-col items-center justify-center min-h-svh bg-background text-muted-foreground">
@@ -146,7 +145,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <SidebarHeader className="p-4">
           <Logo />
         </SidebarHeader>
-        <Separator className="my-1 bg-sidebar-border" />
+        <SidebarSeparator />
         <SidebarContent>
           <SidebarMenu>
             {visibleNavItems.map((item) => (
@@ -178,3 +177,5 @@ export function AppLayout({ children }: { children: ReactNode }) {
     </SidebarProvider>
   );
 }
+
+    

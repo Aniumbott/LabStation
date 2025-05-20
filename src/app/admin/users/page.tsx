@@ -49,10 +49,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { initialMockUsers, mockApproveSignup, mockRejectSignup, addNotification } from '@/lib/mock-data';
+import { initialMockUsers, mockApproveSignup, mockRejectSignup, addNotification, userRolesList } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 
-const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
 const userStatusesList: (UserStatus | 'all')[] = ['all', 'active', 'pending_approval', 'suspended'];
 
 
@@ -151,8 +150,8 @@ export default function UsersPage() {
     setActiveSearchTerm('');
     setActiveFilterRole('all');
     setActiveFilterStatus('all');
-    resetDialogFilters();
-    setIsFilterDialogOpen(false);
+    resetDialogFilters(); // Resets temp filters in dialog
+    setIsFilterDialogOpen(false); // Close dialog if open
   };
 
   const handleOpenNewUserDialog = () => {
@@ -183,7 +182,7 @@ export default function UsersPage() {
         id: `u${initialMockUsers.length + 1 + Date.now()}`,
         ...data,
         avatarUrl: 'https://placehold.co/100x100.png',
-        status: 'active',
+        status: 'active', // New users created by admin are active by default
       };
       const updatedUsersList = [newUser, ...users].sort((a, b) => {
         if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
@@ -267,7 +266,7 @@ export default function UsersPage() {
 
   const activeFilterCount = [activeSearchTerm !== '', activeFilterRole !== 'all', activeFilterStatus !== 'all'].filter(Boolean).length;
   const canAddUsers = currentUser?.role === 'Admin';
-  const canManageUsers = currentUser?.role === 'Admin';
+  const canManageUsers = currentUser?.role === 'Admin'; // For edit/delete of active users
   const canApproveRejectSignups = currentUser?.role === 'Admin';
 
 
@@ -278,7 +277,7 @@ export default function UsersPage() {
         description="View, add, and manage user accounts, roles, and signup requests."
         icon={UsersIconLucide}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
@@ -505,19 +504,18 @@ export default function UsersPage() {
             <p className="text-sm mb-4">
                 {activeFilterCount > 0
                     ? "Try adjusting your search or filter criteria."
-                    : "There are currently no users in the system. Add one to get started!"
+                    : (canAddUsers ? "There are currently no users in the system. Add one to get started!" : "There are currently no users matching this criteria.")
                 }
             </p>
-            {activeFilterCount > 0 ? (
+            {activeFilterCount > 0 && (
                 <Button variant="outline" onClick={resetAllActivePageFilters}>
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
-            ) : (
-              canAddUsers && (
+            )}
+            {activeFilterCount === 0 && !filteredUsers.length && canAddUsers && (
                 <Button onClick={handleOpenNewUserDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First User
                 </Button>
-              )
             )}
           </CardContent>
         </Card>
@@ -531,3 +529,5 @@ export default function UsersPage() {
     </div>
   );
 }
+
+    
