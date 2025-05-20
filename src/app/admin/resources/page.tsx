@@ -60,17 +60,20 @@ export default function ResourcesPage() {
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
+  // Active filters for the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterTypeId, setActiveFilterTypeId] = useState<string>('all');
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
 
-  const [tempSearchTerm, setTempSearchTerm] = useState('');
-  const [tempFilterTypeId, setTempFilterTypeId] = useState<string>('all');
-  const [tempFilterLab, setTempFilterLab] = useState<string>('all');
-  const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(undefined);
-  const [currentMonthInDialog, setCurrentMonthInDialog] = useState<Date>(startOfDay(new Date()));
+  // Filter Dialog State
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+  const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
+  const [tempFilterTypeId, setTempFilterTypeId] = useState<string>(activeFilterTypeId);
+  const [tempFilterLab, setTempFilterLab] = useState<string>(activeFilterLab);
+  const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(activeSelectedDate);
+  const [currentMonthInDialog, setCurrentMonthInDialog] = useState<Date>(startOfDay(new Date()));
+
 
   useEffect(() => {
     if (isFilterDialogOpen) {
@@ -119,7 +122,7 @@ export default function ResourcesPage() {
     return currentResources.sort((a,b) => a.name.localeCompare(b.name));
   }, [resources, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
 
-  const handleApplyFilters = () => {
+  const handleApplyDialogFilters = () => {
     setActiveSearchTerm(tempSearchTerm);
     setActiveFilterTypeId(tempFilterTypeId);
     setActiveFilterLab(tempFilterLab);
@@ -135,7 +138,7 @@ export default function ResourcesPage() {
     setCurrentMonthInDialog(startOfDay(new Date()));
   };
 
-  const resetAllActiveFilters = () => {
+  const resetAllActivePageFilters = () => {
     setActiveSearchTerm('');
     setActiveFilterTypeId('all');
     setActiveFilterLab('all');
@@ -182,7 +185,7 @@ export default function ResourcesPage() {
       });
     } else {
       const newResource: Resource = {
-        id: `res${resources.length + 1 + Date.now()}`,
+        id: `res${allAdminMockResources.length + 1 + Date.now()}`,
         name: data.name,
         resourceTypeId: data.resourceTypeId,
         resourceTypeName: resourceType.name,
@@ -321,13 +324,13 @@ export default function ResourcesPage() {
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={handleApplyFilters}>Apply Filters</Button>
+                  <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
             {canAddResources && (
                 <Button onClick={handleOpenNewDialog}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Add
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add
                 </Button>
             )}
           </div>
@@ -401,7 +404,7 @@ export default function ResourcesPage() {
                 }
             </p>
             {activeFilterCount > 0 ? (
-                <Button variant="outline" onClick={resetAllActiveFilters}>
+                <Button variant="outline" onClick={resetAllActivePageFilters}>
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             ) : (
@@ -426,4 +429,3 @@ export default function ResourcesPage() {
     </div>
   );
 }
-    

@@ -60,9 +60,12 @@ export default function BlackoutDatesPage() {
   const [isDateFormDialogOpen, setIsDateFormDialogOpen] = useState(false);
   const [editingBlackoutDate, setEditingBlackoutDate] = useState<BlackoutDate | null>(null);
   const [dateToDelete, setDateToDelete] = useState<BlackoutDate | null>(null);
+  
+  // Specific Date Filter Dialog State
+  const [isDateFilterDialogOpen, setIsDateFilterDialogOpen] = useState(false);
   const [tempDateSearchTerm, setTempDateSearchTerm] = useState('');
   const [activeDateSearchTerm, setActiveDateSearchTerm] = useState('');
-  const [isDateFilterDialogOpen, setIsDateFilterDialogOpen] = useState(false);
+
 
   const [recurringRules, setRecurringRules] = useState<RecurringBlackoutRule[]>(() => JSON.parse(JSON.stringify(initialRecurringBlackoutRules)));
   const [isRecurringFormDialogOpen, setIsRecurringFormDialogOpen] = useState(false);
@@ -113,7 +116,7 @@ export default function BlackoutDatesPage() {
       });
     } else {
       const newDate: BlackoutDate = {
-        id: `bo${blackoutDates.length + 1 + Date.now()}`,
+        id: `bo${initialBlackoutDates.length + 1 + Date.now()}`,
         date: format(data.date, 'yyyy-MM-dd'),
         reason: data.reason,
       };
@@ -143,7 +146,7 @@ export default function BlackoutDatesPage() {
     setDateToDelete(null);
   };
   
-  const handleApplyDateFilters = () => {
+  const handleApplyDateDialogFilters = () => {
     setActiveDateSearchTerm(tempDateSearchTerm);
     setIsDateFilterDialogOpen(false);
   };
@@ -152,7 +155,7 @@ export default function BlackoutDatesPage() {
     setTempDateSearchTerm('');
   };
 
-  const resetAllActiveDateFilters = () => {
+  const resetAllActiveDatePageFilters = () => {
     setActiveDateSearchTerm('');
     resetDateDialogFilters();
     setIsDateFilterDialogOpen(false);
@@ -185,7 +188,7 @@ export default function BlackoutDatesPage() {
       });
     } else {
       const newRule: RecurringBlackoutRule = {
-        id: `rb${recurringRules.length + 1 + Date.now()}`,
+        id: `rb${initialRecurringBlackoutRules.length + 1 + Date.now()}`,
         ...data,
       };
       setRecurringRules(prev => [...prev, newRule].sort((a,b) => a.name.localeCompare(b.name)));
@@ -271,7 +274,7 @@ export default function BlackoutDatesPage() {
                       <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                     </Button>
                     <Button variant="outline" onClick={() => setIsDateFilterDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleApplyDateFilters}>Apply Filters</Button>
+                    <Button onClick={handleApplyDateDialogFilters}>Apply Filters</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -352,13 +355,13 @@ export default function BlackoutDatesPage() {
                 <CardContent>
                   <CalendarOff className="mx-auto h-10 w-10 mb-3 opacity-50" />
                   <p className="font-medium">
-                    {activeDateSearchTerm ? "No Blackout Dates Match Filter" : "No Specific Blackout Dates Defined"}
+                    {activeDateFilterCount > 0 ? "No Blackout Dates Match Filter" : "No Specific Blackout Dates Defined"}
                   </p>
                   <p className="text-xs mb-3">
-                    {activeDateSearchTerm ? "Try adjusting your search criteria." : "Add individual lab-wide closure dates here."}
+                    {activeDateFilterCount > 0 ? "Try adjusting your search criteria." : "Add individual lab-wide closure dates here."}
                   </p>
-                  {activeDateSearchTerm ? (
-                    <Button variant="outline" size="sm" onClick={resetAllActiveDateFilters}>
+                  {activeDateFilterCount > 0 ? (
+                    <Button variant="outline" size="sm" onClick={resetAllActiveDatePageFilters}>
                       <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                     </Button>
                   ) : (
@@ -491,4 +494,3 @@ export default function BlackoutDatesPage() {
     </TooltipProvider>
   );
 }
-    

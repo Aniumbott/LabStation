@@ -59,10 +59,13 @@ export default function ResourceTypesPage() {
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingType, setEditingType] = useState<ResourceType | null>(null);
 
+  // Active filters for the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
 
-  const [tempSearchTerm, setTempSearchTerm] = useState('');
+  // Filter Dialog State
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+  const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
+
 
   useEffect(() => {
     if (isFilterDialogOpen) {
@@ -82,7 +85,7 @@ export default function ResourceTypesPage() {
     return currentTypes.sort((a, b) => a.name.localeCompare(b.name));
   }, [resourceTypes, activeSearchTerm]);
 
-  const handleApplyFilters = () => {
+  const handleApplyDialogFilters = () => {
     setActiveSearchTerm(tempSearchTerm);
     setIsFilterDialogOpen(false);
   };
@@ -91,7 +94,7 @@ export default function ResourceTypesPage() {
     setTempSearchTerm('');
   };
 
-  const resetAllActiveFilters = () => {
+  const resetAllActivePageFilters = () => {
     setActiveSearchTerm('');
     resetDialogFilters();
     setIsFilterDialogOpen(false);
@@ -121,7 +124,7 @@ export default function ResourceTypesPage() {
       });
     } else {
       const newType: ResourceType = {
-        id: `rt${resourceTypes.length + 1 + Date.now()}`,
+        id: `rt${initialMockResourceTypes.length + 1 + Date.now()}`,
         ...data,
       };
       setResourceTypes(prevTypes => [...prevTypes, newType].sort((a, b) => a.name.localeCompare(b.name)));
@@ -207,7 +210,7 @@ export default function ResourceTypesPage() {
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={handleApplyFilters}>Apply Filters</Button>
+                  <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -299,7 +302,7 @@ export default function ResourceTypesPage() {
                 }
             </p>
             {activeSearchTerm && (
-                <Button variant="outline" onClick={resetAllActiveFilters}>
+                <Button variant="outline" onClick={resetAllActivePageFilters}>
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             )}
@@ -321,4 +324,3 @@ export default function ResourceTypesPage() {
     </TooltipProvider>
   );
 }
-    

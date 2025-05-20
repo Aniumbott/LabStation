@@ -40,7 +40,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { UserFormDialog, UserFormValues } from '@/components/admin/user-form-dialog';
@@ -75,8 +74,8 @@ const getRoleBadgeVariant = (role: RoleName): "default" | "secondary" | "destruc
 
 const getStatusBadgeVariant = (status: UserStatus): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
-      case 'active': return 'default'; 
-      case 'pending_approval': return 'secondary'; 
+      case 'active': return 'default';
+      case 'pending_approval': return 'secondary';
       case 'suspended': return 'destructive';
       default: return 'outline';
     }
@@ -92,14 +91,17 @@ export default function UsersPage() {
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
+  // Active filters for the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterRole, setActiveFilterRole] = useState<RoleName | 'all'>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<UserStatus | 'all'>('all');
 
-  const [tempSearchTerm, setTempSearchTerm] = useState('');
-  const [tempFilterRole, setTempFilterRole] = useState<RoleName | 'all'>('all');
-  const [tempFilterStatus, setTempFilterStatus] = useState<UserStatus | 'all'>('all');
+  // Filter Dialog State
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+  const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
+  const [tempFilterRole, setTempFilterRole] = useState<RoleName | 'all'>(activeFilterRole);
+  const [tempFilterStatus, setTempFilterStatus] = useState<UserStatus | 'all'>(activeFilterStatus);
+
 
   useEffect(() => {
     if (isFilterDialogOpen) {
@@ -131,7 +133,7 @@ export default function UsersPage() {
     });
   }, [users, activeSearchTerm, activeFilterRole, activeFilterStatus]);
 
-  const handleApplyFilters = () => {
+  const handleApplyDialogFilters = () => {
     setActiveSearchTerm(tempSearchTerm);
     setActiveFilterRole(tempFilterRole);
     setActiveFilterStatus(tempFilterStatus);
@@ -144,7 +146,7 @@ export default function UsersPage() {
     setTempFilterStatus('all');
   };
   
-  const resetAllActiveFilters = () => {
+  const resetAllActivePageFilters = () => {
     setActiveSearchTerm('');
     setActiveFilterRole('all');
     setActiveFilterStatus('all');
@@ -175,14 +177,18 @@ export default function UsersPage() {
       });
     } else { 
       const newUser: User = {
-        id: `u${users.length + 1 + Date.now()}`,
+        id: `u${initialMockUsers.length + 1 + Date.now()}`,
         ...data,
         avatarUrl: 'https://placehold.co/100x100.png',
-        status: 'active',
+        status: 'active', // New users created by admin are active by default
       };
-      setUsers(prevUsers => [...prevUsers, newUser].sort((a, b) => a.name.localeCompare(b.name)));
+      setUsers(prevUsers => [newUser, ...prevUsers].sort((a, b) => a.name.localeCompare(b.name)));
       initialMockUsers.push(newUser); 
-      initialMockUsers.sort((a, b) => a.name.localeCompare(b.name));
+      initialMockUsers.sort((a, b) => {
+        if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
+        if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
+        return a.name.localeCompare(b.name);
+      });
 
       toast({
         title: 'User Created',
@@ -333,7 +339,7 @@ export default function UsersPage() {
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={handleApplyFilters}>Apply Filters</Button>
+                  <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -495,7 +501,7 @@ export default function UsersPage() {
                 }
             </p>
             {activeFilterCount > 0 ? (
-                <Button variant="outline" onClick={resetAllActiveFilters}>
+                <Button variant="outline" onClick={resetAllActivePageFilters}>
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             ) : (
@@ -517,4 +523,3 @@ export default function UsersPage() {
     </div>
   );
 }
-    
