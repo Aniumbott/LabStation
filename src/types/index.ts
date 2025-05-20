@@ -46,7 +46,7 @@ export interface Resource {
   purchaseDate?: string; // ISO string
   notes?: string;
   remoteAccess?: RemoteAccessDetails;
-  allowQueueing?: boolean;
+  allowQueueing?: boolean; // Added for queue management
 }
 
 export interface BookingUsageDetails {
@@ -67,7 +67,7 @@ export interface Booking {
   userName: string;
   startTime: Date;
   endTime: Date;
-  status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted';
+  status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted'; // Added 'Waitlisted'
   notes?: string;
   usageDetails?: BookingUsageDetails;
 }
@@ -96,7 +96,7 @@ export interface MaintenanceRequest {
   issueDescription: string;
   status: MaintenanceRequestStatus;
   assignedTechnicianId?: string;
-  assignedTechnicianName?: string;
+  assignedTechnicianName?: string; // Denormalized
   dateReported: string; // ISO string
   dateResolved?: string; // ISO string
   resolutionNotes?: string;
@@ -106,12 +106,14 @@ export type NotificationType =
   | 'booking_confirmed'
   | 'booking_pending_approval'
   | 'booking_rejected'
-  | 'booking_waitlisted'
+  | 'booking_waitlisted' // Existing, can be used when user is initially waitlisted
   | 'maintenance_new'
   | 'maintenance_assigned'
   | 'maintenance_resolved'
   | 'signup_approved'
-  | 'signup_pending_admin';
+  | 'signup_pending_admin'
+  | 'booking_promoted_user'   // New: For user whose booking is promoted
+  | 'booking_promoted_admin'; // New: For admin when a booking is promoted
 
 export interface Notification {
   id: string;

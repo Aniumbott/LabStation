@@ -14,7 +14,7 @@ const nextWeekStr = format(addDays(today, 7), 'yyyy-MM-dd');
 const tenDaysLaterStr = format(addDays(today, 10), 'yyyy-MM-dd');
 
 
-export const initialMockResourceTypes: ResourceType[] = [
+export let initialMockResourceTypes: ResourceType[] = [
   { id: 'rt1', name: 'Oscilloscope', description: 'For visualizing voltage signals over time.' },
   { id: 'rt2', name: 'Power Supply', description: 'Provides DC or AC power to test circuits.' },
   { id: 'rt3', name: 'Function Generator', description: 'Generates various types of electrical waveforms.' },
@@ -39,7 +39,7 @@ export let allAdminMockResources: Resource[] = [
     resourceTypeId: 'rt1',
     resourceTypeName: 'Oscilloscope',
     lab: 'Electronics Lab 1',
-    status: 'Available',
+    status: 'Available', // Initially available
     manufacturer: 'Keysight Technologies',
     model: 'MSOX3054T',
     serialNumber: 'MY58012345',
@@ -48,8 +48,9 @@ export let allAdminMockResources: Resource[] = [
     imageUrl: 'https://placehold.co/300x200.png',
     features: ['500 MHz Bandwidth', '4 Analog Channels', '16 Digital Channels', 'WaveGen', 'Serial Decode'],
     availability: [
-      { date: todayStr, slots: ['14:00-16:00', '16:00-18:00'] },
-      { date: tomorrowStr, slots: ['10:00-12:00', '09:00-17:00'] }
+      { date: todayStr, slots: ['09:00-12:00', '13:00-17:00'] },
+      { date: tomorrowStr, slots: ['09:00-12:00', '13:00-17:00'] },
+      { date: dayAfterTomorrowStr, slots: ['09:00-17:00'] },
     ],
     unavailabilityPeriods: [
       { id: 'unavail1-1', startDate: format(addDays(today, 15), 'yyyy-MM-dd'), endDate: format(addDays(today, 20), 'yyyy-MM-dd'), reason: 'Annual Calibration' }
@@ -77,6 +78,7 @@ export let allAdminMockResources: Resource[] = [
     imageUrl: 'https://placehold.co/300x200.png',
     features: ['3 Channels', 'Programmable', 'Overvoltage Protection', 'LAN Interface'],
     availability: [
+      { date: todayStr, slots: ['09:00-17:00'] },
       { date: tomorrowStr, slots: ['09:00-11:00', '11:00-13:00'] },
       { date: dayAfterTomorrowStr, slots: ['10:00-17:00'] }
     ],
@@ -154,7 +156,7 @@ export let allAdminMockResources: Resource[] = [
     resourceTypeId: 'rt5',
     resourceTypeName: 'Digital Multimeter (DMM)',
     lab: 'General Test Area',
-    status: 'Booked',
+    status: 'Available', // Changed from Booked to Available for testing queue
     manufacturer: 'Fluke Corporation',
     model: '87V',
     serialNumber: 'FLUKE-87V-011',
@@ -163,10 +165,11 @@ export let allAdminMockResources: Resource[] = [
     imageUrl: 'https://placehold.co/300x200.png',
     features: ['True-RMS AC Voltage/Current', 'Temperature Measurement (with probe)', 'CAT III 1000V, CAT IV 600V Safety Rating'],
     availability: [
+      { date: todayStr, slots: ['09:00-17:00'] },
       { date: dayAfterTomorrowStr, slots: ['09:00-17:00'] }
     ],
     unavailabilityPeriods: [],
-    allowQueueing: true,
+    allowQueueing: true, // Allow queueing for this DMM
   },
   {
     id: 'res7',
@@ -229,27 +232,43 @@ export let initialMockUsers: User[] = [
   { id: 'u3', name: 'Technician Third', email: 'tech.third@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
   { id: 'u4', name: 'Researcher Fourth', email: 'researcher.fourth@labstation.com', role: 'Researcher', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
   { id: 'u5', name: 'Lead Technician Fifth', email: 'lead.tech@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
-  { id: 'u6', name: 'Penny Pending', email: 'penny@example.com', role: 'Researcher', status: 'pending_approval', password: 'password', avatarUrl: 'https://placehold.co/100x100.png' }
+  { id: 'u6', name: 'Penny Pending', email: 'penny@example.com', role: 'Researcher', status: 'pending_approval', password: 'password', avatarUrl: 'https://placehold.co/100x100.png' },
+  { id: 'u7', name: 'Walter Waitlist', email: 'walter@example.com', role: 'Researcher', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
 ];
 
 export let initialBookings: Booking[] = [
-  {
+  { // Existing confirmed booking for res1
     id: 'b1',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u4',
+    userId: 'u4', // Researcher Fourth
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
-    startTime: set(addDays(today, 2), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
-    endTime: set(addDays(today, 2), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
+    startTime: set(parseISO(tomorrowStr), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }),
+    endTime: set(parseISO(tomorrowStr), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Confirmed',
     notes: 'Debugging SPI communication on custom MCU board for Project Alpha.',
-    usageDetails: {
-        actualStartTime: set(addDays(today, 2), { hours: 10, minutes: 5, seconds: 0, milliseconds: 0 }).toISOString(),
-        actualEndTime: set(addDays(today, 2), { hours: 11, minutes: 55, seconds: 0, milliseconds: 0 }).toISOString(),
-        outcome: 'Success',
-        dataStorageLocation: '/project_alpha/spi_debug_run1/',
-        usageComments: 'Successfully captured SPI traces. Issue identified in CS line timing.'
-    }
+  },
+  { // Waitlisted booking for res1, same slot as b1
+    id: 'b1_wait1',
+    resourceId: 'res1',
+    resourceName: 'Keysight MSOX3054T Oscilloscope',
+    userId: 'u7', // Walter Waitlist
+    userName: initialMockUsers.find(u => u.id === 'u7')?.name || 'Walter Waitlist',
+    startTime: set(parseISO(tomorrowStr), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }),
+    endTime: set(parseISO(tomorrowStr), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
+    status: 'Waitlisted',
+    notes: 'Hoping to get on the scope if b1 cancels for Project Gamma.',
+  },
+  { // Another waitlisted booking for res1, slightly later but still potentially conflicting or next in line
+    id: 'b1_wait2',
+    resourceId: 'res1',
+    resourceName: 'Keysight MSOX3054T Oscilloscope',
+    userId: 'u2', // Dr. Manager Second
+    userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
+    startTime: set(parseISO(tomorrowStr), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
+    endTime: set(parseISO(tomorrowStr), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
+    status: 'Waitlisted',
+    notes: 'Follow-up measurements for Project Alpha.',
   },
   {
     id: 'b2',
@@ -261,17 +280,6 @@ export let initialBookings: Booking[] = [
     endTime: set(addDays(today, 3), { hours: 16, minutes: 0, seconds: 0, milliseconds: 0 }),
     status: 'Pending',
     notes: 'Powering up prototype device for thermal testing with new heatsink design.'
-  },
-  {
-    id: 'b3',
-    resourceId: 'res1',
-    resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u4',
-    userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
-    startTime: set(addDays(today, 1), { hours: 14, minutes: 0, seconds: 0, milliseconds: 0 }),
-    endTime: set(addDays(today, 1), { hours: 15, minutes: 0, seconds: 0, milliseconds: 0 }),
-    status: 'Pending',
-    notes: 'Quick check of clock signal jitter for new RF module. High priority.'
   },
   {
     id: 'b4',
@@ -323,17 +331,6 @@ export let initialBookings: Booking[] = [
     endTime: set(addDays(today, 4), { hours: 15, minutes: 30, seconds: 0, milliseconds: 0 }),
     status: 'Pending',
     notes: 'Need to test new HDL core for signal processing acceleration. Synthesis complete.'
-  },
-  {
-    id: 'b8',
-    resourceId: 'res1',
-    resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u2',
-    userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
-    startTime: set(addDays(today, 2), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
-    endTime: set(addDays(today, 2), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
-    status: 'Waitlisted',
-    notes: 'Hoping to get on the scope if the earlier booking finishes early.'
   },
 ];
 
@@ -392,7 +389,7 @@ export let initialNotifications: Notification[] = [
     type: 'booking_confirmed',
     isRead: false,
     createdAt: subDays(today, 0).toISOString(),
-    linkTo: `/bookings?bookingId=b1&date=${format(set(addDays(today, 2), { hours: 10, minutes: 0 }), 'yyyy-MM-dd')}`,
+    linkTo: `/bookings?bookingId=b1`,
   },
   {
     id: 'n2',
@@ -425,7 +422,53 @@ export function addNotification(
     linkTo,
   };
   initialNotifications.unshift(newNotification);
+  // In a real app, you might want to trigger a re-render of the notifications component here
+  // For mock, navigating to the notifications page will show the new one.
 }
+
+export function processQueueForResource(resourceId: string): void {
+  const resource = allAdminMockResources.find(r => r.id === resourceId);
+  if (!resource || !resource.allowQueueing) {
+    return;
+  }
+
+  // Find the earliest waitlisted booking for this resource
+  const waitlistedBookings = initialBookings
+    .filter(b => b.resourceId === resourceId && b.status === 'Waitlisted')
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+  if (waitlistedBookings.length > 0) {
+    const bookingToPromote = waitlistedBookings[0];
+    const bookingIndex = initialBookings.findIndex(b => b.id === bookingToPromote.id);
+
+    if (bookingIndex !== -1) {
+      initialBookings[bookingIndex].status = 'Pending';
+
+      // Notify the user
+      addNotification(
+        bookingToPromote.userId,
+        'Booking Promoted from Waitlist',
+        `Your waitlisted booking for ${bookingToPromote.resourceName} on ${format(new Date(bookingToPromote.startTime), 'MMM dd, HH:mm')} is now pending approval.`,
+        'booking_promoted_user',
+        `/bookings?bookingId=${bookingToPromote.id}`
+      );
+
+      // Notify admin/lab manager
+      const adminUser = initialMockUsers.find(u => u.role === 'Admin' || u.role === 'Lab Manager'); // Simplified: notify first admin/manager
+      if (adminUser) {
+        addNotification(
+          adminUser.id,
+          'Booking Promoted - Needs Approval',
+          `Booking for ${bookingToPromote.resourceName} by ${bookingToPromote.userName} (promoted from waitlist) on ${format(new Date(bookingToPromote.startTime), 'MMM dd, HH:mm')} needs approval.`,
+          'booking_promoted_admin',
+          '/admin/booking-requests'
+        );
+      }
+      console.log(`Promoted booking ${bookingToPromote.id} for resource ${resourceId} to Pending.`);
+    }
+  }
+}
+
 
 export let initialBlackoutDates: BlackoutDate[] = [
   { id: 'bo1', date: format(addDays(today, 25), 'yyyy-MM-dd'), reason: 'Lab Deep Cleaning Day' },
@@ -434,20 +477,24 @@ export let initialBlackoutDates: BlackoutDate[] = [
 
 export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = [
   { id: 'rb1', name: 'Weekend Closure', daysOfWeek: ['Saturday', 'Sunday'], reason: 'Lab closed on weekends' },
+  { id: 'rb2', name: 'Weekly Maintenance Window', daysOfWeek: ['Wednesday'], reason: 'Scheduled maintenance from 13:00-15:00' },
 ];
 
 
-export const mockLoginUser = (email: string, password?: string): User | null => {
+export const mockLoginUser = (email: string, password?: string): { success: boolean; message?: string; user?: User } => {
   const user = initialMockUsers.find(u => u.email === email && u.password === password);
   if (user) {
     if (user.status === 'pending_approval') {
-      return { ...user, status: 'pending_approval' }; // Return a different object to indicate special status
+      return { success: false, message: 'Account pending approval. Please wait for an admin.' };
     }
     if (user.status === 'active') {
-      return user;
+      return { success: true, user };
+    }
+    if (user.status === 'suspended') {
+        return { success: false, message: 'Your account has been suspended.' };
     }
   }
-  return null;
+  return { success: false, message: 'Invalid email or password.' };
 };
 
 export const mockSignupUser = (name: string, email: string, password?: string): { success: boolean; message: string; userId?: string } => {
@@ -458,8 +505,8 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
     id: `u${initialMockUsers.length + 1 + Date.now()}`,
     name,
     email,
-    password,
-    role: 'Researcher', // Default role for new signups
+    password, // In a real app, hash this
+    role: 'Researcher', // Default role
     status: 'pending_approval',
     avatarUrl: 'https://placehold.co/100x100.png'
   };
@@ -472,7 +519,7 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
         'New Signup Request',
         `User ${name} (${email}) has signed up and is awaiting approval.`,
         'signup_pending_admin',
-        '/admin/users' // Link to the users page where signups are now managed
+        '/admin/users'
     );
   }
   return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: newUser.id };
@@ -497,7 +544,7 @@ export const mockApproveSignup = (userId: string): boolean => {
 export const mockRejectSignup = (userId: string): boolean => {
   const userIndex = initialMockUsers.findIndex(u => u.id === userId && u.status === 'pending_approval');
   if (userIndex > -1) {
-    initialMockUsers.splice(userIndex, 1); // Remove the user from the array
+    initialMockUsers.splice(userIndex, 1);
     return true;
   }
   return false;

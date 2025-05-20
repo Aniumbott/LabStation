@@ -4,8 +4,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter, Clock } from 'lucide-react';
-import type { Booking } from '@/types';
-import { initialBookings, allAdminMockResources, addNotification, bookingStatusesForFilter } from '@/lib/mock-data';
+import type { Booking, Resource } from '@/types'; // Added Resource type
+import { initialBookings, allAdminMockResources, addNotification, bookingStatusesForFilter, processQueueForResource } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -57,6 +57,8 @@ export default function BookingRequestsPage() {
   const [tempFilterStatus, setTempFilterStatus] = useState<Booking['status'] | 'all'>(activeFilterStatus);
 
   useEffect(() => {
+    // This effect ensures the page reflects global changes to initialBookings if it re-renders
+    // (e.g., after a booking is promoted from waitlist by another action)
     setAllBookingsState(JSON.parse(JSON.stringify(initialBookings)));
   }, []); 
 
@@ -98,11 +100,11 @@ export default function BookingRequestsPage() {
       const updatedBookings = [...allBookingsState];
       const approvedBooking = { ...updatedBookings[bookingIndex], status: 'Confirmed' as Booking['status']};
       updatedBookings[bookingIndex] = approvedBooking;
-      setAllBookingsState(updatedBookings);
+      setAllBookingsState(updatedBookings); // Update local state
 
       const globalBookingIndex = initialBookings.findIndex(b => b.id === bookingId);
       if (globalBookingIndex !== -1) {
-        initialBookings[globalBookingIndex].status = 'Confirmed';
+        initialBookings[globalBookingIndex].status = 'Confirmed'; // Update "global" mock data
       }
       toast({
         title: 'Booking Approved',
@@ -142,6 +144,17 @@ export default function BookingRequestsPage() {
         'booking_rejected',
         `/bookings?bookingId=${rejectedBooking.id}`
       );
+
+      // Process queue if the resource allows queueing
+      const resource = allAdminMockResources.find(r => r.id === rejectedBooking.resourceId);
+      if (resource && resource.allowQueueing) {
+        processQueueForResource(rejectedBooking.resourceId);
+        // Re-fetch/re-filter bookings on this page after queue processing
+        // This timeout is a simple way to allow mock data to update and then refresh the view
+        setTimeout(() => {
+             setAllBookingsState(JSON.parse(JSON.stringify(initialBookings)));
+        }, 100);
+      }
     }
   };
   

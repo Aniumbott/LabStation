@@ -32,7 +32,7 @@ import { BookingDetailsDialog } from '@/components/bookings/booking-details-dial
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { allAdminMockResources, initialBookings, addNotification, initialBlackoutDates, initialRecurringBlackoutRules, bookingStatusesForFilter, bookingStatusesForForm } from '@/lib/mock-data';
+import { allAdminMockResources, initialBookings, addNotification, initialBlackoutDates, initialRecurringBlackoutRules, bookingStatusesForFilter, bookingStatusesForForm, processQueueForResource } from '@/lib/mock-data';
 import { useForm, FormProvider, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -55,14 +55,12 @@ function BookingsPageContent() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { currentUser } = useAuth();
-
-  const [allUserBookings, setAllUserBookings] = useState<Booking[]>([]);
   
+  // All hooks must be at the top level
+  const [allUserBookings, setAllUserBookings] = useState<Booking[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentBooking, setCurrentBooking] = useState<Partial<Booking> & { resourceId?: string } | null>(null);
-
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-  
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<Booking['status'] | 'all'>('all');
@@ -80,15 +78,10 @@ function BookingsPageContent() {
   const [tempFilterStatus, setTempFilterStatus] = useState<Booking['status'] | 'all'>(activeFilterStatus);
   const [tempSelectedDateInDialog, setTempSelectedDateInDialog] = useState<Date | undefined>(activeSelectedDate);
   const [currentCalendarMonthInDialog, setCurrentCalendarMonthInDialog] = useState<Date>(activeSelectedDate || startOfDay(new Date()));
-
   const [isClient, setIsClient] = useState(false);
   const [selectedBookingForDetails, setSelectedBookingForDetails] = useState<Booking | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-  
   const handleOpenForm = useCallback((bookingToEdit?: Booking, resourceIdForNew?: string | null, dateForNew?: Date | null) => {
     if (!currentUser) {
         toast({ title: "Login Required", description: "You need to be logged in to create or edit bookings.", variant: "destructive" });
@@ -105,6 +98,7 @@ function BookingsPageContent() {
             baseDateForNewBooking = startOfDay(new Date());
         }
     }
+    // Default to 9 AM on the determined base date
     const defaultStartTime = set(new Date(baseDateForNewBooking), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 });
 
     let bookingData: Partial<Booking> & { resourceId?: string };
@@ -112,15 +106,15 @@ function BookingsPageContent() {
     if (bookingToEdit) {
         bookingData = {
           ...bookingToEdit,
-          startTime: new Date(bookingToEdit.startTime),
-          endTime: new Date(bookingToEdit.endTime),
+          startTime: new Date(bookingToEdit.startTime), // Ensure it's a Date object
+          endTime: new Date(bookingToEdit.endTime),     // Ensure it's a Date object
           userName: bookingToEdit.userName || currentUser.name
         };
     } else {
         const initialResourceId = resourceIdForNew || (allAdminMockResources.length > 0 ? allAdminMockResources.find(r => r.status === 'Available')?.id || allAdminMockResources[0].id : '');
         bookingData = {
             startTime: defaultStartTime, 
-            endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000), 
+            endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000), // Default 2 hour duration
             userName: currentUser.name,
             userId: currentUser.id,
             resourceId: initialResourceId,
@@ -131,7 +125,10 @@ function BookingsPageContent() {
     setIsFormOpen(true);
   }, [activeSelectedDate, currentUser, toast, setIsFormOpen, setCurrentBooking]);
 
-
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+  
   useEffect(() => {
     if (currentUser) {
       setAllUserBookings(JSON.parse(JSON.stringify(initialBookings.filter(b => b.userId === currentUser.id))));
@@ -268,11 +265,12 @@ function BookingsPageContent() {
 
   const formKey = useMemo(() => {
     if (!isFormOpen) return 'closed';
-    let keyParts = [];
+    let keyParts = ['booking-form']; // Base key
     if (currentBooking?.id) {
       keyParts.push(`edit-${currentBooking.id}`);
+      // Add a timestamp from startTime to force re-render if only time changes but not date
       if (currentBooking.startTime && isValidDate(new Date(currentBooking.startTime))) {
-         keyParts.push(new Date(currentBooking.startTime).toISOString().split('T')[0]);
+         keyParts.push(new Date(currentBooking.startTime).toISOString());
       }
     } else {
       keyParts.push('new');
@@ -296,6 +294,7 @@ function BookingsPageContent() {
     if (isFormOpen && currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime))) {
       return format(new Date(currentBooking.startTime), "PPP");
     }
+    // Fallback if currentBooking.startTime is not set yet (e.g. for a new booking from URL with just resourceId)
     else if (isFormOpen && !currentBooking?.id && activeSelectedDate && isValidDate(activeSelectedDate) ){
        return format(activeSelectedDate, "PPP");
     }
@@ -311,7 +310,7 @@ function BookingsPageContent() {
     return (
         <div className="space-y-8">
             <PageHeader title="Manage Bookings" description="Please log in to manage your bookings." icon={CalendarDays} />
-            <Card className="text-center py-10 text-muted-foreground">
+            <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
                 <CardContent>
                     <Info className="mx-auto h-12 w-12 mb-4 opacity-50" />
                     <p className="text-lg font-medium">Login Required</p>
@@ -338,7 +337,7 @@ function BookingsPageContent() {
     const proposedStartTime = new Date(formData.startTime);
     const proposedEndTime = new Date(formData.endTime);
 
-    if (isBefore(proposedStartTime, startOfDay(new Date())) && !currentBooking?.id) {
+    if (isBefore(proposedStartTime, startOfDay(new Date())) && !currentBooking?.id) { // Check if it's a new booking for the past
        toast({ title: "Invalid Date", description: "Cannot create new bookings for past dates.", variant: "destructive" }); return;
     }
 
@@ -372,12 +371,13 @@ function BookingsPageContent() {
     if (resource.unavailabilityPeriods && resource.unavailabilityPeriods.length > 0) {
       for (const period of resource.unavailabilityPeriods) {
         const unavailabilityStart = startOfDay(parseISO(period.startDate));
-        const unavailabilityEnd = addDays(startOfDay(parseISO(period.endDate)),1); 
+        // Ensure end date covers the entire day by setting time to end of day or adding 1 day to startOfDay
+        const unavailabilityEnd = addDays(startOfDay(parseISO(period.endDate)),1); // Check up to the beginning of the day AFTER the end date
 
         if (
-          (proposedStartTime >= unavailabilityStart && proposedStartTime < unavailabilityEnd) || 
-          (proposedEndTime > unavailabilityStart && proposedEndTime <= unavailabilityEnd) ||     
-          (proposedStartTime <= unavailabilityStart && proposedEndTime >= unavailabilityEnd)      
+          (proposedStartTime >= unavailabilityStart && proposedStartTime < unavailabilityEnd) || // Starts within period
+          (proposedEndTime > unavailabilityStart && proposedEndTime <= unavailabilityEnd) ||     // Ends within period
+          (proposedStartTime <= unavailabilityStart && proposedEndTime >= unavailabilityEnd)      // Engulfs period
         ) {
           toast({ 
             title: "Resource Unavailable", 
@@ -393,20 +393,22 @@ function BookingsPageContent() {
     const proposedDateStr = format(proposedStartTime, 'yyyy-MM-dd');
     const resourceDayAvailability = resource.availability?.find(avail => avail.date === proposedDateStr);
 
-    if (resource.status !== 'Available') {
+    if (resource.status !== 'Available') { // This check might be redundant if availability implies status, but good for clarity
         toast({ title: "Resource Not Available", description: `${resource.name} is currently ${resource.status.toLowerCase()} and cannot be booked.`, variant: "destructive", duration: 7000 });
         return;
     }
 
+    // This is crucial: if no specific slots defined for a day, it's considered unavailable unless globally stated otherwise (which we don't have yet).
     if (!resourceDayAvailability || resourceDayAvailability.slots.length === 0) {
         toast({ title: "Resource Unavailable", description: `${resource.name} is not scheduled to be available on ${format(proposedStartTime, 'PPP')}. Please check resource availability settings.`, variant: "destructive", duration: 7000 });
         return;
     }
 
+    // Check if proposed time is within any available slot
     let isWithinAvailableSlot = false;
     for (const slot of resourceDayAvailability.slots) {
         const [slotStartStr, slotEndStr] = slot.split('-');
-        if (!slotStartStr || !slotEndStr) continue;
+        if (!slotStartStr || !slotEndStr) continue; // Skip malformed slots
 
         const slotStartHours = parseInt(slotStartStr.split(':')[0]);
         const slotStartMinutes = parseInt(slotStartStr.split(':')[1]);
@@ -430,32 +432,35 @@ function BookingsPageContent() {
         return;
     }
 
+    // Check for conflicts with other existing bookings
     const conflictingBooking = initialBookings.find(existingBooking => {
-        if (existingBooking.resourceId !== formData.resourceId) return false;
-        if (existingBooking.status === 'Cancelled') return false;
+        if (existingBooking.resourceId !== formData.resourceId) return false; // Different resource
+        if (existingBooking.status === 'Cancelled') return false; // Ignore cancelled bookings
+        // If editing, ignore conflict with the booking itself
         if (currentBooking && currentBooking.id && existingBooking.id === currentBooking.id) return false; 
 
         const existingStartTime = new Date(existingBooking.startTime);
         const existingEndTime = new Date(existingBooking.endTime);
 
+        // Check for overlap: (StartA < EndB) and (EndA > StartB)
         return (proposedStartTime < existingEndTime && proposedEndTime > existingStartTime);
     });
 
     if (conflictingBooking) {
         if (resource.allowQueueing) {
             const waitlistedBooking: Booking = {
-                ...(currentBooking || {}),
-                ...formData,
+                ...(currentBooking || {}), // spread existing fields if editing, or empty object if new
+                ...formData, // spread new form data
                 id: currentBooking?.id || `b${initialBookings.length + 1 + Date.now()}`,
                 userId: currentUser.id,
                 userName: currentUser.name,
-                startTime: proposedStartTime,
-                endTime: proposedEndTime,
+                startTime: proposedStartTime, // ensure Date object
+                endTime: proposedEndTime,     // ensure Date object
                 resourceName: resource.name,
-                status: 'Waitlisted',
+                status: 'Waitlisted', // Set to waitlisted
             } as Booking;
 
-            const updatedAllUserBookings = [...allUserBookings, waitlistedBooking].sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+            const updatedAllUserBookings = [...allUserBookings.filter(b => b.id !== waitlistedBooking.id), waitlistedBooking].sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
             setAllUserBookings(updatedAllUserBookings);
             
             const globalIndex = initialBookings.findIndex(b => b.id === waitlistedBooking.id);
@@ -505,22 +510,37 @@ function BookingsPageContent() {
       setAllUserBookings(updatedAllUserBookings);
       initialBookings.push(newBookingData); 
       toast({ title: "Success", description: "Booking created and submitted for approval."});
-      addNotification(
-        'u1', 
-        'New Booking Request',
-        `Booking for ${resource.name} by ${currentUser.name} on ${format(proposedStartTime, 'MMM dd, HH:mm')} needs approval.`,
-        'booking_pending_approval',
-        `/admin/booking-requests`
-      );
+      // Notify Admin/Lab Manager
+      const adminUser = initialMockUsers.find(u => u.role === 'Admin' || u.role === 'Lab Manager');
+      if(adminUser){
+         addNotification(
+            adminUser.id, 
+            'New Booking Request',
+            `Booking for ${resource.name} by ${currentUser.name} on ${format(proposedStartTime, 'MMM dd, HH:mm')} needs approval.`,
+            'booking_pending_approval',
+            `/admin/booking-requests`
+          );
+      }
     }
     setIsFormOpen(false);
   }
 
   const handleCancelBookingLocal = (bookingId: string) => {
+    const bookingToCancelIndex = allUserBookings.findIndex(b => b.id === bookingId);
+    if (bookingToCancelIndex === -1) return;
+
+    const bookingToCancel = allUserBookings[bookingToCancelIndex];
+    const resource = allAdminMockResources.find(r => r.id === bookingToCancel.resourceId);
+
     setAllUserBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'Cancelled' } : b));
     const globalIndex = initialBookings.findIndex(b => b.id === bookingId);
     if (globalIndex !== -1) initialBookings[globalIndex].status = 'Cancelled';
     toast({ title: "Info", description: "Booking cancelled."});
+
+    // Process queue if the cancelled booking was confirmed and resource allows queueing
+    if (bookingToCancel.status === 'Confirmed' && resource && resource.allowQueueing) {
+      processQueueForResource(bookingToCancel.resourceId);
+    }
   };
 
   const handleOpenDetailsDialog = (booking: Booking) => {
@@ -547,7 +567,7 @@ function BookingsPageContent() {
                 <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
                   <DialogTrigger asChild>
                       <Button variant="outline">
-                      <FilterIcon className="mr-2 h-4 w-4" /> Filters
+                      <ListFilter className="mr-2 h-4 w-4" /> Filters
                       {activeFilterCount > 0 && (
                           <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
                           {activeFilterCount}
@@ -559,7 +579,7 @@ function BookingsPageContent() {
                       <DialogHeader>
                         <DialogTitle>Filter Your Bookings</DialogTitle>
                         <DialogDescription>
-                            Refine your list of bookings.
+                            Refine your list of bookings. You can also filter by date using the calendar on the main page.
                         </DialogDescription>
                       </DialogHeader>
                       <Separator className="my-4" />
@@ -641,21 +661,19 @@ function BookingsPageContent() {
             )
         }
       />
-     <div className="grid grid-cols-1">
+     <div className="grid grid-cols-1"> {/* Single column layout for the main content card */}
         <Card className="shadow-lg">
-            <CardHeader className="border-b flex flex-row items-center justify-between">
-                <div>
-                    <CardTitle>
-                    {activeSelectedDate ? `Your Bookings for ${format(activeSelectedDate, 'PPP')}` : 'All Your Bookings'}
-                    </CardTitle>
-                    <CardDescription>
-                        Displaying {bookingsToDisplay.length} booking(s) based on active filters.
-                    </CardDescription>
-                </div>
+            <CardHeader className="border-b">
+                <CardTitle>
+                {activeSelectedDate ? `Your Bookings for ${format(activeSelectedDate, 'PPP')}` : 'All Your Bookings'}
+                </CardTitle>
+                <CardDescription>
+                    Displaying {bookingsToDisplay.length} booking(s) based on active filters.
+                </CardDescription>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0"> {/* Remove padding for table container */}
                 {bookingsToDisplay.length > 0 ? (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto"> {/* Wrapper for table responsiveness */}
                 <Table>
                     <TableHeader>
                     <TableRow>
@@ -716,7 +734,7 @@ function BookingsPageContent() {
                 </Table>
                 </div>
                 ) : (
-                <CardContent className="text-center py-10 text-muted-foreground px-6">
+                <CardContent className="text-center py-10 text-muted-foreground px-6"> {/* Restore padding for empty state */}
                     <CalendarDays className="mx-auto h-12 w-12 mb-4 opacity-50" />
                     <p className="text-lg font-medium">
                       {activeFilterCount > 0 ? 'No bookings match your current filters.' :
@@ -860,7 +878,7 @@ interface BookingFormProps {
   selectedDateProp?: Date; 
 }
 
-const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
+const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => { // 9 AM to 5 PM (17:00), 30-min intervals
     const hour = 9 + Math.floor(i / 2);
     const minute = i % 2 === 0 ? '00' : '30';
     return `${String(hour).padStart(2, '0')}:${minute}`;
@@ -873,11 +891,12 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
     if (initialData?.startTime && isValidDate(new Date(initialData.startTime))) {
       return startOfDay(new Date(initialData.startTime));
     }
-    if (selectedDateProp && isValidDate(selectedDateProp) && !initialData?.id) {
+    if (selectedDateProp && isValidDate(selectedDateProp) && !initialData?.id) { // Prioritize selectedDateProp for new bookings
       return startOfDay(selectedDateProp);
     }
     let defaultDate = startOfDay(new Date());
-    if (isBefore(defaultDate, startOfDay(new Date())) && !initialData?.id) {
+    // For new bookings, don't default to a past date even if initialData.startTime (from an old template) was past.
+    if (isBefore(defaultDate, startOfDay(new Date())) && !initialData?.id) { 
       defaultDate = startOfDay(new Date());
     }
     return defaultDate;
@@ -889,7 +908,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
       resourceId: initialData?.resourceId || (allAdminMockResources.length > 0 ? allAdminMockResources.find(r => r.status === 'Available')?.id || allAdminMockResources[0].id : ''),
       bookingDate: getInitialBookingDate(),
       startTime: initialData?.startTime ? format(new Date(initialData.startTime), 'HH:mm') : '09:00',
-      endTime: initialData?.endTime ? format(new Date(initialData.endTime), 'HH:mm') : '11:00',
+      endTime: initialData?.endTime ? format(new Date(initialData.endTime), 'HH:mm') : '11:00', // Default 2-hour booking
       status: initialData?.id ? (initialData.status || 'Pending') : 'Pending',
       notes: initialData?.notes || '',
     },
@@ -899,24 +918,33 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
   const watchBookingDate = form.watch('bookingDate');
   const watchStartTime = form.watch('startTime');
 
-  useEffect(() => {
-    if (!initialData?.id && watchBookingDate && isValidDate(watchBookingDate)) { 
-        const currentStartTimeHours = parseInt(watchStartTime.split(':')[0]);
-        const currentStartTimeMinutes = parseInt(watchStartTime.split(':')[1]);
+  // Effect to auto-update end time based on start time for new bookings, or if date changes for existing
+   useEffect(() => {
+    const currentStartTimeStr = form.getValues('startTime');
+    const currentBookingDate = form.getValues('bookingDate');
+
+    if (currentBookingDate && isValidDate(currentBookingDate) && currentStartTimeStr) {
+        const currentStartTimeHours = parseInt(currentStartTimeStr.split(':')[0]);
+        const currentStartTimeMinutes = parseInt(currentStartTimeStr.split(':')[1]);
 
         if (!isNaN(currentStartTimeHours) && !isNaN(currentStartTimeMinutes)) {
-            const newStartTime = set(new Date(watchBookingDate), { hours: currentStartTimeHours, minutes: currentStartTimeMinutes });
+            const newStartTime = set(new Date(currentBookingDate), { hours: currentStartTimeHours, minutes: currentStartTimeMinutes });
+            
+            // If it's a new booking or if the booking date changed, calculate a default duration (e.g., 2 hours)
+            // For existing bookings, if only the start time changes (not the date), we might want to preserve duration or end time.
+            // This simplified logic sets a 2-hour duration from new start time.
             let newEndTime = new Date(newStartTime.getTime() + 2 * 60 * 60 * 1000); 
 
-            const maxEndTime = set(new Date(watchBookingDate), { hours: 17, minutes: 30 });
-            if (newEndTime > maxEndTime) {
-                newEndTime = maxEndTime;
+            const maxEndTimeForDay = set(new Date(currentBookingDate), { hours: 17, minutes: 30 }); // Assuming lab closes at 17:30
+            if (newEndTime > maxEndTimeForDay) {
+                newEndTime = maxEndTimeForDay;
             }
             
-            if (newEndTime <= newStartTime && watchStartTime !== timeSlots[timeSlots.length -1]) { 
-                 const newStartTimePlus30Min = new Date(newStartTime.getTime() + 30 * 60 * 1000);
-                 if(newStartTimePlus30Min <= maxEndTime) newEndTime = newStartTimePlus30Min;
-                 else newEndTime = newStartTime; 
+            // Ensure end time is after start time, especially if start time is late in the day
+            if (newEndTime <= newStartTime && currentStartTimeStr !== timeSlots[timeSlots.length -1]) { // Avoid issues if start is last slot
+                 const newStartTimePlus30Min = new Date(newStartTime.getTime() + 30 * 60 * 1000); // Default to at least 30 min
+                 if(newStartTimePlus30Min <= maxEndTimeForDay) newEndTime = newStartTimePlus30Min;
+                 else newEndTime = newStartTime; // Can't go past max end time, so end = start if this happens (form validation will catch)
             }
             
             const formattedNewEndTime = format(newEndTime, 'HH:mm');
@@ -925,7 +953,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
             }
         }
     }
-  }, [watchStartTime, watchBookingDate, initialData?.id, form]);
+  }, [watchStartTime, watchBookingDate, form, initialData?.id]);
 
 
   function handleRHFSubmit(data: BookingFormValues) {
@@ -962,7 +990,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
     <Form {...form}>
     <form onSubmit={form.handleSubmit(handleRHFSubmit)} className="space-y-4 py-4">
       <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-1"> {/* Added py-1 for slight scrollbar padding */}
           <FormField
             control={form.control}
             name="bookingDate"
