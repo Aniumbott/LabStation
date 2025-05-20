@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from '@/components/layout/page-header';
-import { UserCog, Shield, Edit3, KeyRound, Image as ImageIcon, Save, Info } from 'lucide-react';
+import { UserCog, Shield, Edit3, KeyRound, Image as ImageIcon, Save, Info, LogOut, Loader2 } from 'lucide-react'; // Added LogOut, Loader2
 import type { User } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -22,11 +22,11 @@ import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function ProfilePage() {
-  const { currentUser, updateUserProfile, isLoading: authIsLoading } = useAuth();
+  const { currentUser, updateUserProfile, isLoading: authIsLoading, logout } = useAuth(); // Added logout
   const router = useRouter();
   const { toast } = useToast();
 
-  const [editableName, setEditableName] = useState(currentUser?.name || '');
+  const [editableName, setEditableName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -61,9 +61,15 @@ export default function ProfilePage() {
     setIsSaving(false);
   };
 
+  const handleLogout = () => {
+    logout();
+    toast({ title: "Logged Out", description: "You have been successfully logged out." });
+    router.push('/login');
+  };
+
   if (authIsLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
+      <div className="flex items-center justify-center min-h-[calc(100vh-200px)] text-muted-foreground">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
         <p className="ml-3">Loading profile...</p>
       </div>
@@ -111,7 +117,7 @@ export default function ProfilePage() {
               </Avatar>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" size="icon" className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 h-8 w-8">
+                  <Button variant="outline" size="icon" className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 h-8 w-8 cursor-not-allowed" disabled>
                       <ImageIcon className="h-4 w-4" />
                       <span className="sr-only">Change Avatar (Coming Soon)</span>
                   </Button>
@@ -147,7 +153,7 @@ export default function ProfilePage() {
                     <Input id="profileEmail" type="email" value={currentUser.email} readOnly className="bg-muted/10" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="ml-2 text-muted-foreground hover:text-primary h-8 w-8 cursor-not-allowed opacity-50">
+                        <Button variant="ghost" size="icon" className="ml-2 text-muted-foreground hover:text-primary h-8 w-8 cursor-not-allowed opacity-50" disabled>
                           <Edit3 className="h-4 w-4" />
                           <span className="sr-only">Edit Email (Coming Soon)</span>
                         </Button>
@@ -170,7 +176,11 @@ export default function ProfilePage() {
             </div>
           </CardContent>
           <Separator />
-          <CardFooter className="p-6 justify-end">
+          <CardFooter className="p-6 flex justify-between items-center"> {/* Changed to flex justify-between */}
+            <Button variant="destructive" onClick={handleLogout}> {/* Added Logout Button */}
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </Button>
             <Button onClick={handleSaveChanges} disabled={isSaving || editableName.trim() === currentUser.name}>
               {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               {isSaving ? 'Saving...' : 'Save Changes'}
@@ -181,6 +191,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
-// Added Loader2 to imports
-import { Loader2 } from 'lucide-react';
