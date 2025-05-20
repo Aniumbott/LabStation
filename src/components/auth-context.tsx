@@ -2,7 +2,7 @@
 'use client';
 
 import type { User, RoleName } from '@/types'; // Added RoleName for future use if needed
-import { mockLoginUser, mockSignupUser, initialMockUsers, pendingSignups, addNotification } from '@/lib/mock-data';
+import { mockLoginUser, mockSignupUser, initialMockUsers, addNotification } from '@/lib/mock-data';
 import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
 
@@ -47,24 +47,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password?: string): Promise<{ success: boolean; message?: string }> => {
     // setIsLoading(true); // No need to set loading here, login is quick
-    const user = mockLoginUser(email, password);
+    const user = mockLoginUser(email, password); // mockLoginUser already checks status
     if (user) {
-      setCurrentUser(user);
-      try {
-        localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
-      } catch (error) {
-        console.error("Error saving user to localStorage:", error);
-      }
-      // setIsLoading(false);
-      return { success: true };
-    } else {
-      // setIsLoading(false);
-      const existingUser = initialMockUsers.find(u => u.email === email) || pendingSignups.find(u => u.email === email);
-      if (existingUser?.status === 'pending_approval') {
+      if (user.status === 'pending_approval') {
+        // setIsLoading(false);
         return { success: false, message: 'Account pending approval. Please wait for an admin.' };
       }
-      return { success: false, message: 'Invalid email or password, or account not active.' };
+      if (user.status === 'active') {
+        setCurrentUser(user);
+        try {
+          localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
+        } catch (error) {
+          console.error("Error saving user to localStorage:", error);
+        }
+        // setIsLoading(false);
+        return { success: true };
+      }
     }
+    // setIsLoading(false);
+    return { success: false, message: 'Invalid email or password, or account not active/pending.' };
   };
 
   const logout = () => {
@@ -77,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signup = async (name: string, email: string, password?: string): Promise<{ success: boolean; message: string; userId?: string }> => {
-    // mockSignupUser already handles adding to pendingSignups and notifying admin
+    // mockSignupUser already handles adding to initialMockUsers with 'pending_approval' status and notifying admin
     return mockSignupUser(name, email, password);
   };
 

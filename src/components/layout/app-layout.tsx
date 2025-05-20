@@ -16,7 +16,7 @@ import {
   Bell,
   CalendarOff,
   Loader2,
-  UserCheck2, // Added for Signup Requests
+  // UserCheck2 removed as signup requests page is removed
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
@@ -68,14 +68,8 @@ const navItems: NavItem[] = [
   },
   {
     href: '/admin/users',
-    label: 'Users',
+    label: 'Users', // Consolidates user management and signup approvals
     icon: UsersIconLucide,
-    allowedRoles: ['Admin'],
-  },
-  {
-    href: '/admin/signup-requests', // New Nav Item
-    label: 'Signup Requests',
-    icon: UserCheck2,
     allowedRoles: ['Admin'],
   },
   {
@@ -97,12 +91,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }, []);
 
   const visibleNavItems = useMemo(() => {
-    if (!currentUser) {
-      return navItems.filter(item => !item.allowedRoles || item.allowedRoles.length === 0);
+    if (!currentUser) { // If no user, only show non-role restricted public-facing links
+      return navItems.filter(item => !item.allowedRoles); // Or adjust if some are truly public for unauth users
     }
     return navItems.filter(item => {
       if (!item.allowedRoles || item.allowedRoles.length === 0) {
-        return true;
+        return true; // Accessible to all logged-in users
       }
       return item.allowedRoles.includes(currentUser.role);
     });
@@ -124,17 +118,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
+  if (!currentUser && PUBLIC_ROUTES.includes(pathname)) {
+    return <>{children}</>;
+  }
+  
+  // If user is not logged in and tries to access a protected route, they'll be redirected by the useEffect above.
+  // If user is not logged in, and we reach here, it means they are trying to access a protected route AND the redirect hasn't happened yet.
+  // In this case, we can also show a loader or null to prevent rendering the full layout.
   if (!currentUser && !PUBLIC_ROUTES.includes(pathname)) {
-    return (
+     return (
       <div className="flex flex-col items-center justify-center min-h-svh bg-background text-muted-foreground">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
         <p className="mt-3 text-lg">Redirecting to login...</p>
       </div>
     );
-  }
-
-  if (!currentUser && PUBLIC_ROUTES.includes(pathname)) {
-    return <>{children}</>;
   }
   
   return (
@@ -168,7 +165,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       <SidebarInset className="flex flex-col relative">
         <MobileSidebarToggle />
-        <div className="p-4 md:p-6 lg:p-8 flex-grow">
+        <div className="p-4 md:p-6 lg:p-8 flex-grow pt-12 sm:pt-4 md:pt-6 lg:pt-8"> {/* Adjusted padding for MobileSidebarToggle */}
           {children}
         </div>
       </SidebarInset>

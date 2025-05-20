@@ -3,8 +3,8 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon } from 'lucide-react';
-import type { User, RoleName } from '@/types';
+import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, ThumbsUp, ThumbsDown } from 'lucide-react';
+import type { User, RoleName, UserStatus } from '@/types';
 import {
   Table,
   TableBody,
@@ -49,10 +49,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { initialMockUsers } from '@/lib/mock-data';
-import { useAuth } from '@/components/auth-context'; // Import useAuth
+import { initialMockUsers, mockApproveSignup, mockRejectSignup } from '@/lib/mock-data';
+import { useAuth } from '@/components/auth-context';
 
 const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
+const userStatusesList: (UserStatus | 'all')[] = ['all', 'active', 'pending_approval', 'suspended'];
 
 
 const roleIcons: Record<User['role'], React.ElementType> = {
@@ -72,29 +73,44 @@ const getRoleBadgeVariant = (role: RoleName): "default" | "secondary" | "destruc
     }
 };
 
+const getStatusBadgeVariant = (status: UserStatus): "default" | "secondary" | "destructive" | "outline" => {
+    switch (status) {
+      case 'active': return 'default'; // Green in many themes, here primary
+      case 'pending_approval': return 'secondary'; // Yellow/Orange
+      case 'suspended': return 'destructive';
+      default: return 'outline';
+    }
+};
+
+
 export default function UsersPage() {
   const { toast } = useToast();
-  const { currentUser } = useAuth(); // Use AuthContext
+  const { currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>(() => JSON.parse(JSON.stringify(initialMockUsers)));
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [userToReject, setUserToReject] = useState<User | null>(null);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
   // Active filters for the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterRole, setActiveFilterRole] = useState<RoleName | 'all'>('all');
+  const [activeFilterStatus, setActiveFilterStatus] = useState<UserStatus | 'all'>('all');
+
 
   // Temporary filters for the Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterRole, setTempFilterRole] = useState<RoleName | 'all'>('all');
+  const [tempFilterStatus, setTempFilterStatus] = useState<UserStatus | 'all'>('all');
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
 
   useEffect(() => {
     if (isFilterDialogOpen) {
       setTempSearchTerm(activeSearchTerm);
       setTempFilterRole(activeFilterRole);
+      setTempFilterStatus(activeFilterStatus);
     }
-  }, [isFilterDialogOpen, activeSearchTerm, activeFilterRole]);
+  }, [isFilterDialogOpen, activeSearchTerm, activeFilterRole, activeFilterStatus]);
 
   const filteredUsers = useMemo(() => {
     let currentUsers = [...users];
@@ -108,23 +124,33 @@ export default function UsersPage() {
     if (activeFilterRole !== 'all') {
       currentUsers = currentUsers.filter(user => user.role === activeFilterRole);
     }
-    return currentUsers.sort((a,b) => a.name.localeCompare(b.name));
-  }, [users, activeSearchTerm, activeFilterRole]);
+    if (activeFilterStatus !== 'all') {
+      currentUsers = currentUsers.filter(user => user.status === activeFilterStatus);
+    }
+    return currentUsers.sort((a,b) => {
+      if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
+      if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [users, activeSearchTerm, activeFilterRole, activeFilterStatus]);
 
   const handleApplyFilters = () => {
     setActiveSearchTerm(tempSearchTerm);
     setActiveFilterRole(tempFilterRole);
+    setActiveFilterStatus(tempFilterStatus);
     setIsFilterDialogOpen(false);
   };
 
   const resetDialogFilters = () => {
     setTempSearchTerm('');
     setTempFilterRole('all');
+    setTempFilterStatus('all');
   };
   
   const resetAllActiveFilters = () => {
     setActiveSearchTerm('');
     setActiveFilterRole('all');
+    setActiveFilterStatus('all');
     resetDialogFilters(); 
     setIsFilterDialogOpen(false); 
   };
@@ -140,7 +166,7 @@ export default function UsersPage() {
   };
 
   const handleSaveUser = (data: UserFormValues) => {
-    if (editingUser) {
+    if (editingUser) { // Editing an existing active user
       const updatedUsers = users.map(u => u.id === editingUser.id ? { ...editingUser, ...data, avatarUrl: u.avatarUrl || 'https://placehold.co/100x100.png' } : u);
       setUsers(updatedUsers);
       const globalIndex = initialMockUsers.findIndex(u => u.id === editingUser.id);
@@ -150,12 +176,12 @@ export default function UsersPage() {
         title: 'User Updated',
         description: `User ${data.name} has been updated.`,
       });
-    } else {
+    } else { // Creating a new user (by admin)
       const newUser: User = {
         id: `u${users.length + 1 + Date.now()}`,
         ...data,
-        avatarUrl: 'https://placehold.co/100x100.png', // Default avatar for new users
-        status: 'active', // New users created by admin are active
+        avatarUrl: 'https://placehold.co/100x100.png',
+        status: 'active', // New users created by admin are active by default
       };
       setUsers(prevUsers => [...prevUsers, newUser].sort((a, b) => a.name.localeCompare(b.name)));
       initialMockUsers.push(newUser); 
@@ -169,7 +195,7 @@ export default function UsersPage() {
     setIsFormDialogOpen(false);
   };
 
-  const handleDeleteUser = (userId: string) => {
+  const handleDeleteUser = (userId: string) => { // For deleting active users
     const deletedUser = users.find(u => u.id === userId);
     setUsers(currentUsers => currentUsers.filter(user => user.id !== userId));
     
@@ -184,16 +210,48 @@ export default function UsersPage() {
     setUserToDelete(null);
   };
 
-  const activeFilterCount = [activeSearchTerm !== '', activeFilterRole !== 'all'].filter(Boolean).length;
+  const handleApproveUser = (userId: string) => {
+    if (mockApproveSignup(userId)) {
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'active' } : u)
+        .sort((a,b) => {
+          if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
+          if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
+          return a.name.localeCompare(b.name);
+        })
+      );
+      const user = users.find(u=>u.id === userId);
+      toast({
+        title: 'User Approved',
+        description: `User ${user?.name} has been approved and is now active.`,
+      });
+    }
+  };
+
+  const handleConfirmRejectUser = (userId: string) => {
+    const userDetails = users.find(u => u.id === userId);
+    if (mockRejectSignup(userId)) {
+      setUsers(prev => prev.filter(u => u.id !== userId));
+      toast({
+        title: 'Signup Request Rejected',
+        description: `Signup request for ${userDetails?.name} has been rejected and removed.`,
+        variant: 'destructive',
+      });
+    }
+    setUserToReject(null);
+  };
+
+
+  const activeFilterCount = [activeSearchTerm !== '', activeFilterRole !== 'all', activeFilterStatus !== 'all'].filter(Boolean).length;
   const canAddUsers = currentUser?.role === 'Admin';
-  const canManageUsers = currentUser?.role === 'Admin';
+  const canManageUsers = currentUser?.role === 'Admin'; // For edit/delete of active users
+  const canApproveRejectSignups = currentUser?.role === 'Admin';
 
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Users"
-        description="View, add, and manage user accounts and their roles."
+        description="View, add, and manage user accounts, roles, and signup requests."
         icon={UsersIconLucide}
         actions={
           <div className="flex items-center gap-2">
@@ -246,6 +304,19 @@ export default function UsersPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div>
+                    <Label htmlFor="userStatusDialog" className="text-sm font-medium mb-1 block">Status</Label>
+                    <Select value={tempFilterStatus} onValueChange={(value) => setTempFilterStatus(value as UserStatus | 'all')} >
+                      <SelectTrigger id="userStatusDialog" className="h-9">
+                        <SelectValue placeholder="Select Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {userStatusesList.map(status => (
+                          <SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <DialogFooter className="pt-6 border-t">
                   <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
@@ -275,7 +346,8 @@ export default function UsersPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
-                {canManageUsers && <TableHead className="text-right w-[100px]">Actions</TableHead>}
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right w-[120px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -297,54 +369,101 @@ export default function UsersPage() {
                         {user.role}
                       </Badge>
                     </TableCell>
-                    {canManageUsers && (
-                      <TableCell className="text-right space-x-1">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditUserDialog(user)}>
-                              <Edit className="h-4 w-4" />
-                              <span className="sr-only">Edit User</span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Edit User</p>
-                          </TooltipContent>
-                        </Tooltip>
-                        
-                        <AlertDialog>
+                    <TableCell>
+                      <Badge variant={getStatusBadgeVariant(user.status)} className="capitalize">
+                        {user.status.replace('_', ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right space-x-1">
+                      {user.status === 'pending_approval' && canApproveRejectSignups && (
+                        <>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToDelete(user)}>
-                                    <Trash2 className="h-4 w-4" />
-                                    <span className="sr-only">Delete User</span>
-                                </Button>
-                              </AlertDialogTrigger>
+                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleApproveUser(user.id)}>
+                                <ThumbsUp className="h-4 w-4 text-green-600" />
+                                <span className="sr-only">Approve User</span>
+                              </Button>
                             </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Delete User</p>
-                            </TooltipContent>
+                            <TooltipContent><p>Approve User</p></TooltipContent>
                           </Tooltip>
-                          {userToDelete && userToDelete.id === user.id && (
+                          <AlertDialog>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToReject(user)}>
+                                    <ThumbsDown className="h-4 w-4" />
+                                    <span className="sr-only">Reject User</span>
+                                  </Button>
+                                </AlertDialogTrigger>
+                              </TooltipTrigger>
+                              <TooltipContent><p>Reject User</p></TooltipContent>
+                            </Tooltip>
+                            {userToReject && userToReject.id === user.id && (
                               <AlertDialogContent>
-                              <AlertDialogHeader>
-                                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Are you sure you want to reject this signup?</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                  This action cannot be undone. This will remove the user 
-                                  <span className="font-semibold"> {userToDelete.name}</span> from the list.
+                                    This will remove the signup request for <span className="font-semibold">{userToReject.name}</span>.
                                   </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                  <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction variant="destructive" onClick={() => handleDeleteUser(userToDelete.id)}>
-                                  Delete User
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel onClick={() => setUserToReject(null)}>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction variant="destructive" onClick={() => handleConfirmRejectUser(userToReject.id)}>
+                                    Reject Signup
                                   </AlertDialogAction>
-                              </AlertDialogFooter>
+                                </AlertDialogFooter>
                               </AlertDialogContent>
-                          )}
-                        </AlertDialog>
-                      </TableCell>
-                    )}
+                            )}
+                          </AlertDialog>
+                        </>
+                      )}
+                      {user.status === 'active' && canManageUsers && (
+                        <>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditUserDialog(user)}>
+                                <Edit className="h-4 w-4" />
+                                <span className="sr-only">Edit User</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Edit User</p></TooltipContent>
+                          </Tooltip>
+                          <AlertDialog>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToDelete(user)}>
+                                      <Trash2 className="h-4 w-4" />
+                                      <span className="sr-only">Delete User</span>
+                                  </Button>
+                                </AlertDialogTrigger>
+                              </TooltipTrigger>
+                              <TooltipContent><p>Delete User</p></TooltipContent>
+                            </Tooltip>
+                            {userToDelete && userToDelete.id === user.id && (
+                                <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                    This action cannot be undone. This will remove the user 
+                                    <span className="font-semibold"> {userToDelete.name}</span>.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction variant="destructive" onClick={() => handleDeleteUser(userToDelete.id)}>
+                                    Delete User
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                                </AlertDialogContent>
+                            )}
+                          </AlertDialog>
+                        </>
+                      )}
+                      {(user.status === 'suspended' || (user.status === 'pending_approval' && !canApproveRejectSignups)) && (
+                        <span className="text-xs italic text-muted-foreground">No actions</span>
+                      )}
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -365,16 +484,15 @@ export default function UsersPage() {
                     : "There are currently no users in the system. Add one to get started!"
                 }
             </p>
-            {activeFilterCount > 0 ? (
+            {activeFilterCount > 0 && (
                 <Button variant="outline" onClick={resetAllActiveFilters}>
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
-            ) : (
-              canAddUsers && (
+            )}
+            {!activeFilterCount && canAddUsers && (
                 <Button onClick={handleOpenNewUserDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First User
                 </Button>
-              )
             )}
           </CardContent>
         </Card>

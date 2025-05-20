@@ -45,7 +45,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'MY58012345',
     purchaseDate: '2022-08-15T00:00:00.000Z',
     description: 'Mixed Signal Oscilloscope with 500 MHz bandwidth, 4 analog channels, and 16 digital channels. Includes built-in waveform generator and serial protocol analysis capabilities. Ideal for debugging embedded systems and mixed-signal designs.',
-    imageUrl: 'https://placehold.co/600x400.png',
+    imageUrl: 'https://placehold.co/300x200.png',
     features: ['500 MHz Bandwidth', '4 Analog Channels', '16 Digital Channels', 'WaveGen', 'Serial Decode'],
     availability: [
       { date: todayStr, slots: ['14:00-16:00', '16:00-18:00'] },
@@ -73,7 +73,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'DP8C198765',
     purchaseDate: '2023-01-20T00:00:00.000Z',
     description: 'Triple output programmable DC power supply. CH1: 0-30V/0-3A, CH2: 0-30V/0-3A, CH3: 0-5V/0-3A. High resolution and remote sense capabilities.',
-    imageUrl: 'https://placehold.co/600x400.png',
+    imageUrl: 'https://placehold.co/300x200.png',
     features: ['3 Channels', 'Programmable', 'Overvoltage Protection', 'LAN Interface'],
     availability: [
       { date: tomorrowStr, slots: ['09:00-11:00', '11:00-13:00'] },
@@ -94,7 +94,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'SDG2XABC001',
     purchaseDate: '2021-05-10T00:00:00.000Z',
     description: 'Dual-channel Arbitrary Waveform Generator, 40 MHz bandwidth, 1.2 GSa/s sampling rate. Generates sine, square, ramp, pulse, noise, and arbitrary waveforms.',
-    imageUrl: 'https://placehold.co/600x400.png',
+    imageUrl: 'https://placehold.co/300x200.png',
     features: ['40 MHz Bandwidth', 'Dual Channel', 'Arbitrary Waveforms', 'IQ Modulation'],
     availability: [],
     unavailabilityPeriods: [
@@ -114,7 +114,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'RS-FPC-987',
     purchaseDate: '2023-06-05T00:00:00.000Z',
     description: 'Spectrum analyzer with frequency range from 5 kHz to 1 GHz (upgradable to 3 GHz). Includes tracking generator and internal VSWR bridge.',
-    imageUrl: 'https://placehold.co/600x400.png',
+    imageUrl: 'https://placehold.co/300x200.png',
     features: ['1 GHz Base Frequency', 'Tracking Generator', 'One-Port Vector Network Analyzer'],
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },
@@ -134,7 +134,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'WEL-WE-007A',
     purchaseDate: '2022-11-01T00:00:00.000Z',
     description: '70W digital soldering station with temperature control and standby mode. Suitable for general purpose and fine pitch soldering work.',
-    imageUrl: 'https://placehold.co/600x400.png',
+    imageUrl: 'https://placehold.co/300x200.png',
     features: ['70 Watt Power', 'Digital Temperature Control', 'ESD Safe', 'Interchangeable Tips'],
     availability: [
         { date: todayStr, slots: ['10:00-17:00'] },
@@ -155,7 +155,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'FLUKE-87V-011',
     purchaseDate: '2023-03-10T00:00:00.000Z',
     description: 'True-RMS industrial digital multimeter for accurate measurements on non-linear signals. Measures AC/DC voltage and current, resistance, capacitance, frequency.',
-    imageUrl: 'https://placehold.co/600x400.png',
+    imageUrl: 'https://placehold.co/300x200.png',
     features: ['True-RMS AC Voltage/Current', 'Temperature Measurement (with probe)', 'CAT III 1000V, CAT IV 600V Safety Rating'],
     availability: [
       { date: dayAfterTomorrowStr, slots: ['09:00-17:00'] }
@@ -175,7 +175,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'XALV-U250-001',
     purchaseDate: '2023-09-01T00:00:00.000Z',
     description: 'High-performance FPGA development node for hardware acceleration and prototyping complex digital systems.',
-    imageUrl: 'https://placehold.co/600x400.png',
+    imageUrl: 'https://placehold.co/300x200.png',
     features: ['High-Speed Transceivers', 'Large Logic Capacity', 'PCIe Gen3 x16'],
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },
@@ -206,7 +206,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'FLMS12345',
     purchaseDate: '2022-07-20T00:00:00.000Z',
     description: 'Compact spectrometer for VIS-NIR measurements (350-1000 nm). Ideal for absorbance, transmittance, and irradiance.',
-    imageUrl: 'https://placehold.co/600x400.png',
+    imageUrl: 'https://placehold.co/300x200.png',
     features: ['350-1000 nm Range', 'High Resolution', 'USB Interface', 'Compact Size'],
     availability: [
       { date: threeDaysLaterStr, slots: ['10:00-12:00', '13:00-16:00'] },
@@ -223,10 +223,6 @@ export let initialMockUsers: User[] = [
   { id: 'u3', name: 'Technician Third', email: 'tech.third@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
   { id: 'u4', name: 'Researcher Fourth', email: 'researcher.fourth@labstation.com', role: 'Researcher', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
   { id: 'u5', name: 'Lead Technician Fifth', email: 'lead.tech@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
-];
-
-// This will hold users who have signed up but are awaiting admin approval.
-export let pendingSignups: User[] = [
   { id: 'ps1', name: 'Penny Pending', email: 'penny@example.com', role: 'Researcher', status: 'pending_approval', password: 'password', avatarUrl: 'https://placehold.co/100x100.png' }
 ];
 
@@ -389,7 +385,7 @@ export let initialNotifications: Notification[] = [
   },
   {
     id: 'n3',
-    userId: 'u1',
+    userId: 'u1', // Admin user
     title: 'New Booking Request: Rigol DP832',
     message: `Booking for Rigol DP832 Programmable Power Supply by ${initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second'} on ${format(set(addDays(today, 3), { hours: 14, minutes: 0 }), 'MMM dd, HH:mm')} needs approval.`,
     type: 'booking_pending_approval',
@@ -399,7 +395,7 @@ export let initialNotifications: Notification[] = [
   },
   {
     id: 'n4',
-    userId: 'u1',
+    userId: 'u1', // Admin user
     title: 'New Maintenance Request Logged',
     message: `A new maintenance request for Keysight MSOX3054T Oscilloscope (touchscreen unresponsive) has been logged by ${initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second'}.`,
     type: 'maintenance_new',
@@ -445,27 +441,23 @@ export const mockLoginUser = (email: string, password?: string): User | null => 
     if (user.status === 'active') return user;
     if (user.status === 'pending_approval') return { ...user, status: 'pending_approval' }; // Indicate status for login logic
   }
-  // Check pending signups as well for the "pending_approval" message
-  const pendingUser = pendingSignups.find(u => u.email === email && u.password === password);
-  if (pendingUser) return { ...pendingUser, status: 'pending_approval' };
-
   return null;
 };
 
 export const mockSignupUser = (name: string, email: string, password?: string): { success: boolean; message: string; userId?: string } => {
-  if (initialMockUsers.find(u => u.email === email) || pendingSignups.find(u => u.email === email)) {
+  if (initialMockUsers.find(u => u.email === email)) {
     return { success: false, message: 'An account with this email already exists or is pending approval.' };
   }
   const newUser: User = {
-    id: `ps${pendingSignups.length + 1 + Date.now()}`,
+    id: `ps${initialMockUsers.filter(u => u.status === 'pending_approval').length + 1 + Date.now()}`, // Generate ID based on pending users
     name,
     email,
     password,
-    role: 'Researcher',
+    role: 'Researcher', // Default role for new signups
     status: 'pending_approval',
     avatarUrl: 'https://placehold.co/100x100.png'
   };
-  pendingSignups.push(newUser);
+  initialMockUsers.push(newUser); // Add directly to initialMockUsers with pending status
 
   const adminUser = initialMockUsers.find(u => u.role === 'Admin');
   if (adminUser) {
@@ -474,37 +466,33 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
         'New Signup Request',
         `User ${name} (${email}) has signed up and is awaiting approval.`,
         'signup_pending_admin',
-        '/admin/signup-requests' // Corrected link
+        '/admin/users' // Link to the main users page
     );
   }
   return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: newUser.id };
 };
 
 export const mockApproveSignup = (userId: string): boolean => {
-  const userIndex = pendingSignups.findIndex(u => u.id === userId);
+  const userIndex = initialMockUsers.findIndex(u => u.id === userId && u.status === 'pending_approval');
   if (userIndex > -1) {
-    const userToApprove = pendingSignups.splice(userIndex, 1)[0];
-    if (userToApprove) {
-      userToApprove.status = 'active';
-      userToApprove.id = `u${initialMockUsers.length + 1 + Date.now()}`;
-      initialMockUsers.push(userToApprove);
-      addNotification(
-        userToApprove.id,
+    initialMockUsers[userIndex].status = 'active';
+     // Add notification for the approved user
+    addNotification(
+        initialMockUsers[userIndex].id,
         'Account Approved!',
         'Your LabStation account has been approved. You can now log in.',
         'signup_approved',
         '/login'
-      );
-      return true;
-    }
+    );
+    return true;
   }
   return false;
 };
 
 export const mockRejectSignup = (userId: string): boolean => {
-  const userIndex = pendingSignups.findIndex(u => u.id === userId);
+  const userIndex = initialMockUsers.findIndex(u => u.id === userId && u.status === 'pending_approval');
   if (userIndex > -1) {
-    pendingSignups.splice(userIndex, 1);
+    initialMockUsers.splice(userIndex, 1); // Remove the user from the main list
     return true;
   }
   return false;
