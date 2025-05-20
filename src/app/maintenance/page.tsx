@@ -4,9 +4,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Wrench, PlusCircle, Edit, Filter as FilterIcon, FilterX, Search as SearchIcon, ListFilter, CheckCircle, AlertCircle, PenToolIcon } from 'lucide-react';
-import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource } from '@/types';
+import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource, RoleName } from '@/types';
 import { initialMaintenanceRequests, maintenanceRequestStatuses, initialMockUsers, allAdminMockResources, addNotification } from '@/lib/mock-data';
-import { useAuth } from '@/components/auth-context'; // Import useAuth
+import { useAuth } from '@/components/auth-context';
 import {
   Table,
   TableBody,
@@ -338,7 +338,7 @@ export default function MaintenanceRequestsPage() {
               <CardTitle>Active Requests ({filteredRequests.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto rounded-lg border shadow-sm">
+              <div className="overflow-x-auto rounded-lg">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -394,9 +394,13 @@ export default function MaintenanceRequestsPage() {
                   ? "Try adjusting your filter criteria."
                   : "All systems operational, or no issues reported yet."}
               </p>
-              {activeFilterCount > 0 && (
+              {activeFilterCount > 0 ? (
                 <Button variant="outline" onClick={resetAllActiveFilters}>
                   <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                </Button>
+              ) : (
+                <Button onClick={handleOpenNewDialog}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Log First Maintenance Request
                 </Button>
               )}
             </CardContent>
@@ -415,5 +419,3 @@ export default function MaintenanceRequestsPage() {
     </TooltipProvider>
   );
 }
-
-    

@@ -359,10 +359,16 @@ export default function BlackoutDatesPage() {
                   <p className="text-xs mb-3">
                     {activeDateSearchTerm ? "Try adjusting your search criteria." : "Add individual lab-wide closure dates here."}
                   </p>
-                  {activeDateSearchTerm && (
+                  {activeDateSearchTerm ? (
                     <Button variant="outline" size="sm" onClick={resetAllActiveDateFilters}>
                       <FilterX className="mr-2 h-4 w-4" /> Reset Date Filters
                     </Button>
+                  ) : (
+                     canManageBlackouts && (
+                      <Button onClick={handleOpenNewDateDialog} size="sm">
+                        <PlusCircle className="mr-2 h-4 w-4" /> Add First Blackout Date
+                      </Button>
+                    )
                   )}
                 </CardContent>
               </Card>
@@ -456,7 +462,12 @@ export default function BlackoutDatesPage() {
                 <CardContent>
                   <Repeat className="mx-auto h-10 w-10 mb-3 opacity-50" />
                   <p className="font-medium">No Recurring Lab Closure Rules Defined</p>
-                  <p className="text-xs">Add rules for regular closures like weekends or weekly maintenance.</p>
+                  <p className="text-xs mb-3">Add rules for regular closures like weekends or weekly maintenance.</p>
+                   {canManageBlackouts && (
+                      <Button onClick={handleOpenNewRecurringDialog} size="sm">
+                        <PlusCircle className="mr-2 h-4 w-4" /> Add First Recurring Rule
+                      </Button>
+                    )}
                 </CardContent>
               </Card>
             )}
