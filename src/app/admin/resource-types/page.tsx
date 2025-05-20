@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon } from 'lucide-react';
 import type { ResourceType } from '@/types';
 import { initialMockResourceTypes } from '@/lib/mock-data';
-import { useAuth } from '@/components/auth-context'; // Import useAuth
+import { useAuth } from '@/components/auth-context';
 import {
   Table,
   TableBody,
@@ -53,16 +53,14 @@ import { Badge } from '@/components/ui/badge';
 
 export default function ResourceTypesPage() {
   const { toast } = useToast();
-  const { currentUser } = useAuth(); // Use AuthContext
+  const { currentUser } = useAuth();
   const [resourceTypes, setResourceTypes] = useState<ResourceType[]>(() => JSON.parse(JSON.stringify(initialMockResourceTypes)));
   const [typeToDelete, setTypeToDelete] = useState<ResourceType | null>(null);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingType, setEditingType] = useState<ResourceType | null>(null);
 
-  // Active filter for the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
 
-  // Temp filter for Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
 
@@ -74,8 +72,8 @@ export default function ResourceTypesPage() {
 
   const filteredResourceTypes = useMemo(() => {
     let currentTypes = [...resourceTypes];
+    const lowerSearchTerm = activeSearchTerm.toLowerCase();
     if (activeSearchTerm) {
-      const lowerSearchTerm = activeSearchTerm.toLowerCase();
       currentTypes = currentTypes.filter(type =>
         type.name.toLowerCase().includes(lowerSearchTerm) ||
         (type.description && type.description.toLowerCase().includes(lowerSearchTerm))
@@ -112,10 +110,10 @@ export default function ResourceTypesPage() {
 
   const handleSaveType = (data: ResourceTypeFormValues) => {
     if (editingType) {
-      const updatedTypes = resourceTypes.map(rt => rt.id === editingType.id ? { ...editingType, ...data } : rt);
-      setResourceTypes(updatedTypes);
+      const updatedType = { ...editingType, ...data };
+      setResourceTypes(resourceTypes.map(rt => rt.id === editingType.id ? updatedType : rt));
       const globalIndex = initialMockResourceTypes.findIndex(rt => rt.id === editingType.id);
-      if (globalIndex !== -1) initialMockResourceTypes[globalIndex] = { ...initialMockResourceTypes[globalIndex], ...data };
+      if (globalIndex !== -1) initialMockResourceTypes[globalIndex] = updatedType;
 
       toast({
         title: 'Resource Type Updated',
@@ -170,7 +168,7 @@ export default function ResourceTypesPage() {
           <div className="flex items-center gap-2">
             <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline">
                   <FilterIcon className="mr-2 h-4 w-4" />
                   Filters
                   {activeFilterCount > 0 && (
@@ -214,7 +212,7 @@ export default function ResourceTypesPage() {
               </DialogContent>
             </Dialog>
             {canAddResourceTypes && (
-              <Button onClick={handleOpenNewDialog} size="sm">
+              <Button onClick={handleOpenNewDialog}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Add
               </Button>
             )}
@@ -301,12 +299,12 @@ export default function ResourceTypesPage() {
                 }
             </p>
             {activeSearchTerm && (
-                <Button variant="outline" size="sm" onClick={resetAllActiveFilters}>
+                <Button variant="outline" onClick={resetAllActiveFilters}>
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             )}
             {!activeSearchTerm && canAddResourceTypes && (
-                <Button onClick={handleOpenNewDialog} size="sm">
+                <Button onClick={handleOpenNewDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource Type
                 </Button>
             )}
@@ -323,3 +321,4 @@ export default function ResourceTypesPage() {
     </TooltipProvider>
   );
 }
+    

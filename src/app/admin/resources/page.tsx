@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon } from 'lucide-react';
 import type { Resource, ResourceStatus } from '@/types';
 import { allAdminMockResources, initialMockResourceTypes, labsList } from '@/lib/mock-data';
-import { useAuth } from '@/components/auth-context'; // Import useAuth
+import { useAuth } from '@/components/auth-context';
 import {
   Table,
   TableBody,
@@ -30,7 +30,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -38,15 +38,16 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, startOfDay, isValid, parseISO, isSameDay, isWithinInterval } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 const getStatusBadge = (status: ResourceStatus) => {
   switch (status) {
     case 'Available':
-      return <Badge className="bg-green-500 hover:bg-green-600 text-white border-transparent"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      return <Badge className={cn("bg-green-500 hover:bg-green-600 text-white border-transparent")}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     case 'Booked':
-      return <Badge className="bg-yellow-500 hover:bg-yellow-600 text-yellow-950 border-transparent"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      return <Badge className={cn("bg-yellow-500 hover:bg-yellow-600 text-yellow-950 border-transparent")}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     case 'Maintenance':
-      return <Badge className="bg-orange-500 hover:bg-orange-600 text-white border-transparent"><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      return <Badge className={cn("bg-orange-500 hover:bg-orange-600 text-white border-transparent")}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     default:
       return <Badge variant="outline"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
   }
@@ -54,18 +55,16 @@ const getStatusBadge = (status: ResourceStatus) => {
 
 export default function ResourcesPage() {
   const { toast } = useToast();
-  const { currentUser } = useAuth(); // Get currentUser from AuthContext
+  const { currentUser } = useAuth(); 
   const [resources, setResources] = useState<Resource[]>(() => JSON.parse(JSON.stringify(allAdminMockResources)));
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
-  // Active filters for the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterTypeId, setActiveFilterTypeId] = useState<string>('all');
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
 
-  // Temp filters for Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterTypeId, setTempFilterTypeId] = useState<string>('all');
   const [tempFilterLab, setTempFilterLab] = useState<string>('all');
@@ -85,8 +84,8 @@ export default function ResourcesPage() {
 
   const filteredResources = useMemo(() => {
     let currentResources = [...resources];
+    const lowerSearchTerm = activeSearchTerm.toLowerCase();
     if (activeSearchTerm) {
-      const lowerSearchTerm = activeSearchTerm.toLowerCase();
       currentResources = currentResources.filter(resource =>
         resource.name.toLowerCase().includes(lowerSearchTerm) ||
         (resource.description && resource.description.toLowerCase().includes(lowerSearchTerm)) ||
@@ -95,10 +94,7 @@ export default function ResourcesPage() {
       );
     }
     if (activeFilterTypeId !== 'all') {
-      const selectedType = initialMockResourceTypes.find(type => type.id === activeFilterTypeId);
-      if (selectedType) {
-         currentResources = currentResources.filter(resource => resource.resourceTypeName === selectedType.name);
-      }
+      currentResources = currentResources.filter(resource => resource.resourceTypeId === activeFilterTypeId);
     }
     if (activeFilterLab !== 'all') {
       currentResources = currentResources.filter(resource => resource.lab === activeFilterLab);
@@ -108,17 +104,13 @@ export default function ResourcesPage() {
       currentResources = currentResources.filter(resource => {
         if (resource.status !== 'Available') return false;
 
-        // Check unavailability periods
-        if (resource.unavailabilityPeriods && resource.unavailabilityPeriods.length > 0) {
-          const isUnavailable = resource.unavailabilityPeriods.some(period => {
+        const isUnavailableDueToPeriod = resource.unavailabilityPeriods?.some(period => {
             const periodStart = startOfDay(parseISO(period.startDate));
             const periodEnd = startOfDay(parseISO(period.endDate));
             return isSameDay(dateToFilter, periodStart) || isSameDay(dateToFilter, periodEnd) || isWithinInterval(dateToFilter, { start: periodStart, end: periodEnd });
-          });
-          if (isUnavailable) return false;
-        }
+        });
+        if (isUnavailableDueToPeriod) return false;
         
-        // Check daily availability slots
         const dateStrToFilter = format(dateToFilter, 'yyyy-MM-dd');
         const dayAvailability = resource.availability?.find(avail => avail.date === dateStrToFilter);
         return dayAvailability && dayAvailability.slots.length > 0;
@@ -173,15 +165,14 @@ export default function ResourcesPage() {
         resourceTypeName: resourceType.name,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
         purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : editingResource.purchaseDate,
-        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
+        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '') ? {
           ...data.remoteAccess,
-          port: data.remoteAccess.port && String(data.remoteAccess.port).trim() !== '' ? Number(data.remoteAccess.port) : undefined,
+          port: data.remoteAccess.port,
         } : undefined,
         availability: editingResource.availability || [],
         unavailabilityPeriods: editingResource.unavailabilityPeriods || [],
       };
-      const updatedResources = resources.map(r => r.id === editingResource.id ? updatedResource : r);
-      setResources(updatedResources);
+      setResources(resources.map(r => r.id === editingResource.id ? updatedResource : r));
       const globalIndex = allAdminMockResources.findIndex(r => r.id === editingResource.id);
       if (globalIndex !== -1) allAdminMockResources[globalIndex] = updatedResource;
 
@@ -207,9 +198,9 @@ export default function ResourcesPage() {
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
         availability: [], 
         unavailabilityPeriods: [],
-        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== '' && v !== undefined && v !== null) ? {
+        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '') ? {
            ...data.remoteAccess,
-           port: data.remoteAccess.port && String(data.remoteAccess.port).trim() !== '' ? Number(data.remoteAccess.port) : undefined,
+           port: data.remoteAccess.port,
         } : undefined,
       };
       setResources(prevResources => [...prevResources, newResource].sort((a,b) => a.name.localeCompare(b.name)));
@@ -225,7 +216,7 @@ export default function ResourcesPage() {
   };
 
   const activeFilterCount = [activeSearchTerm !== '', activeFilterTypeId !== 'all', activeFilterLab !== 'all', activeSelectedDate !== undefined].filter(Boolean).length;
-  const canAddResources = currentUser?.role === 'Admin' || currentUser?.role === 'Lab Manager';
+  const canAddResources = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
 
   return (
     <div className="space-y-8">
@@ -435,5 +426,4 @@ export default function ResourcesPage() {
     </div>
   );
 }
-
     

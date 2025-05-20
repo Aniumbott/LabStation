@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { CalendarOff, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Repeat } from 'lucide-react';
 import type { BlackoutDate, RecurringBlackoutRule, RoleName } from '@/types';
 import { initialBlackoutDates, initialRecurringBlackoutRules } from '@/lib/mock-data';
-import { useAuth } from '@/components/auth-context'; // Import useAuth
+import { useAuth } from '@/components/auth-context';
 import {
   Table,
   TableBody,
@@ -54,9 +54,8 @@ import { RecurringBlackoutRuleFormDialog, RecurringBlackoutRuleFormValues } from
 
 export default function BlackoutDatesPage() {
   const { toast } = useToast();
-  const { currentUser } = useAuth(); // Use AuthContext
+  const { currentUser } = useAuth();
 
-  // Single Dates
   const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>(() => JSON.parse(JSON.stringify(initialBlackoutDates)));
   const [isDateFormDialogOpen, setIsDateFormDialogOpen] = useState(false);
   const [editingBlackoutDate, setEditingBlackoutDate] = useState<BlackoutDate | null>(null);
@@ -65,7 +64,6 @@ export default function BlackoutDatesPage() {
   const [activeDateSearchTerm, setActiveDateSearchTerm] = useState('');
   const [isDateFilterDialogOpen, setIsDateFilterDialogOpen] = useState(false);
 
-  // Recurring Rules
   const [recurringRules, setRecurringRules] = useState<RecurringBlackoutRule[]>(() => JSON.parse(JSON.stringify(initialRecurringBlackoutRules)));
   const [isRecurringFormDialogOpen, setIsRecurringFormDialogOpen] = useState(false);
   const [editingRecurringRule, setEditingRecurringRule] = useState<RecurringBlackoutRule | null>(null);
@@ -80,11 +78,11 @@ export default function BlackoutDatesPage() {
 
   const filteredBlackoutDates = useMemo(() => {
     let currentDates = [...blackoutDates];
+    const lowerSearchTerm = activeDateSearchTerm.toLowerCase();
     if (activeDateSearchTerm) {
-      const lowerSearchTerm = activeDateSearchTerm.toLowerCase();
       currentDates = currentDates.filter(bd =>
         (bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm)) ||
-        format(parseISO(bd.date), 'PPP').toLowerCase().includes(lowerSearchTerm)
+        (bd.date && format(parseISO(bd.date), 'PPP').toLowerCase().includes(lowerSearchTerm))
       );
     }
     return currentDates.sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
@@ -102,12 +100,13 @@ export default function BlackoutDatesPage() {
 
   const handleSaveBlackoutDate = (data: BlackoutDateFormValues) => {
     if (editingBlackoutDate) {
+      const updatedDate = { ...editingBlackoutDate, ...data, date: format(data.date, 'yyyy-MM-dd') };
       const updatedDates = blackoutDates.map(bd =>
-        bd.id === editingBlackoutDate.id ? { ...editingBlackoutDate, ...data, date: format(data.date, 'yyyy-MM-dd') } : bd
+        bd.id === editingBlackoutDate.id ? updatedDate : bd
       );
       setBlackoutDates(updatedDates);
       const globalIndex = initialBlackoutDates.findIndex(bd => bd.id === editingBlackoutDate.id);
-      if (globalIndex !== -1) initialBlackoutDates[globalIndex] = { ...initialBlackoutDates[globalIndex], ...data, date: format(data.date, 'yyyy-MM-dd') };
+      if (globalIndex !== -1) initialBlackoutDates[globalIndex] = updatedDate;
       toast({
         title: 'Blackout Date Updated',
         description: `Blackout date for ${format(data.date, 'PPP')} has been updated.`,
@@ -161,7 +160,6 @@ export default function BlackoutDatesPage() {
   
   const activeDateFilterCount = [activeDateSearchTerm !== ''].filter(Boolean).length;
   
-  // Recurring Rules Handlers
   const handleOpenNewRecurringDialog = () => {
     setEditingRecurringRule(null);
     setIsRecurringFormDialogOpen(true);
@@ -174,12 +172,13 @@ export default function BlackoutDatesPage() {
 
   const handleSaveRecurringRule = (data: RecurringBlackoutRuleFormValues) => {
     if (editingRecurringRule) {
+      const updatedRule = { ...editingRecurringRule, ...data };
       const updatedRules = recurringRules.map(r =>
-        r.id === editingRecurringRule.id ? { ...editingRecurringRule, ...data } : r
+        r.id === editingRecurringRule.id ? updatedRule : r
       );
       setRecurringRules(updatedRules);
       const globalIndex = initialRecurringBlackoutRules.findIndex(r => r.id === editingRecurringRule.id);
-      if (globalIndex !== -1) initialRecurringBlackoutRules[globalIndex] = { ...initialRecurringBlackoutRules[globalIndex], ...data };
+      if (globalIndex !== -1) initialRecurringBlackoutRules[globalIndex] = updatedRule;
       toast({
         title: 'Recurring Rule Updated',
         description: `Recurring rule "${data.name}" has been updated.`,
@@ -226,7 +225,6 @@ export default function BlackoutDatesPage() {
           icon={CalendarOff}
         />
 
-        {/* Single Blackout Dates Section */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -298,7 +296,7 @@ export default function BlackoutDatesPage() {
                   <TableBody>
                     {filteredBlackoutDates.map((bd) => (
                       <TableRow key={bd.id}>
-                        <TableCell className="font-medium">{format(parseISO(bd.date), 'PPP')}</TableCell>
+                        <TableCell className="font-medium">{isValidDate(parseISO(bd.date)) ? format(parseISO(bd.date), 'PPP') : 'Invalid Date'}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{bd.reason || 'N/A'}</TableCell>
                         {canManageBlackouts && (
                           <TableCell className="text-right space-x-1">
@@ -329,7 +327,7 @@ export default function BlackoutDatesPage() {
                                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                     <AlertDialogDescription>
                                       This action cannot be undone. This will remove the blackout date
-                                      <span className="font-semibold"> "{format(parseISO(dateToDelete.date), 'PPP')}"</span>.
+                                      <span className="font-semibold"> "{isValidDate(parseISO(dateToDelete.date)) ? format(parseISO(dateToDelete.date), 'PPP') : ''}"</span>.
                                       All resources will be considered available on this day unless specified otherwise.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
@@ -361,7 +359,7 @@ export default function BlackoutDatesPage() {
                   </p>
                   {activeDateSearchTerm ? (
                     <Button variant="outline" size="sm" onClick={resetAllActiveDateFilters}>
-                      <FilterX className="mr-2 h-4 w-4" /> Reset Date Filters
+                      <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                     </Button>
                   ) : (
                      canManageBlackouts && (
@@ -378,7 +376,6 @@ export default function BlackoutDatesPage() {
 
         <Separator className="my-8" />
 
-        {/* Recurring Blackout Rules Section */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
              <div>
@@ -494,3 +491,4 @@ export default function BlackoutDatesPage() {
     </TooltipProvider>
   );
 }
+    

@@ -49,7 +49,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { initialMockUsers, mockApproveSignup, mockRejectSignup } from '@/lib/mock-data';
+import { initialMockUsers, mockApproveSignup, mockRejectSignup, addNotification } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 
 const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
@@ -75,8 +75,8 @@ const getRoleBadgeVariant = (role: RoleName): "default" | "secondary" | "destruc
 
 const getStatusBadgeVariant = (status: UserStatus): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
-      case 'active': return 'default'; // Green in many themes, here primary
-      case 'pending_approval': return 'secondary'; // Yellow/Orange
+      case 'active': return 'default'; 
+      case 'pending_approval': return 'secondary'; 
       case 'suspended': return 'destructive';
       default: return 'outline';
     }
@@ -92,13 +92,10 @@ export default function UsersPage() {
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
-  // Active filters for the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterRole, setActiveFilterRole] = useState<RoleName | 'all'>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<UserStatus | 'all'>('all');
 
-
-  // Temporary filters for the Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterRole, setTempFilterRole] = useState<RoleName | 'all'>('all');
   const [tempFilterStatus, setTempFilterStatus] = useState<UserStatus | 'all'>('all');
@@ -114,8 +111,8 @@ export default function UsersPage() {
 
   const filteredUsers = useMemo(() => {
     let currentUsers = [...users];
+    const lowerSearchTerm = activeSearchTerm.toLowerCase();
     if (activeSearchTerm) {
-      const lowerSearchTerm = activeSearchTerm.toLowerCase();
       currentUsers = currentUsers.filter(user =>
         user.name.toLowerCase().includes(lowerSearchTerm) ||
         user.email.toLowerCase().includes(lowerSearchTerm)
@@ -166,22 +163,22 @@ export default function UsersPage() {
   };
 
   const handleSaveUser = (data: UserFormValues) => {
-    if (editingUser) { // Editing an existing active user
-      const updatedUsers = users.map(u => u.id === editingUser.id ? { ...editingUser, ...data, avatarUrl: u.avatarUrl || 'https://placehold.co/100x100.png' } : u);
-      setUsers(updatedUsers);
+    if (editingUser) { 
+      const updatedUser = { ...editingUser, ...data, avatarUrl: editingUser.avatarUrl || 'https://placehold.co/100x100.png' };
+      setUsers(users.map(u => u.id === editingUser.id ? updatedUser : u));
       const globalIndex = initialMockUsers.findIndex(u => u.id === editingUser.id);
-      if (globalIndex !== -1) initialMockUsers[globalIndex] = { ...initialMockUsers[globalIndex], ...data, avatarUrl: initialMockUsers[globalIndex].avatarUrl || 'https://placehold.co/100x100.png' };
+      if (globalIndex !== -1) initialMockUsers[globalIndex] = updatedUser;
 
       toast({
         title: 'User Updated',
         description: `User ${data.name} has been updated.`,
       });
-    } else { // Creating a new user (by admin)
+    } else { 
       const newUser: User = {
         id: `u${users.length + 1 + Date.now()}`,
         ...data,
         avatarUrl: 'https://placehold.co/100x100.png',
-        status: 'active', // New users created by admin are active by default
+        status: 'active',
       };
       setUsers(prevUsers => [...prevUsers, newUser].sort((a, b) => a.name.localeCompare(b.name)));
       initialMockUsers.push(newUser); 
@@ -195,7 +192,7 @@ export default function UsersPage() {
     setIsFormDialogOpen(false);
   };
 
-  const handleDeleteUser = (userId: string) => { // For deleting active users
+  const handleDeleteUser = (userId: string) => { 
     const deletedUser = users.find(u => u.id === userId);
     setUsers(currentUsers => currentUsers.filter(user => user.id !== userId));
     
@@ -212,7 +209,7 @@ export default function UsersPage() {
 
   const handleApproveUser = (userId: string) => {
     const user = users.find(u=>u.id === userId);
-    if (mockApproveSignup(userId)) { // This function now also handles adding notification
+    if (mockApproveSignup(userId)) { 
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'active' } : u)
         .sort((a,b) => {
           if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
@@ -520,3 +517,4 @@ export default function UsersPage() {
     </div>
   );
 }
+    

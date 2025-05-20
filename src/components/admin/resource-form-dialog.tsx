@@ -51,7 +51,7 @@ const resourceFormSchema = z.object({
     hostname: z.string().max(255).optional().or(z.literal('')),
     protocol: z.enum(VALID_REMOTE_PROTOCOLS).or(z.literal('')).optional(),
     username: z.string().max(100).optional().or(z.literal('')),
-    port: z.coerce.number().int().min(1).max(65535).optional().or(z.literal('')),
+    port: z.coerce.number().int().min(1).max(65535).optional(), // Removed .or(z.literal('')) as empty string will be coerced to undefined by optional
     notes: z.string().max(500).optional().or(z.literal('')),
   }).optional(),
 });
@@ -153,7 +153,8 @@ export function ResourceFormDialog({
         purchaseDate: data.purchaseDate ? data.purchaseDate : undefined,
         remoteAccess: data.remoteAccess ? {
             ...data.remoteAccess,
-            port: data.remoteAccess.port && String(data.remoteAccess.port).trim() !== '' ? Number(data.remoteAccess.port) : undefined,
+            // Port is already a number or undefined due to z.coerce.number()
+            port: data.remoteAccess.port,
             protocol: data.remoteAccess.protocol === '' ? undefined : data.remoteAccess.protocol,
             ipAddress: data.remoteAccess.ipAddress || undefined,
             hostname: data.remoteAccess.hostname || undefined,
@@ -236,7 +237,7 @@ export function ResourceFormDialog({
                 render={({ field }) => (
                     <FormItem>
                     <FormLabel>Description</FormLabel>
-                    <FormControl><Textarea placeholder="Detailed description of the resource..." {...field} value={field.value || ''} rows={3} /></FormControl>
+                    <FormControl><Textarea placeholder="Detailed description of the resource..." {...field} value={field.value ?? ''} rows={3} /></FormControl>
                     <FormMessage />
                     </FormItem>
                 )}
@@ -248,7 +249,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Image URL</FormLabel>
-                            <FormControl><Input type="url" placeholder="https://placehold.co/300x200.png" {...field} value={field.value || ''} /></FormControl>
+                            <FormControl><Input type="url" placeholder="https://placehold.co/300x200.png" {...field} value={field.value ?? ''} /></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -261,7 +262,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Manufacturer (Optional)</FormLabel>
-                            <FormControl><Input placeholder="e.g., Keysight" {...field} value={field.value || ''} /></FormControl>
+                            <FormControl><Input placeholder="e.g., Keysight" {...field} value={field.value ?? ''} /></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -272,7 +273,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Model (Optional)</FormLabel>
-                            <FormControl><Input placeholder="e.g., MSOX3054T" {...field} value={field.value || ''} /></FormControl>
+                            <FormControl><Input placeholder="e.g., MSOX3054T" {...field} value={field.value ?? ''} /></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -283,7 +284,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Serial Number (Optional)</FormLabel>
-                            <FormControl><Input placeholder="e.g., MY58012345" {...field} value={field.value || ''} /></FormControl>
+                            <FormControl><Input placeholder="e.g., MY58012345" {...field} value={field.value ?? ''} /></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -296,7 +297,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Purchase Date (Optional)</FormLabel>
-                            <FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl>
+                            <FormControl><Input type="date" {...field} value={field.value ?? ''} /></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -326,7 +327,7 @@ export function ResourceFormDialog({
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Features (Optional)</FormLabel>
-                        <FormControl><Textarea placeholder="e.g., 500 MHz Bandwidth, 4 Analog Channels, 16 Digital Channels" {...field} value={field.value || ''} rows={2}/></FormControl>
+                        <FormControl><Textarea placeholder="e.g., 500 MHz Bandwidth, 4 Analog Channels, 16 Digital Channels" {...field} value={field.value ?? ''} rows={2}/></FormControl>
                         <FormDescription>Enter comma-separated values.</FormDescription>
                         <FormMessage />
                         </FormItem>
@@ -338,7 +339,7 @@ export function ResourceFormDialog({
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>General Notes (Optional)</FormLabel>
-                        <FormControl><Textarea placeholder="Any additional notes or special instructions..." {...field} value={field.value || ''} rows={2}/></FormControl>
+                        <FormControl><Textarea placeholder="Any additional notes or special instructions..." {...field} value={field.value ?? ''} rows={2}/></FormControl>
                         <FormMessage />
                         </FormItem>
                     )}
@@ -355,7 +356,7 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>IP Address</FormLabel>
-                                    <FormControl><Input placeholder="e.g., 192.168.1.100" {...field} value={field.value || ''} /></FormControl>
+                                    <FormControl><Input placeholder="e.g., 192.168.1.100" {...field} value={field.value ?? ''} /></FormControl>
                                     <FormMessage />
                                     </FormItem>
                                 )}
@@ -366,7 +367,7 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Hostname</FormLabel>
-                                    <FormControl><Input placeholder="e.g., scope-01.lab.internal" {...field} value={field.value || ''} /></FormControl>
+                                    <FormControl><Input placeholder="e.g., scope-01.lab.internal" {...field} value={field.value ?? ''} /></FormControl>
                                     <FormMessage />
                                     </FormItem>
                                 )}
@@ -401,7 +402,13 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Port</FormLabel>
-                                    <FormControl><Input type="number" placeholder="e.g., 22 (SSH), 3389 (RDP)" {...field} value={field.value === undefined || field.value === null || String(field.value).trim() === '' ? '' : String(field.value)} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} /></FormControl>
+                                    <FormControl><Input 
+                                        type="text" // Change to text to allow empty string and prevent browser's number input UI
+                                        placeholder="e.g., 22 (SSH), 3389 (RDP)" 
+                                        {...field} 
+                                        value={field.value ?? ''} 
+                                        onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.value)}
+                                     /></FormControl>
                                     <FormMessage />
                                     </FormItem>
                                 )}
@@ -412,7 +419,7 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Username</FormLabel>
-                                    <FormControl><Input placeholder="e.g., labuser" {...field}  value={field.value || ''}/></FormControl>
+                                    <FormControl><Input placeholder="e.g., labuser" {...field}  value={field.value ?? ''}/></FormControl>
                                     <FormMessage />
                                     </FormItem>
                                 )}
@@ -424,7 +431,7 @@ export function ResourceFormDialog({
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Connection Notes</FormLabel>
-                                <FormControl><Textarea placeholder="e.g., VPN required, specific client versions, credential location..." {...field} value={field.value || ''} rows={2} /></FormControl>
+                                <FormControl><Textarea placeholder="e.g., VPN required, specific client versions, credential location..." {...field} value={field.value ?? ''} rows={2} /></FormControl>
                                 <FormMessage />
                                 </FormItem>
                             )}
@@ -453,5 +460,4 @@ export function ResourceFormDialog({
     </Dialog>
   );
 }
-
     
