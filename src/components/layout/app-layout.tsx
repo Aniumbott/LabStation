@@ -17,7 +17,7 @@ import {
   CalendarOff,
   Building,
   Loader2,
-  // UserCheck2 removed as signup requests page is removed
+  FlaskConical, // Assuming Logo uses this or similar
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
@@ -56,8 +56,8 @@ const navItems: NavItem[] = [
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/profile', label: 'My Profile', icon: UserCog, allowedRoles: ['Admin', 'Lab Manager', 'Technician', 'Researcher'] },
   {
-    href: '/admin/booking-approvals',
-    label: 'Booking Approvals',
+    href: '/admin/booking-requests', // Updated href
+    label: 'Booking Requests',      // Updated label
     icon: CheckSquare,
     allowedRoles: ['Admin', 'Lab Manager'],
   },
@@ -69,7 +69,7 @@ const navItems: NavItem[] = [
   },
   {
     href: '/admin/users',
-    label: 'Users', // Consolidates user management and signup approvals
+    label: 'Users', 
     icon: UsersIconLucide,
     allowedRoles: ['Admin'],
   },
@@ -92,12 +92,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }, []);
 
   const visibleNavItems = useMemo(() => {
-    if (!currentUser) { // If no user, only show non-role restricted public-facing links
-      return navItems.filter(item => !item.allowedRoles); 
+    if (!currentUser) { 
+      return navItems.filter(item => !item.allowedRoles || item.allowedRoles.length === 0); 
     }
     return navItems.filter(item => {
       if (!item.allowedRoles || item.allowedRoles.length === 0) {
-        return true; // Accessible to all logged-in users
+        return true; 
       }
       return item.allowedRoles.includes(currentUser.role);
     });
@@ -163,7 +163,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       <SidebarInset className="flex flex-col relative">
         <MobileSidebarToggle />
-        <div className="p-4 md:p-6 lg:p-8 flex-grow pt-12 md:pt-6 lg:pt-8"> {/* Adjusted padding for MobileSidebarToggle */}
+        <div className="p-4 md:p-6 lg:p-8 flex-grow pt-12 md:pt-4 lg:pt-4">
           {children}
         </div>
       </SidebarInset>

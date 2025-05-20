@@ -1,5 +1,5 @@
 
-import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType, BlackoutDate, RecurringBlackoutRule, DayOfWeek, UserStatus } from '@/types';
+import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType, BlackoutDate, RecurringBlackoutRule, DayOfWeek, UserStatus, AvailabilitySlot, UnavailabilityPeriod } from '@/types';
 import { format, addDays, set, subDays, parseISO } from 'date-fns';
 
 const today = new Date();
@@ -45,7 +45,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'MY58012345',
     purchaseDate: '2022-08-15T00:00:00.000Z',
     description: 'Mixed Signal Oscilloscope with 500 MHz bandwidth, 4 analog channels, and 16 digital channels. Includes built-in waveform generator and serial protocol analysis capabilities. Ideal for debugging embedded systems and mixed-signal designs.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['500 MHz Bandwidth', '4 Analog Channels', '16 Digital Channels', 'WaveGen', 'Serial Decode'],
     availability: [
       { date: todayStr, slots: ['14:00-16:00', '16:00-18:00'] },
@@ -73,7 +73,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'DP8C198765',
     purchaseDate: '2023-01-20T00:00:00.000Z',
     description: 'Triple output programmable DC power supply. CH1: 0-30V/0-3A, CH2: 0-30V/0-3A, CH3: 0-5V/0-3A. High resolution and remote sense capabilities.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['3 Channels', 'Programmable', 'Overvoltage Protection', 'LAN Interface'],
     availability: [
       { date: tomorrowStr, slots: ['09:00-11:00', '11:00-13:00'] },
@@ -94,7 +94,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'SDG2XABC001',
     purchaseDate: '2021-05-10T00:00:00.000Z',
     description: 'Dual-channel Arbitrary Waveform Generator, 40 MHz bandwidth, 1.2 GSa/s sampling rate. Generates sine, square, ramp, pulse, noise, and arbitrary waveforms.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['40 MHz Bandwidth', 'Dual Channel', 'Arbitrary Waveforms', 'IQ Modulation'],
     availability: [],
     unavailabilityPeriods: [
@@ -114,7 +114,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'RS-FPC-987',
     purchaseDate: '2023-06-05T00:00:00.000Z',
     description: 'Spectrum analyzer with frequency range from 5 kHz to 1 GHz (upgradable to 3 GHz). Includes tracking generator and internal VSWR bridge.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['1 GHz Base Frequency', 'Tracking Generator', 'One-Port Vector Network Analyzer'],
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },
@@ -134,7 +134,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'WEL-WE-007A',
     purchaseDate: '2022-11-01T00:00:00.000Z',
     description: '70W digital soldering station with temperature control and standby mode. Suitable for general purpose and fine pitch soldering work.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['70 Watt Power', 'Digital Temperature Control', 'ESD Safe', 'Interchangeable Tips'],
     availability: [
         { date: todayStr, slots: ['10:00-17:00'] },
@@ -155,7 +155,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'FLUKE-87V-011',
     purchaseDate: '2023-03-10T00:00:00.000Z',
     description: 'True-RMS industrial digital multimeter for accurate measurements on non-linear signals. Measures AC/DC voltage and current, resistance, capacitance, frequency.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['True-RMS AC Voltage/Current', 'Temperature Measurement (with probe)', 'CAT III 1000V, CAT IV 600V Safety Rating'],
     availability: [
       { date: dayAfterTomorrowStr, slots: ['09:00-17:00'] }
@@ -175,7 +175,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'XALV-U250-001',
     purchaseDate: '2023-09-01T00:00:00.000Z',
     description: 'High-performance FPGA development node for hardware acceleration and prototyping complex digital systems.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['High-Speed Transceivers', 'Large Logic Capacity', 'PCIe Gen3 x16'],
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },
@@ -206,7 +206,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'FLMS12345',
     purchaseDate: '2022-07-20T00:00:00.000Z',
     description: 'Compact spectrometer for VIS-NIR measurements (350-1000 nm). Ideal for absorbance, transmittance, and irradiance.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['350-1000 nm Range', 'High Resolution', 'USB Interface', 'Compact Size'],
     availability: [
       { date: threeDaysLaterStr, slots: ['10:00-12:00', '13:00-16:00'] },
@@ -226,12 +226,13 @@ export let initialMockUsers: User[] = [
   { id: 'ps1', name: 'Penny Pending', email: 'penny@example.com', role: 'Researcher', status: 'pending_approval', password: 'password', avatarUrl: 'https://placehold.co/100x100.png' }
 ];
 
+
 export let initialBookings: Booking[] = [
   {
     id: 'b1',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u4',
+    userId: 'u4', // Researcher Fourth
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(addDays(today, 2), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 2), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -249,7 +250,7 @@ export let initialBookings: Booking[] = [
     id: 'b2',
     resourceId: 'res2',
     resourceName: 'Rigol DP832 Programmable Power Supply',
-    userId: 'u2',
+    userId: 'u2', // Dr. Manager Second
     userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
     startTime: set(addDays(today, 3), { hours: 14, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 3), { hours: 16, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -260,7 +261,7 @@ export let initialBookings: Booking[] = [
     id: 'b3',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u4',
+    userId: 'u4', // Researcher Fourth
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(addDays(today, 1), { hours: 14, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 1), { hours: 15, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -271,7 +272,7 @@ export let initialBookings: Booking[] = [
     id: 'b4',
     resourceId: 'res4',
     resourceName: 'Rohde & Schwarz FPC1500 Spectrum Analyzer',
-    userId: 'u4',
+    userId: 'u4', // Researcher Fourth
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(today, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(today, { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -282,7 +283,7 @@ export let initialBookings: Booking[] = [
     id: 'b5',
     resourceId: 'res5',
     resourceName: 'Weller WE1010NA Digital Soldering Station',
-    userId: 'u2',
+    userId: 'u2', // Dr. Manager Second
     userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
     startTime: set(addDays(today, 5), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 5), { hours: 13, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -293,7 +294,7 @@ export let initialBookings: Booking[] = [
     id: 'b6',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u4',
+    userId: 'u4', // Researcher Fourth
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(subDays(today, 1), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(subDays(today, 1), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -311,7 +312,7 @@ export let initialBookings: Booking[] = [
     id: 'b7',
     resourceId: 'res7',
     resourceName: 'FPGA Dev Node Alpha',
-    userId: 'u4',
+    userId: 'u4', // Researcher Fourth
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(addDays(today, 4), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 4), { hours: 15, minutes: 30, seconds: 0, milliseconds: 0 }),
@@ -365,7 +366,7 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
 export let initialNotifications: Notification[] = [
   {
     id: 'n1',
-    userId: 'u4',
+    userId: 'u4', // Researcher Fourth
     title: 'Booking Confirmed: Keysight Scope',
     message: 'Your booking for Keysight MSOX3054T Oscilloscope on ' + format(set(addDays(today, 2), { hours: 10, minutes: 0 }), 'MMM dd, HH:mm') + ' has been confirmed.',
     type: 'booking_confirmed',
@@ -375,7 +376,7 @@ export let initialNotifications: Notification[] = [
   },
   {
     id: 'n2',
-    userId: 'u4',
+    userId: 'u4', // Researcher Fourth
     title: 'Maintenance Update: Siglent SDG2042X',
     message: 'Maintenance request for Siglent SDG2042X Function Generator (Channel 2 output unstable) is now "In Progress". Technician Third assigned.',
     type: 'maintenance_assigned',
@@ -391,7 +392,7 @@ export let initialNotifications: Notification[] = [
     type: 'booking_pending_approval',
     isRead: false,
     createdAt: subDays(today, 0).toISOString(),
-    linkTo: '/admin/booking-approvals',
+    linkTo: '/admin/booking-requests', // Updated link
   },
   {
     id: 'n4',
@@ -405,7 +406,7 @@ export let initialNotifications: Notification[] = [
   },
 ];
 
-// Helper to add notifications (mutates initialNotifications for mock purposes)
+
 export function addNotification(
   userId: string,
   title: string,
@@ -423,7 +424,7 @@ export function addNotification(
     createdAt: new Date().toISOString(),
     linkTo,
   };
-  initialNotifications.unshift(newNotification); // Add to the beginning of the array
+  initialNotifications.unshift(newNotification); 
 }
 
 export let initialBlackoutDates: BlackoutDate[] = [
@@ -435,13 +436,16 @@ export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = [
   { id: 'rb1', name: 'Weekend Closure', daysOfWeek: ['Saturday', 'Sunday'], reason: 'Lab closed on weekends' },
 ];
 
+
 export const mockLoginUser = (email: string, password?: string): User | null => {
   const user = initialMockUsers.find(u => u.email === email && u.password === password);
   if (user) {
     if (user.status === 'pending_approval') {
-      return { ...user, status: 'pending_approval' }; // Indicate status for login logic
+      return { ...user, status: 'pending_approval' }; 
     }
-    return user; // This includes active users
+    if (user.status === 'active') {
+      return user;
+    }
   }
   return null;
 };
@@ -451,11 +455,11 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
     return { success: false, message: 'An account with this email already exists or is pending approval.' };
   }
   const newUser: User = {
-    id: `u${initialMockUsers.length + 1 + Date.now()}`, // Ensure new IDs are unique
+    id: `u${initialMockUsers.length + 1 + Date.now()}`,
     name,
     email,
     password,
-    role: 'Researcher', // Default role for new signups
+    role: 'Researcher', 
     status: 'pending_approval',
     avatarUrl: 'https://placehold.co/100x100.png'
   };
@@ -468,7 +472,7 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
         'New Signup Request',
         `User ${name} (${email}) has signed up and is awaiting approval.`,
         'signup_pending_admin',
-        '/admin/users' // Link to the main users page
+        '/admin/users' 
     );
   }
   return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: newUser.id };
