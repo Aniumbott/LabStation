@@ -16,6 +16,7 @@ import {
   Bell,
   CalendarOff,
   Loader2,
+  Building, // Added for Lab Management if we re-add it
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
@@ -44,15 +45,15 @@ interface NavItem {
   allowedRoles?: RoleName[];
 }
 
-const PUBLIC_ROUTES = ['/login', '/signup'];
+const PUBLIC_ROUTES = ['/login', '/signup']; // Added /signup
 
-const ALL_NAV_ITEMS: NavItem[] = [
+const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/resources', label: 'Resources', icon: ClipboardList },
   { href: '/bookings', label: 'Bookings', icon: CalendarDays },
   { href: '/maintenance', label: 'Maintenance', icon: Wrench },
   { href: '/notifications', label: 'Notifications', icon: Bell },
-  { href: '/profile', label: 'My Profile', icon: UserCog },
+  { href: '/profile', label: 'My Profile', icon: UserCog, allowedRoles: ['Admin', 'Lab Manager', 'Technician', 'Researcher'] }, // Ensure all roles can see profile
   {
     href: '/admin/booking-approvals',
     label: 'Booking Approvals',
@@ -77,7 +78,6 @@ const ALL_NAV_ITEMS: NavItem[] = [
     icon: ListChecks,
     allowedRoles: ['Admin'],
   },
-  // Add new admin link for signup requests later
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {
@@ -91,12 +91,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }, []);
 
   const visibleNavItems = useMemo(() => {
-    if (!currentUser) { // Only filter based on currentUser if they exist
-        return ALL_NAV_ITEMS.filter(item => !item.allowedRoles || item.allowedRoles.length === 0);
+    if (!currentUser) {
+      // Show only items without allowedRoles or with empty allowedRoles if not logged in (e.g., for a public dashboard link if we had one)
+      return navItems.filter(item => !item.allowedRoles || item.allowedRoles.length === 0);
     }
-    return ALL_NAV_ITEMS.filter(item => {
+    return navItems.filter(item => {
       if (!item.allowedRoles || item.allowedRoles.length === 0) {
-        return true;
+        return true; // Accessible to all logged-in users
       }
       return item.allowedRoles.includes(currentUser.role);
     });
@@ -118,7 +119,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // If not authenticated and trying to access a protected route, show a loader while redirecting.
   if (!currentUser && !PUBLIC_ROUTES.includes(pathname)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-svh bg-background text-muted-foreground">
@@ -128,13 +128,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // If not authenticated but on a public route (e.g., /login page itself),
-  // render only the children (the page content) without the main app layout.
   if (!currentUser && PUBLIC_ROUTES.includes(pathname)) {
     return <>{children}</>;
   }
   
-  // If we reach here, the user is authenticated, and we render the full AppLayout.
   return (
     <SidebarProvider defaultOpen>
       <Sidebar>
@@ -148,10 +145,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <SidebarMenuItem key={item.label}>
                 <Link href={item.href} passHref legacyBehavior>
                   <SidebarMenuButton
-                    isActive={pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))}
+                    isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))}
                     tooltip={item.label}
                     className={cn(
-                      (pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))) && 'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
+                      (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))) && 'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
                     )}
                   >
                     <item.icon />
@@ -164,9 +161,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </SidebarContent>
       </Sidebar>
 
-      <SidebarInset className="flex flex-col relative p-4 md:p-6 lg:p-8">
+      <SidebarInset className="flex flex-col relative pt-12 sm:pt-0"> {/* Added sm:pt-0 to remove top padding on larger screens */}
         <MobileSidebarToggle />
-        {children}
+        <div className="p-4 md:p-6 lg:p-8 flex-grow"> {/* Added flex-grow and padding here */}
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );
