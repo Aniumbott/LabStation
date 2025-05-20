@@ -5,7 +5,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { CalendarOff, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Repeat } from 'lucide-react';
 import type { BlackoutDate, RecurringBlackoutRule, RoleName } from '@/types';
-import { initialBlackoutDates, mockCurrentUser, initialRecurringBlackoutRules } from '@/lib/mock-data';
+import { initialBlackoutDates, initialRecurringBlackoutRules } from '@/lib/mock-data';
+import { useAuth } from '@/components/auth-context'; // Import useAuth
 import {
   Table,
   TableBody,
@@ -49,10 +50,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { BlackoutDateFormDialog, BlackoutDateFormValues } from '@/components/admin/blackout-date-form-dialog';
-import { RecurringBlackoutRuleFormDialog, RecurringBlackoutRuleFormValues } from '@/components/admin/recurring-blackout-rule-form-dialog'; // New import
+import { RecurringBlackoutRuleFormDialog, RecurringBlackoutRuleFormValues } from '@/components/admin/recurring-blackout-rule-form-dialog';
 
 export default function BlackoutDatesPage() {
   const { toast } = useToast();
+  const { currentUser } = useAuth(); // Use AuthContext
+
   // Single Dates
   const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>(() => JSON.parse(JSON.stringify(initialBlackoutDates)));
   const [isDateFormDialogOpen, setIsDateFormDialogOpen] = useState(false);
@@ -212,7 +215,7 @@ export default function BlackoutDatesPage() {
     setRuleToDelete(null);
   };
   
-  const canManageBlackouts = mockCurrentUser.role === 'Admin' || mockCurrentUser.role === 'Lab Manager';
+  const canManageBlackouts = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
 
   return (
     <TooltipProvider>
@@ -347,20 +350,22 @@ export default function BlackoutDatesPage() {
                 </Table>
               </div>
             ) : (
-              <div className="text-center py-10 text-muted-foreground">
-                <CalendarOff className="mx-auto h-10 w-10 mb-3 opacity-50" />
-                <p className="font-medium">
-                  {activeDateSearchTerm ? "No Blackout Dates Match Filter" : "No Specific Blackout Dates Defined"}
-                </p>
-                <p className="text-xs mb-3">
-                  {activeDateSearchTerm ? "Try adjusting your search criteria." : "Add individual lab-wide closure dates here."}
-                </p>
-                {activeDateSearchTerm && (
-                  <Button variant="outline" size="sm" onClick={resetAllActiveDateFilters}>
-                    <FilterX className="mr-2 h-4 w-4" /> Reset Date Filters
-                  </Button>
-                )}
-              </div>
+              <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
+                <CardContent>
+                  <CalendarOff className="mx-auto h-10 w-10 mb-3 opacity-50" />
+                  <p className="font-medium">
+                    {activeDateSearchTerm ? "No Blackout Dates Match Filter" : "No Specific Blackout Dates Defined"}
+                  </p>
+                  <p className="text-xs mb-3">
+                    {activeDateSearchTerm ? "Try adjusting your search criteria." : "Add individual lab-wide closure dates here."}
+                  </p>
+                  {activeDateSearchTerm && (
+                    <Button variant="outline" size="sm" onClick={resetAllActiveDateFilters}>
+                      <FilterX className="mr-2 h-4 w-4" /> Reset Date Filters
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
             )}
           </CardContent>
         </Card>
@@ -447,11 +452,13 @@ export default function BlackoutDatesPage() {
                 </Table>
               </div>
             ) : (
-              <div className="text-center py-10 text-muted-foreground">
-                <Repeat className="mx-auto h-10 w-10 mb-3 opacity-50" />
-                <p className="font-medium">No Recurring Lab Closure Rules Defined</p>
-                <p className="text-xs">Add rules for regular closures like weekends or weekly maintenance.</p>
-              </div>
+              <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
+                <CardContent>
+                  <Repeat className="mx-auto h-10 w-10 mb-3 opacity-50" />
+                  <p className="font-medium">No Recurring Lab Closure Rules Defined</p>
+                  <p className="text-xs">Add rules for regular closures like weekends or weekly maintenance.</p>
+                </CardContent>
+              </Card>
             )}
           </CardContent>
         </Card>
