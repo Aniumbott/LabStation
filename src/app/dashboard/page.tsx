@@ -18,10 +18,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format, isValid, isPast, parseISO } from 'date-fns';
+import { format, isValid, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { allAdminMockResources, initialBookings } from '@/lib/mock-data';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/auth-context';
 
 export default function DashboardPage() {
@@ -30,7 +30,8 @@ export default function DashboardPage() {
   const [upcomingUserBookings, setUpcomingUserBookings] = useState<Booking[]>([]);
 
   useEffect(() => {
-    setFrequentlyUsedResources(allAdminMockResources.slice(0, 2));
+    // Simulate fetching frequently used resources; for now, just take the first few.
+    setFrequentlyUsedResources(allAdminMockResources.slice(0, 2)); // Use resources from admin page
     
     if (currentUser) {
       const filteredBookings = initialBookings
@@ -77,7 +78,7 @@ export default function DashboardPage() {
           )}
         </div>
         {frequentlyUsedResources.length > 0 ? (
-          <div className="grid w-fit gap-6 md:grid-cols-2">
+          <div className="grid w-fit gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2">
             {frequentlyUsedResources.map((resource) => (
               <Card key={resource.id} className="w-full md:max-w-lg flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300 p-4">
                 <CardHeader className="p-0 pb-3">

@@ -45,7 +45,7 @@ function ResourceDetailPageSkeleton() {
           </div>
         }
       />
-      <div className="grid md:grid-cols-3 gap-6 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
         <div className="md:col-span-1 space-y-6">
           <Card className="shadow-lg">
             <CardContent className="p-0">
@@ -169,7 +169,7 @@ export default function ResourceDetailPage() {
   useEffect(() => {
     if (resourceId) {
       setIsLoading(true);
-      setTimeout(() => {
+      setTimeout(() => { // Simulate fetch delay
         const foundResource = allAdminMockResources.find(r => r.id === resourceId);
         setResource(foundResource || null);
         setIsLoading(false);
@@ -179,7 +179,7 @@ export default function ResourceDetailPage() {
       setResource(null);
     }
   }, [resourceId]);
-
+  
   const userPastBookingsForResource = useMemo(() => {
     if (!resource || !currentUser) return [];
     return initialBookings
@@ -193,15 +193,14 @@ export default function ResourceDetailPage() {
   }, [resource, currentUser]);
 
   const sortedUnavailabilityPeriods = useMemo(() => {
-    if (!resource || !resource.unavailabilityPeriods) { // Guard against null resource or missing unavailabilityPeriods
+    if (!resource || !resource.unavailabilityPeriods) { 
       return [];
     }
     return [...resource.unavailabilityPeriods].sort((a, b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime());
-  }, [resource]); // Dependency is now the whole resource object
+  }, [resource]);
 
-  // Non-hook definitions
   const canManageResource = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
-  const canBookResource = resource ? resource.status === 'Available' : false; // Handles null resource
+  const canBookResource = resource ? resource.status === 'Available' : false;
 
   const handleSaveResource = (data: ResourceFormValues) => {
     if (resource) {
@@ -233,7 +232,7 @@ export default function ResourceDetailPage() {
         if (resourceIndexInGlobalArray !== -1) {
             allAdminMockResources[resourceIndexInGlobalArray] = updatedResourceData;
         }
-        setResource(updatedResourceData);
+        setResource(updatedResourceData); // Update local state to re-render detail page
         toast({
             title: 'Resource Updated',
             description: `Resource "${data.name}" has been updated.`,
@@ -271,7 +270,7 @@ export default function ResourceDetailPage() {
         }
       } else {
         if (dateIndex !== -1) {
-          updatedAvailability[dateIndex].slots = [];
+          updatedAvailability[dateIndex].slots = []; 
         } else {
            updatedAvailability.push({ date, slots: [] });
         }
@@ -279,11 +278,16 @@ export default function ResourceDetailPage() {
       
       updatedAvailability.sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
       const updatedResource = { ...resource, availability: updatedAvailability };
+      
+      // Update local state for immediate reflection on the detail page
+      setResource(updatedResource);
+
+      // Update "global" mock array
       const globalIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
       if (globalIndex !== -1) {
         allAdminMockResources[globalIndex] = updatedResource;
       }
-      setResource(updatedResource);
+      
       toast({
         title: 'Availability Updated',
         description: `Daily slots for ${resource.name} on ${format(parseISO(date), 'PPP')} have been updated.`,
@@ -294,11 +298,12 @@ export default function ResourceDetailPage() {
   const handleSaveUnavailability = (updatedPeriods: UnavailabilityPeriod[]) => {
     if (resource) {
       const updatedResource = { ...resource, unavailabilityPeriods: updatedPeriods };
+      setResource(updatedResource); // Update local state
+
       const globalIndex = allAdminMockResources.findIndex(r => r.id === resource.id);
       if (globalIndex !== -1) {
         allAdminMockResources[globalIndex] = updatedResource;
       }
-      setResource(updatedResource);
       toast({
         title: 'Unavailability Updated',
         description: `Unavailability periods for ${resource.name} have been updated.`,
@@ -355,7 +360,7 @@ export default function ResourceDetailPage() {
         description={`Detailed information for ${resource.resourceTypeName} in ${resource.lab}.`}
         icon={Archive}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button variant="outline" asChild>
                 <Link href="/admin/resources">
                     <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
@@ -367,7 +372,6 @@ export default function ResourceDetailPage() {
                   <TooltipTrigger asChild>
                     <Button variant="outline" size="icon" onClick={() => setIsUnavailabilityDialogOpen(true)}>
                       <CalendarX className="h-4 w-4" />
-                      <span className="sr-only">Set Unavailability Periods</span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent><p>Set Unavailability Periods</p></TooltipContent>
@@ -376,19 +380,14 @@ export default function ResourceDetailPage() {
                   <TooltipTrigger asChild>
                     <Button variant="outline" size="icon" onClick={() => setIsAvailabilityDialogOpen(true)}>
                       <CalendarCog className="h-4 w-4" />
-                      <span className="sr-only">Manage Daily Availability</span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent><p>Manage Daily Availability</p></TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" onClick={() => {
-                      // setResource(resource); // No need to setResource here, initialResource prop handles it
-                      setIsFormDialogOpen(true);
-                    }}>
+                    <Button variant="outline" size="icon" onClick={() => setIsFormDialogOpen(true)}>
                       <Edit className="h-4 w-4" />
-                      <span className="sr-only">Edit Resource</span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent><p>Edit Resource</p></TooltipContent>
@@ -399,7 +398,6 @@ export default function ResourceDetailPage() {
                        <AlertDialogTrigger asChild>
                           <Button variant="destructive" size="icon">
                               <Trash2 className="h-4 w-4" />
-                              <span className="sr-only">Delete Resource</span>
                           </Button>
                         </AlertDialogTrigger>
                     </TooltipTrigger>
@@ -429,7 +427,7 @@ export default function ResourceDetailPage() {
         }
       />
 
-      <div className="grid md:grid-cols-3 gap-6 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
         <div className="md:col-span-1 space-y-6">
             <Card className="shadow-lg">
                 <CardContent className="p-0">
@@ -619,9 +617,7 @@ export default function ResourceDetailPage() {
       {resource && (
         <ResourceFormDialog
             open={isFormDialogOpen}
-            onOpenChange={(isOpen) => {
-                setIsFormDialogOpen(isOpen);
-            }}
+            onOpenChange={setIsFormDialogOpen}
             initialResource={resource}
             onSave={handleSaveResource}
         />
@@ -646,4 +642,3 @@ export default function ResourceDetailPage() {
     </TooltipProvider>
   );
 }
-

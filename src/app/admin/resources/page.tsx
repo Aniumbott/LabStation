@@ -175,7 +175,9 @@ export default function ResourcesPage() {
         availability: editingResource.availability || [],
         unavailabilityPeriods: editingResource.unavailabilityPeriods || [],
       };
+      
       setResources(resources.map(r => r.id === editingResource.id ? updatedResource : r));
+      
       const globalIndex = allAdminMockResources.findIndex(r => r.id === editingResource.id);
       if (globalIndex !== -1) allAdminMockResources[globalIndex] = updatedResource;
 
@@ -228,7 +230,7 @@ export default function ResourcesPage() {
         description="Browse, filter, and manage all lab resources. Click resource name for details."
         icon={ClipboardList}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">

@@ -234,7 +234,7 @@ export default function BlackoutDatesPage() {
               <CardTitle>Specific Blackout Dates</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">Manage individual lab closure dates.</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Dialog open={isDateFilterDialogOpen} onOpenChange={setIsDateFilterDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm">

@@ -85,6 +85,10 @@ function BookingsPageContent() {
   const [selectedBookingForDetails, setSelectedBookingForDetails] = useState<Booking | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+  
   const handleOpenForm = useCallback((bookingToEdit?: Booking, resourceIdForNew?: string | null, dateForNew?: Date | null) => {
     if (!currentUser) {
         toast({ title: "Login Required", description: "You need to be logged in to create or edit bookings.", variant: "destructive" });
@@ -127,9 +131,6 @@ function BookingsPageContent() {
     setIsFormOpen(true);
   }, [activeSelectedDate, currentUser, toast, setIsFormOpen, setCurrentBooking]);
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
 
   useEffect(() => {
     if (currentUser) {
@@ -218,7 +219,7 @@ function BookingsPageContent() {
     setActiveSearchTerm(tempSearchTerm);
     setActiveFilterResourceId(tempFilterResourceId);
     setActiveFilterStatus(tempFilterStatus);
-    setActiveSelectedDate(tempSelectedDateInDialog); // Apply date from dialog
+    setActiveSelectedDate(tempSelectedDateInDialog); 
     setIsFilterDialogOpen(false);
   };
 
@@ -226,7 +227,7 @@ function BookingsPageContent() {
     setTempSearchTerm('');
     setTempFilterResourceId('all');
     setTempFilterStatus('all');
-    setTempSelectedDateInDialog(undefined); // Reset date in dialog
+    setTempSelectedDateInDialog(undefined); 
     setCurrentCalendarMonthInDialog(startOfDay(new Date()));
   };
 
@@ -530,7 +531,7 @@ function BookingsPageContent() {
   const handleBookingUpdateInDetails = (updatedBooking: Booking) => {
     setAllUserBookings(prev => prev.map(b => b.id === updatedBooking.id ? updatedBooking : b));
     if (selectedBookingForDetails && selectedBookingForDetails.id === updatedBooking.id) {
-      setSelectedBookingForDetails(updatedBooking); // Update the details dialog's view too
+      setSelectedBookingForDetails(updatedBooking); 
     }
   };
 
@@ -542,7 +543,7 @@ function BookingsPageContent() {
         icon={CalendarDays}
         actions={
             currentUser && ( 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
                 <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
                   <DialogTrigger asChild>
                       <Button variant="outline">
@@ -558,7 +559,7 @@ function BookingsPageContent() {
                       <DialogHeader>
                         <DialogTitle>Filter Your Bookings</DialogTitle>
                         <DialogDescription>
-                            Refine your list of bookings. The main page calendar also filters by date.
+                            Refine your list of bookings.
                         </DialogDescription>
                       </DialogHeader>
                       <Separator className="my-4" />
@@ -607,7 +608,7 @@ function BookingsPageContent() {
                             </div>
                             <Separator />
                             <div>
-                            <Label className="text-sm font-medium mb-2 block">Also Filter by Date (Calendar on Main Page)</Label>
+                            <Label className="text-sm font-medium mb-2 block">Filter by Date</Label>
                             <div className="flex justify-center items-center rounded-md border p-2">
                                 <Calendar
                                 mode="single" selected={tempSelectedDateInDialog} onSelect={setTempSelectedDateInDialog}
@@ -617,7 +618,7 @@ function BookingsPageContent() {
                                 footer={
                                     <div className="flex flex-col gap-2 items-center pt-2">
                                     {tempSelectedDateInDialog && <Button variant="ghost" size="sm" onClick={() => setTempSelectedDateInDialog(undefined)} className="w-full text-xs"><FilterX className="mr-2 h-4 w-4" />Clear Date Selection</Button>}
-                                    <p className="text-xs text-muted-foreground">{tempSelectedDateInDialog ? format(tempSelectedDateInDialog, 'PPP') : "No specific date selected for dialog"}</p>
+                                    <p className="text-xs text-muted-foreground">{tempSelectedDateInDialog ? format(tempSelectedDateInDialog, 'PPP') : "No specific date selected"}</p>
                                     </div>
                                 }
                                 classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
@@ -640,45 +641,17 @@ function BookingsPageContent() {
             )
         }
       />
-     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-1 shadow-lg">
-          <CardHeader>
-            <CardTitle>Filter by Date</CardTitle>
-            <CardDescription>Select a date to view bookings for that day.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex justify-center p-2">
-            <Calendar
-                mode="single"
-                selected={activeSelectedDate}
-                onSelect={(date) => setActiveSelectedDate(date ? startOfDay(date) : undefined)}
-                month={activeSelectedDate || startOfDay(new Date())} 
-                onMonthChange={(month) => setActiveSelectedDate(startOfDay(month))}
-                modifiers={{ booked: bookedDatesForCalendar }}
-                modifiersClassNames={{ booked: 'day-booked-dot' }}
-                className="rounded-md border"
-                classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
-                footer={ activeSelectedDate &&
-                    <Button
-                        variant="link"
-                        size="sm"
-                        onClick={() => setActiveSelectedDate(undefined)}
-                        className="w-full mt-2 text-xs text-muted-foreground"
-                    >
-                        <FilterX className="mr-2 h-4 w-4" /> View All My Bookings
-                    </Button>
-                }
-            />
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2 shadow-lg">
-            <CardHeader className="border-b">
-                <CardTitle>
-                {activeSelectedDate ? `Your Bookings for ${format(activeSelectedDate, 'PPP')}` : 'All Your Bookings'}
-                </CardTitle>
-                <CardDescription>
-                    Displaying {bookingsToDisplay.length} booking(s) based on active filters.
-                </CardDescription>
+     <div className="grid grid-cols-1">
+        <Card className="shadow-lg">
+            <CardHeader className="border-b flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle>
+                    {activeSelectedDate ? `Your Bookings for ${format(activeSelectedDate, 'PPP')}` : 'All Your Bookings'}
+                    </CardTitle>
+                    <CardDescription>
+                        Displaying {bookingsToDisplay.length} booking(s) based on active filters.
+                    </CardDescription>
+                </div>
             </CardHeader>
             <CardContent className="p-0">
                 {bookingsToDisplay.length > 0 ? (
@@ -799,7 +772,7 @@ function BookingsPageContent() {
                     currentParams.delete('resourceId');
                      paramsModified = true;
                 }
-                 if (currentParams.has('date') && !activeSelectedDate) { // Only clear date if no active date filter
+                 if (currentParams.has('date') && !activeSelectedDate) { 
                     currentParams.delete('date'); 
                      paramsModified = true;
                 }
@@ -1057,7 +1030,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
             <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Info size={12} /> This is automatically set.</p>
           </FormItem>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField
                 control={form.control}
                 name="startTime"
@@ -1137,4 +1110,3 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
     </Form>
   );
 }
-

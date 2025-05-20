@@ -122,13 +122,13 @@ export default function BookingRequestsPage() {
     const bookingIndex = allBookingsState.findIndex(b => b.id === bookingId);
     if (bookingIndex !== -1) {
       const updatedBookings = [...allBookingsState];
-      const rejectedBooking = { ...updatedBookings[bookingIndex], status: 'Cancelled' as Booking['status']}; // Changed to Cancelled
+      const rejectedBooking = { ...updatedBookings[bookingIndex], status: 'Cancelled' as Booking['status']}; 
       updatedBookings[bookingIndex] = rejectedBooking;
       setAllBookingsState(updatedBookings);
 
       const globalBookingIndex = initialBookings.findIndex(b => b.id === bookingId);
       if (globalBookingIndex !== -1) {
-        initialBookings[globalBookingIndex].status = 'Cancelled'; // Changed to Cancelled
+        initialBookings[globalBookingIndex].status = 'Cancelled'; 
       }
       toast({
         title: 'Booking Rejected',
@@ -155,13 +155,13 @@ export default function BookingRequestsPage() {
   const resetDialogFilters = () => {
     setTempSearchTerm('');
     setTempFilterResourceId('all');
-    setTempFilterStatus('Pending'); // Default to Pending
+    setTempFilterStatus('Pending'); 
   };
 
   const resetAllActiveFilters = () => {
     setActiveSearchTerm('');
     setActiveFilterResourceId('all');
-    setActiveFilterStatus('Pending'); // Default to Pending
+    setActiveFilterStatus('Pending'); 
     resetDialogFilters(); 
     setIsFilterDialogOpen(false); 
   };
@@ -169,7 +169,7 @@ export default function BookingRequestsPage() {
   const activeFilterCount = [
     activeSearchTerm !== '',
     activeFilterResourceId !== 'all',
-    activeFilterStatus !== 'Pending' && activeFilterStatus !== 'all', // Count if not default pending or all
+    activeFilterStatus !== 'Pending' && activeFilterStatus !== 'all', 
   ].filter(Boolean).length;
 
   const formatDateField = (dateInput: string | Date): string => {
@@ -190,7 +190,7 @@ export default function BookingRequestsPage() {
           description="Review and manage pending or waitlisted booking requests."
           icon={CheckSquare}
           actions={
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline">
@@ -226,31 +226,33 @@ export default function BookingRequestsPage() {
                           />
                       </div>
                     </div>
-                    <div>
-                      <Label htmlFor="requestResourceDialog" className="text-sm font-medium mb-1 block">Resource</Label>
-                      <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId}>
-                          <SelectTrigger id="requestResourceDialog" className="h-9"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
-                          <SelectContent>
-                              <SelectItem value="all">All Resources</SelectItem>
-                              {Array.from(new Set(allBookingsState.filter(b => b.status === 'Pending' || b.status === 'Waitlisted').map(b => b.resourceId)))
-                                  .map(resourceId => {
-                                      const resource = allAdminMockResources.find(r => r.id === resourceId);
-                                      return resource ? <SelectItem key={resource.id} value={resource.id}>{resource.name}</SelectItem> : null;
-                                  })
-                              }
-                          </SelectContent>
-                      </Select>
-                    </div>
-                     <div>
-                      <Label htmlFor="requestStatusDialog" className="text-sm font-medium mb-1 block">Status</Label>
-                      <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as Booking['status'] | 'all')}>
-                          <SelectTrigger id="requestStatusDialog" className="h-9"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
-                          <SelectContent>
-                              <SelectItem value="all">All (Pending & Waitlisted)</SelectItem>
-                              <SelectItem value="Pending">Pending</SelectItem>
-                              <SelectItem value="Waitlisted">Waitlisted</SelectItem>
-                          </SelectContent>
-                      </Select>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="requestResourceDialog" className="text-sm font-medium mb-1 block">Resource</Label>
+                        <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId}>
+                            <SelectTrigger id="requestResourceDialog" className="h-9"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Resources</SelectItem>
+                                {Array.from(new Set(allBookingsState.filter(b => b.status === 'Pending' || b.status === 'Waitlisted').map(b => b.resourceId)))
+                                    .map(resourceId => {
+                                        const resource = allAdminMockResources.find(r => r.id === resourceId);
+                                        return resource ? <SelectItem key={resource.id} value={resource.id}>{resource.name}</SelectItem> : null;
+                                    })
+                                }
+                            </SelectContent>
+                        </Select>
+                      </div>
+                       <div>
+                        <Label htmlFor="requestStatusDialog" className="text-sm font-medium mb-1 block">Status</Label>
+                        <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as Booking['status'] | 'all')}>
+                            <SelectTrigger id="requestStatusDialog" className="h-9"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All (Pending & Waitlisted)</SelectItem>
+                                <SelectItem value="Pending">Pending</SelectItem>
+                                <SelectItem value="Waitlisted">Waitlisted</SelectItem>
+                            </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
                   <DialogFooter className="pt-6 border-t">

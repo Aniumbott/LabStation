@@ -114,7 +114,8 @@ export default function ResourceTypesPage() {
   const handleSaveType = (data: ResourceTypeFormValues) => {
     if (editingType) {
       const updatedType = { ...editingType, ...data };
-      setResourceTypes(resourceTypes.map(rt => rt.id === editingType.id ? updatedType : rt));
+      const updatedTypes = resourceTypes.map(rt => rt.id === editingType.id ? updatedType : rt);
+      setResourceTypes(updatedTypes);
       const globalIndex = initialMockResourceTypes.findIndex(rt => rt.id === editingType.id);
       if (globalIndex !== -1) initialMockResourceTypes[globalIndex] = updatedType;
 
@@ -168,7 +169,7 @@ export default function ResourceTypesPage() {
         description="Define and manage categories for lab resources."
         icon={ListChecks}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">

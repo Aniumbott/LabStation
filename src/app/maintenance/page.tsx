@@ -246,7 +246,7 @@ export default function MaintenanceRequestsPage() {
           description="Log, track, and manage service requests for lab resources."
           icon={Wrench}
           actions={
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline">
@@ -338,7 +338,7 @@ export default function MaintenanceRequestsPage() {
               <CardTitle>Active Requests ({filteredRequests.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto rounded-lg">
+              <div className="overflow-x-auto rounded-lg border shadow-sm">
                 <Table>
                   <TableHeader>
                     <TableRow>
