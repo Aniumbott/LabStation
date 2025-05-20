@@ -46,7 +46,7 @@ export interface Resource {
   purchaseDate?: string; // ISO string
   notes?: string;
   remoteAccess?: RemoteAccessDetails;
-  allowQueueing?: boolean; // Added for queue management
+  allowQueueing?: boolean;
 }
 
 export interface BookingUsageDetails {
@@ -67,7 +67,8 @@ export interface Booking {
   userName: string;
   startTime: Date;
   endTime: Date;
-  status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted'; // Added 'Waitlisted'
+  createdAt: Date; // Ensured for waitlist ordering
+  status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted';
   notes?: string;
   usageDetails?: BookingUsageDetails;
 }
@@ -106,14 +107,14 @@ export type NotificationType =
   | 'booking_confirmed'
   | 'booking_pending_approval'
   | 'booking_rejected'
-  | 'booking_waitlisted' // Existing, can be used when user is initially waitlisted
+  | 'booking_waitlisted'
   | 'maintenance_new'
   | 'maintenance_assigned'
   | 'maintenance_resolved'
   | 'signup_approved'
   | 'signup_pending_admin'
-  | 'booking_promoted_user'   // New: For user whose booking is promoted
-  | 'booking_promoted_admin'; // New: For admin when a booking is promoted
+  | 'booking_promoted_user'
+  | 'booking_promoted_admin';
 
 export interface Notification {
   id: string;
@@ -141,4 +142,21 @@ export interface RecurringBlackoutRule {
   name: string;
   daysOfWeek: DayOfWeek[];
   reason?: string;
+}
+
+export type AuditActionType =
+  | 'USER_CREATED' | 'USER_UPDATED' | 'USER_DELETED' | 'USER_APPROVED' | 'USER_REJECTED'
+  | 'RESOURCE_CREATED' | 'RESOURCE_UPDATED' | 'RESOURCE_DELETED'
+  | 'BOOKING_CREATED' | 'BOOKING_UPDATED' | 'BOOKING_APPROVED' | 'BOOKING_REJECTED' | 'BOOKING_CANCELLED'
+  | 'MAINTENANCE_CREATED' | 'MAINTENANCE_UPDATED';
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string; // ISO string
+  userId: string;    // User who performed the action
+  userName: string;  // Denormalized for display
+  action: AuditActionType;
+  entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule';
+  entityId?: string;
+  details: string; // Human-readable summary
 }

@@ -1,4 +1,3 @@
-
 'use client';
 
 import Image from 'next/image';
@@ -20,7 +19,7 @@ import {
 } from "@/components/ui/table";
 import { format, isValid, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { allAdminMockResources, initialBookings } from '@/lib/mock-data';
+import { allAdminMockResources, initialBookings, getWaitlistPosition } from '@/lib/mock-data';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/auth-context';
 
@@ -30,15 +29,15 @@ export default function DashboardPage() {
   const [upcomingUserBookings, setUpcomingUserBookings] = useState<Booking[]>([]);
 
   useEffect(() => {
-    // Simulate fetching frequently used resources; for now, just take the first few.
-    setFrequentlyUsedResources(allAdminMockResources.slice(0, 2)); // Use resources from admin page
+    setFrequentlyUsedResources(allAdminMockResources.slice(0, 2)); 
     
     if (currentUser) {
       const filteredBookings = initialBookings
         .filter(b => {
-            const startTimeDate = b.startTime; // Already a Date object
+            const startTimeDate = b.startTime; 
             return isValid(startTimeDate) && !isPast(startTimeDate) && b.status !== 'Cancelled' && b.userId === currentUser.id;
         })
+        .map(b => ({...b, createdAt: b.createdAt || b.startTime })) // Ensure createdAt for waitlist calculation
         .sort((a,b) => a.startTime.getTime() - b.startTime.getTime())
         .slice(0, 5);
       setUpcomingUserBookings(filteredBookings);
@@ -138,6 +137,7 @@ export default function DashboardPage() {
                     {upcomingUserBookings.map((booking) => {
                       const startTimeDate = booking.startTime;
                       const endTimeDate = booking.endTime;
+                      const waitlistPosition = getWaitlistPosition(booking, initialBookings);
                       return (
                         <TableRow key={booking.id}>
                           <TableCell className="font-medium">{booking.resourceName}</TableCell>
@@ -153,7 +153,7 @@ export default function DashboardPage() {
                                     booking.status === 'Waitlisted' && 'bg-purple-500 text-white hover:bg-purple-600'
                                 )}
                             >
-                                {booking.status}
+                                {booking.status} {booking.status === 'Waitlisted' && waitlistPosition && `(#${waitlistPosition})`}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">

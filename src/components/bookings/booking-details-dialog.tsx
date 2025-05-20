@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,7 @@ import { Calendar, Clock, User, Info, Tag, StickyNote, Activity, CheckCircle, Al
 import { cn } from '@/lib/utils';
 import { Separator } from '../ui/separator';
 import { LogUsageFormDialog } from './log-usage-form-dialog';
-import { initialBookings } from '@/lib/mock-data'; // To update global mock data
+import { initialBookings, getWaitlistPosition } from '@/lib/mock-data'; 
 
 interface BookingDetailsDialogProps {
   booking: Booking | null;
@@ -43,10 +43,8 @@ const DetailItem = ({ icon: Icon, label, value }: { icon: React.ElementType, lab
 
 export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChange, onBookingUpdate }: BookingDetailsDialogProps) {
   const [isLogUsageFormOpen, setIsLogUsageFormOpen] = useState(false);
-  // Use a local state for booking to reflect immediate updates to usageDetails
   const [currentBookingDetails, setCurrentBookingDetails] = useState<Booking | null>(bookingProp);
 
-  // Sync local state if the booking prop changes
   useEffect(() => {
     setCurrentBookingDetails(bookingProp);
   }, [bookingProp]);
@@ -82,6 +80,8 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
 
   const isPastBooking = currentBookingDetails.startTime && isPast(new Date(currentBookingDetails.startTime));
   const canLogUsage = isPastBooking && currentBookingDetails.status === 'Confirmed';
+  const waitlistPosition = getWaitlistPosition(currentBookingDetails, initialBookings);
+
 
   const handleSaveUsage = (usageData: BookingUsageDetails) => {
     if (currentBookingDetails) {
@@ -92,8 +92,8 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
         initialBookings[globalIndex] = updatedBooking;
       }
       
-      setCurrentBookingDetails(updatedBooking); // Update local state for immediate reflection in this dialog
-      onBookingUpdate(updatedBooking); // Notify parent to update its state
+      setCurrentBookingDetails(updatedBooking); 
+      onBookingUpdate(updatedBooking); 
       setIsLogUsageFormOpen(false);
     }
   };
@@ -135,11 +135,16 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
                 {format(new Date(currentBookingDetails.startTime), 'p')} - {format(new Date(currentBookingDetails.endTime), 'p')}
               </span>
             </div>
+             <div className="flex items-center">
+              <Clock className="mr-3 h-5 w-5 text-muted-foreground" />
+              <span className="font-medium text-muted-foreground w-28">Created:</span>
+              <span className="text-foreground">{format(new Date(currentBookingDetails.createdAt), 'PPP, p')}</span>
+            </div>
             <div className="flex items-center">
               <Info className="mr-3 h-5 w-5 text-muted-foreground" /> 
               <span className="font-medium text-muted-foreground w-28">Status:</span>
               <Badge className={cn("whitespace-nowrap text-xs px-2 py-0.5 border-transparent", getStatusBadgeClass(currentBookingDetails.status))}>
-                {currentBookingDetails.status}
+                {currentBookingDetails.status} {currentBookingDetails.status === 'Waitlisted' && waitlistPosition && `(#${waitlistPosition})`}
               </Badge>
             </div>
             {currentBookingDetails.notes && (

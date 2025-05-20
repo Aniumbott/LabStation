@@ -1,6 +1,6 @@
 
-import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType, BlackoutDate, RecurringBlackoutRule, DayOfWeek } from '@/types';
-import { format, addDays, set, subDays, parseISO } from 'date-fns';
+import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType, BlackoutDate, RecurringBlackoutRule, DayOfWeek, AuditLogEntry, AuditActionType } from '@/types';
+import { format, addDays, set, subDays, parseISO, startOfDay } from 'date-fns';
 
 const today = new Date();
 const todayStr = format(today, 'yyyy-MM-dd');
@@ -109,12 +109,12 @@ export let allAdminMockResources: Resource[] = [
   },
   {
     id: 'res4',
-    name: 'Rohde &amp; Schwarz FPC1500 Spectrum Analyzer',
+    name: 'Rohde & Schwarz FPC1500 Spectrum Analyzer',
     resourceTypeId: 'rt4',
     resourceTypeName: 'Spectrum Analyzer',
     lab: 'RF Lab',
     status: 'Available',
-    manufacturer: 'Rohde &amp; Schwarz',
+    manufacturer: 'Rohde & Schwarz',
     model: 'FPC1500',
     serialNumber: 'RS-FPC-987',
     purchaseDate: '2023-06-05T00:00:00.000Z',
@@ -247,6 +247,7 @@ export let initialBookings: Booking[] = [
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(parseISO(tomorrowStr), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(parseISO(tomorrowStr), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
+    createdAt: set(parseISO(yesterdayStr), { hours: 10, minutes: 0}),
     status: 'Confirmed',
     notes: 'Debugging SPI communication on custom MCU board for Project Alpha.',
   },
@@ -258,6 +259,7 @@ export let initialBookings: Booking[] = [
     userName: initialMockUsers.find(u => u.id === 'u7')?.name || 'Walter Waitlist',
     startTime: set(parseISO(tomorrowStr), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(parseISO(tomorrowStr), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
+    createdAt: set(parseISO(yesterdayStr), { hours: 10, minutes: 5}),
     status: 'Waitlisted',
     notes: 'Hoping to get on the scope if b1 cancels for Project Gamma.',
   },
@@ -269,6 +271,7 @@ export let initialBookings: Booking[] = [
     userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
     startTime: set(parseISO(tomorrowStr), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(parseISO(tomorrowStr), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
+    createdAt: set(parseISO(yesterdayStr), { hours: 10, minutes: 10}),
     status: 'Waitlisted',
     notes: 'Follow-up measurements for Project Alpha.',
   },
@@ -280,17 +283,19 @@ export let initialBookings: Booking[] = [
     userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
     startTime: set(addDays(today, 3), { hours: 14, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 3), { hours: 16, minutes: 0, seconds: 0, milliseconds: 0 }),
+    createdAt: set(addDays(today,1), {hours: 11, minutes: 0}),
     status: 'Pending',
     notes: 'Powering up prototype device for thermal testing with new heatsink design.'
   },
   {
     id: 'b4',
     resourceId: 'res4',
-    resourceName: 'Rohde &amp; Schwarz FPC1500 Spectrum Analyzer',
+    resourceName: 'Rohde & Schwarz FPC1500 Spectrum Analyzer',
     userId: 'u4',
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(today, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(today, { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
+    createdAt: set(subDays(today, 1), { hours: 14, minutes: 30}),
     status: 'Confirmed',
     notes: 'Antenna matching and S11 parameter measurement for Project Beta.'
   },
@@ -302,6 +307,7 @@ export let initialBookings: Booking[] = [
     userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
     startTime: set(addDays(today, 5), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 5), { hours: 13, minutes: 0, seconds: 0, milliseconds: 0 }),
+    createdAt: set(addDays(today, 2), { hours: 16, minutes: 0}),
     status: 'Pending',
     notes: 'Reworking BGA component on development board Gamma-03.'
   },
@@ -313,6 +319,7 @@ export let initialBookings: Booking[] = [
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(subDays(today, 1), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(subDays(today, 1), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
+    createdAt: set(subDays(today, 3), { hours: 9, minutes: 15}),
     status: 'Confirmed',
     notes: 'Past booking: Verifying I2C signals between sensor and MCU on Project Delta.',
     usageDetails: {
@@ -331,6 +338,7 @@ export let initialBookings: Booking[] = [
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(addDays(today, 4), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 4), { hours: 15, minutes: 30, seconds: 0, milliseconds: 0 }),
+    createdAt: set(addDays(today, 1), { hours: 17, minutes: 0}),
     status: 'Pending',
     notes: 'Need to test new HDL core for signal processing acceleration. Synthesis complete.'
   },
@@ -385,7 +393,7 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
 export let initialNotifications: Notification[] = [
   {
     id: 'n1',
-    userId: 'u4', // Researcher Fourth
+    userId: 'u4', 
     title: 'Booking Confirmed: Keysight Scope',
     message: 'Your booking for Keysight MSOX3054T Oscilloscope on ' + format(set(addDays(today, 2), { hours: 10, minutes: 0 }), 'MMM dd, HH:mm') + ' has been confirmed.',
     type: 'booking_confirmed',
@@ -395,7 +403,7 @@ export let initialNotifications: Notification[] = [
   },
   {
     id: 'n2',
-    userId: 'u4', // Researcher Fourth
+    userId: 'u4', 
     title: 'Maintenance Update: Siglent SDG2042X',
     message: 'Maintenance request for Siglent SDG2042X Function Generator (Channel 2 output unstable) is now "In Progress". Technician Third assigned.',
     type: 'maintenance_assigned',
@@ -405,7 +413,7 @@ export let initialNotifications: Notification[] = [
   },
   {
     id: 'n3',
-    userId: 'u1', // Admin User
+    userId: 'u1', 
     title: 'New Booking Request',
     message: 'Booking for Rigol DP832 Power Supply by Dr. Manager Second needs approval.',
     type: 'booking_pending_approval',
@@ -429,7 +437,7 @@ export function addNotification(
     message,
     type,
     isRead: false,
-    createdAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(), 
     linkTo,
   };
   initialNotifications.unshift(newNotification);
@@ -443,7 +451,7 @@ export function processQueueForResource(resourceId: string): void {
 
   const waitlistedBookings = initialBookings
     .filter(b => b.resourceId === resourceId && b.status === 'Waitlisted')
-    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()); 
 
   if (waitlistedBookings.length > 0) {
     const bookingToPromote = waitlistedBookings[0];
@@ -451,7 +459,7 @@ export function processQueueForResource(resourceId: string): void {
 
     if (bookingIndex !== -1) {
       const promotedBookingOriginalStartTime = new Date(initialBookings[bookingIndex].startTime);
-      initialBookings[bookingIndex].status = 'Pending';
+      initialBookings[bookingIndex].status = 'Pending'; 
 
       addNotification(
         bookingToPromote.userId,
@@ -516,6 +524,8 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
     avatarUrl: 'https://placehold.co/100x100.png'
   };
   initialMockUsers.push(newUser);
+  addAuditLog(newUser.id, newUser.name, 'USER_CREATED', { entityType: 'User', entityId: newUser.id, details: `User ${name} (${email}) signed up. Status: pending_approval.` });
+
 
   const adminUser = initialMockUsers.find(u => u.role === 'Admin');
   if (adminUser) {
@@ -533,6 +543,7 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
 export const mockApproveSignup = (userId: string): boolean => {
   const userIndex = initialMockUsers.findIndex(u => u.id === userId && u.status === 'pending_approval');
   if (userIndex > -1) {
+    const userDetails = initialMockUsers[userIndex];
     initialMockUsers[userIndex].status = 'active';
     addNotification(
         initialMockUsers[userIndex].id,
@@ -541,6 +552,7 @@ export const mockApproveSignup = (userId: string): boolean => {
         'signup_approved',
         '/login'
     );
+    addAuditLog('SYSTEM_ADMIN_APPROVAL', 'System (Admin)', 'USER_APPROVED', { entityType: 'User', entityId: userDetails.id, details: `User ${userDetails.name} (${userDetails.email}) approved.` });
     return true;
   }
   return false;
@@ -549,10 +561,81 @@ export const mockApproveSignup = (userId: string): boolean => {
 export const mockRejectSignup = (userId: string): boolean => {
   const userIndex = initialMockUsers.findIndex(u => u.id === userId && u.status === 'pending_approval');
   if (userIndex > -1) {
+    const userDetails = initialMockUsers[userIndex];
+    addAuditLog('SYSTEM_ADMIN_REJECTION', 'System (Admin)', 'USER_REJECTED', { entityType: 'User', entityId: userDetails.id, details: `Signup request for ${userDetails.name} (${userDetails.email}) rejected.` });
     initialMockUsers.splice(userIndex, 1);
     return true;
   }
   return false;
 };
 
-    
+export let initialAuditLogs: AuditLogEntry[] = [
+    {
+        id: `log-${Date.now() - 100000}`,
+        timestamp: subDays(today, 1).toISOString(),
+        userId: 'u1',
+        userName: 'Admin User',
+        action: 'RESOURCE_CREATED',
+        entityType: 'Resource',
+        entityId: 'res1',
+        details: "Admin User created resource 'Keysight MSOX3054T Oscilloscope'."
+    },
+    {
+        id: `log-${Date.now() - 90000}`,
+        timestamp: new Date().toISOString(),
+        userId: 'u4',
+        userName: 'Researcher Fourth',
+        action: 'BOOKING_CREATED',
+        entityType: 'Booking',
+        entityId: 'b1',
+        details: "Researcher Fourth created booking for 'Keysight MSOX3054T Oscilloscope'."
+    }
+];
+
+export function addAuditLog(
+  actingUserId: string,
+  actingUserName: string,
+  action: AuditActionType,
+  params: {
+    entityType?: AuditLogEntry['entityType'];
+    entityId?: string;
+    details: string;
+  }
+) {
+  const newLog: AuditLogEntry = {
+    id: `log-${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    userId: actingUserId,
+    userName: actingUserName,
+    action: action,
+    entityType: params.entityType,
+    entityId: params.entityId,
+    details: params.details,
+  };
+  initialAuditLogs.unshift(newLog);
+}
+
+export function getWaitlistPosition(booking: Booking, allBookings: Booking[]): number | null {
+  if (booking.status !== 'Waitlisted' || !booking.createdAt) {
+    return null;
+  }
+
+  // Consider bookings for the same resource that are also waitlisted and overlap in time
+  const competingWaitlistedBookings = allBookings.filter(b =>
+    b.resourceId === booking.resourceId &&
+    b.status === 'Waitlisted' &&
+    b.createdAt && // Ensure competitor has a createdAt
+    (b.startTime < booking.endTime && b.endTime > booking.startTime) // Basic conflict check
+  );
+
+  // Sort them by creation time (earliest first), then by ID as a tie-breaker
+  const sortedWaitlist = competingWaitlistedBookings.sort((a, b) => {
+    const timeDiff = a.createdAt.getTime() - b.createdAt.getTime();
+    if (timeDiff !== 0) return timeDiff;
+    return a.id.localeCompare(b.id); // Ensure stable sort if createdAt is identical
+  });
+  
+  const positionIndex = sortedWaitlist.findIndex(b => b.id === booking.id);
+
+  return positionIndex !== -1 ? positionIndex + 1 : null;
+}
