@@ -56,29 +56,30 @@ function BookingsPageContent() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
 
-  const initialDateFromUrl = useMemo(() => {
-    if (!searchParams) return undefined;
-    const dateParam = searchParams.get('date');
-    if (dateParam) {
-      const parsedDate = parseISO(dateParam);
-      if (isValidDate(parsedDate)) return startOfDay(parsedDate);
-    }
-    return undefined;
-  }, [searchParams]);
-
   const [allUserBookings, setAllUserBookings] = useState<Booking[]>([]);
-  const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(initialDateFromUrl);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentBooking, setCurrentBooking] = useState<Partial<Booking> & { resourceId?: string } | null>(null);
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-  const [tempSearchTerm, setTempSearchTerm] = useState('');
+  
+  // Active page filters
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
-  const [tempFilterResourceId, setTempFilterResourceId] = useState<string>('all');
   const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
-  const [tempFilterStatus, setTempFilterStatus] = useState<Booking['status'] | 'all'>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<Booking['status'] | 'all'>('all');
+  const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(() => {
+     const dateParam = searchParams?.get('date');
+      if (dateParam) {
+          const parsedDate = parseISO(dateParam);
+          if (isValidDate(parsedDate)) return startOfDay(parsedDate);
+      }
+      return undefined;
+  });
+
+  // Temporary filters for the dialog
+  const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
+  const [tempFilterResourceId, setTempFilterResourceId] = useState<string>(activeFilterResourceId);
+  const [tempFilterStatus, setTempFilterStatus] = useState<Booking['status'] | 'all'>(activeFilterStatus);
   const [tempSelectedDateInDialog, setTempSelectedDateInDialog] = useState<Date | undefined>(activeSelectedDate);
   const [currentCalendarMonthInDialog, setCurrentCalendarMonthInDialog] = useState<Date>(activeSelectedDate || startOfDay(new Date()));
 
@@ -126,7 +127,7 @@ function BookingsPageContent() {
     }
     setCurrentBooking(bookingData);
     setIsFormOpen(true);
-  }, [activeSelectedDate, currentUser, toast]);
+  }, [activeSelectedDate, currentUser, toast, setIsFormOpen, setCurrentBooking]);
 
   useEffect(() => {
     setIsClient(true);
@@ -164,7 +165,7 @@ function BookingsPageContent() {
     const shouldOpenFormForNewWithResourceOnly = resourceIdParam && !dateToSetFromUrl && (!isFormOpen || currentBooking?.id || currentBooking?.resourceId !== resourceIdParam);
 
     if (shouldOpenFormForEdit) {
-      const bookingToEdit = initialBookings.find(b => b.id === bookingIdParam && b.userId === currentUser.id); // Ensure user owns the booking
+      const bookingToEdit = initialBookings.find(b => b.id === bookingIdParam && b.userId === currentUser.id); 
       if (bookingToEdit) {
         handleOpenForm(bookingToEdit, undefined, new Date(bookingToEdit.startTime));
       }
@@ -173,8 +174,7 @@ function BookingsPageContent() {
     } else if (shouldOpenFormForNewWithResourceOnly) {
       handleOpenForm(undefined, resourceIdParam, activeSelectedDate || new Date());
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, isClient, currentUser, activeSelectedDate]);
+  }, [searchParams, isClient, currentUser, activeSelectedDate, handleOpenForm, isFormOpen, currentBooking]);
 
 
   useEffect(() => {
@@ -250,7 +250,7 @@ function BookingsPageContent() {
   const bookedDatesForCalendar = useMemo(() => {
     if(!currentUser) return [];
     const dates = new Set<string>();
-    initialBookings.filter(b => b.userId === currentUser.id).forEach(booking => { // Filter global bookings for current user
+    initialBookings.filter(b => b.userId === currentUser.id).forEach(booking => { 
       if (booking.status !== 'Cancelled' && isValidDate(new Date(booking.startTime))) {
         dates.add(format(new Date(booking.startTime), 'yyyy-MM-dd'));
       }
@@ -273,7 +273,7 @@ function BookingsPageContent() {
     if (currentBooking?.id) {
       keyParts.push(`edit-${currentBooking.id}`);
       if (currentBooking.startTime && isValidDate(new Date(currentBooking.startTime))) {
-         keyParts.push(new Date(currentBooking.startTime).toISOString());
+         keyParts.push(new Date(currentBooking.startTime).toISOString().split('T')[0]); // Use only date part for key
       }
     } else {
       keyParts.push('new');
@@ -292,9 +292,11 @@ function BookingsPageContent() {
   const dialogHeaderDateString = useMemo(() => {
     if (isFormOpen && currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime))) {
       return format(new Date(currentBooking.startTime), "PPP");
+    } else if (isFormOpen && !currentBooking?.id && activeSelectedDate && isValidDate(activeSelectedDate) ){
+       return format(activeSelectedDate, "PPP");
     }
     return null;
-  }, [isFormOpen, currentBooking?.startTime]);
+  }, [isFormOpen, currentBooking?.startTime, activeSelectedDate, currentBooking?.id]);
 
 
   if (!isClient) {
@@ -748,7 +750,7 @@ function BookingsPageContent() {
                      paramsModified = true;
                 }
                  if (currentParams.has('date')) { 
-                    currentParams.delete('date'); // Also clear date if form was opened contextually with it
+                    currentParams.delete('date'); 
                      paramsModified = true;
                 }
 
@@ -773,6 +775,7 @@ function BookingsPageContent() {
                 onCancel={() => setIsFormOpen(false)}
                 currentUserFullName={currentUser.name}
                 currentUserRole={currentUser.role}
+                selectedDateProp={activeSelectedDate}
             />
           }
         </DialogContent>
@@ -831,25 +834,31 @@ interface BookingFormProps {
   onCancel: () => void;
   currentUserFullName: string;
   currentUserRole: RoleName;
+  selectedDateProp?: Date; 
 }
 
-function BookingForm({ initialData, onSave, onCancel, currentUserFullName, currentUserRole }: BookingFormProps) {
+const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
+    const hour = 9 + Math.floor(i / 2);
+    const minute = i % 2 === 0 ? '00' : '30';
+    return `${String(hour).padStart(2, '0')}:${minute}`;
+});
+  
+
+function BookingForm({ initialData, onSave, onCancel, currentUserFullName, currentUserRole, selectedDateProp }: BookingFormProps) {
   
   const getInitialBookingDate = useCallback(() => {
     if (initialData?.startTime && isValidDate(new Date(initialData.startTime))) {
       return startOfDay(new Date(initialData.startTime));
     }
-    // If activeSelectedDate was passed from parent for new bookings, use it
-    // This prop is removed now, but logic kept for reference if we re-add direct date passing
-    // if (selectedDateProp && isValidDate(selectedDateProp) && !initialData?.id) {
-    //   return startOfDay(selectedDateProp);
-    // }
+    if (selectedDateProp && isValidDate(selectedDateProp) && !initialData?.id) {
+      return startOfDay(selectedDateProp);
+    }
     let defaultDate = startOfDay(new Date());
     if (isBefore(defaultDate, startOfDay(new Date())) && !initialData?.id) {
       defaultDate = startOfDay(new Date());
     }
     return defaultDate;
-  }, [initialData?.startTime, initialData?.id]);
+  }, [initialData?.startTime, initialData?.id, selectedDateProp]);
 
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
@@ -893,7 +902,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
             }
         }
     }
-  }, [watchStartTime, watchBookingDate, initialData?.id, form, timeSlots]);
+  }, [watchStartTime, watchBookingDate, initialData?.id, form]);
 
 
   function handleRHFSubmit(data: BookingFormValues) {
@@ -926,15 +935,9 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
 
   const canEditStatus = (currentUserRole === 'Admin' || currentUserRole === 'Lab Manager') && !!initialData?.id;
 
-  const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
-    const hour = 9 + Math.floor(i / 2);
-    const minute = i % 2 === 0 ? '00' : '30';
-    return `${String(hour).padStart(2, '0')}:${minute}`;
-  });
-
   return (
     <FormProvider {...form}>
-    <form onSubmit={form.handleSubmit(handleRHFSubmit)}>
+    <form onSubmit={form.handleSubmit(handleRHFSubmit)} className="space-y-4 py-4">
       <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
         <div className="space-y-4 py-4">
           <FormField

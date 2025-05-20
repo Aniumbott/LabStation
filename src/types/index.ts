@@ -46,7 +46,7 @@ export interface Resource {
   purchaseDate?: string; // ISO string
   notes?: string;
   remoteAccess?: RemoteAccessDetails;
-  allowQueueing?: boolean; // New field for queue management
+  allowQueueing?: boolean;
 }
 
 export interface BookingUsageDetails {
@@ -67,7 +67,7 @@ export interface Booking {
   userName: string;
   startTime: Date;
   endTime: Date;
-  status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted'; // Added 'Waitlisted'
+  status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted';
   notes?: string;
   usageDetails?: BookingUsageDetails;
 }
@@ -106,7 +106,7 @@ export type NotificationType =
   | 'booking_confirmed'
   | 'booking_pending_approval'
   | 'booking_rejected'
-  | 'booking_waitlisted' // New notification type
+  | 'booking_waitlisted'
   | 'maintenance_new'
   | 'maintenance_assigned'
   | 'maintenance_resolved'
