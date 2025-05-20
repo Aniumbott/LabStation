@@ -4,14 +4,14 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { VariantProps, cva } from "class-variance-authority"
-import { PanelLeft } from "lucide-react"
+import { FlaskConical, PanelLeft } from "lucide-react" // Added FlaskConical directly
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet" // Added SheetHeader, SheetTitle
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
@@ -19,6 +19,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { Logo } from "@/components/icons/logo" // Keep for desktop
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
@@ -185,8 +186,6 @@ const Sidebar = React.forwardRef<
     }, []);
 
     if (!isClient) {
-      // Render nothing or a placeholder skeleton on the server and during initial client render
-      // This ensures the server output matches the initial client output before hydration.
       return null;
     }
 
@@ -206,6 +205,18 @@ const Sidebar = React.forwardRef<
     }
 
     if (isMobile) {
+      // Filter children to include only Separator and SidebarContent for mobile view main content
+      const mobileChildren = React.Children.toArray(children).filter(child => {
+        if (React.isValidElement(child)) {
+          // Check if the child's type matches SidebarContent or Separator
+          // This is a bit fragile as it relies on component display names or internal structure.
+          // A more robust way might involve specific props or context if components become more complex.
+          const childType = (child.type as any)?.displayName || (child.type as any)?.name;
+          return childType === 'SidebarContent' || childType === 'Separator';
+        }
+        return false;
+      });
+
       return (
         <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
           <SheetContent
@@ -219,11 +230,13 @@ const Sidebar = React.forwardRef<
             }
             side={side}
           >
-            <SheetHeader className="p-4 border-b border-sidebar-border">
-              <SheetTitle>LabStation Menu</SheetTitle>
+            <SheetHeader className="p-4 border-b border-sidebar-border flex flex-row items-center gap-2">
+              <FlaskConical className="h-7 w-7 text-primary flex-shrink-0" />
+              <SheetTitle className="sr-only">Main Navigation</SheetTitle>
             </SheetHeader>
             <div className="flex h-full w-full flex-col overflow-y-auto">
-                {children}
+                {/* Render only specific children for mobile */}
+                {mobileChildren}
             </div>
           </SheetContent>
         </Sheet>
@@ -779,3 +792,4 @@ export {
   SidebarTrigger,
   useSidebar,
 }
+
