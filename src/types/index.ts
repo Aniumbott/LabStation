@@ -52,7 +52,7 @@ export interface BookingUsageDetails {
   actualStartTime?: string; // ISO string
   actualEndTime?: string;   // ISO string
   outcome?: 'Success' | 'Failure' | 'Interrupted' | 'Not Applicable';
-  dataStorageLocation?: string;
+  dataStorageLocation?: string; // e.g., path to results, lab notebook ID
   usageComments?: string;
 }
 export const BookingUsageOutcomes: Array<BookingUsageDetails['outcome']> = ['Success', 'Failure', 'Interrupted', 'Not Applicable'];
@@ -108,7 +108,7 @@ export type NotificationType =
   | 'maintenance_new'
   | 'maintenance_assigned'
   | 'maintenance_resolved'
-  | 'signup_approved'
+  | 'signup_approved' // Notification for user when their signup is approved
   | 'signup_pending_admin'; // Notification for admin about a new signup
 
 export interface Notification {

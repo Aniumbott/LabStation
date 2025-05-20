@@ -218,7 +218,7 @@ export let allAdminMockResources: Resource[] = [
 ];
 
 export let initialMockUsers: User[] = [
-  { id: 'u1', name: 'Admin User', email: 'admin@labstation.com', role: 'Admin', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' }, // Added mock password
+  { id: 'u1', name: 'Admin User', email: 'admin@labstation.com', role: 'Admin', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
   { id: 'u2', name: 'Dr. Manager Second', email: 'manager.second@labstation.com', role: 'Lab Manager', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
   { id: 'u3', name: 'Technician Third', email: 'tech.third@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
   { id: 'u4', name: 'Researcher Fourth', email: 'researcher.fourth@labstation.com', role: 'Researcher', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
@@ -235,7 +235,7 @@ export let initialBookings: Booking[] = [
     id: 'b1',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u4', // Researcher Fourth
+    userId: 'u4',
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(addDays(today, 2), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 2), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -253,7 +253,7 @@ export let initialBookings: Booking[] = [
     id: 'b2',
     resourceId: 'res2',
     resourceName: 'Rigol DP832 Programmable Power Supply',
-    userId: 'u2', // Dr. Manager Second
+    userId: 'u2',
     userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
     startTime: set(addDays(today, 3), { hours: 14, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 3), { hours: 16, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -286,7 +286,7 @@ export let initialBookings: Booking[] = [
     id: 'b5',
     resourceId: 'res5',
     resourceName: 'Weller WE1010NA Digital Soldering Station',
-    userId: 'u2', // Dr. Manager Second
+    userId: 'u2',
     userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
     startTime: set(addDays(today, 5), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 5), { hours: 13, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -369,7 +369,7 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
 export let initialNotifications: Notification[] = [
   {
     id: 'n1',
-    userId: 'u4', // Researcher Fourth
+    userId: 'u4',
     title: 'Booking Confirmed: Keysight Scope',
     message: 'Your booking for Keysight MSOX3054T Oscilloscope on ' + format(set(addDays(today, 2), { hours: 10, minutes: 0 }), 'MMM dd, HH:mm') + ' has been confirmed.',
     type: 'booking_confirmed',
@@ -379,7 +379,7 @@ export let initialNotifications: Notification[] = [
   },
   {
     id: 'n2',
-    userId: 'u4', // Researcher Fourth
+    userId: 'u4',
     title: 'Maintenance Update: Siglent SDG2042X',
     message: 'Maintenance request for Siglent SDG2042X Function Generator (Channel 2 output unstable) is now "In Progress". Technician Third assigned.',
     type: 'maintenance_assigned',
@@ -389,7 +389,7 @@ export let initialNotifications: Notification[] = [
   },
   {
     id: 'n3',
-    userId: 'u1', // For Admin User
+    userId: 'u1',
     title: 'New Booking Request: Rigol DP832',
     message: `Booking for Rigol DP832 Programmable Power Supply by ${initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second'} on ${format(set(addDays(today, 3), { hours: 14, minutes: 0 }), 'MMM dd, HH:mm')} needs approval.`,
     type: 'booking_pending_approval',
@@ -399,7 +399,7 @@ export let initialNotifications: Notification[] = [
   },
   {
     id: 'n4',
-    userId: 'u1', // For Admin User
+    userId: 'u1',
     title: 'New Maintenance Request Logged',
     message: `A new maintenance request for Keysight MSOX3054T Oscilloscope (touchscreen unresponsive) has been logged by ${initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second'}.`,
     type: 'maintenance_new',
@@ -430,43 +430,43 @@ export function addNotification(
   initialNotifications.unshift(newNotification); // Add to the beginning of the array
 }
 
-// Lab-wide Blackout Dates
 export let initialBlackoutDates: BlackoutDate[] = [
   { id: 'bo1', date: format(addDays(today, 25), 'yyyy-MM-dd'), reason: 'Lab Deep Cleaning Day' },
   { id: 'bo2', date: format(addDays(today, 60), 'yyyy-MM-dd'), reason: 'Public Holiday - Lab Closed' },
 ];
 
-// Recurring Lab-wide Blackout Rules
 export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = [
   { id: 'rb1', name: 'Weekend Closure', daysOfWeek: ['Saturday', 'Sunday'], reason: 'Lab closed on weekends' },
-  // { id: 'rb2', name: 'Weekly Maintenance Window', daysOfWeek: ['Wednesday'], reason: 'Scheduled lab maintenance 2-4 PM' },
 ];
 
-
-// --- Authentication Mock Functions ---
-// Simulates logging in a user
 export const mockLoginUser = (email: string, password?: string): User | null => {
-  // In a real app, password would be checked against a hash
-  const user = initialMockUsers.find(u => u.email === email && u.password === password && u.status === 'active');
-  return user || null;
+  const user = initialMockUsers.find(u => u.email === email && u.password === password);
+  if (user) {
+    if (user.status === 'active') return user;
+    if (user.status === 'pending_approval') return { ...user, status: 'pending_approval' }; // Indicate status for login logic
+  }
+  // Check pending signups as well for the "pending_approval" message
+  const pendingUser = pendingSignups.find(u => u.email === email && u.password === password);
+  if (pendingUser) return { ...pendingUser, status: 'pending_approval' };
+
+  return null;
 };
 
-// Simulates signing up a new user (adds to pending)
 export const mockSignupUser = (name: string, email: string, password?: string): { success: boolean; message: string; userId?: string } => {
   if (initialMockUsers.find(u => u.email === email) || pendingSignups.find(u => u.email === email)) {
-    return { success: false, message: 'Email already exists.' };
+    return { success: false, message: 'An account with this email already exists or is pending approval.' };
   }
   const newUser: User = {
     id: `ps${pendingSignups.length + 1 + Date.now()}`,
     name,
     email,
-    password, // Stored in mock, NOT FOR PRODUCTION
-    role: 'Researcher', // Default role for new sign-ups
+    password,
+    role: 'Researcher',
     status: 'pending_approval',
     avatarUrl: 'https://placehold.co/100x100.png'
   };
   pendingSignups.push(newUser);
-  // Notify admin
+
   const adminUser = initialMockUsers.find(u => u.role === 'Admin');
   if (adminUser) {
     addNotification(
@@ -474,22 +474,20 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
         'New Signup Request',
         `User ${name} (${email}) has signed up and is awaiting approval.`,
         'signup_pending_admin',
-        '/admin/signup-requests'
+        '/admin/signup-requests' // Corrected link
     );
   }
   return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: newUser.id };
 };
 
-// Simulates admin approving a signup
 export const mockApproveSignup = (userId: string): boolean => {
   const userIndex = pendingSignups.findIndex(u => u.id === userId);
   if (userIndex > -1) {
     const userToApprove = pendingSignups.splice(userIndex, 1)[0];
     if (userToApprove) {
       userToApprove.status = 'active';
-      userToApprove.id = `u${initialMockUsers.length + 1 + Date.now()}`; // Assign a new "active" ID
+      userToApprove.id = `u${initialMockUsers.length + 1 + Date.now()}`;
       initialMockUsers.push(userToApprove);
-      // Add a notification for the approved user
       addNotification(
         userToApprove.id,
         'Account Approved!',
@@ -503,7 +501,6 @@ export const mockApproveSignup = (userId: string): boolean => {
   return false;
 };
 
-// Simulates admin rejecting a signup
 export const mockRejectSignup = (userId: string): boolean => {
   const userIndex = pendingSignups.findIndex(u => u.id === userId);
   if (userIndex > -1) {

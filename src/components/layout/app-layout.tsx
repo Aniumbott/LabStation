@@ -16,7 +16,7 @@ import {
   Bell,
   CalendarOff,
   Loader2,
-  Building, // Added for Lab Management if we re-add it
+  UserCheck2, // Added for Signup Requests
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
@@ -45,7 +45,7 @@ interface NavItem {
   allowedRoles?: RoleName[];
 }
 
-const PUBLIC_ROUTES = ['/login', '/signup']; // Added /signup
+const PUBLIC_ROUTES = ['/login', '/signup'];
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -53,7 +53,7 @@ const navItems: NavItem[] = [
   { href: '/bookings', label: 'Bookings', icon: CalendarDays },
   { href: '/maintenance', label: 'Maintenance', icon: Wrench },
   { href: '/notifications', label: 'Notifications', icon: Bell },
-  { href: '/profile', label: 'My Profile', icon: UserCog, allowedRoles: ['Admin', 'Lab Manager', 'Technician', 'Researcher'] }, // Ensure all roles can see profile
+  { href: '/profile', label: 'My Profile', icon: UserCog, allowedRoles: ['Admin', 'Lab Manager', 'Technician', 'Researcher'] },
   {
     href: '/admin/booking-approvals',
     label: 'Booking Approvals',
@@ -70,6 +70,12 @@ const navItems: NavItem[] = [
     href: '/admin/users',
     label: 'Users',
     icon: UsersIconLucide,
+    allowedRoles: ['Admin'],
+  },
+  {
+    href: '/admin/signup-requests', // New Nav Item
+    label: 'Signup Requests',
+    icon: UserCheck2,
     allowedRoles: ['Admin'],
   },
   {
@@ -92,12 +98,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const visibleNavItems = useMemo(() => {
     if (!currentUser) {
-      // Show only items without allowedRoles or with empty allowedRoles if not logged in (e.g., for a public dashboard link if we had one)
       return navItems.filter(item => !item.allowedRoles || item.allowedRoles.length === 0);
     }
     return navItems.filter(item => {
       if (!item.allowedRoles || item.allowedRoles.length === 0) {
-        return true; // Accessible to all logged-in users
+        return true;
       }
       return item.allowedRoles.includes(currentUser.role);
     });
@@ -161,9 +166,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </SidebarContent>
       </Sidebar>
 
-      <SidebarInset className="flex flex-col relative pt-12 sm:pt-0"> {/* Added sm:pt-0 to remove top padding on larger screens */}
+      <SidebarInset className="flex flex-col relative">
         <MobileSidebarToggle />
-        <div className="p-4 md:p-6 lg:p-8 flex-grow"> {/* Added flex-grow and padding here */}
+        <div className="p-4 md:p-6 lg:p-8 flex-grow">
           {children}
         </div>
       </SidebarInset>
