@@ -49,7 +49,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { initialMockUsers, mockCurrentUser } from '@/lib/mock-data';
+import { initialMockUsers } from '@/lib/mock-data';
+import { useAuth } from '@/components/auth-context'; // Import useAuth
 
 const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
 
@@ -73,7 +74,8 @@ const getRoleBadgeVariant = (role: RoleName): "default" | "secondary" | "destruc
 
 export default function UsersPage() {
   const { toast } = useToast();
-  const [users, setUsers] = useState<User[]>(initialMockUsers);
+  const { currentUser } = useAuth(); // Use AuthContext
+  const [users, setUsers] = useState<User[]>(() => JSON.parse(JSON.stringify(initialMockUsers)));
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -153,6 +155,7 @@ export default function UsersPage() {
         id: `u${users.length + 1 + Date.now()}`,
         ...data,
         avatarUrl: 'https://placehold.co/100x100.png', // Default avatar for new users
+        status: 'active', // New users created by admin are active
       };
       setUsers(prevUsers => [...prevUsers, newUser].sort((a, b) => a.name.localeCompare(b.name)));
       initialMockUsers.push(newUser); 
@@ -182,8 +185,8 @@ export default function UsersPage() {
   };
 
   const activeFilterCount = [activeSearchTerm !== '', activeFilterRole !== 'all'].filter(Boolean).length;
-  const canAddUsers = mockCurrentUser.role === 'Admin';
-  const canManageUsers = mockCurrentUser.role === 'Admin';
+  const canAddUsers = currentUser?.role === 'Admin';
+  const canManageUsers = currentUser?.role === 'Admin';
 
 
   return (
