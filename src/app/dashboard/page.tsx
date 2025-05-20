@@ -1,9 +1,9 @@
 
-'use client'; // Make it a client component to use hooks
+'use client';
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Construction } from 'lucide-react';
+import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Construction, Clock } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,37 +18,31 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format, isValid, isPast } from 'date-fns';
+import { format, isValid, isPast, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { allAdminMockResources, initialBookings } from '@/lib/mock-data'; // mockCurrentUser removed
+import { allAdminMockResources, initialBookings } from '@/lib/mock-data';
 import { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '@/components/auth-context'; // Import useAuth
+import { useAuth } from '@/components/auth-context';
 
 export default function DashboardPage() {
-  const { currentUser } = useAuth(); // Get currentUser from AuthContext
+  const { currentUser } = useAuth();
   const [frequentlyUsedResources, setFrequentlyUsedResources] = useState<Resource[]>([]);
   const [upcomingUserBookings, setUpcomingUserBookings] = useState<Booking[]>([]);
 
   useEffect(() => {
-    // Simulate fetching or processing data
     setFrequentlyUsedResources(allAdminMockResources.slice(0, 2));
     
     if (currentUser) {
       const filteredBookings = initialBookings
         .filter(b => {
-            // Ensure b.startTime is a Date object before comparison
-            const startTimeDate = typeof b.startTime === 'string' ? new Date(b.startTime) : b.startTime;
+            const startTimeDate = b.startTime; // Already a Date object
             return isValid(startTimeDate) && !isPast(startTimeDate) && b.status !== 'Cancelled' && b.userId === currentUser.id;
         })
-        .sort((a,b) => {
-            const timeA = typeof a.startTime === 'string' ? new Date(a.startTime).getTime() : a.startTime.getTime();
-            const timeB = typeof b.startTime === 'string' ? new Date(b.startTime).getTime() : b.startTime.getTime();
-            return timeA - timeB;
-        })
+        .sort((a,b) => a.startTime.getTime() - b.startTime.getTime())
         .slice(0, 5);
       setUpcomingUserBookings(filteredBookings);
     } else {
-      setUpcomingUserBookings([]); // No user, no bookings
+      setUpcomingUserBookings([]);
     }
   }, [currentUser]);
 
@@ -56,11 +50,11 @@ export default function DashboardPage() {
   const getResourceStatusBadge = (status: Resource['status']) => {
     switch (status) {
       case 'Available':
-        return <Badge className="bg-green-500 hover:bg-green-600 text-white border-transparent"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={cn("bg-green-500 hover:bg-green-600 text-white border-transparent")}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Booked':
-        return <Badge className="bg-yellow-500 hover:bg-yellow-600 text-yellow-950 border-transparent"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={cn("bg-yellow-500 hover:bg-yellow-600 text-yellow-950 border-transparent")}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Maintenance':
-        return <Badge className="bg-orange-500 hover:bg-orange-600 text-white border-transparent"><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+        return <Badge className={cn("bg-orange-500 hover:bg-orange-600 text-white border-transparent")}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       default:
         return <Badge variant="outline"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     }
@@ -141,8 +135,8 @@ export default function DashboardPage() {
                   </TableHeader>
                   <TableBody>
                     {upcomingUserBookings.map((booking) => {
-                      const startTimeDate = typeof booking.startTime === 'string' ? new Date(booking.startTime) : booking.startTime;
-                      const endTimeDate = typeof booking.endTime === 'string' ? new Date(booking.endTime) : booking.endTime;
+                      const startTimeDate = booking.startTime;
+                      const endTimeDate = booking.endTime;
                       return (
                         <TableRow key={booking.id}>
                           <TableCell className="font-medium">{booking.resourceName}</TableCell>
@@ -154,7 +148,8 @@ export default function DashboardPage() {
                                     "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
                                     booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
                                     booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
-                                    booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500'
+                                    booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500',
+                                    booking.status === 'Waitlisted' && 'bg-purple-500 text-white hover:bg-purple-600'
                                 )}
                             >
                                 {booking.status}
@@ -173,7 +168,7 @@ export default function DashboardPage() {
               </div>
             </CardContent>
             {upcomingUserBookings.length > 0 && (
-                <CardFooter className="justify-end pt-4">
+                <CardFooter className="justify-end pt-4 border-t">
                     <Button variant="outline" asChild>
                         <Link href="/bookings">View All Bookings <ChevronRight className="ml-2 h-4 w-4" /></Link>
                     </Button>

@@ -3,9 +3,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter } from 'lucide-react';
+import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter, Clock } from 'lucide-react';
 import type { Booking } from '@/types';
-import { initialBookings, allAdminMockResources, addNotification } from '@/lib/mock-data';
+import { initialBookings, allAdminMockResources, addNotification, bookingStatusesForFilter } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -39,6 +39,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 
 export default function BookingRequestsPage() {
@@ -46,21 +47,21 @@ export default function BookingRequestsPage() {
   const { currentUser } = useAuth();
   const [allBookingsState, setAllBookingsState] = useState<Booking[]>(() => JSON.parse(JSON.stringify(initialBookings)));
 
-  // Active filters for the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
+  const [activeFilterStatus, setActiveFilterStatus] = useState<Booking['status'] | 'all'>('Pending'); // Default to Pending
   
-  // Filter Dialog State
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
   const [tempFilterResourceId, setTempFilterResourceId] = useState<string>(activeFilterResourceId);
+  const [tempFilterStatus, setTempFilterStatus] = useState<Booking['status'] | 'all'>(activeFilterStatus);
 
   useEffect(() => {
     setAllBookingsState(JSON.parse(JSON.stringify(initialBookings)));
   }, []); 
 
-  const pendingBookings = useMemo(() => {
-    let filtered = allBookingsState.filter(b => b.status === 'Pending');
+  const bookingsForApproval = useMemo(() => {
+    let filtered = allBookingsState.filter(b => b.status === 'Pending' || b.status === 'Waitlisted');
     
     if (activeSearchTerm) {
       const lowerSearch = activeSearchTerm.toLowerCase();
@@ -74,6 +75,13 @@ export default function BookingRequestsPage() {
     if (activeFilterResourceId !== 'all') {
       filtered = filtered.filter(b => b.resourceId === activeFilterResourceId);
     }
+    
+    if (activeFilterStatus !== 'all') {
+        filtered = filtered.filter(b => b.status === activeFilterStatus);
+    } else { // If 'all' statuses selected in dialog, still default to pending/waitlisted for this page
+        filtered = filtered.filter(b => b.status === 'Pending' || b.status === 'Waitlisted');
+    }
+
 
     return filtered.sort((a, b) => {
         const dateA = typeof a.startTime === 'string' ? parseISO(a.startTime) : a.startTime;
@@ -81,7 +89,7 @@ export default function BookingRequestsPage() {
         if (!isValidDate(dateA) || !isValidDate(dateB)) return 0;
         return dateA.getTime() - dateB.getTime();
     });
-  }, [allBookingsState, activeSearchTerm, activeFilterResourceId]);
+  }, [allBookingsState, activeSearchTerm, activeFilterResourceId, activeFilterStatus]);
 
 
   const handleApproveBooking = (bookingId: string) => {
@@ -114,13 +122,13 @@ export default function BookingRequestsPage() {
     const bookingIndex = allBookingsState.findIndex(b => b.id === bookingId);
     if (bookingIndex !== -1) {
       const updatedBookings = [...allBookingsState];
-      const rejectedBooking = { ...updatedBookings[bookingIndex], status: 'Cancelled' as Booking['status']};
+      const rejectedBooking = { ...updatedBookings[bookingIndex], status: 'Cancelled' as Booking['status']}; // Changed to Cancelled
       updatedBookings[bookingIndex] = rejectedBooking;
       setAllBookingsState(updatedBookings);
 
       const globalBookingIndex = initialBookings.findIndex(b => b.id === bookingId);
       if (globalBookingIndex !== -1) {
-        initialBookings[globalBookingIndex].status = 'Cancelled';
+        initialBookings[globalBookingIndex].status = 'Cancelled'; // Changed to Cancelled
       }
       toast({
         title: 'Booking Rejected',
@@ -130,7 +138,7 @@ export default function BookingRequestsPage() {
       addNotification(
         rejectedBooking.userId,
         'Booking Rejected',
-        `Your booking for ${rejectedBooking.resourceName} on ${format(new Date(rejectedBooking.startTime), 'MMM dd, HH:mm')} has been rejected.`,
+        `Your booking for ${rejectedBooking.resourceName} on ${format(new Date(rejectedBooking.startTime), 'MMM dd, HH:mm')} has been rejected and cancelled.`,
         'booking_rejected',
         `/bookings?bookingId=${rejectedBooking.id}`
       );
@@ -140,17 +148,20 @@ export default function BookingRequestsPage() {
   const handleApplyFilters = () => {
     setActiveSearchTerm(tempSearchTerm);
     setActiveFilterResourceId(tempFilterResourceId);
+    setActiveFilterStatus(tempFilterStatus);
     setIsFilterDialogOpen(false);
   };
 
   const resetDialogFilters = () => {
     setTempSearchTerm('');
     setTempFilterResourceId('all');
+    setTempFilterStatus('Pending'); // Default to Pending
   };
 
   const resetAllActiveFilters = () => {
     setActiveSearchTerm('');
     setActiveFilterResourceId('all');
+    setActiveFilterStatus('Pending'); // Default to Pending
     resetDialogFilters(); 
     setIsFilterDialogOpen(false); 
   };
@@ -158,6 +169,7 @@ export default function BookingRequestsPage() {
   const activeFilterCount = [
     activeSearchTerm !== '',
     activeFilterResourceId !== 'all',
+    activeFilterStatus !== 'Pending' && activeFilterStatus !== 'all', // Count if not default pending or all
   ].filter(Boolean).length;
 
   const formatDateField = (dateInput: string | Date): string => {
@@ -175,7 +187,7 @@ export default function BookingRequestsPage() {
       <div className="space-y-8">
         <PageHeader
           title="Booking Requests"
-          description="Review and manage pending booking requests."
+          description="Review and manage pending or waitlisted booking requests."
           icon={CheckSquare}
           actions={
             <div className="flex items-center gap-2">
@@ -195,7 +207,7 @@ export default function BookingRequestsPage() {
                   <DialogHeader>
                     <DialogTitle>Filter Booking Requests</DialogTitle>
                     <DialogDescription>
-                      Refine the list of pending booking requests.
+                      Refine the list of pending or waitlisted booking requests.
                     </DialogDescription>
                   </DialogHeader>
                   <Separator className="my-4" />
@@ -220,12 +232,23 @@ export default function BookingRequestsPage() {
                           <SelectTrigger id="requestResourceDialog" className="h-9"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
                           <SelectContent>
                               <SelectItem value="all">All Resources</SelectItem>
-                              {Array.from(new Set(allBookingsState.filter(b => b.status === 'Pending').map(b => b.resourceId)))
+                              {Array.from(new Set(allBookingsState.filter(b => b.status === 'Pending' || b.status === 'Waitlisted').map(b => b.resourceId)))
                                   .map(resourceId => {
                                       const resource = allAdminMockResources.find(r => r.id === resourceId);
                                       return resource ? <SelectItem key={resource.id} value={resource.id}>{resource.name}</SelectItem> : null;
                                   })
                               }
+                          </SelectContent>
+                      </Select>
+                    </div>
+                     <div>
+                      <Label htmlFor="requestStatusDialog" className="text-sm font-medium mb-1 block">Status</Label>
+                      <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as Booking['status'] | 'all')}>
+                          <SelectTrigger id="requestStatusDialog" className="h-9"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="all">All (Pending & Waitlisted)</SelectItem>
+                              <SelectItem value="Pending">Pending</SelectItem>
+                              <SelectItem value="Waitlisted">Waitlisted</SelectItem>
                           </SelectContent>
                       </Select>
                     </div>
@@ -243,10 +266,10 @@ export default function BookingRequestsPage() {
           }
         />
 
-        {pendingBookings.length > 0 ? (
+        {bookingsForApproval.length > 0 ? (
           <Card>
             <CardHeader>
-              <CardTitle>Pending Requests ({pendingBookings.length})</CardTitle>
+              <CardTitle>Pending & Waitlisted Requests ({bookingsForApproval.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
@@ -256,12 +279,13 @@ export default function BookingRequestsPage() {
                       <TableHead>Resource</TableHead>
                       <TableHead>Booked By</TableHead>
                       <TableHead>Date & Time</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead>Notes</TableHead>
                       <TableHead className="text-right w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pendingBookings.map((booking) => (
+                    {bookingsForApproval.map((booking) => (
                       <TableRow key={booking.id}>
                         <TableCell className="font-medium">{booking.resourceName}</TableCell>
                         <TableCell>{booking.userName}</TableCell>
@@ -270,6 +294,17 @@ export default function BookingRequestsPage() {
                           <div className="text-xs text-muted-foreground">
                               {formatTimeField(booking.startTime)} - {formatTimeField(booking.endTime)}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                            <Badge
+                                className={cn(
+                                    "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
+                                    booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
+                                    booking.status === 'Waitlisted' && 'bg-purple-500 text-white hover:bg-purple-600'
+                                )}
+                            >
+                                {booking.status}
+                            </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{booking.notes || 'N/A'}</TableCell>
                         <TableCell className="text-right space-x-1">
@@ -304,12 +339,12 @@ export default function BookingRequestsPage() {
             <CardContent>
               <CheckSquare className="mx-auto h-12 w-12 mb-4 opacity-50" />
               <p className="text-lg font-medium">
-                  {activeFilterCount > 0 ? "No Pending Requests Match Filters" : "No Pending Booking Requests"}
+                  {activeFilterCount > 0 ? "No Requests Match Filters" : "No Pending or Waitlisted Booking Requests"}
               </p>
               <p className="text-sm mb-4">
                   {activeFilterCount > 0
                       ? "Try adjusting your filter criteria."
-                      : "There are currently no booking requests awaiting approval."
+                      : "There are currently no booking requests awaiting approval or on the waitlist."
                   }
               </p>
               {activeFilterCount > 0 && (

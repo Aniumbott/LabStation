@@ -1,5 +1,4 @@
 
-
 export interface ResourceType {
   id: string;
   name: string;
@@ -47,6 +46,7 @@ export interface Resource {
   purchaseDate?: string; // ISO string
   notes?: string;
   remoteAccess?: RemoteAccessDetails;
+  allowQueueing?: boolean; // New field for queue management
 }
 
 export interface BookingUsageDetails {
@@ -67,7 +67,7 @@ export interface Booking {
   userName: string;
   startTime: Date;
   endTime: Date;
-  status: 'Confirmed' | 'Pending' | 'Cancelled';
+  status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted'; // Added 'Waitlisted'
   notes?: string;
   usageDetails?: BookingUsageDetails;
 }
@@ -79,7 +79,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  password?: string; // For mock sign-up, will not be stored securely
+  password?: string;
   role: RoleName;
   avatarUrl?: string;
   status: UserStatus;
@@ -96,7 +96,7 @@ export interface MaintenanceRequest {
   issueDescription: string;
   status: MaintenanceRequestStatus;
   assignedTechnicianId?: string;
-  assignedTechnicianName?: string; // Denormalized
+  assignedTechnicianName?: string;
   dateReported: string; // ISO string
   dateResolved?: string; // ISO string
   resolutionNotes?: string;
@@ -106,21 +106,22 @@ export type NotificationType =
   | 'booking_confirmed'
   | 'booking_pending_approval'
   | 'booking_rejected'
+  | 'booking_waitlisted' // New notification type
   | 'maintenance_new'
   | 'maintenance_assigned'
   | 'maintenance_resolved'
-  | 'signup_approved' // Notification for user when their signup is approved
-  | 'signup_pending_admin'; // Notification for admin about a new signup
+  | 'signup_approved'
+  | 'signup_pending_admin';
 
 export interface Notification {
   id: string;
-  userId: string; // For whom the notification is
+  userId: string;
   title: string;
   message: string;
   type: NotificationType;
   isRead: boolean;
   createdAt: string; // ISO string
-  linkTo?: string; // Optional link for action, e.g., to view the specific booking
+  linkTo?: string;
 }
 
 export interface BlackoutDate {

@@ -59,7 +59,8 @@ export let allAdminMockResources: Resource[] = [
       hostname: 'scope-01.lab.internal',
       protocol: 'VNC',
       notes: 'Access via internal network. Web interface also available at IP.'
-    }
+    },
+    allowQueueing: true,
   },
   {
     id: 'res2',
@@ -80,7 +81,8 @@ export let allAdminMockResources: Resource[] = [
       { date: dayAfterTomorrowStr, slots: ['10:00-17:00'] }
     ],
     unavailabilityPeriods: [],
-    notes: 'Ensure load is disconnected before changing voltage settings.'
+    notes: 'Ensure load is disconnected before changing voltage settings.',
+    allowQueueing: false,
   },
    {
     id: 'res3',
@@ -100,7 +102,8 @@ export let allAdminMockResources: Resource[] = [
     unavailabilityPeriods: [
        { id: 'unavail3-1', startDate: todayStr, endDate: nextWeekStr, reason: 'Output Amplifier Repair' }
     ],
-    notes: 'Output amplifier stage under repair. Expected back online next week.'
+    notes: 'Output amplifier stage under repair. Expected back online next week.',
+    allowQueueing: true,
   },
   {
     id: 'res4',
@@ -121,6 +124,7 @@ export let allAdminMockResources: Resource[] = [
       { date: dayAfterTomorrowStr, slots: ['10:00-12:00', '14:00-16:00'] }
     ],
     unavailabilityPeriods: [],
+    allowQueueing: false,
   },
   {
     id: 'res5',
@@ -141,7 +145,8 @@ export let allAdminMockResources: Resource[] = [
         { date: tomorrowStr, slots: ['10:00-17:00'] },
     ],
     unavailabilityPeriods: [],
-    notes: 'Variety of tips available in the labeled drawer. Please clean tip after use.'
+    notes: 'Variety of tips available in the labeled drawer. Please clean tip after use.',
+    allowQueueing: true,
   },
   {
     id: 'res6',
@@ -161,7 +166,7 @@ export let allAdminMockResources: Resource[] = [
       { date: dayAfterTomorrowStr, slots: ['09:00-17:00'] }
     ],
     unavailabilityPeriods: [],
-    notes: 'Includes standard test leads and thermocouple probe.'
+    allowQueueing: true,
   },
   {
     id: 'res7',
@@ -192,7 +197,8 @@ export let allAdminMockResources: Resource[] = [
       username: 'devuser',
       port: 22,
       notes: 'SSH key authentication required. Contact admin for access.'
-    }
+    },
+    allowQueueing: true,
   },
   {
     id: 'res8',
@@ -213,7 +219,7 @@ export let allAdminMockResources: Resource[] = [
       { date: fourDaysLaterStr, slots: ['09:00-17:00'] }
     ],
     unavailabilityPeriods: [],
-    notes: 'OceanView software installed on connected PC. Fiber optic cables in drawer.'
+    allowQueueing: false,
   }
 ];
 
@@ -223,16 +229,15 @@ export let initialMockUsers: User[] = [
   { id: 'u3', name: 'Technician Third', email: 'tech.third@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
   { id: 'u4', name: 'Researcher Fourth', email: 'researcher.fourth@labstation.com', role: 'Researcher', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
   { id: 'u5', name: 'Lead Technician Fifth', email: 'lead.tech@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
-  { id: 'ps1', name: 'Penny Pending', email: 'penny@example.com', role: 'Researcher', status: 'pending_approval', password: 'password', avatarUrl: 'https://placehold.co/100x100.png' }
+  { id: 'u6', name: 'Penny Pending', email: 'penny@example.com', role: 'Researcher', status: 'pending_approval', password: 'password', avatarUrl: 'https://placehold.co/100x100.png' }
 ];
-
 
 export let initialBookings: Booking[] = [
   {
     id: 'b1',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u4', // Researcher Fourth
+    userId: 'u4',
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(addDays(today, 2), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 2), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -250,7 +255,7 @@ export let initialBookings: Booking[] = [
     id: 'b2',
     resourceId: 'res2',
     resourceName: 'Rigol DP832 Programmable Power Supply',
-    userId: 'u2', // Dr. Manager Second
+    userId: 'u2',
     userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
     startTime: set(addDays(today, 3), { hours: 14, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 3), { hours: 16, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -261,7 +266,7 @@ export let initialBookings: Booking[] = [
     id: 'b3',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u4', // Researcher Fourth
+    userId: 'u4',
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(addDays(today, 1), { hours: 14, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 1), { hours: 15, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -272,7 +277,7 @@ export let initialBookings: Booking[] = [
     id: 'b4',
     resourceId: 'res4',
     resourceName: 'Rohde & Schwarz FPC1500 Spectrum Analyzer',
-    userId: 'u4', // Researcher Fourth
+    userId: 'u4',
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(today, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(today, { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -283,7 +288,7 @@ export let initialBookings: Booking[] = [
     id: 'b5',
     resourceId: 'res5',
     resourceName: 'Weller WE1010NA Digital Soldering Station',
-    userId: 'u2', // Dr. Manager Second
+    userId: 'u2',
     userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
     startTime: set(addDays(today, 5), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 5), { hours: 13, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -294,7 +299,7 @@ export let initialBookings: Booking[] = [
     id: 'b6',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u4', // Researcher Fourth
+    userId: 'u4',
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(subDays(today, 1), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(subDays(today, 1), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -312,14 +317,30 @@ export let initialBookings: Booking[] = [
     id: 'b7',
     resourceId: 'res7',
     resourceName: 'FPGA Dev Node Alpha',
-    userId: 'u4', // Researcher Fourth
+    userId: 'u4',
     userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
     startTime: set(addDays(today, 4), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 4), { hours: 15, minutes: 30, seconds: 0, milliseconds: 0 }),
     status: 'Pending',
     notes: 'Need to test new HDL core for signal processing acceleration. Synthesis complete.'
   },
+  { // Example of a Waitlisted booking
+    id: 'b8',
+    resourceId: 'res1', // Keysight Oscilloscope, allows queueing
+    resourceName: 'Keysight MSOX3054T Oscilloscope',
+    userId: 'u2', // Dr. Manager Second
+    userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
+    startTime: set(addDays(today, 2), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }), // Same time as b1
+    endTime: set(addDays(today, 2), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
+    status: 'Waitlisted',
+    notes: 'Hoping to get on the scope if the earlier booking finishes early.'
+  },
 ];
+
+// Define booking statuses for filters and forms, including 'Waitlisted'
+export const bookingStatusesForFilter: (Booking['status'] | 'all')[] = ['all', 'Confirmed', 'Pending', 'Waitlisted', 'Cancelled'];
+export const bookingStatusesForForm: Booking['status'][] = ['Confirmed', 'Pending', 'Waitlisted', 'Cancelled'];
+
 
 export const maintenanceRequestStatuses: MaintenanceRequestStatus[] = ['Open', 'In Progress', 'Resolved', 'Closed'];
 
@@ -366,7 +387,7 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
 export let initialNotifications: Notification[] = [
   {
     id: 'n1',
-    userId: 'u4', // Researcher Fourth
+    userId: 'u4',
     title: 'Booking Confirmed: Keysight Scope',
     message: 'Your booking for Keysight MSOX3054T Oscilloscope on ' + format(set(addDays(today, 2), { hours: 10, minutes: 0 }), 'MMM dd, HH:mm') + ' has been confirmed.',
     type: 'booking_confirmed',
@@ -376,7 +397,7 @@ export let initialNotifications: Notification[] = [
   },
   {
     id: 'n2',
-    userId: 'u4', // Researcher Fourth
+    userId: 'u4',
     title: 'Maintenance Update: Siglent SDG2042X',
     message: 'Maintenance request for Siglent SDG2042X Function Generator (Channel 2 output unstable) is now "In Progress". Technician Third assigned.',
     type: 'maintenance_assigned',
@@ -386,17 +407,17 @@ export let initialNotifications: Notification[] = [
   },
   {
     id: 'n3',
-    userId: 'u1', // Admin user
+    userId: 'u1',
     title: 'New Booking Request: Rigol DP832',
     message: `Booking for Rigol DP832 Programmable Power Supply by ${initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second'} on ${format(set(addDays(today, 3), { hours: 14, minutes: 0 }), 'MMM dd, HH:mm')} needs approval.`,
     type: 'booking_pending_approval',
     isRead: false,
     createdAt: subDays(today, 0).toISOString(),
-    linkTo: '/admin/booking-requests', // Updated link
+    linkTo: '/admin/booking-requests',
   },
   {
     id: 'n4',
-    userId: 'u1', // Admin user
+    userId: 'u1',
     title: 'New Maintenance Request Logged',
     message: `A new maintenance request for Keysight MSOX3054T Oscilloscope (touchscreen unresponsive) has been logged by ${initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second'}.`,
     type: 'maintenance_new',
@@ -424,7 +445,7 @@ export function addNotification(
     createdAt: new Date().toISOString(),
     linkTo,
   };
-  initialNotifications.unshift(newNotification); 
+  initialNotifications.unshift(newNotification);
 }
 
 export let initialBlackoutDates: BlackoutDate[] = [
@@ -441,7 +462,7 @@ export const mockLoginUser = (email: string, password?: string): User | null => 
   const user = initialMockUsers.find(u => u.email === email && u.password === password);
   if (user) {
     if (user.status === 'pending_approval') {
-      return { ...user, status: 'pending_approval' }; 
+      return { ...user, status: 'pending_approval' };
     }
     if (user.status === 'active') {
       return user;
@@ -459,7 +480,7 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
     name,
     email,
     password,
-    role: 'Researcher', 
+    role: 'Researcher',
     status: 'pending_approval',
     avatarUrl: 'https://placehold.co/100x100.png'
   };
@@ -472,7 +493,7 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
         'New Signup Request',
         `User ${name} (${email}) has signed up and is awaiting approval.`,
         'signup_pending_admin',
-        '/admin/users' 
+        '/admin/users'
     );
   }
   return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: newUser.id };
