@@ -1,3 +1,4 @@
+
 'use client';
 
 import Image from 'next/image';
@@ -17,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format, isValid, isPast } from 'date-fns';
+import { format, isValid, isPast, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { allAdminMockResources, initialBookings, getWaitlistPosition } from '@/lib/mock-data';
 import { useState, useEffect } from 'react';
@@ -29,16 +30,17 @@ export default function DashboardPage() {
   const [upcomingUserBookings, setUpcomingUserBookings] = useState<Booking[]>([]);
 
   useEffect(() => {
+    // Simulate fetching frequently used resources; here, just take the first few.
     setFrequentlyUsedResources(allAdminMockResources.slice(0, 2)); 
     
     if (currentUser) {
       const filteredBookings = initialBookings
         .filter(b => {
-            const startTimeDate = b.startTime; 
+            const startTimeDate = new Date(b.startTime); // Ensure startTime is a Date object
             return isValid(startTimeDate) && !isPast(startTimeDate) && b.status !== 'Cancelled' && b.userId === currentUser.id;
         })
-        .map(b => ({...b, createdAt: b.createdAt || b.startTime })) // Ensure createdAt for waitlist calculation
-        .sort((a,b) => a.startTime.getTime() - b.startTime.getTime())
+        .map(b => ({...b, createdAt: b.createdAt ? new Date(b.createdAt) : new Date(b.startTime) })) 
+        .sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
         .slice(0, 5);
       setUpcomingUserBookings(filteredBookings);
     } else {
@@ -135,8 +137,8 @@ export default function DashboardPage() {
                   </TableHeader>
                   <TableBody>
                     {upcomingUserBookings.map((booking) => {
-                      const startTimeDate = booking.startTime;
-                      const endTimeDate = booking.endTime;
+                      const startTimeDate = new Date(booking.startTime);
+                      const endTimeDate = new Date(booking.endTime);
                       const waitlistPosition = getWaitlistPosition(booking, initialBookings);
                       return (
                         <TableRow key={booking.id}>
@@ -153,7 +155,7 @@ export default function DashboardPage() {
                                     booking.status === 'Waitlisted' && 'bg-purple-500 text-white hover:bg-purple-600'
                                 )}
                             >
-                                {booking.status} {booking.status === 'Waitlisted' && waitlistPosition && `(#${waitlistPosition})`}
+                                {booking.status} {booking.status === 'Waitlisted' && waitlistPosition != null && `(#${waitlistPosition})`}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
@@ -192,3 +194,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

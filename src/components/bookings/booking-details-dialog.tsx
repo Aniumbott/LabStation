@@ -80,7 +80,12 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
 
   const isPastBooking = currentBookingDetails.startTime && isPast(new Date(currentBookingDetails.startTime));
   const canLogUsage = isPastBooking && currentBookingDetails.status === 'Confirmed';
-  const waitlistPosition = getWaitlistPosition(currentBookingDetails, initialBookings);
+  
+  // Calculate waitlist position here if needed, using imported initialBookings
+  // This calculation should ideally happen where 'allBookings' or a relevant subset is available
+  const waitlistPosition = currentBookingDetails.status === 'Waitlisted' 
+    ? getWaitlistPosition(currentBookingDetails, initialBookings) // Use global initialBookings for simplicity
+    : null;
 
 
   const handleSaveUsage = (usageData: BookingUsageDetails) => {
@@ -138,13 +143,13 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
              <div className="flex items-center">
               <Clock className="mr-3 h-5 w-5 text-muted-foreground" />
               <span className="font-medium text-muted-foreground w-28">Created:</span>
-              <span className="text-foreground">{format(new Date(currentBookingDetails.createdAt), 'PPP, p')}</span>
+              <span className="text-foreground">{currentBookingDetails.createdAt ? format(new Date(currentBookingDetails.createdAt), 'PPP, p') : 'N/A'}</span>
             </div>
             <div className="flex items-center">
               <Info className="mr-3 h-5 w-5 text-muted-foreground" /> 
               <span className="font-medium text-muted-foreground w-28">Status:</span>
               <Badge className={cn("whitespace-nowrap text-xs px-2 py-0.5 border-transparent", getStatusBadgeClass(currentBookingDetails.status))}>
-                {currentBookingDetails.status} {currentBookingDetails.status === 'Waitlisted' && waitlistPosition && `(#${waitlistPosition})`}
+                {currentBookingDetails.status} {waitlistPosition != null && `(#${waitlistPosition})`}
               </Badge>
             </div>
             {currentBookingDetails.notes && (
@@ -202,3 +207,5 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
     </>
   );
 }
+
+    
