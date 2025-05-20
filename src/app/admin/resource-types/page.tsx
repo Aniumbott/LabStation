@@ -5,7 +5,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon } from 'lucide-react';
 import type { ResourceType } from '@/types';
-import { initialMockResourceTypes, mockCurrentUser } from '@/lib/mock-data';
+import { initialMockResourceTypes } from '@/lib/mock-data';
+import { useAuth } from '@/components/auth-context'; // Import useAuth
 import {
   Table,
   TableBody,
@@ -52,7 +53,8 @@ import { Badge } from '@/components/ui/badge';
 
 export default function ResourceTypesPage() {
   const { toast } = useToast();
-  const [resourceTypes, setResourceTypes] = useState<ResourceType[]>(initialMockResourceTypes);
+  const { currentUser } = useAuth(); // Use AuthContext
+  const [resourceTypes, setResourceTypes] = useState<ResourceType[]>(() => JSON.parse(JSON.stringify(initialMockResourceTypes)));
   const [typeToDelete, setTypeToDelete] = useState<ResourceType | null>(null);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingType, setEditingType] = useState<ResourceType | null>(null);
@@ -125,7 +127,7 @@ export default function ResourceTypesPage() {
         ...data,
       };
       setResourceTypes(prevTypes => [...prevTypes, newType].sort((a, b) => a.name.localeCompare(b.name)));
-      initialMockResourceTypes.push(newType); 
+      initialMockResourceTypes.push(newType);
       initialMockResourceTypes.sort((a, b) => a.name.localeCompare(b.name));
 
 
@@ -140,7 +142,7 @@ export default function ResourceTypesPage() {
   const handleDeleteType = (typeId: string) => {
     const deletedType = resourceTypes.find(rt => rt.id === typeId);
     setResourceTypes(currentTypes => currentTypes.filter(type => type.id !== typeId));
-    
+
     const globalIndex = initialMockResourceTypes.findIndex(rt => rt.id === typeId);
     if (globalIndex !== -1) initialMockResourceTypes.splice(globalIndex, 1);
 
@@ -153,11 +155,12 @@ export default function ResourceTypesPage() {
   };
 
   const activeFilterCount = [activeSearchTerm !== ''].filter(Boolean).length;
-  const canAddResourceTypes = mockCurrentUser.role === 'Admin';
-  const canManageResourceTypes = mockCurrentUser.role === 'Admin';
+  const canAddResourceTypes = currentUser?.role === 'Admin';
+  const canManageResourceTypes = currentUser?.role === 'Admin';
 
 
   return (
+    <TooltipProvider>
     <div className="space-y-8">
       <PageHeader
         title="Resource Types"
@@ -167,7 +170,7 @@ export default function ResourceTypesPage() {
           <div className="flex items-center gap-2">
             <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline">
+                <Button variant="outline" size="sm">
                   <FilterIcon className="mr-2 h-4 w-4" />
                   Filters
                   {activeFilterCount > 0 && (
@@ -211,7 +214,7 @@ export default function ResourceTypesPage() {
               </DialogContent>
             </Dialog>
             {canAddResourceTypes && (
-              <Button onClick={handleOpenNewDialog}>
+              <Button onClick={handleOpenNewDialog} size="sm">
                 <PlusCircle className="mr-2 h-4 w-4" /> Add
               </Button>
             )}
@@ -220,7 +223,6 @@ export default function ResourceTypesPage() {
       />
 
       {filteredResourceTypes.length > 0 ? (
-        <TooltipProvider>
         <div className="overflow-x-auto rounded-lg border shadow-sm">
           <Table>
             <TableHeader>
@@ -285,7 +287,6 @@ export default function ResourceTypesPage() {
             </TableBody>
           </Table>
         </div>
-        </TooltipProvider>
       ) : (
         <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
           <CardContent>
@@ -299,16 +300,15 @@ export default function ResourceTypesPage() {
                     : "Add resource types to categorize your lab equipment and assets."
                 }
             </p>
-            {activeSearchTerm ? (
-                <Button variant="outline" onClick={resetAllActiveFilters}>
+            {activeSearchTerm && (
+                <Button variant="outline" size="sm" onClick={resetAllActiveFilters}>
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
-            ) : (
-              canAddResourceTypes && (
-                <Button onClick={handleOpenNewDialog}>
+            )}
+            {!activeSearchTerm && canAddResourceTypes && (
+                <Button onClick={handleOpenNewDialog} size="sm">
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource Type
                 </Button>
-              )
             )}
           </CardContent>
         </Card>
@@ -320,5 +320,6 @@ export default function ResourceTypesPage() {
         onSave={handleSaveType}
       />
     </div>
+    </TooltipProvider>
   );
 }
