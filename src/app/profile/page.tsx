@@ -16,15 +16,61 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useAuth } from '@/components/auth-context'; // Import useAuth
+import { useAuth } from '@/components/auth-context';
 import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ProfilePage() {
-  const { currentUser } = useAuth(); // Get currentUser from AuthContext
+  const { currentUser, updateUserProfile, isLoading: authIsLoading } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
 
-  if (!currentUser) {
-    // Handle case where no user is logged in
+  const [editableName, setEditableName] = useState(currentUser?.name || '');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (currentUser) {
+      setEditableName(currentUser.name);
+    }
+  }, [currentUser]);
+
+  const handleSaveChanges = async () => {
+    if (!currentUser || !editableName.trim()) {
+      toast({
+        title: "Error",
+        description: "Name cannot be empty.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsSaving(true);
+    const result = await updateUserProfile({ name: editableName.trim() });
+    if (result.success) {
+      toast({
+        title: "Profile Updated",
+        description: "Your name has been successfully updated.",
+      });
+    } else {
+      toast({
+        title: "Update Failed",
+        description: result.message || "Could not update your profile.",
+        variant: "destructive",
+      });
+    }
+    setIsSaving(false);
+  };
+
+  if (authIsLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="ml-3">Loading profile...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser && !authIsLoading) {
     return (
       <div className="space-y-8">
         <PageHeader
@@ -45,6 +91,8 @@ export default function ProfilePage() {
       </div>
     );
   }
+  
+  if (!currentUser) return null; // Should be caught by above, but good for type safety
 
   return (
     <div className="space-y-8">
@@ -65,11 +113,11 @@ export default function ProfilePage() {
                 <TooltipTrigger asChild>
                   <Button variant="outline" size="icon" className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 h-8 w-8">
                       <ImageIcon className="h-4 w-4" />
-                      <span className="sr-only">Change Avatar</span>
+                      <span className="sr-only">Change Avatar (Coming Soon)</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Change Avatar</p>
+                  <p>Change Avatar (Coming Soon)</p>
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -86,39 +134,46 @@ export default function ProfilePage() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="profileName" className="font-medium">Full Name</Label>
-                  <Input id="profileName" defaultValue={currentUser.name} className="mt-1" />
+                  <Input 
+                    id="profileName" 
+                    value={editableName} 
+                    onChange={(e) => setEditableName(e.target.value)}
+                    className="mt-1" 
+                  />
                 </div>
                 <div>
                   <Label htmlFor="profileEmail" className="font-medium">Email Address</Label>
                   <div className="flex items-center mt-1">
-                    <Input id="profileEmail" type="email" defaultValue={currentUser.email} />
+                    <Input id="profileEmail" type="email" value={currentUser.email} readOnly className="bg-muted/10" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="ml-2 text-muted-foreground hover:text-primary h-8 w-8">
+                        <Button variant="ghost" size="icon" className="ml-2 text-muted-foreground hover:text-primary h-8 w-8 cursor-not-allowed opacity-50">
                           <Edit3 className="h-4 w-4" />
-                          <span className="sr-only">Edit Email</span>
+                          <span className="sr-only">Edit Email (Coming Soon)</span>
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Edit Email</p>
+                        <p>Edit Email (Coming Soon)</p>
                       </TooltipContent>
                     </Tooltip>
                   </div>
+                   <p className="text-xs text-muted-foreground mt-1">Email address cannot be changed currently.</p>
                 </div>
               </div>
             </div>
             <Separator />
             <div>
               <h3 className="text-lg font-semibold mb-4 text-primary">Security</h3>
-              <Button variant="outline">
-                  <KeyRound className="mr-2 h-4 w-4" /> Change Password
+              <Button variant="outline" disabled>
+                  <KeyRound className="mr-2 h-4 w-4" /> Change Password (Coming Soon)
               </Button>
             </div>
           </CardContent>
           <Separator />
           <CardFooter className="p-6 justify-end">
-            <Button>
-              <Save className="mr-2 h-4 w-4" /> Save Changes
+            <Button onClick={handleSaveChanges} disabled={isSaving || editableName.trim() === currentUser.name}>
+              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              {isSaving ? 'Saving...' : 'Save Changes'}
             </Button>
           </CardFooter>
         </Card>
@@ -126,3 +181,6 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+// Added Loader2 to imports
+import { Loader2 } from 'lucide-react';

@@ -1,10 +1,10 @@
 
 'use client';
 
-import type { User, RoleName } from '@/types'; // Added RoleName for future use if needed
+import type { User, RoleName } from '@/types';
 import { mockLoginUser, mockSignupUser, initialMockUsers, addNotification } from '@/lib/mock-data';
 import type { ReactNode } from 'react';
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 
 const LOCAL_STORAGE_USER_KEY = 'labstation_currentUser';
 
@@ -14,6 +14,7 @@ interface AuthContextType {
   login: (email: string, password?: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   signup: (name: string, email: string, password?: string) => Promise<{ success: boolean; message: string; userId?: string }>;
+  updateUserProfile: (updatedFields: Partial<Pick<User, 'name'>>) => Promise<{ success: boolean; message?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,34 +24,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true); // Start with loading true
 
   useEffect(() => {
-    // Try to load user from localStorage on initial mount
+    setIsLoading(true);
     try {
       const storedUserString = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
       if (storedUserString) {
         const storedUser: User = JSON.parse(storedUserString);
-        // Optional: Re-validate user against mock data in case it changed
-        // For this mock, we'll trust localStorage, but in a real app, you'd validate a token.
         const validatedUser = initialMockUsers.find(u => u.id === storedUser.id && u.email === storedUser.email);
         if (validatedUser && validatedUser.status === 'active') {
           setCurrentUser(validatedUser);
         } else {
-          // User from localStorage is no longer valid or not active
           localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
         }
       }
     } catch (error) {
       console.error("Error loading user from localStorage:", error);
-      localStorage.removeItem(LOCAL_STORAGE_USER_KEY); // Clear corrupted data
+      localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
     }
     setIsLoading(false);
   }, []);
 
   const login = async (email: string, password?: string): Promise<{ success: boolean; message?: string }> => {
-    // setIsLoading(true); // No need to set loading here, login is quick
-    const user = mockLoginUser(email, password); // mockLoginUser already checks status
+    const user = mockLoginUser(email, password);
     if (user) {
       if (user.status === 'pending_approval') {
-        // setIsLoading(false);
         return { success: false, message: 'Account pending approval. Please wait for an admin.' };
       }
       if (user.status === 'active') {
@@ -60,11 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (error) {
           console.error("Error saving user to localStorage:", error);
         }
-        // setIsLoading(false);
         return { success: true };
       }
     }
-    // setIsLoading(false);
     return { success: false, message: 'Invalid email or password, or account not active/pending.' };
   };
 
@@ -78,12 +72,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signup = async (name: string, email: string, password?: string): Promise<{ success: boolean; message: string; userId?: string }> => {
-    // mockSignupUser already handles adding to initialMockUsers with 'pending_approval' status and notifying admin
     return mockSignupUser(name, email, password);
   };
 
+  const updateUserProfile = useCallback(async (updatedFields: Partial<Pick<User, 'name'>>): Promise<{ success: boolean; message?: string }> => {
+    if (!currentUser) {
+      return { success: false, message: "No user logged in." };
+    }
+    const updatedUser = { ...currentUser, ...updatedFields };
+    setCurrentUser(updatedUser);
+
+    try {
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(updatedUser));
+    } catch (error) {
+      console.error("Error saving updated user to localStorage:", error);
+      // Optionally, revert setCurrentUser if localStorage fails critically
+      return { success: false, message: "Failed to save profile to local storage." };
+    }
+
+    // Update in mock data for session consistency
+    const userIndex = initialMockUsers.findIndex(u => u.id === currentUser.id);
+    if (userIndex !== -1) {
+      initialMockUsers[userIndex] = { ...initialMockUsers[userIndex], ...updatedFields };
+    }
+    return { success: true, message: "Profile updated successfully." };
+  }, [currentUser]);
+
+
   return (
-    <AuthContext.Provider value={{ currentUser, isLoading, login, logout, signup }}>
+    <AuthContext.Provider value={{ currentUser, isLoading, login, logout, signup, updateUserProfile }}>
       {children}
     </AuthContext.Provider>
   );
