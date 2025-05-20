@@ -438,8 +438,10 @@ export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = [
 export const mockLoginUser = (email: string, password?: string): User | null => {
   const user = initialMockUsers.find(u => u.email === email && u.password === password);
   if (user) {
-    if (user.status === 'active') return user;
-    if (user.status === 'pending_approval') return { ...user, status: 'pending_approval' }; // Indicate status for login logic
+    if (user.status === 'pending_approval') {
+      return { ...user, status: 'pending_approval' }; // Indicate status for login logic
+    }
+    return user; // This includes active users
   }
   return null;
 };
@@ -449,7 +451,7 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
     return { success: false, message: 'An account with this email already exists or is pending approval.' };
   }
   const newUser: User = {
-    id: `ps${initialMockUsers.filter(u => u.status === 'pending_approval').length + 1 + Date.now()}`, // Generate ID based on pending users
+    id: `u${initialMockUsers.length + 1 + Date.now()}`, // Ensure new IDs are unique
     name,
     email,
     password,
@@ -457,7 +459,7 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
     status: 'pending_approval',
     avatarUrl: 'https://placehold.co/100x100.png'
   };
-  initialMockUsers.push(newUser); // Add directly to initialMockUsers with pending status
+  initialMockUsers.push(newUser);
 
   const adminUser = initialMockUsers.find(u => u.role === 'Admin');
   if (adminUser) {
@@ -476,7 +478,6 @@ export const mockApproveSignup = (userId: string): boolean => {
   const userIndex = initialMockUsers.findIndex(u => u.id === userId && u.status === 'pending_approval');
   if (userIndex > -1) {
     initialMockUsers[userIndex].status = 'active';
-     // Add notification for the approved user
     addNotification(
         initialMockUsers[userIndex].id,
         'Account Approved!',
@@ -492,7 +493,7 @@ export const mockApproveSignup = (userId: string): boolean => {
 export const mockRejectSignup = (userId: string): boolean => {
   const userIndex = initialMockUsers.findIndex(u => u.id === userId && u.status === 'pending_approval');
   if (userIndex > -1) {
-    initialMockUsers.splice(userIndex, 1); // Remove the user from the main list
+    initialMockUsers.splice(userIndex, 1);
     return true;
   }
   return false;

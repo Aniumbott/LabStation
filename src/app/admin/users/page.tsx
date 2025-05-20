@@ -211,7 +211,8 @@ export default function UsersPage() {
   };
 
   const handleApproveUser = (userId: string) => {
-    if (mockApproveSignup(userId)) {
+    const user = users.find(u=>u.id === userId);
+    if (mockApproveSignup(userId)) { // This function now also handles adding notification
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'active' } : u)
         .sort((a,b) => {
           if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
@@ -219,23 +220,35 @@ export default function UsersPage() {
           return a.name.localeCompare(b.name);
         })
       );
-      const user = users.find(u=>u.id === userId);
       toast({
         title: 'User Approved',
         description: `User ${user?.name} has been approved and is now active.`,
       });
+    } else {
+        toast({
+            title: 'Approval Failed',
+            description: `Could not approve user ${user?.name}. They might not be pending approval.`,
+            variant: 'destructive',
+        });
     }
   };
 
-  const handleConfirmRejectUser = (userId: string) => {
-    const userDetails = users.find(u => u.id === userId);
-    if (mockRejectSignup(userId)) {
-      setUsers(prev => prev.filter(u => u.id !== userId));
+  const handleConfirmRejectUser = () => {
+    if (!userToReject) return;
+    const userDetails = users.find(u => u.id === userToReject.id);
+    if (mockRejectSignup(userToReject.id)) {
+      setUsers(prev => prev.filter(u => u.id !== userToReject.id));
       toast({
         title: 'Signup Request Rejected',
         description: `Signup request for ${userDetails?.name} has been rejected and removed.`,
         variant: 'destructive',
       });
+    } else {
+        toast({
+            title: 'Rejection Failed',
+            description: `Could not reject user ${userDetails?.name}.`,
+            variant: 'destructive',
+        });
     }
     setUserToReject(null);
   };
@@ -243,7 +256,7 @@ export default function UsersPage() {
 
   const activeFilterCount = [activeSearchTerm !== '', activeFilterRole !== 'all', activeFilterStatus !== 'all'].filter(Boolean).length;
   const canAddUsers = currentUser?.role === 'Admin';
-  const canManageUsers = currentUser?.role === 'Admin'; // For edit/delete of active users
+  const canManageUsers = currentUser?.role === 'Admin'; 
   const canApproveRejectSignups = currentUser?.role === 'Admin';
 
 
@@ -403,12 +416,12 @@ export default function UsersPage() {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Are you sure you want to reject this signup?</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    This will remove the signup request for <span className="font-semibold">{userToReject.name}</span>.
+                                    This will remove the signup request for <span className="font-semibold">{userToReject.name}</span>. This action cannot be undone.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel onClick={() => setUserToReject(null)}>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction variant="destructive" onClick={() => handleConfirmRejectUser(userToReject.id)}>
+                                  <AlertDialogAction variant="destructive" onClick={handleConfirmRejectUser}>
                                     Reject Signup
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
@@ -484,15 +497,16 @@ export default function UsersPage() {
                     : "There are currently no users in the system. Add one to get started!"
                 }
             </p>
-            {activeFilterCount > 0 && (
+            {activeFilterCount > 0 ? (
                 <Button variant="outline" onClick={resetAllActiveFilters}>
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
-            )}
-            {!activeFilterCount && canAddUsers && (
+            ) : (
+              canAddUsers && (
                 <Button onClick={handleOpenNewUserDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First User
                 </Button>
+              )
             )}
           </CardContent>
         </Card>

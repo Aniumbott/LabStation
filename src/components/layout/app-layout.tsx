@@ -15,6 +15,7 @@ import {
   Wrench,
   Bell,
   CalendarOff,
+  Building,
   Loader2,
   // UserCheck2 removed as signup requests page is removed
 } from 'lucide-react';
@@ -92,7 +93,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const visibleNavItems = useMemo(() => {
     if (!currentUser) { // If no user, only show non-role restricted public-facing links
-      return navItems.filter(item => !item.allowedRoles); // Or adjust if some are truly public for unauth users
+      return navItems.filter(item => !item.allowedRoles); 
     }
     return navItems.filter(item => {
       if (!item.allowedRoles || item.allowedRoles.length === 0) {
@@ -122,9 +123,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
   
-  // If user is not logged in and tries to access a protected route, they'll be redirected by the useEffect above.
-  // If user is not logged in, and we reach here, it means they are trying to access a protected route AND the redirect hasn't happened yet.
-  // In this case, we can also show a loader or null to prevent rendering the full layout.
   if (!currentUser && !PUBLIC_ROUTES.includes(pathname)) {
      return (
       <div className="flex flex-col items-center justify-center min-h-svh bg-background text-muted-foreground">
@@ -165,7 +163,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       <SidebarInset className="flex flex-col relative">
         <MobileSidebarToggle />
-        <div className="p-4 md:p-6 lg:p-8 flex-grow pt-12 sm:pt-4 md:pt-6 lg:pt-8"> {/* Adjusted padding for MobileSidebarToggle */}
+        <div className="p-4 md:p-6 lg:p-8 flex-grow pt-12 md:pt-6 lg:pt-8"> {/* Adjusted padding for MobileSidebarToggle */}
           {children}
         </div>
       </SidebarInset>
