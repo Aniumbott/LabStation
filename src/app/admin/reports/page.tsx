@@ -61,7 +61,6 @@ const CHART_COLORS = {
     Resolved: "hsl(var(--chart-4))",
     Closed: "hsl(var(--chart-5))",
   },
-  users: "hsl(var(--chart-1))",
   utilization: "hsl(var(--chart-2))",
   peakHours: "hsl(var(--chart-3))",
   waitlist: "hsl(var(--chart-4))",
@@ -125,30 +124,6 @@ export default function ReportsPage() {
     return config;
   }, [maintenanceByStatus]);
 
-
-  const usersByRole: ReportItem[] = useMemo(() => {
-    const report: ReportItem[] = [];
-    userRolesList.forEach(role => {
-      const count = initialMockUsers.filter(user => user.role === role).length;
-       if (count > 0) {
-        report.push({ name: role, count });
-       }
-    });
-    return report;
-  }, []);
-
-  const usersChartConfig = useMemo(() => {
-    const config: ChartConfig = {};
-    usersByRole.forEach(item => {
-      config[item.name] = {
-        label: item.name,
-        color: CHART_COLORS.users,
-      };
-    });
-    config["count"] = { label: "Users", color: CHART_COLORS.users };
-    return config;
-  }, [usersByRole]);
-
   const resourceUtilization: UtilizationItem[] = useMemo(() => {
     const report: UtilizationItem[] = [];
     const today = new Date();
@@ -157,20 +132,20 @@ export default function ReportsPage() {
     allAdminMockResources.forEach(resource => {
       const bookedDays = new Set<string>();
       initialBookings.forEach(booking => {
+        // Ensure booking.startTime is treated as a Date object
+        const bookingDate = typeof booking.startTime === 'string' ? parseISO(booking.startTime) : booking.startTime;
         if (booking.resourceId === resource.id && booking.status === 'Confirmed') {
-          const bookingDate = booking.startTime; // Already a Date object
           if (isValid(bookingDate) && bookingDate >= thirtyDaysAgo && bookingDate <= today) {
             bookedDays.add(formatDate(bookingDate, 'yyyy-MM-dd'));
           }
         }
       });
-      // Conceptual: assumes resource is available all 30 days for simplicity in mock
       const utilizationPercentage = (bookedDays.size / 30) * 100;
-      if (bookedDays.size > 0) { // Only show resources with some utilization
+      if (bookedDays.size > 0) {
         report.push({ name: resource.name, utilization: Math.round(utilizationPercentage) });
       }
     });
-    return report.sort((a, b) => b.utilization - a.utilization).slice(0, 7); // Top 7
+    return report.sort((a, b) => b.utilization - a.utilization).slice(0, 7);
   }, []);
 
   const utilizationChartConfig = useMemo(() => {
@@ -189,7 +164,7 @@ export default function ReportsPage() {
     const hourCounts: { [hour: string]: number } = {};
     initialBookings.forEach(booking => {
       if (booking.status === 'Confirmed') {
-        const bookingDate = booking.startTime; // Already a Date object
+        const bookingDate = typeof booking.startTime === 'string' ? parseISO(booking.startTime) : booking.startTime;
         if (isValid(bookingDate)) {
             const hour = formatDate(startOfHour(bookingDate), 'HH:00');
             hourCounts[hour] = (hourCounts[hour] || 0) + 1;
@@ -263,7 +238,7 @@ export default function ReportsPage() {
             {bookingsPerResource.length > 0 ? (
               <ChartContainer config={bookingsChartConfig} className="min-h-[300px] w-full">
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={bookingsPerResource} margin={{ top: 5, right: 20, left: -20, bottom: 40 }}>
+                  <BarChart data={bookingsPerResource} margin={{ top: 5, right: 20, left: -20, bottom: 50 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis
                       dataKey="name"
@@ -273,7 +248,7 @@ export default function ReportsPage() {
                       angle={-45}
                       textAnchor="end"
                       interval={0}
-                      height={80}
+                      height={70} // Increased height for angled labels
                       className="text-xs"
                     />
                     <YAxis tickLine={false} axisLine={false} tickMargin={8} allowDecimals={false} />
@@ -327,37 +302,6 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary" />
-              User Role Distribution
-            </CardTitle>
-            <CardDescription>Number of users assigned to each role.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {usersByRole.length > 0 ? (
-              <ChartContainer config={usersChartConfig} className="min-h-[250px] w-full">
-                 <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={usersByRole} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-                    <XAxis type="number" tickLine={false} axisLine={false} tickMargin={8} allowDecimals={false}/>
-                    <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={8} width={100} className="text-xs"/>
-                     <ChartTooltip {...chartTooltipConfig} />
-                    <Bar dataKey="count" fill="var(--color-count)" radius={4} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-            ) : (
-              <p className="text-muted-foreground text-center py-10">No user data available.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Separator />
-      <h2 className="text-2xl font-semibold pt-4">Advanced Analytics</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -442,3 +386,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    
