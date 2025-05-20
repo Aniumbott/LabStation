@@ -1,11 +1,10 @@
-
 import type { Metadata } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import './globals.css';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Toaster } from "@/components/ui/toaster";
-import { AuthProvider } from '@/components/auth-context';
+import { AuthProviderWrapper } from '@/components/layout/auth-provider-wrapper'; // Updated import
 
 export const metadata: Metadata = {
   title: 'LabStation',
@@ -20,9 +19,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body className="font-sans antialiased" suppressHydrationWarning>
-        <AuthProvider>
+        <AuthProviderWrapper> {/* Use the new wrapper component */}
           <AppLayout>{children}</AppLayout>
-        </AuthProvider>
+        </AuthProviderWrapper>
         <Toaster />
       </body>
     </html>
