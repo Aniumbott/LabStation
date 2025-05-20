@@ -34,7 +34,7 @@ export type UserFormValues = z.infer<typeof userFormSchema>;
 interface UserFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initialUser: User | null; 
+  initialUser: User | null;
   onSave: (data: UserFormValues) => void;
 }
 
@@ -72,7 +72,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="w-full max-w-xs sm:max-w-sm md:max-w-md">
         <DialogHeader>
           <DialogTitle>{initialUser ? 'Edit User' : 'Add New User'}</DialogTitle>
           <DialogDescription>
@@ -136,8 +136,8 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting 
-                  ? (initialUser ? 'Saving...' : 'Creating...') 
+                {form.formState.isSubmitting
+                  ? (initialUser ? 'Saving...' : 'Creating...')
                   : (initialUser ? <><Save className="mr-2 h-4 w-4" /> Save Changes</> : <><UserPlus className="mr-2 h-4 w-4" /> Create User</>)
                 }
               </Button>

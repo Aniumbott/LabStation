@@ -146,13 +146,13 @@ export default function UsersPage() {
     setTempFilterRole('all');
     setTempFilterStatus('all');
   };
-  
+
   const resetAllActivePageFilters = () => {
     setActiveSearchTerm('');
     setActiveFilterRole('all');
     setActiveFilterStatus('all');
-    resetDialogFilters(); 
-    setIsFilterDialogOpen(false); 
+    resetDialogFilters();
+    setIsFilterDialogOpen(false);
   };
 
   const handleOpenNewUserDialog = () => {
@@ -166,11 +166,11 @@ export default function UsersPage() {
   };
 
   const handleSaveUser = (data: UserFormValues) => {
-    if (editingUser) { 
+    if (editingUser) {
       const updatedUser = { ...editingUser, ...data, avatarUrl: editingUser.avatarUrl || 'https://placehold.co/100x100.png' };
       const updatedUsersList = users.map(u => u.id === editingUser.id ? updatedUser : u);
       setUsers(updatedUsersList);
-      
+
       const globalIndex = initialMockUsers.findIndex(u => u.id === editingUser.id);
       if (globalIndex !== -1) initialMockUsers[globalIndex] = updatedUser;
 
@@ -178,16 +178,20 @@ export default function UsersPage() {
         title: 'User Updated',
         description: `User ${data.name} has been updated.`,
       });
-    } else { 
+    } else {
       const newUser: User = {
         id: `u${initialMockUsers.length + 1 + Date.now()}`,
         ...data,
         avatarUrl: 'https://placehold.co/100x100.png',
-        status: 'active', 
+        status: 'active',
       };
-      const updatedUsersList = [newUser, ...users].sort((a, b) => a.name.localeCompare(b.name));
+      const updatedUsersList = [newUser, ...users].sort((a, b) => {
+        if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
+        if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
+        return a.name.localeCompare(b.name);
+      });
       setUsers(updatedUsersList);
-      initialMockUsers.push(newUser); 
+      initialMockUsers.push(newUser);
       initialMockUsers.sort((a, b) => {
         if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
         if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
@@ -202,10 +206,10 @@ export default function UsersPage() {
     setIsFormDialogOpen(false);
   };
 
-  const handleDeleteUser = (userId: string) => { 
+  const handleDeleteUser = (userId: string) => {
     const deletedUser = users.find(u => u.id === userId);
     setUsers(currentUsers => currentUsers.filter(user => user.id !== userId));
-    
+
     const globalIndex = initialMockUsers.findIndex(u => u.id === userId);
     if (globalIndex !== -1) initialMockUsers.splice(globalIndex, 1);
 
@@ -219,7 +223,7 @@ export default function UsersPage() {
 
   const handleApproveUser = (userId: string) => {
     const user = users.find(u=>u.id === userId);
-    if (mockApproveSignup(userId)) { 
+    if (mockApproveSignup(userId)) {
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'active' } : u)
         .sort((a,b) => {
           if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
@@ -263,7 +267,7 @@ export default function UsersPage() {
 
   const activeFilterCount = [activeSearchTerm !== '', activeFilterRole !== 'all', activeFilterStatus !== 'all'].filter(Boolean).length;
   const canAddUsers = currentUser?.role === 'Admin';
-  const canManageUsers = currentUser?.role === 'Admin'; 
+  const canManageUsers = currentUser?.role === 'Admin';
   const canApproveRejectSignups = currentUser?.role === 'Admin';
 
 
@@ -274,7 +278,7 @@ export default function UsersPage() {
         description="View, add, and manage user accounts, roles, and signup requests."
         icon={UsersIconLucide}
         actions={
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
@@ -287,7 +291,7 @@ export default function UsersPage() {
                   )}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
+              <DialogContent className="w-full max-w-xs sm:max-w-sm md:max-w-md">
                 <DialogHeader>
                   <DialogTitle>Filter Users</DialogTitle>
                   <DialogDescription>
@@ -465,7 +469,7 @@ export default function UsersPage() {
                                 <AlertDialogHeader>
                                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                    This action cannot be undone. This will remove the user 
+                                    This action cannot be undone. This will remove the user
                                     <span className="font-semibold"> {userToDelete.name}</span>.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
@@ -500,7 +504,7 @@ export default function UsersPage() {
             </p>
             <p className="text-sm mb-4">
                 {activeFilterCount > 0
-                    ? "Try adjusting your search or filter criteria." 
+                    ? "Try adjusting your search or filter criteria."
                     : "There are currently no users in the system. Add one to get started!"
                 }
             </p>
