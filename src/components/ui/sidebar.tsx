@@ -4,7 +4,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { VariantProps, cva } from "class-variance-authority"
-import { PanelLeft } from "lucide-react"
+import { PanelLeft, FlaskConical } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
@@ -198,14 +198,6 @@ const Sidebar = React.forwardRef<
     }
 
     if (isMobile) {
-      const mobileChildren = React.Children.toArray(children).filter(child => {
-        if (React.isValidElement(child)) {
-          const childType = (child.type as any)?.displayName || (child.type as any)?.name;
-          return childType === 'SidebarContent' || childType === 'Separator';
-        }
-        return false;
-      });
-
       return (
         <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
           <SheetContent
@@ -219,12 +211,23 @@ const Sidebar = React.forwardRef<
             }
             side={side}
           >
-            <SheetHeader className="p-4 border-b border-sidebar-border flex flex-row items-center gap-2">
+            {/* This SheetHeader contains the Logo and the accessible title */}
+            <SheetHeader className="p-4 flex flex-row items-center gap-2"> {/* Removed border-b border-sidebar-border */}
               <Logo />
               <SheetTitle className="sr-only">Main Navigation</SheetTitle>
             </SheetHeader>
             <div className="flex h-full w-full flex-col overflow-y-auto">
-                {mobileChildren}
+                {React.Children.map(children, (child) => {
+                  if (React.isValidElement(child)) {
+                    // Ensure we are consistently using displayName or name for type checking
+                    const childType = (child.type as any)?.displayName || (child.type as any)?.name;
+                    // Only render Separator and SidebarContent children from AppLayout
+                    if (childType === 'Separator' || childType === 'SidebarContent') {
+                      return child;
+                    }
+                  }
+                  return null;
+                })}
             </div>
           </SheetContent>
         </Sheet>
@@ -405,7 +408,7 @@ const SidebarSeparator = React.forwardRef<
     <Separator
       ref={ref}
       data-sidebar="separator"
-      className={cn("mx-2 w-auto bg-sidebar-border", className)}
+      className={cn("my-1 bg-sidebar-border", className)} // Removed mx-2 w-auto
       {...props}
     />
   )
