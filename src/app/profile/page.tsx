@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from '@/components/layout/page-header';
-import { UserCog, Shield, KeyRound, Image as ImageIcon, Save, Info, LogOut, Loader2, Eye, EyeOff } from 'lucide-react';
+import { UserCog, Shield, KeyRound, Image as ImageIcon, Save, Info, LogOut, Loader2, Edit3, Eye, EyeOff } from 'lucide-react'; // Added Edit3
 import type { User } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -91,27 +91,17 @@ export default function ProfilePage() {
       return;
     }
 
-    // Mock password change logic
     setIsSavingPassword(true);
-    // In a real app, you'd call an API here.
-    // For mock, we'll simulate a check against currentUser.password IF it exists.
-    // Note: We don't actually change the password in the mock data for simplicity.
-    if (currentUser && currentUser.password && currentUser.password !== currentPassword) {
-      // This check is illustrative; in a real app, the backend handles current password verification.
-      // For this mock, let's assume for demo purposes that if a password is set, it must be matched.
-      // If no password on current user (e.g. from social login later), this check could be skipped.
-      // await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
-      // setPasswordChangeError("Incorrect current password (mock check).");
-      // setIsSavingPassword(false);
-      // return;
-      // For simplicity of mock, we'll bypass current password check and just show success
-    }
-
-    // Simulate API delay
+    // Simulate API delay for password change
     await new Promise(resolve => setTimeout(resolve, 1000));
 
+    // In a real app, you would call an API to change the password.
+    // For this mock, we'll just simulate success.
+    // We won't actually compare currentPassword for simplicity in mock.
+    // Assume the backend handles current password verification.
+
     setIsSavingPassword(false);
-    setPasswordChangeSuccess("Password changed successfully (mock).");
+    setPasswordChangeSuccess("Password changed successfully (mock). Please use your new password next time you log in.");
     toast({
       title: "Password Changed (Mock)",
       description: "Your password has been 'changed'.",
@@ -159,7 +149,7 @@ export default function ProfilePage() {
     );
   }
 
-  if (!currentUser) return null;
+  if (!currentUser) return null; // Should be caught by the redirect in AppLayout, but good for type safety
 
   return (
     <div className="space-y-8">
@@ -226,7 +216,7 @@ export default function ProfilePage() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">Email address cannot be changed currently.</p>
                 </div>
-                 <Button onClick={handleSaveNameChanges} disabled={isSavingName || editableName.trim() === currentUser.name} className="w-full sm:w-auto">
+                 <Button onClick={handleSaveNameChanges} disabled={isSavingName || editableName.trim() === currentUser.name || !editableName.trim()} className="w-full sm:w-auto">
                     {isSavingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     {isSavingName ? 'Saving Name...' : 'Save Name Changes'}
                  </Button>
@@ -314,7 +304,7 @@ export default function ProfilePage() {
                     <AlertDescription className="text-green-700 dark:text-green-400">{passwordChangeSuccess}</AlertDescription>
                   </Alert>
                 )}
-                <Button onClick={handleChangePassword} disabled={isSavingPassword} className="w-full sm:w-auto">
+                <Button onClick={handleChangePassword} disabled={isSavingPassword || !currentPassword || !newPassword || !confirmNewPassword} className="w-full sm:w-auto">
                   {isSavingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
                   {isSavingPassword ? 'Changing Password...' : 'Change Password'}
                 </Button>
@@ -322,16 +312,15 @@ export default function ProfilePage() {
             </div>
           </CardContent>
           <Separator />
-          <CardFooter className="p-6 flex justify-start"> {/* Only Logout button now */}
+          <CardFooter className="p-6 flex justify-between items-center"> {/* Changed to justify-between */}
             <Button variant="destructive" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Logout
             </Button>
+             {/* The Save Name Changes button was moved to Account Information section */}
           </CardFooter>
         </Card>
       </TooltipProvider>
     </div>
   );
 }
-
-    
