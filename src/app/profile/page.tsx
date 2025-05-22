@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from '@/components/layout/page-header';
-import { UserCog, Shield, Edit3, KeyRound, Image as ImageIcon, Save, Info, LogOut, Loader2 } from 'lucide-react'; // Added LogOut, Loader2
+import { UserCog, Shield, KeyRound, Image as ImageIcon, Save, Info, LogOut, Loader2, Eye, EyeOff } from 'lucide-react';
 import type { User } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -20,14 +20,27 @@ import { useAuth } from '@/components/auth-context';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function ProfilePage() {
-  const { currentUser, updateUserProfile, isLoading: authIsLoading, logout } = useAuth(); // Added logout
+  const { currentUser, updateUserProfile, isLoading: authIsLoading, logout } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
   const [editableName, setEditableName] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingName, setIsSavingName] = useState(false);
+
+  // Password Change State
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
+  const [passwordChangeSuccess, setPasswordChangeSuccess] = useState<string | null>(null);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
 
   useEffect(() => {
     if (currentUser) {
@@ -35,7 +48,7 @@ export default function ProfilePage() {
     }
   }, [currentUser]);
 
-  const handleSaveChanges = async () => {
+  const handleSaveNameChanges = async () => {
     if (!currentUser || !editableName.trim()) {
       toast({
         title: "Error",
@@ -44,7 +57,7 @@ export default function ProfilePage() {
       });
       return;
     }
-    setIsSaving(true);
+    setIsSavingName(true);
     const result = await updateUserProfile({ name: editableName.trim() });
     if (result.success) {
       toast({
@@ -58,8 +71,56 @@ export default function ProfilePage() {
         variant: "destructive",
       });
     }
-    setIsSaving(false);
+    setIsSavingName(false);
   };
+
+  const handleChangePassword = async () => {
+    setPasswordChangeError(null);
+    setPasswordChangeSuccess(null);
+
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      setPasswordChangeError("All password fields are required.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordChangeError("New password must be at least 6 characters long.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordChangeError("New passwords do not match.");
+      return;
+    }
+
+    // Mock password change logic
+    setIsSavingPassword(true);
+    // In a real app, you'd call an API here.
+    // For mock, we'll simulate a check against currentUser.password IF it exists.
+    // Note: We don't actually change the password in the mock data for simplicity.
+    if (currentUser && currentUser.password && currentUser.password !== currentPassword) {
+      // This check is illustrative; in a real app, the backend handles current password verification.
+      // For this mock, let's assume for demo purposes that if a password is set, it must be matched.
+      // If no password on current user (e.g. from social login later), this check could be skipped.
+      // await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      // setPasswordChangeError("Incorrect current password (mock check).");
+      // setIsSavingPassword(false);
+      // return;
+      // For simplicity of mock, we'll bypass current password check and just show success
+    }
+
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    setIsSavingPassword(false);
+    setPasswordChangeSuccess("Password changed successfully (mock).");
+    toast({
+      title: "Password Changed (Mock)",
+      description: "Your password has been 'changed'.",
+    });
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmNewPassword('');
+  };
+
 
   const handleLogout = () => {
     logout();
@@ -97,8 +158,8 @@ export default function ProfilePage() {
       </div>
     );
   }
-  
-  if (!currentUser) return null; // Should be caught by above, but good for type safety
+
+  if (!currentUser) return null;
 
   return (
     <div className="space-y-8">
@@ -108,7 +169,7 @@ export default function ProfilePage() {
         icon={UserCog}
       />
       <TooltipProvider>
-        <Card className="max-w-2xl mx-auto shadow-lg">
+        <Card className="w-full max-w-2xl mx-auto shadow-lg">
           <CardHeader className="items-center text-center p-6">
             <div className="relative group mb-4">
               <Avatar className="w-32 h-32 mx-auto border-4 border-primary/20 shadow-md group-hover:opacity-80 transition-opacity">
@@ -118,8 +179,8 @@ export default function ProfilePage() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="outline" size="icon" className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 h-8 w-8 cursor-not-allowed" disabled>
-                      <ImageIcon className="h-4 w-4" />
-                      <span className="sr-only">Change Avatar (Coming Soon)</span>
+                    <ImageIcon className="h-4 w-4" />
+                    <span className="sr-only">Change Avatar (Coming Soon)</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -127,7 +188,7 @@ export default function ProfilePage() {
                 </TooltipContent>
               </Tooltip>
             </div>
-            
+
             <CardTitle className="text-2xl">{currentUser.name}</CardTitle>
             <CardDescription className="flex items-center justify-center gap-1 text-base">
               <Shield className="h-4 w-4 text-muted-foreground" /> {currentUser.role}
@@ -140,11 +201,11 @@ export default function ProfilePage() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="profileName" className="font-medium">Full Name</Label>
-                  <Input 
-                    id="profileName" 
-                    value={editableName} 
+                  <Input
+                    id="profileName"
+                    value={editableName}
                     onChange={(e) => setEditableName(e.target.value)}
-                    className="mt-1" 
+                    className="mt-1"
                   />
                 </div>
                 <div>
@@ -155,35 +216,116 @@ export default function ProfilePage() {
                       <TooltipTrigger asChild>
                         <Button variant="ghost" size="icon" className="ml-2 text-muted-foreground hover:text-primary h-8 w-8 cursor-not-allowed opacity-50" disabled>
                           <Edit3 className="h-4 w-4" />
-                          <span className="sr-only">Edit Email (Coming Soon)</span>
+                          <span className="sr-only">Edit Email (Not available)</span>
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Edit Email (Coming Soon)</p>
+                        <p>Changing email is not available in this version.</p>
                       </TooltipContent>
                     </Tooltip>
                   </div>
-                   <p className="text-xs text-muted-foreground mt-1">Email address cannot be changed currently.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Email address cannot be changed currently.</p>
                 </div>
+                 <Button onClick={handleSaveNameChanges} disabled={isSavingName || editableName.trim() === currentUser.name} className="w-full sm:w-auto">
+                    {isSavingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    {isSavingName ? 'Saving Name...' : 'Save Name Changes'}
+                 </Button>
               </div>
             </div>
+
             <Separator />
+
             <div>
               <h3 className="text-lg font-semibold mb-4 text-primary">Security</h3>
-              <Button variant="outline" disabled>
-                  <KeyRound className="mr-2 h-4 w-4" /> Change Password (Coming Soon)
-              </Button>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="currentPassword">Current Password</Label>
+                  <div className="relative mt-1">
+                    <Input
+                      id="currentPassword"
+                      type={showCurrentPassword ? "text" : "password"}
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Enter your current password"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
+                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    >
+                      {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      <span className="sr-only">{showCurrentPassword ? "Hide" : "Show"} current password</span>
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="newPassword">New Password</Label>
+                   <div className="relative mt-1">
+                    <Input
+                      id="newPassword"
+                      type={showNewPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Enter new password (min. 6 characters)"
+                    />
+                     <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                    >
+                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      <span className="sr-only">{showNewPassword ? "Hide" : "Show"} new password</span>
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
+                  <div className="relative mt-1">
+                    <Input
+                      id="confirmNewPassword"
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                    />
+                     <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      <span className="sr-only">{showConfirmPassword ? "Hide" : "Show"} confirm password</span>
+                    </Button>
+                  </div>
+                </div>
+                {passwordChangeError && (
+                  <Alert variant="destructive" className="mt-2">
+                    <AlertDescription>{passwordChangeError}</AlertDescription>
+                  </Alert>
+                )}
+                {passwordChangeSuccess && (
+                  <Alert variant="default" className="mt-2 bg-green-50 border-green-200 dark:bg-green-900/30 dark:border-green-700">
+                    <AlertDescription className="text-green-700 dark:text-green-400">{passwordChangeSuccess}</AlertDescription>
+                  </Alert>
+                )}
+                <Button onClick={handleChangePassword} disabled={isSavingPassword} className="w-full sm:w-auto">
+                  {isSavingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
+                  {isSavingPassword ? 'Changing Password...' : 'Change Password'}
+                </Button>
+              </div>
             </div>
           </CardContent>
           <Separator />
-          <CardFooter className="p-6 flex justify-between items-center"> {/* Changed to flex justify-between */}
-            <Button variant="destructive" onClick={handleLogout}> {/* Added Logout Button */}
+          <CardFooter className="p-6 flex justify-start"> {/* Only Logout button now */}
+            <Button variant="destructive" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Logout
-            </Button>
-            <Button onClick={handleSaveChanges} disabled={isSaving || editableName.trim() === currentUser.name}>
-              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              {isSaving ? 'Saving...' : 'Save Changes'}
             </Button>
           </CardFooter>
         </Card>
@@ -191,3 +333,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+    
