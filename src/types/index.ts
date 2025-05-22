@@ -1,4 +1,5 @@
 
+
 export interface ResourceType {
   id: string;
   name: string;
@@ -53,7 +54,7 @@ export interface BookingUsageDetails {
   actualStartTime?: string; // ISO string
   actualEndTime?: string;   // ISO string
   outcome?: 'Success' | 'Failure' | 'Interrupted' | 'Not Applicable';
-  dataStorageLocation?: string; // e.g., path to results, lab notebook ID
+  dataStorageLocation?: string; 
   usageComments?: string;
 }
 export const BookingUsageOutcomes: Array<BookingUsageDetails['outcome']> = ['Success', 'Failure', 'Interrupted', 'Not Applicable'];
@@ -67,7 +68,7 @@ export interface Booking {
   userName: string;
   startTime: Date;
   endTime: Date;
-  createdAt: Date; // Ensured for waitlist ordering
+  createdAt: Date; 
   status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted';
   notes?: string;
   usageDetails?: BookingUsageDetails;
@@ -97,7 +98,7 @@ export interface MaintenanceRequest {
   issueDescription: string;
   status: MaintenanceRequestStatus;
   assignedTechnicianId?: string;
-  assignedTechnicianName?: string; // Denormalized
+  assignedTechnicianName?: string; 
   dateReported: string; // ISO string
   dateResolved?: string; // ISO string
   resolutionNotes?: string;
@@ -147,16 +148,17 @@ export interface RecurringBlackoutRule {
 export type AuditActionType =
   | 'USER_CREATED' | 'USER_UPDATED' | 'USER_DELETED' | 'USER_APPROVED' | 'USER_REJECTED'
   | 'RESOURCE_CREATED' | 'RESOURCE_UPDATED' | 'RESOURCE_DELETED'
-  | 'BOOKING_CREATED' | 'BOOKING_UPDATED' | 'BOOKING_APPROVED' | 'BOOKING_REJECTED' | 'BOOKING_CANCELLED'
+  | 'BOOKING_CREATED' | 'BOOKING_UPDATED' | 'BOOKING_APPROVED' | 'BOOKING_REJECTED' | 'BOOKING_CANCELLED' | 'BOOKING_PROMOTED'
   | 'MAINTENANCE_CREATED' | 'MAINTENANCE_UPDATED';
 
 export interface AuditLogEntry {
   id: string;
   timestamp: string; // ISO string
-  userId: string;    // User who performed the action
-  userName: string;  // Denormalized for display
+  userId: string;    
+  userName: string;  
   action: AuditActionType;
   entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule';
   entityId?: string;
-  details: string; // Human-readable summary
+  details: string; 
 }
+

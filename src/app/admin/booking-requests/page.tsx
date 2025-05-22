@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter, Clock } from 'lucide-react';
-import type { Booking, Resource } from '@/types'; // Added Resource type
+import type { Booking, Resource } from '@/types'; 
 import { initialBookings, allAdminMockResources, addNotification, bookingStatusesForFilter, processQueueForResource } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
@@ -49,7 +49,7 @@ export default function BookingRequestsPage() {
 
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
-  const [activeFilterStatus, setActiveFilterStatus] = useState<Booking['status'] | 'all'>('Pending'); // Default to Pending
+  const [activeFilterStatus, setActiveFilterStatus] = useState<Booking['status'] | 'all'>('Pending'); 
   
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
@@ -57,8 +57,6 @@ export default function BookingRequestsPage() {
   const [tempFilterStatus, setTempFilterStatus] = useState<Booking['status'] | 'all'>(activeFilterStatus);
 
   useEffect(() => {
-    // This effect ensures the page reflects global changes to initialBookings if it re-renders
-    // (e.g., after a booking is promoted from waitlist by another action)
     setAllBookingsState(JSON.parse(JSON.stringify(initialBookings)));
   }, []); 
 
@@ -80,7 +78,7 @@ export default function BookingRequestsPage() {
     
     if (activeFilterStatus !== 'all') {
         filtered = filtered.filter(b => b.status === activeFilterStatus);
-    } else { // If 'all' statuses selected in dialog, still default to pending/waitlisted for this page
+    } else { 
         filtered = filtered.filter(b => b.status === 'Pending' || b.status === 'Waitlisted');
     }
 
@@ -100,16 +98,17 @@ export default function BookingRequestsPage() {
       const updatedBookings = [...allBookingsState];
       const approvedBooking = { ...updatedBookings[bookingIndex], status: 'Confirmed' as Booking['status']};
       updatedBookings[bookingIndex] = approvedBooking;
-      setAllBookingsState(updatedBookings); // Update local state
+      setAllBookingsState(updatedBookings); 
 
       const globalBookingIndex = initialBookings.findIndex(b => b.id === bookingId);
       if (globalBookingIndex !== -1) {
-        initialBookings[globalBookingIndex].status = 'Confirmed'; // Update "global" mock data
+        initialBookings[globalBookingIndex].status = 'Confirmed'; 
       }
       toast({
         title: 'Booking Approved',
         description: `Booking for "${approvedBooking.resourceName}" by ${approvedBooking.userName} has been confirmed.`,
       });
+      addAuditLog(currentUser?.id || 'SYSTEM', currentUser?.name || 'System', 'BOOKING_APPROVED', { entityType: 'Booking', entityId: approvedBooking.id, details: `Booking for ${approvedBooking.resourceName} by ${approvedBooking.userName} approved.`});
       addNotification(
         approvedBooking.userId,
         'Booking Confirmed',
@@ -125,6 +124,7 @@ export default function BookingRequestsPage() {
     if (bookingIndex !== -1) {
       const updatedBookings = [...allBookingsState];
       const rejectedBooking = { ...updatedBookings[bookingIndex], status: 'Cancelled' as Booking['status']}; 
+      const originalStatus = updatedBookings[bookingIndex].status; // Store original status before changing
       updatedBookings[bookingIndex] = rejectedBooking;
       setAllBookingsState(updatedBookings);
 
@@ -137,6 +137,7 @@ export default function BookingRequestsPage() {
         description: `Booking for "${rejectedBooking.resourceName}" by ${rejectedBooking.userName} has been cancelled.`,
         variant: 'destructive',
       });
+      addAuditLog(currentUser?.id || 'SYSTEM', currentUser?.name || 'System', 'BOOKING_REJECTED', { entityType: 'Booking', entityId: rejectedBooking.id, details: `Booking for ${rejectedBooking.resourceName} by ${rejectedBooking.userName} rejected/cancelled.`});
       addNotification(
         rejectedBooking.userId,
         'Booking Rejected',
@@ -145,12 +146,9 @@ export default function BookingRequestsPage() {
         `/bookings?bookingId=${rejectedBooking.id}`
       );
 
-      // Process queue if the resource allows queueing
       const resource = allAdminMockResources.find(r => r.id === rejectedBooking.resourceId);
-      if (resource && resource.allowQueueing) {
+      if ((originalStatus === 'Confirmed' || originalStatus === 'Pending') && resource && resource.allowQueueing) {
         processQueueForResource(rejectedBooking.resourceId);
-        // Re-fetch/re-filter bookings on this page after queue processing
-        // This timeout is a simple way to allow mock data to update and then refresh the view
         setTimeout(() => {
              setAllBookingsState(JSON.parse(JSON.stringify(initialBookings)));
         }, 100);
@@ -374,3 +372,4 @@ export default function BookingRequestsPage() {
     </TooltipProvider>
   );
 }
+

@@ -1,6 +1,6 @@
 
 import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType, BlackoutDate, RecurringBlackoutRule, DayOfWeek, AuditLogEntry, AuditActionType } from '@/types';
-import { format, addDays, set, subDays, parseISO, startOfDay } from 'date-fns';
+import { format, addDays, set, subDays, parseISO, startOfDay, isValid as isValidDate } from 'date-fns';
 
 const today = new Date();
 const todayStr = format(today, 'yyyy-MM-dd');
@@ -251,11 +251,11 @@ export let initialBookings: Booking[] = [
     status: 'Confirmed',
     notes: 'Debugging SPI communication on custom MCU board for Project Alpha.',
   },
-  { 
+  {
     id: 'b1_wait1',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u7', 
+    userId: 'u7',
     userName: initialMockUsers.find(u => u.id === 'u7')?.name || 'Walter Waitlist',
     startTime: set(parseISO(tomorrowStr), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(parseISO(tomorrowStr), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -263,11 +263,11 @@ export let initialBookings: Booking[] = [
     status: 'Waitlisted',
     notes: 'Hoping to get on the scope if b1 cancels for Project Gamma.',
   },
-  { 
+  {
     id: 'b1_wait2',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u2', 
+    userId: 'u2',
     userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
     startTime: set(parseISO(tomorrowStr), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(parseISO(tomorrowStr), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -393,7 +393,7 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
 export let initialNotifications: Notification[] = [
   {
     id: 'n1',
-    userId: 'u4', 
+    userId: 'u4',
     title: 'Booking Confirmed: Keysight Scope',
     message: 'Your booking for Keysight MSOX3054T Oscilloscope on ' + format(set(addDays(today, 2), { hours: 10, minutes: 0 }), 'MMM dd, HH:mm') + ' has been confirmed.',
     type: 'booking_confirmed',
@@ -403,23 +403,13 @@ export let initialNotifications: Notification[] = [
   },
   {
     id: 'n2',
-    userId: 'u4', 
+    userId: 'u4',
     title: 'Maintenance Update: Siglent SDG2042X',
     message: 'Maintenance request for Siglent SDG2042X Function Generator (Channel 2 output unstable) is now "In Progress". Technician Third assigned.',
     type: 'maintenance_assigned',
     isRead: true,
     createdAt: subDays(today, 1).toISOString(),
     linkTo: '/maintenance',
-  },
-  {
-    id: 'n3',
-    userId: 'u1', 
-    title: 'New Booking Request',
-    message: 'Booking for Rigol DP832 Power Supply by Dr. Manager Second needs approval.',
-    type: 'booking_pending_approval',
-    isRead: false,
-    createdAt: new Date().toISOString(),
-    linkTo: '/admin/booking-requests',
   },
 ];
 
@@ -437,7 +427,7 @@ export function addNotification(
     message,
     type,
     isRead: false,
-    createdAt: new Date().toISOString(), 
+    createdAt: new Date().toISOString(),
     linkTo,
   };
   initialNotifications.unshift(newNotification);
@@ -446,46 +436,47 @@ export function addNotification(
 export function processQueueForResource(resourceId: string): void {
   const resource = allAdminMockResources.find(r => r.id === resourceId);
   if (!resource || !resource.allowQueueing) {
-    console.log(`Resource ${resourceId} does not allow queueing or not found.`);
     return;
   }
 
   const waitlistedBookingsForResource = initialBookings
-    .filter(b => b.resourceId === resourceId && b.status === 'Waitlisted')
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    .filter(b => b.resourceId === resourceId && b.status === 'Waitlisted' && b.createdAt)
+    .sort((a, b) => new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime());
 
   if (waitlistedBookingsForResource.length > 0) {
     const bookingToPromote = waitlistedBookingsForResource[0];
     const bookingIndexInGlobal = initialBookings.findIndex(b => b.id === bookingToPromote.id);
 
     if (bookingIndexInGlobal !== -1) {
-      const originalStartTime = new Date(initialBookings[bookingIndexInGlobal].startTime);
-      
-      // Check if the slot is now truly available by checking for any confirmed/pending bookings
-      // that would conflict with this waitlisted item.
+      const promoteStartTime = new Date(bookingToPromote.startTime);
+      const promoteEndTime = new Date(bookingToPromote.endTime);
+
       const conflictingActiveBooking = initialBookings.find(existingBooking => {
+        if (existingBooking.id === bookingToPromote.id) return false; // Don't conflict with self
         if (existingBooking.resourceId !== resourceId) return false;
         if (existingBooking.status === 'Cancelled' || existingBooking.status === 'Waitlisted') return false;
-        // Check for time conflict
+        
         const existingStartTime = new Date(existingBooking.startTime);
         const existingEndTime = new Date(existingBooking.endTime);
-        const promoteStartTime = new Date(bookingToPromote.startTime);
-        const promoteEndTime = new Date(bookingToPromote.endTime);
         return (promoteStartTime < existingEndTime && promoteEndTime > existingStartTime);
       });
 
       if (conflictingActiveBooking) {
         console.log(`Cannot promote booking ${bookingToPromote.id}. Slot still blocked by booking ${conflictingActiveBooking.id}.`);
-        return; // Slot is still blocked by another active booking, do not promote.
+        return; 
       }
 
-      initialBookings[bookingIndexInGlobal].status = 'Pending'; 
-      console.log(`Promoted booking ${bookingToPromote.id} to Pending for resource ${resourceId}.`);
-
+      initialBookings[bookingIndexInGlobal].status = 'Pending';
+      addAuditLog(
+        'SYSTEM_QUEUE_MANAGER',
+        'System',
+        'BOOKING_PROMOTED',
+        { entityType: 'Booking', entityId: bookingToPromote.id, details: `Booking ${bookingToPromote.id} for ${bookingToPromote.resourceName} promoted from waitlist to Pending.` }
+      );
       addNotification(
         bookingToPromote.userId,
-        'Booking Promoted from Waitlist',
-        `Your waitlisted booking for ${bookingToPromote.resourceName} on ${format(originalStartTime, 'MMM dd, HH:mm')} is now pending approval.`,
+        'Promoted from Waitlist',
+        `Your waitlisted booking for ${bookingToPromote.resourceName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} is now pending approval.`,
         'booking_promoted_user',
         `/bookings?bookingId=${bookingToPromote.id}`
       );
@@ -495,16 +486,12 @@ export function processQueueForResource(resourceId: string): void {
         addNotification(
           adminUser.id,
           'Waitlisted Booking Promoted',
-          `A waitlisted booking for ${bookingToPromote.resourceName} by ${bookingToPromote.userName} on ${format(originalStartTime, 'MMM dd, HH:mm')} has been promoted to Pending and needs your approval.`,
+          `A waitlisted booking for ${bookingToPromote.resourceName} by ${bookingToPromote.userName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} has been promoted to Pending and needs your approval.`,
           'booking_promoted_admin',
           '/admin/booking-requests'
         );
       }
-    } else {
-       console.log(`Booking ${bookingToPromote.id} not found in global list for promotion.`);
     }
-  } else {
-    console.log(`No waitlisted bookings found for resource ${resourceId} to promote.`);
   }
 }
 
@@ -544,7 +531,7 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
     name,
     email,
     password,
-    role: 'Researcher', 
+    role: 'Researcher',
     status: 'pending_approval',
     avatarUrl: 'https://placehold.co/100x100.png'
   };
@@ -559,7 +546,7 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
         'New Signup Request',
         `User ${name} (${email}) has signed up and is awaiting approval.`,
         'signup_pending_admin',
-        '/admin/users' // Updated link
+        '/admin/users'
     );
   }
   return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: newUser.id };
@@ -645,24 +632,18 @@ export function getWaitlistPosition(booking: Booking, allBookings: Booking[]): n
     return null;
   }
 
-  // Get all active waitlisted bookings for the same resource
-  const resourceWaitlist = allBookings.filter(b =>
+  const conflictingWaitlistedBookings = allBookings.filter(b =>
     b.resourceId === booking.resourceId &&
     b.status === 'Waitlisted' &&
-    b.createdAt // Make sure it has a creation date
+    b.createdAt && 
+    (new Date(b.startTime) < new Date(booking.endTime) && new Date(b.endTime) > new Date(booking.startTime)) 
   );
-
-  // Sort them by creation time (earliest first), then by ID as a tie-breaker for stability
-  const sortedResourceWaitlist = resourceWaitlist.sort((a, b) => {
-    const timeA = new Date(a.createdAt).getTime(); // Ensure createdAt is treated as Date
-    const timeB = new Date(b.createdAt).getTime(); // Ensure createdAt is treated as Date
-    const timeDiff = timeA - timeB;
-    if (timeDiff !== 0) return timeDiff;
-    return a.id.localeCompare(b.id);
-  });
   
-  const positionIndex = sortedResourceWaitlist.findIndex(b => b.id === booking.id);
+  const sortedWaitlist = conflictingWaitlistedBookings
+    .sort((a, b) => new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime());
 
+  const positionIndex = sortedWaitlist.findIndex(b => b.id === booking.id);
+  
   return positionIndex !== -1 ? positionIndex + 1 : null;
 }
 
