@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { CalendarOff, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Repeat } from 'lucide-react';
 import type { BlackoutDate, RecurringBlackoutRule, RoleName } from '@/types';
-import { initialBlackoutDates, initialRecurringBlackoutRules } from '@/lib/mock-data';
+import { initialBlackoutDates, initialRecurringBlackoutRules, addAuditLog } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -102,6 +102,7 @@ export default function BlackoutDatesPage() {
   };
 
   const handleSaveBlackoutDate = (data: BlackoutDateFormValues) => {
+    const formattedDate = format(data.date, 'PPP');
     if (editingBlackoutDate) {
       const updatedDate = { ...editingBlackoutDate, ...data, date: format(data.date, 'yyyy-MM-dd') };
       const updatedDates = blackoutDates.map(bd =>
@@ -110,9 +111,10 @@ export default function BlackoutDatesPage() {
       setBlackoutDates(updatedDates);
       const globalIndex = initialBlackoutDates.findIndex(bd => bd.id === editingBlackoutDate.id);
       if (globalIndex !== -1) initialBlackoutDates[globalIndex] = updatedDate;
+      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'BLACKOUT_DATE_UPDATED', { entityType: 'BlackoutDate', entityId: updatedDate.id, details: `Blackout Date for ${formattedDate} updated. Reason: ${updatedDate.reason || 'N/A'}`});
       toast({
         title: 'Blackout Date Updated',
-        description: `Blackout date for ${format(data.date, 'PPP')} has been updated.`,
+        description: `Blackout date for ${formattedDate} has been updated.`,
       });
     } else {
       const newDate: BlackoutDate = {
@@ -123,9 +125,10 @@ export default function BlackoutDatesPage() {
       setBlackoutDates(prev => [...prev, newDate].sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime()));
       initialBlackoutDates.push(newDate);
       initialBlackoutDates.sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
+      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'BLACKOUT_DATE_CREATED', { entityType: 'BlackoutDate', entityId: newDate.id, details: `Blackout Date for ${formattedDate} created. Reason: ${newDate.reason || 'N/A'}`});
       toast({
         title: 'Blackout Date Added',
-        description: `Blackout date for ${format(data.date, 'PPP')} has been added.`,
+        description: `Blackout date for ${formattedDate} has been added.`,
       });
     }
     setIsDateFormDialogOpen(false);
@@ -137,12 +140,15 @@ export default function BlackoutDatesPage() {
     
     const globalIndex = initialBlackoutDates.findIndex(bd => bd.id === blackoutDateId);
     if (globalIndex !== -1) initialBlackoutDates.splice(globalIndex, 1);
-
-    toast({
-      title: "Blackout Date Removed",
-      description: `Blackout date for "${deletedDate ? format(parseISO(deletedDate.date), 'PPP') : ''}" has been removed.`,
-      variant: "destructive"
-    });
+    
+    if(deletedDate) {
+      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Blackout Date for ${format(parseISO(deletedDate.date), 'PPP')} (Reason: ${deletedDate.reason || 'N/A'}) deleted.`});
+      toast({
+        title: "Blackout Date Removed",
+        description: `Blackout date for "${format(parseISO(deletedDate.date), 'PPP')}" has been removed.`,
+        variant: "destructive"
+      });
+    }
     setDateToDelete(null);
   };
   
@@ -182,6 +188,7 @@ export default function BlackoutDatesPage() {
       setRecurringRules(updatedRules);
       const globalIndex = initialRecurringBlackoutRules.findIndex(r => r.id === editingRecurringRule.id);
       if (globalIndex !== -1) initialRecurringBlackoutRules[globalIndex] = updatedRule;
+      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'RECURRING_RULE_UPDATED', { entityType: 'RecurringBlackoutRule', entityId: updatedRule.id, details: `Recurring rule '${updatedRule.name}' updated.`});
       toast({
         title: 'Recurring Rule Updated',
         description: `Recurring rule "${data.name}" has been updated.`,
@@ -194,6 +201,7 @@ export default function BlackoutDatesPage() {
       setRecurringRules(prev => [...prev, newRule].sort((a,b) => a.name.localeCompare(b.name)));
       initialRecurringBlackoutRules.push(newRule);
       initialRecurringBlackoutRules.sort((a,b) => a.name.localeCompare(b.name));
+      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'RECURRING_RULE_CREATED', { entityType: 'RecurringBlackoutRule', entityId: newRule.id, details: `Recurring rule '${newRule.name}' created.`});
       toast({
         title: 'Recurring Rule Added',
         description: `Recurring rule "${data.name}" has been added.`,
@@ -209,11 +217,14 @@ export default function BlackoutDatesPage() {
     const globalIndex = initialRecurringBlackoutRules.findIndex(r => r.id === ruleId);
     if (globalIndex !== -1) initialRecurringBlackoutRules.splice(globalIndex, 1);
 
-    toast({
-      title: "Recurring Rule Removed",
-      description: `Recurring rule "${deletedRule?.name}" has been removed.`,
-      variant: "destructive"
-    });
+    if (deletedRule) {
+      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Recurring rule '${deletedRule.name}' deleted.`});
+      toast({
+        title: "Recurring Rule Removed",
+        description: `Recurring rule "${deletedRule.name}" has been removed.`,
+        variant: "destructive"
+      });
+    }
     setRuleToDelete(null);
   };
   
@@ -365,7 +376,7 @@ export default function BlackoutDatesPage() {
                       <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                     </Button>
                   ) : (
-                     canManageBlackouts && (
+                     canManageBlackouts && !filteredBlackoutDates.length && (
                       <Button onClick={handleOpenNewDateDialog} size="sm">
                         <PlusCircle className="mr-2 h-4 w-4" /> Add First Blackout Date
                       </Button>
@@ -463,7 +474,7 @@ export default function BlackoutDatesPage() {
                   <Repeat className="mx-auto h-10 w-10 mb-3 opacity-50" />
                   <p className="font-medium">No Recurring Lab Closure Rules Defined</p>
                   <p className="text-xs mb-3">Add rules for regular closures like weekends or weekly maintenance.</p>
-                   {canManageBlackouts && (
+                   {canManageBlackouts && !recurringRules.length && (
                       <Button onClick={handleOpenNewRecurringDialog} size="sm">
                         <PlusCircle className="mr-2 h-4 w-4" /> Add First Recurring Rule
                       </Button>

@@ -83,6 +83,7 @@ function BookingsPageContent() {
   const [isClient, setIsClient] = useState(false);
   const [allUserBookings, setAllUserBookings] = useState<Booking[]>([]);
 
+  
   const handleOpenForm = useCallback((bookingToEdit?: Booking, resourceIdForNew?: string | null, dateForNew?: Date | null) => {
     if (!currentUser) {
         toast({ title: "Login Required", description: "You need to be logged in to create or edit bookings.", variant: "destructive" });
@@ -131,10 +132,11 @@ function BookingsPageContent() {
     setCurrentBooking(bookingData);
     setIsFormOpen(true);
   }, [activeSelectedDate, currentUser, toast, setIsFormOpen, setCurrentBooking]);
-
+  
   useEffect(() => {
     setIsClient(true);
   }, []);
+
 
   useEffect(() => {
     if (currentUser) {
@@ -233,7 +235,7 @@ function BookingsPageContent() {
     setActiveSearchTerm(tempSearchTerm);
     setActiveFilterResourceId(tempFilterResourceId);
     setActiveFilterStatus(tempFilterStatus);
-    setActiveSelectedDate(tempSelectedDateInDialog); // This now applies date filter from dialog
+    setActiveSelectedDate(tempSelectedDateInDialog); 
     setIsFilterDialogOpen(false);
   };
 
@@ -241,7 +243,7 @@ function BookingsPageContent() {
     setTempSearchTerm('');
     setTempFilterResourceId('all');
     setTempFilterStatus('all');
-    setTempSelectedDateInDialog(undefined); // Reset date in dialog
+    setTempSelectedDateInDialog(undefined); 
     setCurrentCalendarMonthInDialog(startOfDay(new Date()));
   };
 
@@ -249,7 +251,7 @@ function BookingsPageContent() {
     setActiveSearchTerm('');
     setActiveFilterResourceId('all');
     setActiveFilterStatus('all');
-    setActiveSelectedDate(undefined); // Clear main page date filter
+    setActiveSelectedDate(undefined); 
     resetDialogFilters();
 
     const newSearchParams = new URLSearchParams(searchParams?.toString() || '');
@@ -458,12 +460,13 @@ function BookingsPageContent() {
         if (resource.allowQueueing) {
             finalStatus = 'Waitlisted';
             toast({ title: "Added to Waitlist", description: `This time slot is currently booked. Your request for ${resource.name} has been added to the waitlist.` });
+             addAuditLog(currentUser.id, currentUser.name, 'BOOKING_WAITLISTED', { entityType: 'Booking', entityId: (currentBooking?.id || `b_temp_${Date.now()}`), details: `Booking for '${resource.name}' placed on waitlist.`});
             addNotification(
                 currentUser.id,
                 'Added to Waitlist',
                 `Your booking request for ${resource.name} on ${format(proposedStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`,
                 'booking_waitlisted',
-                `/bookings?bookingId=${currentBooking?.id || `b${initialBookings.length + 1 + Date.now()}`}`
+                `/bookings?bookingId=${currentBooking?.id || `b_temp_${Date.now()}`}`
             );
         } else {
             toast({ title: "Booking Conflict", description: `${resource.name} is already booked by ${conflictingBooking.userName} from ${format(new Date(conflictingBooking.startTime), 'p')} to ${format(new Date(conflictingBooking.endTime), 'p')} on ${format(new Date(conflictingBooking.startTime), 'PPP')}. This resource does not allow queueing.`, variant: "destructive", duration: 10000 });
@@ -479,7 +482,7 @@ function BookingsPageContent() {
         userName: currentUser.name,
         startTime: proposedStartTime,
         endTime: proposedEndTime,
-        createdAt: formData.createdAt || new Date(), // Use form's createdAt or new Date()
+        createdAt: formData.createdAt || new Date(), 
         resourceName: resource.name,
         status: finalStatus,
     } as Booking;
@@ -510,15 +513,6 @@ function BookingsPageContent() {
                 `/admin/booking-requests`
             );
         }
-      } else if (finalStatus === 'Waitlisted') {
-         addAuditLog(currentUser.id, currentUser.name, 'BOOKING_WAITLISTED', { entityType: 'Booking', entityId: newBookingData.id, details: `Booking for '${resource.name}' placed on waitlist.`});
-         addNotification(
-            currentUser.id,
-            'Added to Waitlist',
-            `Your booking request for ${resource.name} on ${format(proposedStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`,
-            'booking_waitlisted',
-            `/bookings?bookingId=${newBookingData.id}`
-        );
       }
     }
     setIsFormOpen(false);
@@ -674,120 +668,120 @@ function BookingsPageContent() {
             )
         }
       />
-     <div className="grid grid-cols-1">
-        <Card className="shadow-lg">
-            <CardHeader className="border-b">
+     <Card className="shadow-lg">
+        <CardHeader className="border-b flex flex-row items-center justify-between">
+            <div>
                 <CardTitle>
                 {activeSelectedDate ? `Your Bookings for ${format(activeSelectedDate, 'PPP')}` : 'All Your Bookings'}
                 </CardTitle>
                 <CardDescription>
                     Displaying {bookingsToDisplay.length} booking(s) based on active filters.
                 </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-                {bookingsToDisplay.length > 0 ? (
-                <div className="overflow-x-auto">
-                <Table>
-                    <TableHeader>
-                    <TableRow>
-                        <TableHead>Resource</TableHead>
-                        <TableHead>Date & Time</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                    {bookingsToDisplay.map((booking) => {
-                        const waitlistPosition = getWaitlistPosition(booking, allUserBookings);
-                        return (
-                        <TableRow key={booking.id} className={cn(booking.status === 'Cancelled' && 'opacity-60')}>
-                        <TableCell
-                            className="font-medium cursor-pointer hover:underline hover:text-primary"
-                            onClick={() => handleOpenDetailsDialog(booking)}
-                        >
-                            {booking.resourceName}
-                        </TableCell>
-                        <TableCell>
-                            <div>{isValidDate(new Date(booking.startTime)) ? format(new Date(booking.startTime), 'MMM dd, yyyy') : 'Invalid Date'}</div>
-                            <div className="text-xs text-muted-foreground">
-                                {isValidDate(new Date(booking.startTime)) ? format(new Date(booking.startTime), 'p') : ''} -
-                                {isValidDate(new Date(booking.endTime)) ? format(new Date(booking.endTime), 'p') : ''}
-                            </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                                className={cn(
-                                    "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
-                                    booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
-                                    booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
-                                    booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500',
-                                    booking.status === 'Waitlisted' && 'bg-purple-500 text-white hover:bg-purple-600'
-                                )}
-                            >{booking.status} {booking.status === 'Waitlisted' && waitlistPosition != null && `(#${waitlistPosition})`}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right space-x-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenDetailsDialog(booking)}>
-                              <Eye className="h-4 w-4" /> <span className="sr-only">View Details</span>
+            </div>
+        </CardHeader>
+        <CardContent className="p-0">
+            {bookingsToDisplay.length > 0 ? (
+            <div className="overflow-x-auto">
+            <Table>
+                <TableHeader>
+                <TableRow>
+                    <TableHead>Resource</TableHead>
+                    <TableHead>Date & Time</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+                </TableHeader>
+                <TableBody>
+                {bookingsToDisplay.map((booking) => {
+                    const waitlistPosition = getWaitlistPosition(booking, allUserBookings);
+                    return (
+                    <TableRow key={booking.id} className={cn(booking.status === 'Cancelled' && 'opacity-60')}>
+                    <TableCell
+                        className="font-medium cursor-pointer hover:underline hover:text-primary"
+                        onClick={() => handleOpenDetailsDialog(booking)}
+                    >
+                        {booking.resourceName}
+                    </TableCell>
+                    <TableCell>
+                        <div>{isValidDate(new Date(booking.startTime)) ? format(new Date(booking.startTime), 'MMM dd, yyyy') : 'Invalid Date'}</div>
+                        <div className="text-xs text-muted-foreground">
+                            {isValidDate(new Date(booking.startTime)) ? format(new Date(booking.startTime), 'p') : ''} -
+                            {isValidDate(new Date(booking.endTime)) ? format(new Date(booking.endTime), 'p') : ''}
+                        </div>
+                    </TableCell>
+                    <TableCell>
+                        <Badge
+                            className={cn(
+                                "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
+                                booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
+                                booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
+                                booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500',
+                                booking.status === 'Waitlisted' && 'bg-purple-500 text-white hover:bg-purple-600'
+                            )}
+                        >{booking.status} {booking.status === 'Waitlisted' && waitlistPosition != null && `(#${waitlistPosition})`}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right space-x-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenDetailsDialog(booking)}>
+                            <Eye className="h-4 w-4" /> <span className="sr-only">View Details</span>
+                        </Button>
+                        {booking.status !== 'Cancelled' && booking.status !== 'Waitlisted' && (
+                        <>
+                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenForm(booking, undefined, new Date(booking.startTime))}>
+                            <Edit3 className="h-4 w-4" /> <span className="sr-only">Edit Booking</span>
                             </Button>
-                            {booking.status !== 'Cancelled' && booking.status !== 'Waitlisted' && (
-                            <>
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenForm(booking, undefined, new Date(booking.startTime))}>
-                                <Edit3 className="h-4 w-4" /> <span className="sr-only">Edit Booking</span>
-                                </Button>
-                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8" onClick={() => handleCancelBookingLocal(booking.id)}>
-                                <X className="h-4 w-4" /> <span className="sr-only">Cancel Booking</span>
-                                </Button>
-                            </>
-                            )}
-                            {(booking.status === 'Cancelled' || booking.status === 'Waitlisted') && (
-                                <span className="text-xs text-muted-foreground italic">{booking.status}</span>
-                            )}
-                        </TableCell>
-                        </TableRow>
-                    )})}
-                    </TableBody>
-                </Table>
-                </div>
-                ) : (
-                <CardContent className="text-center py-10 text-muted-foreground px-6">
-                    <CalendarDays className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                    <p className="text-lg font-medium">
-                      {activeFilterCount > 0 ? 'No bookings match your current filters.' :
-                      activeSelectedDate ? `No bookings scheduled for ${format(activeSelectedDate, 'PPP')}.` :
-                      'You have no bookings.'}
-                    </p>
-                    <p className="text-sm mb-4">
-                      {activeFilterCount > 0 ? 'Try adjusting your filter criteria.' :
-                      activeSelectedDate ? 'Feel free to create a new booking for this date.' :
-                      'Create a new booking to get started.'}
-                    </p>
-                    {activeFilterCount > 0 ? (
-                        <Button variant="outline" onClick={resetAllActivePageFilters}>
-                            <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
-                        </Button>
-                    ): (
-                      activeSelectedDate ? (
-                        <Button onClick={() => handleOpenForm(undefined, null, activeSelectedDate)} className="mt-4">
-                            <PlusCircle className="mr-2 h-4 w-4" /> Create New Booking
-                        </Button>
-                      ) : (
-                        <Button onClick={() => handleOpenForm(undefined, null, new Date())} className="mt-4">
-                            <PlusCircle className="mr-2 h-4 w-4" /> Create Your First Booking
-                        </Button>
-                      )
-                    )}
-                </CardContent>
-                )}
-            </CardContent>
-            { activeFilterCount > 0 && bookingsToDisplay.length > 0 &&
-                <CardFooter className="pt-4 justify-center border-t">
-                    <Button variant="link" className="p-0 h-auto text-xs" onClick={resetAllActivePageFilters}>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8" onClick={() => handleCancelBookingLocal(booking.id)}>
+                            <X className="h-4 w-4" /> <span className="sr-only">Cancel Booking</span>
+                            </Button>
+                        </>
+                        )}
+                        {(booking.status === 'Cancelled' || booking.status === 'Waitlisted') && (
+                            <span className="text-xs text-muted-foreground italic">{booking.status}</span>
+                        )}
+                    </TableCell>
+                    </TableRow>
+                )})}
+                </TableBody>
+            </Table>
+            </div>
+            ) : (
+            <CardContent className="text-center py-10 text-muted-foreground px-6">
+                <CalendarDays className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                <p className="text-lg font-medium">
+                    {activeFilterCount > 0 ? 'No bookings match your current filters.' :
+                    activeSelectedDate ? `No bookings scheduled for ${format(activeSelectedDate, 'PPP')}.` :
+                    'You have no bookings.'}
+                </p>
+                <p className="text-sm mb-4">
+                    {activeFilterCount > 0 ? 'Try adjusting your filter criteria.' :
+                    activeSelectedDate ? 'Feel free to create a new booking for this date.' :
+                    'Create a new booking to get started.'}
+                </p>
+                {activeFilterCount > 0 ? (
+                    <Button variant="outline" onClick={resetAllActivePageFilters}>
                         <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                     </Button>
-                </CardFooter>
-            }
-            </Card>
-      </div>
+                ): (
+                    activeSelectedDate ? (
+                    <Button onClick={() => handleOpenForm(undefined, null, activeSelectedDate)} className="mt-4">
+                        <PlusCircle className="mr-2 h-4 w-4" /> Create New Booking
+                    </Button>
+                    ) : (
+                    <Button onClick={() => handleOpenForm(undefined, null, new Date())} className="mt-4">
+                        <PlusCircle className="mr-2 h-4 w-4" /> Create Your First Booking
+                    </Button>
+                    )
+                )}
+            </CardContent>
+            )}
+        </CardContent>
+        { activeFilterCount > 0 && bookingsToDisplay.length > 0 &&
+            <CardFooter className="pt-4 justify-center border-t">
+                <Button variant="link" className="p-0 h-auto text-xs" onClick={resetAllActivePageFilters}>
+                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                </Button>
+            </CardFooter>
+        }
+        </Card>
 
       <Dialog
         open={isFormOpen}
@@ -805,7 +799,7 @@ function BookingsPageContent() {
                     currentParams.delete('resourceId');
                      paramsModified = true;
                 }
-                 if (currentParams.has('date') && !activeSelectedDate) {
+                 if (currentParams.has('date') && !activeSelectedDate) { // only clear date if no active main page date
                     currentParams.delete('date');
                      paramsModified = true;
                 }
@@ -864,7 +858,7 @@ const bookingFormSchema = z.object({
   endTime: z.string().min(1, "Please select an end time."),
   status: z.enum(bookingStatusesForForm).optional(),
   notes: z.string().max(500, "Notes cannot exceed 500 characters.").optional().or(z.literal('')),
-  createdAt: z.date().optional(), // Added createdAt to form schema
+  createdAt: z.date().optional(), 
 }).refine(data => {
   if (!data.bookingDate || !data.startTime || !data.endTime) return true;
   const startDateTime = set(data.bookingDate, {
@@ -901,22 +895,6 @@ const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
 
 function BookingForm({ initialData, onSave, onCancel, currentUserFullName, currentUserRole }: BookingFormProps) {
   
-  const getInitialBookingDate = useCallback(() => {
-    if (initialData?.startTime && isValidDate(new Date(initialData.startTime))) {
-      return startOfDay(new Date(initialData.startTime));
-    }
-    // Fallback to a sensible default if activeSelectedDateProp isn't available or is invalid
-    // For new bookings, if initialData.startTime is not set (which it wouldn't be),
-    // we should be using a prop like `activeSelectedDate` passed from parent,
-    // or defaulting to today.
-    // For now, let's keep it simple, assuming `initialData.startTime` will be set based on context.
-    let defaultDate = startOfDay(new Date());
-    if (isBefore(defaultDate, startOfDay(new Date())) && !initialData?.id) {
-      defaultDate = startOfDay(new Date());
-    }
-    return defaultDate;
-  }, [initialData?.startTime, initialData?.id]);
-
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
@@ -1149,5 +1127,3 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
     </Form>
   );
 }
-
-    

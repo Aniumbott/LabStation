@@ -402,7 +402,7 @@ export default function ResourcesPage() {
             <p className="text-sm mb-4">
                 {activeFilterCount > 0
                     ? "Try adjusting your search or filter criteria."
-                    : "There are currently no resources in the catalog. Add one to get started!"
+                    : (canAddResources ? "There are currently no resources in the catalog. Add one to get started!" : "There are currently no resources in the system.")
                 }
             </p>
             {activeFilterCount > 0 ? (
@@ -410,7 +410,7 @@ export default function ResourcesPage() {
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             ) : (
-              canAddResources && (
+              !filteredResources.length && canAddResources && (
                 <Button onClick={handleOpenNewDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource
                 </Button>

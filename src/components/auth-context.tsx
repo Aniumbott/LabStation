@@ -44,22 +44,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password?: string): Promise<{ success: boolean; message?: string }> => {
-    const user = mockLoginUser(email, password);
-    if (user) {
-      if (user.status === 'pending_approval') {
-        return { success: false, message: 'Account pending approval. Please wait for an admin.' };
-      }
-      if (user.status === 'active') {
-        setCurrentUser(user);
+    const loginResult = mockLoginUser(email, password); // mockLoginUser already returns { success, message, user }
+    if (loginResult.success && loginResult.user) {
+        setCurrentUser(loginResult.user);
         try {
-          localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
+          localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(loginResult.user));
         } catch (error) {
           console.error("Error saving user to localStorage:", error);
         }
         return { success: true };
-      }
     }
-    return { success: false, message: 'Invalid email or password, or account not active/pending.' };
+    return { success: false, message: loginResult.message || 'Login failed.' };
   };
 
   const logout = () => {
@@ -86,14 +81,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(updatedUser));
     } catch (error) {
       console.error("Error saving updated user to localStorage:", error);
-      // Optionally, revert setCurrentUser if localStorage fails critically
       return { success: false, message: "Failed to save profile to local storage." };
     }
 
-    // Update in mock data for session consistency
     const userIndex = initialMockUsers.findIndex(u => u.id === currentUser.id);
     if (userIndex !== -1) {
-      initialMockUsers[userIndex] = { ...initialMockUsers[userIndex], ...updatedFields };
+      initialMockUsers[userIndex] = { ...initialMockUsers[userIndex], ...updatedUser };
     }
     return { success: true, message: "Profile updated successfully." };
   }, [currentUser]);

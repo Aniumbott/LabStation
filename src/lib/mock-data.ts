@@ -1,6 +1,6 @@
 
 import type { Resource, ResourceType, ResourceStatus, RoleName, User, Booking, MaintenanceRequest, MaintenanceRequestStatus, Notification, NotificationType, BlackoutDate, RecurringBlackoutRule, DayOfWeek, AuditLogEntry, AuditActionType } from '@/types';
-import { format, addDays, set, subDays, parseISO, startOfDay, isValid as isValidDate } from 'date-fns';
+import { format, addDays, set, subDays, parseISO, startOfDay, isValid as isValidDate, getDay, isBefore } from 'date-fns';
 
 const today = new Date();
 const todayStr = format(today, 'yyyy-MM-dd');
@@ -529,7 +529,6 @@ export function processQueueForResource(resourceId: string): void {
       const promoteStartTime = new Date(bookingToPromote.startTime);
       const promoteEndTime = new Date(bookingToPromote.endTime);
 
-      // Check for conflicts with *other* Confirmed or Pending bookings
       const conflictingActiveBooking = initialBookings.find(existingBooking => {
         if (existingBooking.id === bookingToPromote.id) return false;
         if (existingBooking.resourceId !== resourceId) return false;
@@ -541,7 +540,7 @@ export function processQueueForResource(resourceId: string): void {
       });
 
       if (conflictingActiveBooking) {
-        console.log(`Cannot promote booking ${bookingToPromote.id}. Slot still blocked by active booking ${conflictingActiveBooking.id}.`);
+        console.log(`QUEUE_PROCESS: Cannot promote booking ${bookingToPromote.id}. Slot still blocked by active booking ${conflictingActiveBooking.id}.`);
         return; 
       }
 
@@ -550,12 +549,12 @@ export function processQueueForResource(resourceId: string): void {
         'SYSTEM_QUEUE',
         'System',
         'BOOKING_PROMOTED',
-        { entityType: 'Booking', entityId: bookingToPromote.id, details: `Booking ${bookingToPromote.id} for ${bookingToPromote.resourceName} by ${bookingToPromote.userName} promoted from waitlist to Pending.` }
+        { entityType: 'Booking', entityId: bookingToPromote.id, details: `Booking for '${bookingToPromote.resourceName}' by ${bookingToPromote.userName} promoted from waitlist to Pending.` }
       );
       addNotification(
         bookingToPromote.userId,
-        'Promoted from Waitlist',
-        `Your waitlisted booking for ${bookingToPromote.resourceName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} has been promoted and is now pending approval. Please check your bookings.`,
+        'Promoted from Waitlist!',
+        `Your waitlisted booking for ${bookingToPromote.resourceName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} is now pending approval.`,
         'booking_promoted_user',
         `/bookings?bookingId=${bookingToPromote.id}`
       );
@@ -564,8 +563,8 @@ export function processQueueForResource(resourceId: string): void {
       if (adminUser) {
         addNotification(
           adminUser.id,
-          'Waitlisted Booking Promoted',
-          `Waitlisted booking for ${bookingToPromote.resourceName} by ${bookingToPromote.userName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} has been promoted to Pending and requires your approval.`,
+          'Booking Promoted from Waitlist',
+          `Booking for ${bookingToPromote.resourceName} by ${bookingToPromote.userName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} was promoted from waitlist and needs approval.`,
           'booking_promoted_admin',
           '/admin/booking-requests'
         );
@@ -613,7 +612,7 @@ export const mockSignupUser = (name: string, email: string, password?: string): 
         'New Signup Request',
         `User ${name} (${email}) has signed up and is awaiting approval.`,
         'signup_pending_admin',
-        '/admin/users'
+        '/admin/users' 
     );
   }
   return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: newUser.id };
@@ -631,7 +630,7 @@ export const mockApproveSignup = (userId: string): boolean => {
         'signup_approved',
         '/login'
     );
-    addAuditLog('SYSTEM_ADMIN', 'System (Admin)', 'USER_APPROVED', { entityType: 'User', entityId: userDetails.id, details: `User ${userDetails.name} (${userDetails.email}) approved.` });
+    addAuditLog('SYSTEM_ADMIN', 'System Admin', 'USER_APPROVED', { entityType: 'User', entityId: userDetails.id, details: `User ${userDetails.name} (${userDetails.email}) approved.` });
     return true;
   }
   return false;
@@ -641,7 +640,7 @@ export const mockRejectSignup = (userId: string): boolean => {
   const userIndex = initialMockUsers.findIndex(u => u.id === userId && u.status === 'pending_approval');
   if (userIndex > -1) {
     const userDetails = initialMockUsers[userIndex];
-    addAuditLog('SYSTEM_ADMIN', 'System (Admin)', 'USER_REJECTED', { entityType: 'User', entityId: userDetails.id, details: `Signup request for ${userDetails.name} (${userDetails.email}) rejected and user removed.` });
+    addAuditLog('SYSTEM_ADMIN', 'System Admin', 'USER_REJECTED', { entityType: 'User', entityId: userDetails.id, details: `Signup request for ${userDetails.name} (${userDetails.email}) rejected and user removed.` });
     initialMockUsers.splice(userIndex, 1); 
     return true;
   }

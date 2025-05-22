@@ -51,7 +51,7 @@ const resourceFormSchema = z.object({
     hostname: z.string().max(255).optional().or(z.literal('')),
     protocol: z.enum(VALID_REMOTE_PROTOCOLS).or(z.literal('')).optional(),
     username: z.string().max(100).optional().or(z.literal('')),
-    port: z.coerce.number().int().min(1).max(65535).optional(), // Removed .or(z.literal('')) as empty string will be coerced to undefined by optional
+    port: z.coerce.number().int().min(1).max(65535).optional(),
     notes: z.string().max(500).optional().or(z.literal('')),
   }).optional(),
 });
@@ -153,8 +153,7 @@ export function ResourceFormDialog({
         purchaseDate: data.purchaseDate ? data.purchaseDate : undefined,
         remoteAccess: data.remoteAccess ? {
             ...data.remoteAccess,
-            // Port is already a number or undefined due to z.coerce.number()
-            port: data.remoteAccess.port,
+            port: data.remoteAccess.port, // Already number or undefined
             protocol: data.remoteAccess.protocol === '' ? undefined : data.remoteAccess.protocol,
             ipAddress: data.remoteAccess.ipAddress || undefined,
             hostname: data.remoteAccess.hostname || undefined,
@@ -403,7 +402,7 @@ export function ResourceFormDialog({
                                     <FormItem>
                                     <FormLabel>Port</FormLabel>
                                     <FormControl><Input 
-                                        type="text" // Change to text to allow empty string and prevent browser's number input UI
+                                        type="text"
                                         placeholder="e.g., 22 (SSH), 3389 (RDP)" 
                                         {...field} 
                                         value={field.value ?? ''} 
@@ -460,4 +459,3 @@ export function ResourceFormDialog({
     </Dialog>
   );
 }
-    

@@ -49,7 +49,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { initialMockUsers, mockApproveSignup, mockRejectSignup, addNotification, userRolesList } from '@/lib/mock-data';
+import { initialMockUsers, mockApproveSignup, mockRejectSignup, addNotification, userRolesList, addAuditLog } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 
 const userStatusesList: (UserStatus | 'all')[] = ['all', 'active', 'pending_approval', 'suspended'];
@@ -150,8 +150,8 @@ export default function UsersPage() {
     setActiveSearchTerm('');
     setActiveFilterRole('all');
     setActiveFilterStatus('all');
-    resetDialogFilters(); // Resets temp filters in dialog
-    setIsFilterDialogOpen(false); // Close dialog if open
+    resetDialogFilters(); 
+    setIsFilterDialogOpen(false); 
   };
 
   const handleOpenNewUserDialog = () => {
@@ -172,7 +172,7 @@ export default function UsersPage() {
 
       const globalIndex = initialMockUsers.findIndex(u => u.id === editingUser.id);
       if (globalIndex !== -1) initialMockUsers[globalIndex] = updatedUser;
-
+      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'USER_UPDATED', { entityType: 'User', entityId: updatedUser.id, details: `User ${updatedUser.name} details updated.` });
       toast({
         title: 'User Updated',
         description: `User ${data.name} has been updated.`,
@@ -196,7 +196,7 @@ export default function UsersPage() {
         if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
         return a.name.localeCompare(b.name);
       });
-
+      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'USER_CREATED', { entityType: 'User', entityId: newUser.id, details: `User ${newUser.name} created with role ${newUser.role}.` });
       toast({
         title: 'User Created',
         description: `User ${data.name} with role ${data.role} has been created.`,
@@ -211,7 +211,7 @@ export default function UsersPage() {
 
     const globalIndex = initialMockUsers.findIndex(u => u.id === userId);
     if (globalIndex !== -1) initialMockUsers.splice(globalIndex, 1);
-
+    addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'USER_DELETED', { entityType: 'User', entityId: userId, details: `User ${deletedUser?.name || userId} deleted.` });
     toast({
       title: "User Deleted",
       description: `User "${deletedUser?.name}" has been removed.`,
@@ -266,7 +266,7 @@ export default function UsersPage() {
 
   const activeFilterCount = [activeSearchTerm !== '', activeFilterRole !== 'all', activeFilterStatus !== 'all'].filter(Boolean).length;
   const canAddUsers = currentUser?.role === 'Admin';
-  const canManageUsers = currentUser?.role === 'Admin'; // For edit/delete of active users
+  const canManageUsers = currentUser?.role === 'Admin'; 
   const canApproveRejectSignups = currentUser?.role === 'Admin';
 
 
@@ -507,15 +507,16 @@ export default function UsersPage() {
                     : (canAddUsers ? "There are currently no users in the system. Add one to get started!" : "There are currently no users matching this criteria.")
                 }
             </p>
-            {activeFilterCount > 0 && (
+            {activeFilterCount > 0 ? (
                 <Button variant="outline" onClick={resetAllActivePageFilters}>
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
-            )}
-            {activeFilterCount === 0 && !filteredUsers.length && canAddUsers && (
+            ) : (
+              !filteredUsers.length && canAddUsers && (
                 <Button onClick={handleOpenNewUserDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First User
                 </Button>
+              )
             )}
           </CardContent>
         </Card>
@@ -529,5 +530,3 @@ export default function UsersPage() {
     </div>
   );
 }
-
-    

@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon } from 'lucide-react';
 import type { ResourceType } from '@/types';
-import { initialMockResourceTypes } from '@/lib/mock-data';
+import { initialMockResourceTypes, addAuditLog } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -118,7 +118,7 @@ export default function ResourceTypesPage() {
       setResourceTypes(updatedTypes);
       const globalIndex = initialMockResourceTypes.findIndex(rt => rt.id === editingType.id);
       if (globalIndex !== -1) initialMockResourceTypes[globalIndex] = updatedType;
-
+      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'RESOURCE_TYPE_UPDATED', { entityType: 'ResourceType', entityId: updatedType.id, details: `Resource Type '${updatedType.name}' updated.`});
       toast({
         title: 'Resource Type Updated',
         description: `Resource Type "${data.name}" has been updated.`,
@@ -131,8 +131,7 @@ export default function ResourceTypesPage() {
       setResourceTypes(prevTypes => [...prevTypes, newType].sort((a, b) => a.name.localeCompare(b.name)));
       initialMockResourceTypes.push(newType);
       initialMockResourceTypes.sort((a, b) => a.name.localeCompare(b.name));
-
-
+      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'RESOURCE_TYPE_CREATED', { entityType: 'ResourceType', entityId: newType.id, details: `Resource Type '${newType.name}' created.`});
       toast({
         title: 'Resource Type Created',
         description: `Resource Type "${data.name}" has been created.`,
@@ -147,7 +146,7 @@ export default function ResourceTypesPage() {
 
     const globalIndex = initialMockResourceTypes.findIndex(rt => rt.id === typeId);
     if (globalIndex !== -1) initialMockResourceTypes.splice(globalIndex, 1);
-
+    addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'RESOURCE_TYPE_DELETED', { entityType: 'ResourceType', entityId: typeId, details: `Resource Type '${deletedType?.name || typeId}' deleted.`});
     toast({
       title: "Resource Type Deleted",
       description: `Resource Type "${deletedType?.name}" has been removed.`,
@@ -299,7 +298,7 @@ export default function ResourceTypesPage() {
             <p className="text-sm mb-4">
                 {activeSearchTerm
                     ? "Try adjusting your search criteria."
-                    : "Add resource types to categorize your lab equipment and assets."
+                    : (canAddResourceTypes ? "Add resource types to categorize your lab equipment and assets." : "No resource types have been defined.")
                 }
             </p>
             {activeSearchTerm && (
@@ -307,7 +306,7 @@ export default function ResourceTypesPage() {
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             )}
-            {!activeSearchTerm && canAddResourceTypes && (
+            {!activeSearchTerm && !filteredResourceTypes.length && canAddResourceTypes && (
                 <Button onClick={handleOpenNewDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource Type
                 </Button>

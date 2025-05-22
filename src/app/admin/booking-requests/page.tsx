@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter, Clock } from 'lucide-react';
 import type { Booking, Resource } from '@/types'; 
-import { initialBookings, allAdminMockResources, addNotification, bookingStatusesForFilter, processQueueForResource } from '@/lib/mock-data';
+import { initialBookings, allAdminMockResources, addNotification, bookingStatusesForFilter, processQueueForResource, addAuditLog } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -57,14 +57,21 @@ export default function BookingRequestsPage() {
   const [tempFilterStatus, setTempFilterStatus] = useState<Booking['status'] | 'all'>(activeFilterStatus);
 
   useEffect(() => {
-    setAllBookingsState(JSON.parse(JSON.stringify(initialBookings)));
+    // Periodically refresh local state from global mock data to catch updates
+    // (e.g., from queue processing). In a real app, this would be driven by
+    // Firestore listeners or similar real-time updates.
+    const intervalId = setInterval(() => {
+        setAllBookingsState(JSON.parse(JSON.stringify(initialBookings)));
+    }, 5000); // Refresh every 5 seconds
+
+    return () => clearInterval(intervalId);
   }, []); 
 
   const bookingsForApproval = useMemo(() => {
     let filtered = allBookingsState.filter(b => b.status === 'Pending' || b.status === 'Waitlisted');
     
+    const lowerSearch = activeSearchTerm.toLowerCase();
     if (activeSearchTerm) {
-      const lowerSearch = activeSearchTerm.toLowerCase();
       filtered = filtered.filter(b => 
         b.resourceName.toLowerCase().includes(lowerSearch) ||
         b.userName.toLowerCase().includes(lowerSearch) ||
@@ -76,10 +83,10 @@ export default function BookingRequestsPage() {
       filtered = filtered.filter(b => b.resourceId === activeFilterResourceId);
     }
     
-    if (activeFilterStatus !== 'all') {
+    if (activeFilterStatus === 'all') {
+        // This is fine, no specific status filter
+    } else if (activeFilterStatus) {
         filtered = filtered.filter(b => b.status === activeFilterStatus);
-    } else { 
-        filtered = filtered.filter(b => b.status === 'Pending' || b.status === 'Waitlisted');
     }
 
 
@@ -108,7 +115,7 @@ export default function BookingRequestsPage() {
         title: 'Booking Approved',
         description: `Booking for "${approvedBooking.resourceName}" by ${approvedBooking.userName} has been confirmed.`,
       });
-      addAuditLog(currentUser?.id || 'SYSTEM', currentUser?.name || 'System', 'BOOKING_APPROVED', { entityType: 'Booking', entityId: approvedBooking.id, details: `Booking for ${approvedBooking.resourceName} by ${approvedBooking.userName} approved.`});
+      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'BOOKING_APPROVED', { entityType: 'Booking', entityId: approvedBooking.id, details: `Booking for ${approvedBooking.resourceName} by ${approvedBooking.userName} approved.`});
       addNotification(
         approvedBooking.userId,
         'Booking Confirmed',
@@ -124,7 +131,7 @@ export default function BookingRequestsPage() {
     if (bookingIndex !== -1) {
       const updatedBookings = [...allBookingsState];
       const rejectedBooking = { ...updatedBookings[bookingIndex], status: 'Cancelled' as Booking['status']}; 
-      const originalStatus = updatedBookings[bookingIndex].status; // Store original status before changing
+      const originalStatus = updatedBookings[bookingIndex].status; 
       updatedBookings[bookingIndex] = rejectedBooking;
       setAllBookingsState(updatedBookings);
 
@@ -137,7 +144,7 @@ export default function BookingRequestsPage() {
         description: `Booking for "${rejectedBooking.resourceName}" by ${rejectedBooking.userName} has been cancelled.`,
         variant: 'destructive',
       });
-      addAuditLog(currentUser?.id || 'SYSTEM', currentUser?.name || 'System', 'BOOKING_REJECTED', { entityType: 'Booking', entityId: rejectedBooking.id, details: `Booking for ${rejectedBooking.resourceName} by ${rejectedBooking.userName} rejected/cancelled.`});
+      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'BOOKING_REJECTED', { entityType: 'Booking', entityId: rejectedBooking.id, details: `Booking for ${rejectedBooking.resourceName} by ${rejectedBooking.userName} rejected/cancelled.`});
       addNotification(
         rejectedBooking.userId,
         'Booking Rejected',
@@ -149,9 +156,10 @@ export default function BookingRequestsPage() {
       const resource = allAdminMockResources.find(r => r.id === rejectedBooking.resourceId);
       if ((originalStatus === 'Confirmed' || originalStatus === 'Pending') && resource && resource.allowQueueing) {
         processQueueForResource(rejectedBooking.resourceId);
+        // Force a re-read from the global mock after processing queue to see updates
         setTimeout(() => {
              setAllBookingsState(JSON.parse(JSON.stringify(initialBookings)));
-        }, 100);
+        }, 100); // Small delay to allow mock-data update
       }
     }
   };
@@ -180,7 +188,7 @@ export default function BookingRequestsPage() {
   const activeFilterCount = [
     activeSearchTerm !== '',
     activeFilterResourceId !== 'all',
-    activeFilterStatus !== 'Pending' && activeFilterStatus !== 'all', 
+    activeFilterStatus !== 'Pending', // Default is Pending, so filter is active if not Pending or all
   ].filter(Boolean).length;
 
   const formatDateField = (dateInput: string | Date): string => {
@@ -192,6 +200,9 @@ export default function BookingRequestsPage() {
     const date = typeof dateInput === 'string' ? parseISO(dateInput) : dateInput;
     return isValidDate(date) ? format(date, 'p') : '';
   };
+
+  const statusOptionsForFilterDialog: (Booking['status'] | 'all')[] = ['all', 'Pending', 'Waitlisted'];
+
 
   return (
     <TooltipProvider>
@@ -232,7 +243,7 @@ export default function BookingRequestsPage() {
                           type="search"
                           placeholder="Keyword..."
                           value={tempSearchTerm}
-                          onChange={(e) => setTempSearchTerm(e.target.value)}
+                          onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
                           className="h-9 pl-8"
                           />
                       </div>
@@ -258,9 +269,9 @@ export default function BookingRequestsPage() {
                         <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as Booking['status'] | 'all')}>
                             <SelectTrigger id="requestStatusDialog" className="h-9"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All (Pending & Waitlisted)</SelectItem>
-                                <SelectItem value="Pending">Pending</SelectItem>
-                                <SelectItem value="Waitlisted">Waitlisted</SelectItem>
+                                {statusOptionsForFilterDialog.map(s => (
+                                    <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                       </div>
@@ -372,4 +383,3 @@ export default function BookingRequestsPage() {
     </TooltipProvider>
   );
 }
-

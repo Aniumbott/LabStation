@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from '@/components/layout/page-header';
-import { UserCog, Shield, KeyRound, Image as ImageIcon, Save, Info, LogOut, Loader2, Edit3, Eye, EyeOff } from 'lucide-react'; // Added Edit3
+import { UserCog, Shield, KeyRound, Image as ImageIcon, Save, Info, LogOut, Loader2, Edit3, Eye, EyeOff } from 'lucide-react';
 import type { User } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -149,7 +149,7 @@ export default function ProfilePage() {
     );
   }
 
-  if (!currentUser) return null; // Should be caught by the redirect in AppLayout, but good for type safety
+  if (!currentUser) return null;
 
   return (
     <div className="space-y-8">
@@ -312,12 +312,11 @@ export default function ProfilePage() {
             </div>
           </CardContent>
           <Separator />
-          <CardFooter className="p-6 flex justify-between items-center"> {/* Changed to justify-between */}
+          <CardFooter className="p-6 flex justify-between items-center">
             <Button variant="destructive" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Logout
             </Button>
-             {/* The Save Name Changes button was moved to Account Information section */}
           </CardFooter>
         </Card>
       </TooltipProvider>
