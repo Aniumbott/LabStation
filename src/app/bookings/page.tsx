@@ -56,13 +56,11 @@ function BookingsPageContent() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
 
-  // States for dialogs and forms
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentBooking, setCurrentBooking] = useState<Partial<Booking> & { resourceId?: string } | null>(null);
   const [selectedBookingForDetails, setSelectedBookingForDetails] = useState<Booking | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
-
-  // Active page filters
+  
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<Booking['status'] | 'all'>('all');
@@ -75,7 +73,6 @@ function BookingsPageContent() {
       return undefined;
   });
 
-  // Filter Dialog State
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
   const [tempFilterResourceId, setTempFilterResourceId] = useState<string>(activeFilterResourceId);
@@ -123,7 +120,7 @@ function BookingsPageContent() {
         const initialResourceId = resourceIdForNew || (allAdminMockResources.length > 0 ? allAdminMockResources.find(r => r.status === 'Available')?.id || allAdminMockResources[0].id : '');
         bookingData = {
             startTime: defaultStartTime,
-            endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000),
+            endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000), // Default 2hr booking
             createdAt: new Date(),
             userName: currentUser.name,
             userId: currentUser.id,
@@ -236,7 +233,7 @@ function BookingsPageContent() {
     setActiveSearchTerm(tempSearchTerm);
     setActiveFilterResourceId(tempFilterResourceId);
     setActiveFilterStatus(tempFilterStatus);
-    setActiveSelectedDate(tempSelectedDateInDialog);
+    setActiveSelectedDate(tempSelectedDateInDialog); // This now applies date filter from dialog
     setIsFilterDialogOpen(false);
   };
 
@@ -244,7 +241,7 @@ function BookingsPageContent() {
     setTempSearchTerm('');
     setTempFilterResourceId('all');
     setTempFilterStatus('all');
-    setTempSelectedDateInDialog(undefined);
+    setTempSelectedDateInDialog(undefined); // Reset date in dialog
     setCurrentCalendarMonthInDialog(startOfDay(new Date()));
   };
 
@@ -252,7 +249,7 @@ function BookingsPageContent() {
     setActiveSearchTerm('');
     setActiveFilterResourceId('all');
     setActiveFilterStatus('all');
-    setActiveSelectedDate(undefined);
+    setActiveSelectedDate(undefined); // Clear main page date filter
     resetDialogFilters();
 
     const newSearchParams = new URLSearchParams(searchParams?.toString() || '');
@@ -282,7 +279,6 @@ function BookingsPageContent() {
     activeSelectedDate !== undefined,
   ].filter(Boolean).length, [activeSearchTerm, activeFilterResourceId, activeFilterStatus, activeSelectedDate]);
 
-
   const formKey = useMemo(() => {
     if (!isFormOpen) return 'closed';
     let keyParts = ['booking-form'];
@@ -295,7 +291,7 @@ function BookingsPageContent() {
       keyParts.push('new');
       if (currentBooking?.resourceId) keyParts.push(currentBooking.resourceId);
       
-      let formDateForNewKey: Date;
+      let formDateForNewKey: Date | undefined;
       if(currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime))) {
           formDateForNewKey = startOfDay(new Date(currentBooking.startTime));
       } else if (activeSelectedDate && isValidDate(activeSelectedDate) ){
@@ -307,7 +303,6 @@ function BookingsPageContent() {
     }
     return keyParts.join(':');
   }, [isFormOpen, currentBooking, activeSelectedDate]);
-
 
   const dialogHeaderDateString = useMemo(() => {
     if (isFormOpen && currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime))) {
@@ -367,7 +362,7 @@ function BookingsPageContent() {
     if (recurringBlackout) {
       toast({
         title: "Lab Closed",
-        description: `The lab is regularly closed on ${bookingDayName}s for: ${recurringBlackout.name}${recurringBlackout.reason ? ` (${recurringBlackout.reason})` : ''}. Please select a different date.`,
+        description: `The lab is regularly closed on ${bookingDayName}s due to: ${recurringBlackout.name}${recurringBlackout.reason ? ` (${recurringBlackout.reason})` : ''}. Please select a different date.`,
         variant: "destructive",
         duration: 10000
       });
@@ -484,7 +479,7 @@ function BookingsPageContent() {
         userName: currentUser.name,
         startTime: proposedStartTime,
         endTime: proposedEndTime,
-        createdAt: formData.createdAt ? new Date(formData.createdAt) : new Date(),
+        createdAt: formData.createdAt || new Date(), // Use form's createdAt or new Date()
         resourceName: resource.name,
         status: finalStatus,
     } as Booking;
@@ -516,7 +511,14 @@ function BookingsPageContent() {
             );
         }
       } else if (finalStatus === 'Waitlisted') {
-         addAuditLog(currentUser.id, currentUser.name, 'BOOKING_CREATED', { entityType: 'Booking', entityId: newBookingData.id, details: `Booking for '${resource.name}' created with status Waitlisted.`});
+         addAuditLog(currentUser.id, currentUser.name, 'BOOKING_WAITLISTED', { entityType: 'Booking', entityId: newBookingData.id, details: `Booking for '${resource.name}' placed on waitlist.`});
+         addNotification(
+            currentUser.id,
+            'Added to Waitlist',
+            `Your booking request for ${resource.name} on ${format(proposedStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`,
+            'booking_waitlisted',
+            `/bookings?bookingId=${newBookingData.id}`
+        );
       }
     }
     setIsFormOpen(false);
@@ -537,8 +539,7 @@ function BookingsPageContent() {
 
 
     if (bookingToCancel.status === 'Confirmed' && resource && resource.allowQueueing) {
-      processQueueForResource(bookingToCancel.resourceId); // Process queue
-      // Re-fetch/re-filter bookings on this page after queue processing
+      processQueueForResource(bookingToCancel.resourceId); 
       setTimeout(() => {
           if (currentUser) {
             setAllUserBookings(JSON.parse(JSON.stringify(initialBookings
@@ -546,7 +547,7 @@ function BookingsPageContent() {
                 .map(b => ({...b, createdAt: b.createdAt ? new Date(b.createdAt) : new Date(b.startTime) }))
             )));
           }
-      }, 100); // Small delay to allow mock data to "update"
+      }, 100); 
     }
   };
 
@@ -863,7 +864,7 @@ const bookingFormSchema = z.object({
   endTime: z.string().min(1, "Please select an end time."),
   status: z.enum(bookingStatusesForForm).optional(),
   notes: z.string().max(500, "Notes cannot exceed 500 characters.").optional().or(z.literal('')),
-  createdAt: z.date().optional(),
+  createdAt: z.date().optional(), // Added createdAt to form schema
 }).refine(data => {
   if (!data.bookingDate || !data.startTime || !data.endTime) return true;
   const startDateTime = set(data.bookingDate, {
@@ -904,6 +905,11 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
     if (initialData?.startTime && isValidDate(new Date(initialData.startTime))) {
       return startOfDay(new Date(initialData.startTime));
     }
+    // Fallback to a sensible default if activeSelectedDateProp isn't available or is invalid
+    // For new bookings, if initialData.startTime is not set (which it wouldn't be),
+    // we should be using a prop like `activeSelectedDate` passed from parent,
+    // or defaulting to today.
+    // For now, let's keep it simple, assuming `initialData.startTime` will be set based on context.
     let defaultDate = startOfDay(new Date());
     if (isBefore(defaultDate, startOfDay(new Date())) && !initialData?.id) {
       defaultDate = startOfDay(new Date());
@@ -915,7 +921,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       resourceId: initialData?.resourceId || (allAdminMockResources.length > 0 ? allAdminMockResources.find(r => r.status === 'Available')?.id || allAdminMockResources[0].id : ''),
-      bookingDate: getInitialBookingDate(),
+      bookingDate: initialData?.startTime ? startOfDay(new Date(initialData.startTime)) : startOfDay(new Date()),
       startTime: initialData?.startTime ? format(new Date(initialData.startTime), 'HH:mm') : '09:00',
       endTime: initialData?.endTime ? format(new Date(initialData.endTime), 'HH:mm') : '11:00',
       status: initialData?.id ? (initialData.status || 'Pending') : 'Pending',

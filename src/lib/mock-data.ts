@@ -393,22 +393,32 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
 export let initialNotifications: Notification[] = [
   {
     id: 'n1',
-    userId: 'u4',
+    userId: 'u4', // Researcher Fourth
     title: 'Booking Confirmed: Keysight Scope',
-    message: 'Your booking for Keysight MSOX3054T Oscilloscope on ' + format(set(addDays(today, 2), { hours: 10, minutes: 0 }), 'MMM dd, HH:mm') + ' has been confirmed.',
+    message: 'Your booking for Keysight MSOX3054T Oscilloscope on ' + format(set(parseISO(tomorrowStr), { hours: 9, minutes: 0 }), 'MMM dd, HH:mm') + ' has been confirmed.',
     type: 'booking_confirmed',
     isRead: false,
-    createdAt: subDays(today, 0).toISOString(),
+    createdAt: new Date().toISOString(),
     linkTo: `/bookings?bookingId=b1`,
   },
   {
     id: 'n2',
-    userId: 'u4',
-    title: 'Maintenance Update: Siglent SDG2042X',
-    message: 'Maintenance request for Siglent SDG2042X Function Generator (Channel 2 output unstable) is now "In Progress". Technician Third assigned.',
+    userId: 'u1', // Admin User
+    title: 'New Signup Request: Penny Pending',
+    message: 'User Penny Pending (penny@example.com) has signed up and is awaiting approval.',
+    type: 'signup_pending_admin',
+    isRead: false,
+    createdAt: subDays(new Date(),1).toISOString(),
+    linkTo: '/admin/users',
+  },
+  {
+    id: 'n3',
+    userId: 'u3', // Technician Third
+    title: 'Maintenance Assigned: Siglent SDG2042X',
+    message: 'You have been assigned the maintenance task for Siglent SDG2042X (Channel 2 output unstable).',
     type: 'maintenance_assigned',
     isRead: true,
-    createdAt: subDays(today, 1).toISOString(),
+    createdAt: subDays(new Date(), 2).toISOString(),
     linkTo: '/maintenance',
   },
 ];
@@ -432,154 +442,6 @@ export function addNotification(
   };
   initialNotifications.unshift(newNotification);
 }
-
-export function processQueueForResource(resourceId: string): void {
-  const resource = allAdminMockResources.find(r => r.id === resourceId);
-  if (!resource || !resource.allowQueueing) {
-    return;
-  }
-
-  const waitlistedBookingsForResource = initialBookings
-    .filter(b => b.resourceId === resourceId && b.status === 'Waitlisted' && b.createdAt)
-    .sort((a, b) => new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime());
-
-  if (waitlistedBookingsForResource.length > 0) {
-    const bookingToPromote = waitlistedBookingsForResource[0];
-    const bookingIndexInGlobal = initialBookings.findIndex(b => b.id === bookingToPromote.id);
-
-    if (bookingIndexInGlobal !== -1) {
-      const promoteStartTime = new Date(bookingToPromote.startTime);
-      const promoteEndTime = new Date(bookingToPromote.endTime);
-
-      const conflictingActiveBooking = initialBookings.find(existingBooking => {
-        if (existingBooking.id === bookingToPromote.id) return false; // Don't conflict with self
-        if (existingBooking.resourceId !== resourceId) return false;
-        if (existingBooking.status === 'Cancelled' || existingBooking.status === 'Waitlisted') return false;
-        
-        const existingStartTime = new Date(existingBooking.startTime);
-        const existingEndTime = new Date(existingBooking.endTime);
-        return (promoteStartTime < existingEndTime && promoteEndTime > existingStartTime);
-      });
-
-      if (conflictingActiveBooking) {
-        console.log(`Cannot promote booking ${bookingToPromote.id}. Slot still blocked by booking ${conflictingActiveBooking.id}.`);
-        return; 
-      }
-
-      initialBookings[bookingIndexInGlobal].status = 'Pending';
-      addAuditLog(
-        'SYSTEM_QUEUE_MANAGER',
-        'System',
-        'BOOKING_PROMOTED',
-        { entityType: 'Booking', entityId: bookingToPromote.id, details: `Booking ${bookingToPromote.id} for ${bookingToPromote.resourceName} promoted from waitlist to Pending.` }
-      );
-      addNotification(
-        bookingToPromote.userId,
-        'Promoted from Waitlist',
-        `Your waitlisted booking for ${bookingToPromote.resourceName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} is now pending approval.`,
-        'booking_promoted_user',
-        `/bookings?bookingId=${bookingToPromote.id}`
-      );
-
-      const adminUser = initialMockUsers.find(u => u.role === 'Admin' || u.role === 'Lab Manager');
-      if (adminUser) {
-        addNotification(
-          adminUser.id,
-          'Waitlisted Booking Promoted',
-          `A waitlisted booking for ${bookingToPromote.resourceName} by ${bookingToPromote.userName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} has been promoted to Pending and needs your approval.`,
-          'booking_promoted_admin',
-          '/admin/booking-requests'
-        );
-      }
-    }
-  }
-}
-
-
-export let initialBlackoutDates: BlackoutDate[] = [
-  { id: 'bo1', date: format(addDays(today, 25), 'yyyy-MM-dd'), reason: 'Lab Deep Cleaning Day' },
-  { id: 'bo2', date: format(addDays(today, 60), 'yyyy-MM-dd'), reason: 'Public Holiday - Lab Closed' },
-];
-
-export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = [
-  { id: 'rb1', name: 'Weekend Closure', daysOfWeek: ['Saturday', 'Sunday'], reason: 'Lab closed on weekends' },
-  { id: 'rb2', name: 'Weekly Maintenance Window', daysOfWeek: ['Wednesday'], reason: 'Scheduled maintenance from 13:00-15:00' },
-];
-
-export const mockLoginUser = (email: string, password?: string): { success: boolean; message?: string; user?: User } => {
-  const user = initialMockUsers.find(u => u.email === email && u.password === password);
-  if (user) {
-    if (user.status === 'pending_approval') {
-      return { success: false, message: 'Account pending approval. Please wait for an admin.' };
-    }
-    if (user.status === 'active') {
-      return { success: true, user };
-    }
-    if (user.status === 'suspended') {
-        return { success: false, message: 'Your account has been suspended.' };
-    }
-  }
-  return { success: false, message: 'Invalid email or password.' };
-};
-
-export const mockSignupUser = (name: string, email: string, password?: string): { success: boolean; message: string; userId?: string } => {
-  if (initialMockUsers.find(u => u.email === email)) {
-    return { success: false, message: 'An account with this email already exists or is pending approval.' };
-  }
-  const newUser: User = {
-    id: `u${initialMockUsers.length + 1 + Date.now()}`,
-    name,
-    email,
-    password,
-    role: 'Researcher',
-    status: 'pending_approval',
-    avatarUrl: 'https://placehold.co/100x100.png'
-  };
-  initialMockUsers.push(newUser);
-  addAuditLog(newUser.id, newUser.name, 'USER_CREATED', { entityType: 'User', entityId: newUser.id, details: `User ${name} (${email}) signed up. Status: pending_approval.` });
-
-
-  const adminUser = initialMockUsers.find(u => u.role === 'Admin');
-  if (adminUser) {
-    addNotification(
-        adminUser.id,
-        'New Signup Request',
-        `User ${name} (${email}) has signed up and is awaiting approval.`,
-        'signup_pending_admin',
-        '/admin/users'
-    );
-  }
-  return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: newUser.id };
-};
-
-export const mockApproveSignup = (userId: string): boolean => {
-  const userIndex = initialMockUsers.findIndex(u => u.id === userId && u.status === 'pending_approval');
-  if (userIndex > -1) {
-    const userDetails = initialMockUsers[userIndex];
-    initialMockUsers[userIndex].status = 'active';
-    addNotification(
-        initialMockUsers[userIndex].id,
-        'Account Approved!',
-        'Your LabStation account has been approved. You can now log in.',
-        'signup_approved',
-        '/login'
-    );
-    addAuditLog('SYSTEM_ADMIN_APPROVAL', 'System (Admin)', 'USER_APPROVED', { entityType: 'User', entityId: userDetails.id, details: `User ${userDetails.name} (${userDetails.email}) approved.` });
-    return true;
-  }
-  return false;
-};
-
-export const mockRejectSignup = (userId: string): boolean => {
-  const userIndex = initialMockUsers.findIndex(u => u.id === userId && u.status === 'pending_approval');
-  if (userIndex > -1) {
-    const userDetails = initialMockUsers[userIndex];
-    addAuditLog('SYSTEM_ADMIN_REJECTION', 'System (Admin)', 'USER_REJECTED', { entityType: 'User', entityId: userDetails.id, details: `Signup request for ${userDetails.name} (${userDetails.email}) rejected.` });
-    initialMockUsers.splice(userIndex, 1);
-    return true;
-  }
-  return false;
-};
 
 export let initialAuditLogs: AuditLogEntry[] = [
     {
@@ -636,15 +498,162 @@ export function getWaitlistPosition(booking: Booking, allBookings: Booking[]): n
     b.resourceId === booking.resourceId &&
     b.status === 'Waitlisted' &&
     b.createdAt && 
-    (new Date(b.startTime) < new Date(booking.endTime) && new Date(b.endTime) > new Date(booking.startTime)) 
+    (b.startTime < booking.endTime && b.endTime > booking.startTime) 
   );
   
   const sortedWaitlist = conflictingWaitlistedBookings
-    .sort((a, b) => new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime());
+    .filter(b => b.createdAt) 
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   const positionIndex = sortedWaitlist.findIndex(b => b.id === booking.id);
   
   return positionIndex !== -1 ? positionIndex + 1 : null;
 }
 
-    
+
+export function processQueueForResource(resourceId: string): void {
+  const resource = allAdminMockResources.find(r => r.id === resourceId);
+  if (!resource || !resource.allowQueueing) {
+    return;
+  }
+
+  const waitlistedBookingsForResource = initialBookings
+    .filter(b => b.resourceId === resourceId && b.status === 'Waitlisted' && b.createdAt)
+    .sort((a, b) => new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime());
+
+  if (waitlistedBookingsForResource.length > 0) {
+    const bookingToPromote = waitlistedBookingsForResource[0];
+    const bookingIndexInGlobal = initialBookings.findIndex(b => b.id === bookingToPromote.id);
+
+    if (bookingIndexInGlobal !== -1) {
+      const promoteStartTime = new Date(bookingToPromote.startTime);
+      const promoteEndTime = new Date(bookingToPromote.endTime);
+
+      // Check for conflicts with *other* Confirmed or Pending bookings
+      const conflictingActiveBooking = initialBookings.find(existingBooking => {
+        if (existingBooking.id === bookingToPromote.id) return false;
+        if (existingBooking.resourceId !== resourceId) return false;
+        if (existingBooking.status === 'Cancelled' || existingBooking.status === 'Waitlisted') return false;
+        
+        const existingStartTime = new Date(existingBooking.startTime);
+        const existingEndTime = new Date(existingBooking.endTime);
+        return (promoteStartTime < existingEndTime && promoteEndTime > existingStartTime);
+      });
+
+      if (conflictingActiveBooking) {
+        console.log(`Cannot promote booking ${bookingToPromote.id}. Slot still blocked by active booking ${conflictingActiveBooking.id}.`);
+        return; 
+      }
+
+      initialBookings[bookingIndexInGlobal].status = 'Pending';
+      addAuditLog(
+        'SYSTEM_QUEUE',
+        'System',
+        'BOOKING_PROMOTED',
+        { entityType: 'Booking', entityId: bookingToPromote.id, details: `Booking ${bookingToPromote.id} for ${bookingToPromote.resourceName} by ${bookingToPromote.userName} promoted from waitlist to Pending.` }
+      );
+      addNotification(
+        bookingToPromote.userId,
+        'Promoted from Waitlist',
+        `Your waitlisted booking for ${bookingToPromote.resourceName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} has been promoted and is now pending approval. Please check your bookings.`,
+        'booking_promoted_user',
+        `/bookings?bookingId=${bookingToPromote.id}`
+      );
+
+      const adminUser = initialMockUsers.find(u => u.role === 'Admin' || u.role === 'Lab Manager');
+      if (adminUser) {
+        addNotification(
+          adminUser.id,
+          'Waitlisted Booking Promoted',
+          `Waitlisted booking for ${bookingToPromote.resourceName} by ${bookingToPromote.userName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} has been promoted to Pending and requires your approval.`,
+          'booking_promoted_admin',
+          '/admin/booking-requests'
+        );
+      }
+    }
+  }
+}
+
+export const mockLoginUser = (email: string, password?: string): { success: boolean; message?: string; user?: User } => {
+  const user = initialMockUsers.find(u => u.email === email && u.password === password);
+  if (user) {
+    if (user.status === 'pending_approval') {
+      return { success: false, message: 'Account pending approval. Please wait for an admin.' };
+    }
+    if (user.status === 'active') {
+      return { success: true, user };
+    }
+    if (user.status === 'suspended') {
+        return { success: false, message: 'Your account has been suspended.' };
+    }
+  }
+  return { success: false, message: 'Invalid email or password.' };
+};
+
+export const mockSignupUser = (name: string, email: string, password?: string): { success: boolean; message: string; userId?: string } => {
+  if (initialMockUsers.find(u => u.email === email)) {
+    return { success: false, message: 'An account with this email already exists or is pending approval.' };
+  }
+  const newUser: User = {
+    id: `u${initialMockUsers.length + 1 + Date.now()}`,
+    name,
+    email,
+    password,
+    role: 'Researcher', // Default role for new signups
+    status: 'pending_approval',
+    avatarUrl: 'https://placehold.co/100x100.png'
+  };
+  initialMockUsers.push(newUser);
+  addAuditLog(newUser.id, newUser.name, 'USER_CREATED', { entityType: 'User', entityId: newUser.id, details: `User ${name} (${email}) signed up. Status: pending_approval.` });
+
+  const adminUser = initialMockUsers.find(u => u.role === 'Admin');
+  if (adminUser) {
+    addNotification(
+        adminUser.id,
+        'New Signup Request',
+        `User ${name} (${email}) has signed up and is awaiting approval.`,
+        'signup_pending_admin',
+        '/admin/users'
+    );
+  }
+  return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: newUser.id };
+};
+
+export const mockApproveSignup = (userId: string): boolean => {
+  const userIndex = initialMockUsers.findIndex(u => u.id === userId && u.status === 'pending_approval');
+  if (userIndex > -1) {
+    const userDetails = initialMockUsers[userIndex];
+    initialMockUsers[userIndex].status = 'active';
+    addNotification(
+        initialMockUsers[userIndex].id,
+        'Account Approved!',
+        'Your LabStation account has been approved. You can now log in.',
+        'signup_approved',
+        '/login'
+    );
+    addAuditLog('SYSTEM_ADMIN', 'System (Admin)', 'USER_APPROVED', { entityType: 'User', entityId: userDetails.id, details: `User ${userDetails.name} (${userDetails.email}) approved.` });
+    return true;
+  }
+  return false;
+};
+
+export const mockRejectSignup = (userId: string): boolean => {
+  const userIndex = initialMockUsers.findIndex(u => u.id === userId && u.status === 'pending_approval');
+  if (userIndex > -1) {
+    const userDetails = initialMockUsers[userIndex];
+    addAuditLog('SYSTEM_ADMIN', 'System (Admin)', 'USER_REJECTED', { entityType: 'User', entityId: userDetails.id, details: `Signup request for ${userDetails.name} (${userDetails.email}) rejected and user removed.` });
+    initialMockUsers.splice(userIndex, 1); 
+    return true;
+  }
+  return false;
+};
+
+export let initialBlackoutDates: BlackoutDate[] = [
+  { id: 'bo1', date: format(addDays(today, 25), 'yyyy-MM-dd'), reason: 'Lab Deep Cleaning Day' },
+  { id: 'bo2', date: format(addDays(today, 60), 'yyyy-MM-dd'), reason: 'Public Holiday - Lab Closed' },
+];
+
+export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = [
+  { id: 'rb1', name: 'Weekend Closure', daysOfWeek: ['Saturday', 'Sunday'], reason: 'Lab closed on weekends' },
+  { id: 'rb2', name: 'Weekly Maintenance Window (Fridays PM)', daysOfWeek: ['Friday'], reason: 'Scheduled maintenance from 13:00-17:00' },
+];
