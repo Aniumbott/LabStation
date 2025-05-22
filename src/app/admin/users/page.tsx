@@ -49,8 +49,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { initialMockUsers, mockApproveSignup, mockRejectSignup, addNotification, userRolesList, addAuditLog } from '@/lib/mock-data';
+import { addNotification, userRolesList, addAuditLog } from '@/lib/mock-data'; // Removed mock user lists
 import { useAuth } from '@/components/auth-context';
+import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, query, where, writeBatch } from 'firebase/firestore';
+import { db } from '@/lib/firebase'; // Import db from firebase config
+import { Loader2 } from 'lucide-react';
 
 const userStatusesList: (UserStatus | 'all')[] = ['all', 'active', 'pending_approval', 'suspended'];
 
@@ -74,9 +77,9 @@ const getRoleBadgeVariant = (role: RoleName): "default" | "secondary" | "destruc
 
 const getStatusBadgeVariant = (status: UserStatus): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
-      case 'active': return 'default';
-      case 'pending_approval': return 'secondary';
-      case 'suspended': return 'destructive';
+      case 'active': return 'default'; // Using theme's default (primary color)
+      case 'pending_approval': return 'secondary'; // Using theme's secondary
+      case 'suspended': return 'destructive'; // Using theme's destructive
       default: return 'outline';
     }
 };
@@ -85,22 +88,46 @@ const getStatusBadgeVariant = (status: UserStatus): "default" | "secondary" | "d
 export default function UsersPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
-  const [users, setUsers] = useState<User[]>(() => JSON.parse(JSON.stringify(initialMockUsers)));
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [userToReject, setUserToReject] = useState<User | null>(null);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
-  // Active filters for the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterRole, setActiveFilterRole] = useState<RoleName | 'all'>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<UserStatus | 'all'>('all');
 
-  // Filter Dialog State
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
   const [tempFilterRole, setTempFilterRole] = useState<RoleName | 'all'>(activeFilterRole);
   const [tempFilterStatus, setTempFilterStatus] = useState<UserStatus | 'all'>(activeFilterStatus);
+
+  const fetchUsers = async () => {
+    setIsLoadingUsers(true);
+    try {
+      const usersCollectionRef = collection(db, "users");
+      const querySnapshot = await getDocs(usersCollectionRef);
+      const fetchedUsers: User[] = [];
+      querySnapshot.forEach((doc) => {
+        fetchedUsers.push({ id: doc.id, ...doc.data() } as User);
+      });
+      setUsers(fetchedUsers.sort((a,b) => {
+        if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
+        if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
+        return (a.name || '').localeCompare(b.name || '');
+      }));
+    } catch (error) {
+      console.error("Error fetching users: ", error);
+      toast({ title: "Error", description: "Failed to fetch users from database.", variant: "destructive" });
+    }
+    setIsLoadingUsers(false);
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
 
   useEffect(() => {
@@ -116,8 +143,8 @@ export default function UsersPage() {
     const lowerSearchTerm = activeSearchTerm.toLowerCase();
     if (activeSearchTerm) {
       currentUsers = currentUsers.filter(user =>
-        user.name.toLowerCase().includes(lowerSearchTerm) ||
-        user.email.toLowerCase().includes(lowerSearchTerm)
+        (user.name && user.name.toLowerCase().includes(lowerSearchTerm)) ||
+        (user.email && user.email.toLowerCase().includes(lowerSearchTerm))
       );
     }
     if (activeFilterRole !== 'all') {
@@ -126,11 +153,7 @@ export default function UsersPage() {
     if (activeFilterStatus !== 'all') {
       currentUsers = currentUsers.filter(user => user.status === activeFilterStatus);
     }
-    return currentUsers.sort((a,b) => {
-      if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
-      if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
-      return a.name.localeCompare(b.name);
-    });
+    return currentUsers; // Already sorted by fetchUsers
   }, [users, activeSearchTerm, activeFilterRole, activeFilterStatus]);
 
   const handleApplyDialogFilters = () => {
@@ -164,101 +187,109 @@ export default function UsersPage() {
     setIsFormDialogOpen(true);
   };
 
-  const handleSaveUser = (data: UserFormValues) => {
-    if (editingUser) {
-      const updatedUser = { ...editingUser, ...data, avatarUrl: editingUser.avatarUrl || 'https://placehold.co/100x100.png' };
-      const updatedUsersList = users.map(u => u.id === editingUser.id ? updatedUser : u);
-      setUsers(updatedUsersList);
-
-      const globalIndex = initialMockUsers.findIndex(u => u.id === editingUser.id);
-      if (globalIndex !== -1) initialMockUsers[globalIndex] = updatedUser;
-      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'USER_UPDATED', { entityType: 'User', entityId: updatedUser.id, details: `User ${updatedUser.name} details updated.` });
-      toast({
-        title: 'User Updated',
-        description: `User ${data.name} has been updated.`,
-      });
-    } else {
-      const newUser: User = {
-        id: `u${initialMockUsers.length + 1 + Date.now()}`,
-        ...data,
-        avatarUrl: 'https://placehold.co/100x100.png',
-        status: 'active', // New users created by admin are active by default
-      };
-      const updatedUsersList = [newUser, ...users].sort((a, b) => {
-        if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
-        if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
-        return a.name.localeCompare(b.name);
-      });
-      setUsers(updatedUsersList);
-      initialMockUsers.push(newUser);
-      initialMockUsers.sort((a, b) => {
-        if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
-        if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
-        return a.name.localeCompare(b.name);
-      });
-      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'USER_CREATED', { entityType: 'User', entityId: newUser.id, details: `User ${newUser.name} created with role ${newUser.role}.` });
-      toast({
-        title: 'User Created',
-        description: `User ${data.name} with role ${data.role} has been created.`,
-      });
+  const handleSaveUser = async (data: UserFormValues) => {
+    if (!currentUser) return; // Should be caught by UI restrictions
+    
+    if (editingUser) { // Editing existing user
+      try {
+        const userDocRef = doc(db, "users", editingUser.id);
+        await updateDoc(userDocRef, {
+          name: data.name,
+          email: data.email, // Caution: Email change in Auth needs re-auth. For Firestore profile only for now.
+          role: data.role,
+        });
+        addAuditLog(currentUser.id, currentUser.name, 'USER_UPDATED', { entityType: 'User', entityId: editingUser.id, details: `User ${data.name} details updated.` });
+        toast({ title: 'User Updated', description: `User ${data.name} has been updated.` });
+        fetchUsers(); // Re-fetch users to show changes
+      } catch (error) {
+        console.error("Error updating user:", error);
+        toast({ title: "Error", description: "Failed to update user.", variant: "destructive" });
+      }
+    } else { // Adding new user - Note: Firebase Auth handles actual user creation via Signup flow. This admin "add" is for Firestore profile.
+      // This 'Add User' by admin is more like creating a profile record for someone who might not have a Firebase Auth account yet,
+      // or if you are managing user profiles directly in Firestore. For simplicity, we'll assume it creates an active user.
+      // A more robust system would integrate this with Firebase Admin SDK for creating auth users.
+      try {
+        const newUserId = `manual_${Date.now()}`; // Placeholder ID for manually added user
+        const userDocRef = doc(db, "users", newUserId);
+        await setDoc(userDocRef, {
+          ...data,
+          id: newUserId, // Add id to the document data as well
+          avatarUrl: 'https://placehold.co/100x100.png',
+          status: 'active', // Manually added users are active by default
+          createdAt: new Date().toISOString(),
+        });
+        addAuditLog(currentUser.id, currentUser.name, 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User ${data.name} created by admin with role ${data.role}.` });
+        toast({ title: 'User Created', description: `User ${data.name} with role ${data.role} has been created.` });
+        fetchUsers();
+      } catch (error) {
+        console.error("Error creating user:", error);
+        toast({ title: "Error", description: "Failed to create user.", variant: "destructive" });
+      }
     }
     setIsFormDialogOpen(false);
   };
 
-  const handleDeleteUser = (userId: string) => {
-    const deletedUser = users.find(u => u.id === userId);
-    setUsers(currentUsers => currentUsers.filter(user => user.id !== userId));
-
-    const globalIndex = initialMockUsers.findIndex(u => u.id === userId);
-    if (globalIndex !== -1) initialMockUsers.splice(globalIndex, 1);
-    addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'USER_DELETED', { entityType: 'User', entityId: userId, details: `User ${deletedUser?.name || userId} deleted.` });
-    toast({
-      title: "User Deleted",
-      description: `User "${deletedUser?.name}" has been removed.`,
-      variant: "destructive"
-    });
+  const handleDeleteUser = async (userId: string) => {
+    if (!currentUser) return;
+    const userToDeleteDetails = users.find(u => u.id === userId);
+    try {
+      const userDocRef = doc(db, "users", userId);
+      await deleteDoc(userDocRef);
+      // Note: Deleting Firebase Auth user is a separate, privileged operation, usually done via Admin SDK or Cloud Function.
+      // This only deletes the Firestore profile.
+      addAuditLog(currentUser.id, currentUser.name, 'USER_DELETED', { entityType: 'User', entityId: userId, details: `User ${userToDeleteDetails?.name || userId} Firestore profile deleted.` });
+      toast({ title: "User Deleted", description: `User "${userToDeleteDetails?.name}" Firestore profile has been removed.`, variant: "destructive" });
+      fetchUsers();
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      toast({ title: "Error", description: "Failed to delete user profile.", variant: "destructive" });
+    }
     setUserToDelete(null);
   };
 
-  const handleApproveUser = (userId: string) => {
-    const user = users.find(u=>u.id === userId);
-    if (mockApproveSignup(userId)) {
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'active' } : u)
-        .sort((a,b) => {
-          if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
-          if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
-          return a.name.localeCompare(b.name);
-        })
-      );
-      toast({
-        title: 'User Approved',
-        description: `User ${user?.name} has been approved and is now active.`,
-      });
-    } else {
-        toast({
-            title: 'Approval Failed',
-            description: `Could not approve user ${user?.name}. They might not be pending approval.`,
-            variant: 'destructive',
-        });
+  const handleApproveUser = async (userId: string) => {
+    if (!currentUser) return;
+    const userToApproveDetails = users.find(u=>u.id === userId);
+    try {
+        const userDocRef = doc(db, "users", userId);
+        await updateDoc(userDocRef, { status: 'active' });
+        
+        addAuditLog(currentUser.id, currentUser.name, 'USER_APPROVED', { entityType: 'User', entityId: userId, details: `User ${userToApproveDetails?.name || userId} approved.`});
+        toast({ title: 'User Approved', description: `User ${userToApproveDetails?.name} has been approved and is now active.` });
+        
+        if (userToApproveDetails) {
+            addNotification(
+                userId,
+                'Account Approved!',
+                'Your LabStation account has been approved. You can now log in.',
+                'signup_approved',
+                '/login'
+            );
+        }
+        fetchUsers();
+    } catch (error) {
+        console.error("Error approving user:", error);
+        toast({ title: 'Approval Failed', description: `Could not approve user ${userToApproveDetails?.name}.`, variant: 'destructive' });
     }
   };
 
-  const handleConfirmRejectUser = () => {
-    if (!userToReject) return;
+  const handleConfirmRejectUser = async () => {
+    if (!userToReject || !currentUser) return;
     const userDetails = users.find(u => u.id === userToReject.id);
-    if (mockRejectSignup(userToReject.id)) {
-      setUsers(prev => prev.filter(u => u.id !== userToReject.id));
-      toast({
-        title: 'Signup Request Rejected',
-        description: `Signup request for ${userDetails?.name} has been rejected and removed.`,
-        variant: 'destructive',
-      });
-    } else {
-        toast({
-            title: 'Rejection Failed',
-            description: `Could not reject user ${userDetails?.name}.`,
-            variant: 'destructive',
-        });
+    try {
+      // For "rejection", we delete the Firestore profile.
+      // The Firebase Auth user (if created) would still exist but won't be usable with the app.
+      // A more complete solution would involve deleting the Auth user via Admin SDK.
+      const userDocRef = doc(db, "users", userToReject.id);
+      await deleteDoc(userDocRef);
+
+      addAuditLog(currentUser.id, currentUser.name, 'USER_REJECTED', { entityType: 'User', entityId: userToReject.id, details: `Signup request for ${userDetails?.name || userToReject.id} rejected and profile removed.` });
+      toast({ title: 'Signup Request Rejected', description: `Signup request for ${userDetails?.name} has been rejected and removed.`, variant: 'destructive' });
+      fetchUsers();
+    } catch (error) {
+      console.error("Error rejecting user:", error);
+      toast({ title: 'Rejection Failed', description: `Could not reject user ${userDetails?.name}.`, variant: 'destructive' });
     }
     setUserToReject(null);
   };
@@ -277,7 +308,7 @@ export default function UsersPage() {
         description="View, add, and manage user accounts, roles, and signup requests."
         icon={UsersIconLucide}
         actions={
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
@@ -358,8 +389,12 @@ export default function UsersPage() {
           </div>
         }
       />
-
-      {filteredUsers.length > 0 ? (
+      {isLoadingUsers ? (
+         <div className="flex justify-center items-center py-10 text-muted-foreground">
+           <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
+           Loading users...
+         </div>
+      ) : filteredUsers.length > 0 ? (
         <TooltipProvider>
         <div className="overflow-x-auto rounded-lg border shadow-sm">
           <Table>
@@ -381,11 +416,11 @@ export default function UsersPage() {
                     <TableCell>
                       <Avatar className="h-10 w-10">
                         <AvatarImage src={user.avatarUrl} alt={user.name} />
-                        <AvatarFallback>{user.name.split(' ').map(n => n[0]).join('').toUpperCase()}</AvatarFallback>
+                        <AvatarFallback>{user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'}</AvatarFallback>
                       </Avatar>
                     </TableCell>
-                    <TableCell className="font-medium">{user.name}</TableCell>
-                    <TableCell>{user.email}</TableCell>
+                    <TableCell className="font-medium">{user.name || 'N/A'}</TableCell>
+                    <TableCell>{user.email || 'N/A'}</TableCell>
                     <TableCell>
                       <Badge variant={getRoleBadgeVariant(user.role)} className="capitalize">
                          <RoleIcon className="mr-1 h-3.5 w-3.5" />
@@ -440,7 +475,7 @@ export default function UsersPage() {
                           </AlertDialog>
                         </>
                       )}
-                      {user.status === 'active' && canManageUsers && (
+                      {user.status === 'active' && canManageUsers && user.id !== currentUser?.id && ( // Prevent admin from deleting self
                         <>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -469,13 +504,14 @@ export default function UsersPage() {
                                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                     <AlertDialogDescription>
                                     This action cannot be undone. This will remove the user
-                                    <span className="font-semibold"> {userToDelete.name}</span>.
+                                    <span className="font-semibold"> {userToDelete.name}</span>'s profile.
+                                    The Firebase Auth account may need to be deleted separately.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                     <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
                                     <AlertDialogAction variant="destructive" onClick={() => handleDeleteUser(userToDelete.id)}>
-                                    Delete User
+                                    Delete User Profile
                                     </AlertDialogAction>
                                 </AlertDialogFooter>
                                 </AlertDialogContent>
@@ -483,7 +519,7 @@ export default function UsersPage() {
                           </AlertDialog>
                         </>
                       )}
-                      {(user.status === 'suspended' || (user.status === 'pending_approval' && !canApproveRejectSignups)) && (
+                      {((user.status === 'suspended' || user.id === currentUser?.id) && user.status !== 'pending_approval') && (
                         <span className="text-xs italic text-muted-foreground">No actions</span>
                       )}
                     </TableCell>
@@ -495,7 +531,7 @@ export default function UsersPage() {
         </div>
         </TooltipProvider>
       ) : (
-        <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
+        <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
           <CardContent>
             <UsersIconLucide className="mx-auto h-12 w-12 mb-4 opacity-50" />
             <p className="text-lg font-medium">

@@ -10,7 +10,7 @@ export type ResourceStatus = 'Available' | 'Booked' | 'Maintenance';
 export interface RemoteAccessDetails {
   ipAddress?: string;
   hostname?: string;
-  protocol?: 'RDP' | 'SSH' | 'VNC' | 'Other';
+  protocol?: 'RDP' | 'SSH' | 'VNC' | 'Other' | ''; // Added empty string for "None"
   username?: string;
   port?: number;
   notes?: string;
@@ -56,7 +56,7 @@ export interface BookingUsageDetails {
   dataStorageLocation?: string; 
   usageComments?: string;
 }
-export const BookingUsageOutcomes: Array<BookingUsageDetails['outcome']> = ['Success', 'Failure', 'Interrupted', 'Not Applicable'];
+export const BookingUsageOutcomes: Array<BookingUsageDetails['outcome'] | undefined> = ['Success', 'Failure', 'Interrupted', 'Not Applicable', undefined];
 
 
 export interface Booking {
@@ -77,13 +77,14 @@ export type RoleName = 'Admin' | 'Lab Manager' | 'Technician' | 'Researcher';
 export type UserStatus = 'active' | 'pending_approval' | 'suspended';
 
 export interface User {
-  id: string;
-  name: string;
-  email: string;
-  password?: string;
-  role: RoleName;
-  avatarUrl?: string;
-  status: UserStatus;
+  id: string; // This will be the Firebase uid
+  name: string; // This is Firebase's displayName
+  email: string; // Firebase's email
+  role: RoleName; // Stored in Firestore user profile
+  avatarUrl?: string; // Stored in Firestore user profile or Firebase Storage
+  status: UserStatus; // Stored in Firestore user profile
+  // Password is no longer stored here, Firebase Auth handles it
+  createdAt?: string; // ISO string, stored in Firestore
 }
 
 export type MaintenanceRequestStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed';
@@ -108,13 +109,13 @@ export type NotificationType =
   | 'booking_pending_approval'
   | 'booking_rejected'
   | 'booking_waitlisted'
+  | 'booking_promoted_user'
+  | 'booking_promoted_admin'
   | 'maintenance_new'
   | 'maintenance_assigned'
   | 'maintenance_resolved'
   | 'signup_approved'
-  | 'signup_pending_admin'
-  | 'booking_promoted_user'
-  | 'booking_promoted_admin';
+  | 'signup_pending_admin';
 
 export interface Notification {
   id: string;

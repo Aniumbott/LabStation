@@ -228,23 +228,27 @@ export let allAdminMockResources: Resource[] = [
 
 export const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
 
+// initialMockUsers is now primarily for seeding Firestore upon first app run or for local dev without persistence.
+// The AuthContext will handle actual user state.
 export let initialMockUsers: User[] = [
-  { id: 'u1', name: 'Admin User', email: 'admin@labstation.com', role: 'Admin', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
-  { id: 'u2', name: 'Dr. Manager Second', email: 'manager.second@labstation.com', role: 'Lab Manager', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
-  { id: 'u3', name: 'Technician Third', email: 'tech.third@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
-  { id: 'u4', name: 'Researcher Fourth', email: 'researcher.fourth@labstation.com', role: 'Researcher', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
-  { id: 'u5', name: 'Lead Technician Fifth', email: 'lead.tech@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
-  { id: 'u6', name: 'Penny Pending', email: 'penny@example.com', role: 'Researcher', status: 'pending_approval', password: 'password', avatarUrl: 'https://placehold.co/100x100.png' },
-  { id: 'u7', name: 'Walter Waitlist', email: 'walter@example.com', role: 'Researcher', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', password: 'password' },
+  // This user will be created by Firebase Auth and Firestore on first signup
+  // { id: 'firebase-admin-uid', name: 'Admin User', email: 'admin@labstation.com', role: 'Admin', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', createdAt: new Date().toISOString() },
+  // { id: 'firebase-manager-uid', name: 'Dr. Manager Second', email: 'manager.second@labstation.com', role: 'Lab Manager', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', createdAt: new Date().toISOString() },
+  // { id: 'firebase-tech-uid', name: 'Technician Third', email: 'tech.third@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', createdAt: new Date().toISOString() },
+  // { id: 'firebase-researcher-uid', name: 'Researcher Fourth', email: 'researcher.fourth@labstation.com', role: 'Researcher', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', createdAt: new Date().toISOString() },
+  // { id: 'firebase-leadtech-uid', name: 'Lead Technician Fifth', email: 'lead.tech@labstation.com', role: 'Technician', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', createdAt: new Date().toISOString() },
+  // { id: 'firebase-penny-uid', name: 'Penny Pending', email: 'penny@example.com', role: 'Researcher', status: 'pending_approval', avatarUrl: 'https://placehold.co/100x100.png', createdAt: new Date().toISOString() },
+  // { id: 'firebase-walter-uid', name: 'Walter Waitlist', email: 'walter@example.com', role: 'Researcher', avatarUrl: 'https://placehold.co/100x100.png', status: 'active', createdAt: new Date().toISOString() },
 ];
+
 
 export let initialBookings: Booking[] = [
   {
     id: 'b1',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u4',
-    userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
+    userId: 'firebase-researcher-uid', // Example UID
+    userName: 'Researcher Fourth',
     startTime: set(parseISO(tomorrowStr), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(parseISO(tomorrowStr), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
     createdAt: set(parseISO(yesterdayStr), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -255,8 +259,8 @@ export let initialBookings: Booking[] = [
     id: 'b1_wait1',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u7',
-    userName: initialMockUsers.find(u => u.id === 'u7')?.name || 'Walter Waitlist',
+    userId: 'firebase-walter-uid', // Example UID
+    userName: 'Walter Waitlist',
     startTime: set(parseISO(tomorrowStr), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(parseISO(tomorrowStr), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
     createdAt: set(parseISO(yesterdayStr), { hours: 10, minutes: 5, seconds: 0, milliseconds: 0 }),
@@ -267,8 +271,8 @@ export let initialBookings: Booking[] = [
     id: 'b1_wait2',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u2',
-    userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
+    userId: 'firebase-manager-uid', // Example UID
+    userName: 'Dr. Manager Second',
     startTime: set(parseISO(tomorrowStr), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(parseISO(tomorrowStr), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
     createdAt: set(parseISO(yesterdayStr), { hours: 10, minutes: 10, seconds: 0, milliseconds: 0 }),
@@ -279,8 +283,8 @@ export let initialBookings: Booking[] = [
     id: 'b2',
     resourceId: 'res2',
     resourceName: 'Rigol DP832 Programmable Power Supply',
-    userId: 'u2',
-    userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
+    userId: 'firebase-manager-uid', // Example UID
+    userName: 'Dr. Manager Second',
     startTime: set(addDays(today, 3), { hours: 14, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 3), { hours: 16, minutes: 0, seconds: 0, milliseconds: 0 }),
     createdAt: set(addDays(today,1), {hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -291,8 +295,8 @@ export let initialBookings: Booking[] = [
     id: 'b4',
     resourceId: 'res4',
     resourceName: 'Rohde & Schwarz FPC1500 Spectrum Analyzer',
-    userId: 'u4',
-    userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
+    userId: 'firebase-researcher-uid', // Example UID
+    userName: 'Researcher Fourth',
     startTime: set(today, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(today, { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
     createdAt: set(subDays(today, 1), { hours: 14, minutes: 30, seconds: 0, milliseconds: 0 }),
@@ -303,8 +307,8 @@ export let initialBookings: Booking[] = [
     id: 'b5',
     resourceId: 'res5',
     resourceName: 'Weller WE1010NA Digital Soldering Station',
-    userId: 'u2',
-    userName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
+    userId: 'firebase-manager-uid', // Example UID
+    userName: 'Dr. Manager Second',
     startTime: set(addDays(today, 5), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 5), { hours: 13, minutes: 0, seconds: 0, milliseconds: 0 }),
     createdAt: set(addDays(today, 2), { hours: 16, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -315,8 +319,8 @@ export let initialBookings: Booking[] = [
     id: 'b6',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    userId: 'u4',
-    userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
+    userId: 'firebase-researcher-uid', // Example UID
+    userName: 'Researcher Fourth',
     startTime: set(subDays(today, 1), { hours: 10, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(subDays(today, 1), { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 }),
     createdAt: set(subDays(today, 3), { hours: 9, minutes: 15, seconds: 0, milliseconds: 0 }),
@@ -334,8 +338,8 @@ export let initialBookings: Booking[] = [
     id: 'b7',
     resourceId: 'res7',
     resourceName: 'FPGA Dev Node Alpha',
-    userId: 'u4',
-    userName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
+    userId: 'firebase-researcher-uid', // Example UID
+    userName: 'Researcher Fourth',
     startTime: set(addDays(today, 4), { hours: 11, minutes: 0, seconds: 0, milliseconds: 0 }),
     endTime: set(addDays(today, 4), { hours: 15, minutes: 30, seconds: 0, milliseconds: 0 }),
     createdAt: set(addDays(today, 1), { hours: 17, minutes: 0, seconds: 0, milliseconds: 0 }),
@@ -355,12 +359,12 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
     id: 'mr1',
     resourceId: 'res3',
     resourceName: 'Siglent SDG2042X Function Generator',
-    reportedByUserId: 'u4',
-    reportedByUserName: initialMockUsers.find(u => u.id === 'u4')?.name || 'Researcher Fourth',
+    reportedByUserId: 'firebase-researcher-uid', // Example UID
+    reportedByUserName: 'Researcher Fourth',
     issueDescription: 'Channel 2 output is unstable and showing significant noise above 20 MHz. Amplitude is also inconsistent. Suspect faulty output amplifier.',
     status: 'In Progress',
-    assignedTechnicianId: 'u3',
-    assignedTechnicianName: initialMockUsers.find(u => u.id === 'u3')?.name || 'Technician Third',
+    assignedTechnicianId: 'firebase-tech-uid', // Example UID
+    assignedTechnicianName: 'Technician Third',
     dateReported: subDays(today, 5).toISOString(),
     resolutionNotes: 'Replaced output amplifier IC (Part# XYZ123) for Channel 2. Currently undergoing post-repair calibration and testing.'
   },
@@ -368,8 +372,8 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
     id: 'mr2',
     resourceId: 'res1',
     resourceName: 'Keysight MSOX3054T Oscilloscope',
-    reportedByUserId: 'u2',
-    reportedByUserName: initialMockUsers.find(u => u.id === 'u2')?.name || 'Dr. Manager Second',
+    reportedByUserId: 'firebase-manager-uid', // Example UID
+    reportedByUserName: 'Dr. Manager Second',
     issueDescription: 'The touchscreen is unresponsive in the lower-left quadrant. Makes it difficult to access some menus. Restart did not fix.',
     status: 'Open',
     dateReported: subDays(today, 2).toISOString(),
@@ -378,12 +382,12 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
     id: 'mr3',
     resourceId: 'res5',
     resourceName: 'Weller WE1010NA Digital Soldering Station',
-    reportedByUserId: 'u3',
-    reportedByUserName: initialMockUsers.find(u => u.id === 'u3')?.name || 'Technician Third',
+    reportedByUserId: 'firebase-tech-uid', // Example UID
+    reportedByUserName: 'Technician Third',
     issueDescription: 'Heating element failed. Station does not heat up to set temperature. Error E1 on display.',
     status: 'Resolved',
-    assignedTechnicianId: 'u5',
-    assignedTechnicianName: initialMockUsers.find(u => u.id === 'u5')?.name || 'Lead Technician Fifth',
+    assignedTechnicianId: 'firebase-leadtech-uid', // Example UID
+    assignedTechnicianName: 'Lead Technician Fifth',
     dateReported: subDays(today, 10).toISOString(),
     dateResolved: subDays(today, 8).toISOString(),
     resolutionNotes: 'Replaced heating element and thermocouple sensor. Tested temperature accuracy across range. Confirmed working correctly.'
@@ -393,7 +397,7 @@ export let initialMaintenanceRequests: MaintenanceRequest[] = [
 export let initialNotifications: Notification[] = [
   {
     id: 'n1',
-    userId: 'u4', // Researcher Fourth
+    userId: 'firebase-researcher-uid', // Researcher Fourth
     title: 'Booking Confirmed: Keysight Scope',
     message: 'Your booking for Keysight MSOX3054T Oscilloscope on ' + format(set(parseISO(tomorrowStr), { hours: 9, minutes: 0 }), 'MMM dd, HH:mm') + ' has been confirmed.',
     type: 'booking_confirmed',
@@ -401,19 +405,10 @@ export let initialNotifications: Notification[] = [
     createdAt: new Date().toISOString(),
     linkTo: `/bookings?bookingId=b1`,
   },
-  {
-    id: 'n2',
-    userId: 'u1', // Admin User
-    title: 'New Signup Request: Penny Pending',
-    message: 'User Penny Pending (penny@example.com) has signed up and is awaiting approval.',
-    type: 'signup_pending_admin',
-    isRead: false,
-    createdAt: subDays(new Date(),1).toISOString(),
-    linkTo: '/admin/users',
-  },
+  // Note: Admin 'signup_pending_admin' notifications will be generated dynamically by AuthContext on signup
   {
     id: 'n3',
-    userId: 'u3', // Technician Third
+    userId: 'firebase-tech-uid', // Technician Third
     title: 'Maintenance Assigned: Siglent SDG2042X',
     message: 'You have been assigned the maintenance task for Siglent SDG2042X (Channel 2 output unstable).',
     type: 'maintenance_assigned',
@@ -447,7 +442,7 @@ export let initialAuditLogs: AuditLogEntry[] = [
     {
         id: `log-${Date.now() - 100000}`,
         timestamp: subDays(today, 1).toISOString(),
-        userId: 'u1',
+        userId: 'firebase-admin-uid', // Example UID
         userName: 'Admin User',
         action: 'RESOURCE_CREATED',
         entityType: 'Resource',
@@ -457,7 +452,7 @@ export let initialAuditLogs: AuditLogEntry[] = [
     {
         id: `log-${Date.now() - 90000}`,
         timestamp: new Date().toISOString(),
-        userId: 'u4',
+        userId: 'firebase-researcher-uid', // Example UID
         userName: 'Researcher Fourth',
         action: 'BOOKING_CREATED',
         entityType: 'Booking',
@@ -498,12 +493,12 @@ export function getWaitlistPosition(booking: Booking, allBookings: Booking[]): n
     b.resourceId === booking.resourceId &&
     b.status === 'Waitlisted' &&
     b.createdAt && 
-    (new Date(b.startTime) < new Date(booking.endTime) && new Date(b.endTime) > new Date(booking.startTime)) 
+    (b.startTime < booking.endTime && b.endTime > booking.startTime) 
   );
   
   const sortedWaitlist = conflictingWaitlistedBookings
     .filter(b => b.createdAt) 
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
   const positionIndex = sortedWaitlist.findIndex(b => b.id === booking.id);
   
@@ -559,93 +554,18 @@ export function processQueueForResource(resourceId: string): void {
         `/bookings?bookingId=${bookingToPromote.id}`
       );
 
-      const adminUser = initialMockUsers.find(u => u.role === 'Admin' || u.role === 'Lab Manager');
-      if (adminUser) {
-        addNotification(
-          adminUser.id,
-          'Booking Promoted from Waitlist',
-          `Waitlisted booking for ${bookingToPromote.resourceName} by ${bookingToPromote.userName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} has been promoted to Pending and requires your approval.`,
-          'booking_promoted_admin',
-          '/admin/booking-requests'
-        );
-      }
+      // For now, assuming 'u1' is an admin/manager. In a real app, find appropriate roles.
+      const adminUserId = 'firebase-admin-uid'; // Example Admin UID
+      addNotification(
+        adminUserId,
+        'Booking Promoted from Waitlist',
+        `Waitlisted booking for ${bookingToPromote.resourceName} by ${bookingToPromote.userName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} has been promoted to Pending and requires your approval.`,
+        'booking_promoted_admin',
+        '/admin/booking-requests'
+      );
     }
   }
 }
-
-export const mockLoginUser = (email: string, password?: string): { success: boolean; message?: string; user?: User } => {
-  const user = initialMockUsers.find(u => u.email === email && u.password === password);
-  if (user) {
-    if (user.status === 'pending_approval') {
-      return { success: false, message: 'Account pending approval. Please wait for an admin.' };
-    }
-    if (user.status === 'active') {
-      return { success: true, user };
-    }
-    if (user.status === 'suspended') {
-        return { success: false, message: 'Your account has been suspended.' };
-    }
-  }
-  return { success: false, message: 'Invalid email or password.' };
-};
-
-export const mockSignupUser = (name: string, email: string, password?: string): { success: boolean; message: string; userId?: string } => {
-  if (initialMockUsers.find(u => u.email === email)) {
-    return { success: false, message: 'An account with this email already exists or is pending approval.' };
-  }
-  const newUser: User = {
-    id: `u${initialMockUsers.length + 1 + Date.now()}`,
-    name,
-    email,
-    password,
-    role: 'Researcher', // Default role for new signups
-    status: 'pending_approval',
-    avatarUrl: 'https://placehold.co/100x100.png'
-  };
-  initialMockUsers.push(newUser);
-  addAuditLog(newUser.id, newUser.name, 'USER_CREATED', { entityType: 'User', entityId: newUser.id, details: `User ${name} (${email}) signed up. Status: pending_approval.` });
-
-  const adminUser = initialMockUsers.find(u => u.role === 'Admin');
-  if (adminUser) {
-    addNotification(
-        adminUser.id,
-        'New Signup Request',
-        `User ${name} (${email}) has signed up and is awaiting approval.`,
-        'signup_pending_admin',
-        '/admin/users' 
-    );
-  }
-  return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: newUser.id };
-};
-
-export const mockApproveSignup = (userId: string): boolean => {
-  const userIndex = initialMockUsers.findIndex(u => u.id === userId && u.status === 'pending_approval');
-  if (userIndex > -1) {
-    const userDetails = initialMockUsers[userIndex];
-    initialMockUsers[userIndex].status = 'active';
-    addNotification(
-        initialMockUsers[userIndex].id,
-        'Account Approved!',
-        'Your LabStation account has been approved. You can now log in.',
-        'signup_approved',
-        '/login'
-    );
-    addAuditLog('SYSTEM_ADMIN', 'System Admin', 'USER_APPROVED', { entityType: 'User', entityId: userDetails.id, details: `User ${userDetails.name} (${userDetails.email}) approved.` });
-    return true;
-  }
-  return false;
-};
-
-export const mockRejectSignup = (userId: string): boolean => {
-  const userIndex = initialMockUsers.findIndex(u => u.id === userId && u.status === 'pending_approval');
-  if (userIndex > -1) {
-    const userDetails = initialMockUsers[userIndex];
-    addAuditLog('SYSTEM_ADMIN', 'System Admin', 'USER_REJECTED', { entityType: 'User', entityId: userDetails.id, details: `Signup request for ${userDetails.name} (${userDetails.email}) rejected and user removed.` });
-    initialMockUsers.splice(userIndex, 1); 
-    return true;
-  }
-  return false;
-};
 
 export let initialBlackoutDates: BlackoutDate[] = [
   { id: 'bo1', date: format(addDays(today, 25), 'yyyy-MM-dd'), reason: 'Lab Deep Cleaning Day' },
