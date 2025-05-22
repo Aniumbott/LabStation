@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useAuth } from '@/components/auth-context';
-import { LogIn, AlertCircle } from 'lucide-react';
+import { LogIn, AlertCircle, Loader2 } from 'lucide-react';
 import { Logo } from '@/components/icons/logo';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -44,18 +44,26 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormValues) => {
     setErrorMessage(null);
-    const result = await login(data.email, data.password);
-    if (result.success) {
-      router.push('/dashboard');
-    } else {
-      setErrorMessage(result.message || 'Login failed. Please check your credentials.');
+    form.control.disabled = true; // Visually disable form while submitting
+    try {
+      const result = await login(data.email, data.password);
+      if (result.success) {
+        router.push('/dashboard');
+      } else {
+        setErrorMessage(result.message || 'Login failed. Please check your credentials.');
+      }
+    } catch (error) {
+      console.error("Login submission error:", error);
+      setErrorMessage("An unexpected error occurred. Please try again.");
+    } finally {
+      form.control.disabled = false;
     }
   };
   
   if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
-        <LogIn className="h-12 w-12 animate-pulse text-primary" />
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
@@ -95,7 +103,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Email Address</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="you@example.com" {...field} />
+                      <Input type="email" placeholder="you@example.com" {...field} disabled={form.formState.isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -108,14 +116,14 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
+                      <Input type="password" placeholder="••••••••" {...field} disabled={form.formState.isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Signing In...' : 'Sign In'}
+                {form.formState.isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing In...</> : 'Sign In'}
               </Button>
             </form>
           </Form>

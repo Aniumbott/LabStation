@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useAuth } from '@/components/auth-context';
-import { UserPlus, AlertCircle, CheckCircle } from 'lucide-react';
+import { UserPlus, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { Logo } from '@/components/icons/logo';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
@@ -50,27 +50,37 @@ export default function SignupPage() {
   const onSubmit = async (data: SignupFormValues) => {
     setErrorMessage(null);
     setSuccessMessage(null);
-    const result = await signup(data.name, data.email, data.password);
-    if (result.success) {
-      setSuccessMessage(result.message || 'Signup successful! Your request is awaiting admin approval.');
-      toast({
-        title: 'Signup Successful',
-        description: result.message || 'Your account request has been submitted for approval.',
-        duration: 5000,
-      });
-      // Optionally redirect after a delay or let user click a link
-      setTimeout(() => {
-        router.push('/login');
-      }, 3000);
-    } else {
-      setErrorMessage(result.message || 'Signup failed. Please try again.');
+    form.control.disabled = true; // Visually disable form
+    try {
+      const result = await signup(data.name, data.email, data.password);
+      if (result.success) {
+        setSuccessMessage(result.message || 'Signup successful! Your request is awaiting admin approval.');
+        toast({
+          title: 'Signup Successful',
+          description: result.message || 'Your account request has been submitted for approval.',
+          duration: 5000,
+        });
+        // Optionally redirect after a delay or let user click a link
+        setTimeout(() => {
+          router.push('/login');
+        }, 3000);
+      } else {
+        setErrorMessage(result.message || 'Signup failed. Please try again.');
+      }
+    } catch (error) {
+      console.error("Signup submission error:", error);
+      setErrorMessage("An unexpected error occurred. Please try again.");
+    } finally {
+      if(!successMessage) { // Only re-enable if no success (as success leads to redirect)
+         form.control.disabled = false;
+      }
     }
   };
   
   if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
-        <UserPlus className="h-12 w-12 animate-pulse text-primary" />
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
@@ -117,7 +127,7 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Full Name</FormLabel>
                     <FormControl>
-                      <Input type="text" placeholder="e.g., Ada Lovelace" {...field} />
+                      <Input type="text" placeholder="e.g., Ada Lovelace" {...field} disabled={form.formState.isSubmitting || !!successMessage} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -130,7 +140,7 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Email Address</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="you@example.com" {...field} />
+                      <Input type="email" placeholder="you@example.com" {...field} disabled={form.formState.isSubmitting || !!successMessage}/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -143,14 +153,14 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="•••••••• (min. 6 characters)" {...field} />
+                      <Input type="password" placeholder="•••••••• (min. 6 characters)" {...field} disabled={form.formState.isSubmitting || !!successMessage}/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || !!successMessage}>
-                {form.formState.isSubmitting ? 'Creating Account...' : 'Create Account'}
+                {form.formState.isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating Account...</> : 'Create Account'}
               </Button>
             </form>
           </Form>

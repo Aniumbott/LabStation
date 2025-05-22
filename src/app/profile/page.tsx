@@ -58,20 +58,30 @@ export default function ProfilePage() {
       return;
     }
     setIsSavingName(true);
-    const result = await updateUserProfile({ name: editableName.trim() });
-    if (result.success) {
+    try {
+      const result = await updateUserProfile({ name: editableName.trim() });
+      if (result.success) {
+        toast({
+          title: "Profile Updated",
+          description: "Your name has been successfully updated.",
+        });
+      } else {
+        toast({
+          title: "Update Failed",
+          description: result.message || "Could not update your profile.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Profile update error:", error);
       toast({
-        title: "Profile Updated",
-        description: "Your name has been successfully updated.",
-      });
-    } else {
-      toast({
-        title: "Update Failed",
-        description: result.message || "Could not update your profile.",
+        title: "Error",
+        description: "An unexpected error occurred while updating your profile.",
         variant: "destructive",
       });
+    } finally {
+      setIsSavingName(false);
     }
-    setIsSavingName(false);
   };
 
   const handleChangePassword = async () => {
@@ -112,8 +122,8 @@ export default function ProfilePage() {
   };
 
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     toast({ title: "Logged Out", description: "You have been successfully logged out." });
     router.push('/login');
   };
@@ -149,7 +159,7 @@ export default function ProfilePage() {
     );
   }
 
-  if (!currentUser) return null;
+  if (!currentUser) return null; // Should be caught by above, but defensive
 
   return (
     <div className="space-y-8">
@@ -196,6 +206,7 @@ export default function ProfilePage() {
                     value={editableName}
                     onChange={(e) => setEditableName(e.target.value)}
                     className="mt-1"
+                    disabled={isSavingName}
                   />
                 </div>
                 <div>
@@ -237,6 +248,7 @@ export default function ProfilePage() {
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       placeholder="Enter your current password"
+                      disabled={isSavingPassword}
                     />
                     <Button
                       type="button"
@@ -244,6 +256,7 @@ export default function ProfilePage() {
                       size="icon"
                       className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
                       onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      disabled={isSavingPassword}
                     >
                       {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       <span className="sr-only">{showCurrentPassword ? "Hide" : "Show"} current password</span>
@@ -259,6 +272,7 @@ export default function ProfilePage() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="Enter new password (min. 6 characters)"
+                      disabled={isSavingPassword}
                     />
                      <Button
                       type="button"
@@ -266,6 +280,7 @@ export default function ProfilePage() {
                       size="icon"
                       className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
                       onClick={() => setShowNewPassword(!showNewPassword)}
+                      disabled={isSavingPassword}
                     >
                       {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       <span className="sr-only">{showNewPassword ? "Hide" : "Show"} new password</span>
@@ -281,6 +296,7 @@ export default function ProfilePage() {
                       value={confirmNewPassword}
                       onChange={(e) => setConfirmNewPassword(e.target.value)}
                       placeholder="Confirm new password"
+                      disabled={isSavingPassword}
                     />
                      <Button
                       type="button"
@@ -288,6 +304,7 @@ export default function ProfilePage() {
                       size="icon"
                       className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      disabled={isSavingPassword}
                     >
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       <span className="sr-only">{showConfirmPassword ? "Hide" : "Show"} confirm password</span>
@@ -296,11 +313,15 @@ export default function ProfilePage() {
                 </div>
                 {passwordChangeError && (
                   <Alert variant="destructive" className="mt-2">
+                     <AlertCircle className="h-4 w-4" />
+                     <AlertTitle>Error</AlertTitle>
                     <AlertDescription>{passwordChangeError}</AlertDescription>
                   </Alert>
                 )}
                 {passwordChangeSuccess && (
                   <Alert variant="default" className="mt-2 bg-green-50 border-green-200 dark:bg-green-900/30 dark:border-green-700">
+                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    <AlertTitle className="text-green-700 dark:text-green-300">Success</AlertTitle>
                     <AlertDescription className="text-green-700 dark:text-green-400">{passwordChangeSuccess}</AlertDescription>
                   </Alert>
                 )}
@@ -317,6 +338,10 @@ export default function ProfilePage() {
               <LogOut className="mr-2 h-4 w-4" />
               Logout
             </Button>
+             <Button onClick={handleSaveNameChanges} disabled={isSavingName || editableName.trim() === currentUser.name || !editableName.trim()} className="w-full sm:w-auto">
+                {isSavingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                {isSavingName ? 'Saving Name...' : 'Save Name Changes'}
+             </Button>
           </CardFooter>
         </Card>
       </TooltipProvider>
