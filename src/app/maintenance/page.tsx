@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Wrench, PlusCircle, Edit, Filter as FilterIcon, FilterX, Search as SearchIcon, ListFilter, CheckCircle, AlertCircle, PenToolIcon } from 'lucide-react';
 import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource, RoleName } from '@/types';
-import { initialMaintenanceRequests, maintenanceRequestStatuses, initialMockUsers, allAdminMockResources, addNotification } from '@/lib/mock-data';
+import { initialMaintenanceRequests, maintenanceRequestStatuses, initialMockUsers, allAdminMockResources, addNotification, addAuditLog } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -173,6 +173,8 @@ export default function MaintenanceRequestsPage() {
       setRequests(requests.map(req => req.id === editingRequest.id ? updatedRequest : req));
       const globalIndex = initialMaintenanceRequests.findIndex(r => r.id === editingRequest.id);
       if (globalIndex !== -1) initialMaintenanceRequests[globalIndex] = updatedRequest;
+      
+      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: updatedRequest.id, details: `Maintenance request for '${resource.name}' updated. Status: ${updatedRequest.status}.`});
       toast({ title: 'Request Updated', description: `Maintenance request for "${resource.name}" has been updated.` });
       
       if (updatedRequest.status === 'Resolved' && editingRequest.status !== 'Resolved' && updatedRequest.reportedByUserId) {
@@ -212,6 +214,7 @@ export default function MaintenanceRequestsPage() {
       initialMaintenanceRequests.unshift(newRequest); 
       initialMaintenanceRequests.sort((a, b) => new Date(b.dateReported).getTime() - new Date(a.dateReported).getTime());
 
+      addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: newRequest.id, details: `New maintenance request for '${resource.name}' logged.`});
       toast({ title: 'Request Logged', description: `New maintenance request for "${resource.name}" has been logged.` });
       
       const targetTechnicianId = newRequest.assignedTechnicianId || (technicians.length > 0 ? technicians[0].id : 'u1'); 

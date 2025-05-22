@@ -45,7 +45,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'MY58012345',
     purchaseDate: '2022-08-15T00:00:00.000Z',
     description: 'Mixed Signal Oscilloscope with 500 MHz bandwidth, 4 analog channels, and 16 digital channels. Includes built-in waveform generator and serial protocol analysis capabilities. Ideal for debugging embedded systems and mixed-signal designs.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['500 MHz Bandwidth', '4 Analog Channels', '16 Digital Channels', 'WaveGen', 'Serial Decode'],
     availability: [
       { date: todayStr, slots: ['09:00-12:00', '13:00-17:00'] },
@@ -75,7 +75,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'DP8C198765',
     purchaseDate: '2023-01-20T00:00:00.000Z',
     description: 'Triple output programmable DC power supply. CH1: 0-30V/0-3A, CH2: 0-30V/0-3A, CH3: 0-5V/0-3A. High resolution and remote sense capabilities.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['3 Channels', 'Programmable', 'Overvoltage Protection', 'LAN Interface'],
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },
@@ -98,7 +98,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'SDG2XABC001',
     purchaseDate: '2021-05-10T00:00:00.000Z',
     description: 'Dual-channel Arbitrary Waveform Generator, 40 MHz bandwidth, 1.2 GSa/s sampling rate. Generates sine, square, ramp, pulse, noise, and arbitrary waveforms.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['40 MHz Bandwidth', 'Dual Channel', 'Arbitrary Waveforms', 'IQ Modulation'],
     availability: [],
     unavailabilityPeriods: [
@@ -119,7 +119,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'RS-FPC-987',
     purchaseDate: '2023-06-05T00:00:00.000Z',
     description: 'Spectrum analyzer with frequency range from 5 kHz to 1 GHz (upgradable to 3 GHz). Includes tracking generator and internal VSWR bridge.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['1 GHz Base Frequency', 'Tracking Generator', 'One-Port Vector Network Analyzer'],
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },
@@ -140,7 +140,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'WEL-WE-007A',
     purchaseDate: '2022-11-01T00:00:00.000Z',
     description: '70W digital soldering station with temperature control and standby mode. Suitable for general purpose and fine pitch soldering work.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['70 Watt Power', 'Digital Temperature Control', 'ESD Safe', 'Interchangeable Tips'],
     availability: [
         { date: todayStr, slots: ['10:00-17:00'] },
@@ -162,7 +162,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'FLUKE-87V-011',
     purchaseDate: '2023-03-10T00:00:00.000Z',
     description: 'True-RMS industrial digital multimeter for accurate measurements on non-linear signals. Measures AC/DC voltage and current, resistance, capacitance, frequency.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['True-RMS AC Voltage/Current', 'Temperature Measurement (with probe)', 'CAT III 1000V, CAT IV 600V Safety Rating'],
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },
@@ -183,7 +183,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'XALV-U250-001',
     purchaseDate: '2023-09-01T00:00:00.000Z',
     description: 'High-performance FPGA development node for hardware acceleration and prototyping complex digital systems.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['High-Speed Transceivers', 'Large Logic Capacity', 'PCIe Gen3 x16'],
     availability: [
       { date: todayStr, slots: ['09:00-17:00'] },
@@ -215,7 +215,7 @@ export let allAdminMockResources: Resource[] = [
     serialNumber: 'FLMS12345',
     purchaseDate: '2022-07-20T00:00:00.000Z',
     description: 'Compact spectrometer for VIS-NIR measurements (350-1000 nm). Ideal for absorbance, transmittance, and irradiance.',
-    imageUrl: 'https://placehold.co/300x200.png',
+    imageUrl: 'https://placehold.co/600x400.png',
     features: ['350-1000 nm Range', 'High Resolution', 'USB Interface', 'Compact Size'],
     availability: [
       { date: threeDaysLaterStr, slots: ['10:00-12:00', '13:00-16:00'] },
@@ -498,7 +498,7 @@ export function getWaitlistPosition(booking: Booking, allBookings: Booking[]): n
     b.resourceId === booking.resourceId &&
     b.status === 'Waitlisted' &&
     b.createdAt && 
-    (b.startTime < booking.endTime && b.endTime > booking.startTime) 
+    (new Date(b.startTime) < new Date(booking.endTime) && new Date(b.endTime) > new Date(booking.startTime)) 
   );
   
   const sortedWaitlist = conflictingWaitlistedBookings
@@ -554,7 +554,7 @@ export function processQueueForResource(resourceId: string): void {
       addNotification(
         bookingToPromote.userId,
         'Promoted from Waitlist!',
-        `Your waitlisted booking for ${bookingToPromote.resourceName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} is now pending approval.`,
+        `Your waitlisted booking for ${bookingToPromote.resourceName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} has been promoted and is now pending approval. Please check your bookings.`,
         'booking_promoted_user',
         `/bookings?bookingId=${bookingToPromote.id}`
       );
@@ -564,7 +564,7 @@ export function processQueueForResource(resourceId: string): void {
         addNotification(
           adminUser.id,
           'Booking Promoted from Waitlist',
-          `Booking for ${bookingToPromote.resourceName} by ${bookingToPromote.userName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} was promoted from waitlist and needs approval.`,
+          `Waitlisted booking for ${bookingToPromote.resourceName} by ${bookingToPromote.userName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} has been promoted to Pending and requires your approval.`,
           'booking_promoted_admin',
           '/admin/booking-requests'
         );

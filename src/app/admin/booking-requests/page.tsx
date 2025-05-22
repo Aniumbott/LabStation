@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter, Clock } from 'lucide-react';
 import type { Booking, Resource } from '@/types'; 
-import { initialBookings, allAdminMockResources, addNotification, bookingStatusesForFilter, processQueueForResource, addAuditLog } from '@/lib/mock-data';
+import { initialBookings, allAdminMockResources, addNotification, processQueueForResource, addAuditLog } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -68,7 +68,7 @@ export default function BookingRequestsPage() {
   }, []); 
 
   const bookingsForApproval = useMemo(() => {
-    let filtered = allBookingsState.filter(b => b.status === 'Pending' || b.status === 'Waitlisted');
+    let filtered = allBookingsState;
     
     const lowerSearch = activeSearchTerm.toLowerCase();
     if (activeSearchTerm) {
@@ -84,7 +84,7 @@ export default function BookingRequestsPage() {
     }
     
     if (activeFilterStatus === 'all') {
-        // This is fine, no specific status filter
+        filtered = filtered.filter(b => b.status === 'Pending' || b.status === 'Waitlisted');
     } else if (activeFilterStatus) {
         filtered = filtered.filter(b => b.status === activeFilterStatus);
     }
@@ -201,7 +201,7 @@ export default function BookingRequestsPage() {
     return isValidDate(date) ? format(date, 'p') : '';
   };
 
-  const statusOptionsForFilterDialog: (Booking['status'] | 'all')[] = ['all', 'Pending', 'Waitlisted'];
+  const bookingStatusesForFilterDialog: Array<Booking['status'] | 'all'> = ['all', 'Pending', 'Waitlisted'];
 
 
   return (
@@ -269,8 +269,8 @@ export default function BookingRequestsPage() {
                         <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as Booking['status'] | 'all')}>
                             <SelectTrigger id="requestStatusDialog" className="h-9"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
                             <SelectContent>
-                                {statusOptionsForFilterDialog.map(s => (
-                                    <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+                                {bookingStatusesForFilterDialog.map(s => (
+                                    <SelectItem key={s} value={s}>{s === 'all' ? 'All (Pending & Waitlisted)' : s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
