@@ -18,9 +18,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format, isValid, isPast, parseISO } from 'date-fns';
+import { format, isValid, isPast, parseISO, compareAsc } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/auth-context';
 import { db } from '@/lib/firebase';
 import { collection, query, where, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore';
@@ -32,79 +32,79 @@ export default function DashboardPage() {
   const [isLoadingResources, setIsLoadingResources] = useState(true);
   const [isLoadingBookings, setIsLoadingBookings] = useState(true);
 
-  useEffect(() => {
-    async function fetchDashboardData() {
-      setIsLoadingResources(true);
-      try {
-        // Firestore query for frequently used resources (e.g., first 2 resources)
-        const resourcesQuery = query(collection(db, 'resources'), limit(3));
-        const resourcesSnapshot = await getDocs(resourcesQuery);
-        const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
-          const data = docSnap.data();
-           return {
-            id: docSnap.id,
-            name: data.name || 'Unnamed Resource',
-            resourceTypeId: data.resourceTypeId || '',
-            lab: data.lab || 'Unknown Lab',
-            status: data.status || 'Available',
-            description: data.description || '',
-            imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
-            features: data.features || [],
-          } as Resource;
-        });
-        setFrequentlyUsedResources(fetchedResources);
-      } catch (error) {
-        console.error("Error fetching frequently used resources:", error);
-        // Optionally set an error state to display to the user
-      }
-      setIsLoadingResources(false);
-
-      if (currentUser) {
-        setIsLoadingBookings(true);
-        try {
-          // Firestore query for upcoming user bookings
-          // REQUIRES FIRESTORE INDEX: userId ASC, startTime ASC
-          const bookingsQuery = query(
-            collection(db, 'bookings'),
-            where('userId', '==', currentUser.id),
-            where('startTime', '>=', new Date().toISOString()), // Compare with ISO string
-            orderBy('startTime', 'asc'),
-            limit(5)
-          );
-          const bookingsSnapshot = await getDocs(bookingsQuery);
-          const fetchedBookingsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
-            const bookingData = docSnap.data();
-            let resourceNameStr = 'Unknown Resource';
-            if (bookingData.resourceId) {
-              const resourceDocRef = doc(db, 'resources', bookingData.resourceId);
-              const resourceDocSnap = await getDoc(resourceDocRef);
-              if (resourceDocSnap.exists()) {
-                resourceNameStr = resourceDocSnap.data()?.name || 'Unknown Resource';
-              }
-            }
-            return {
-              id: docSnap.id,
-              ...bookingData,
-              startTime: bookingData.startTime ? parseISO(bookingData.startTime) : new Date(),
-              endTime: bookingData.endTime ? parseISO(bookingData.endTime) : new Date(),
-              createdAt: bookingData.createdAt ? parseISO(bookingData.createdAt) : new Date(),
-              resourceName: resourceNameStr,
-            } as Booking;
-          });
-          const resolvedBookings = await Promise.all(fetchedBookingsPromises);
-          setUpcomingUserBookings(resolvedBookings);
-        } catch (error) {
-          console.error("Error fetching upcoming bookings:", error);
-          // Optionally set an error state
-        }
-        setIsLoadingBookings(false);
-      } else {
-        setUpcomingUserBookings([]);
-        setIsLoadingBookings(false);
-      }
+  const fetchDashboardData = useCallback(async () => {
+    setIsLoadingResources(true);
+    try {
+      const resourcesQuery = query(collection(db, 'resources'), limit(3));
+      const resourcesSnapshot = await getDocs(resourcesQuery);
+      const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          name: data.name || 'Unnamed Resource',
+          resourceTypeId: data.resourceTypeId || '',
+          lab: data.lab || 'Unknown Lab',
+          status: data.status || 'Available',
+          description: data.description || '',
+          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+          features: Array.isArray(data.features) ? data.features : [],
+        } as Resource;
+      });
+      setFrequentlyUsedResources(fetchedResources);
+    } catch (error) {
+      console.error("Error fetching frequently used resources:", error);
     }
-    fetchDashboardData();
+    setIsLoadingResources(false);
+
+    if (currentUser) {
+      setIsLoadingBookings(true);
+      try {
+        // Firestore query for upcoming user bookings
+        // REMOVED: orderBy('startTime', 'asc') to avoid specific index error. Sorting is now done client-side.
+        // A Firestore index on (userId ASC, startTime ASC) would be more performant for server-side sorting.
+        const bookingsQuery = query(
+          collection(db, 'bookings'),
+          where('userId', '==', currentUser.id),
+          where('startTime', '>=', new Date().toISOString()), // Storing startTime as ISO string
+          limit(5)
+        );
+        const bookingsSnapshot = await getDocs(bookingsQuery);
+        const fetchedBookingsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
+          const bookingData = docSnap.data();
+          let resourceNameStr = 'Unknown Resource';
+          if (bookingData.resourceId) {
+            const resourceDocRef = doc(db, 'resources', bookingData.resourceId);
+            const resourceDocSnap = await getDoc(resourceDocRef);
+            if (resourceDocSnap.exists()) {
+              resourceNameStr = resourceDocSnap.data()?.name || 'Unknown Resource';
+            }
+          }
+          return {
+            id: docSnap.id,
+            ...bookingData,
+            startTime: bookingData.startTime ? parseISO(bookingData.startTime) : new Date(),
+            endTime: bookingData.endTime ? parseISO(bookingData.endTime) : new Date(),
+            createdAt: bookingData.createdAt?.toDate ? bookingData.createdAt.toDate() : new Date(bookingData.createdAt || Date.now()),
+            // resourceName is now part of the booking document from Firestore
+          } as Booking;
+        });
+        let resolvedBookings = await Promise.all(fetchedBookingsPromises);
+        // Client-side sorting
+        resolvedBookings.sort((a, b) => compareAsc(a.startTime, b.startTime));
+        setUpcomingUserBookings(resolvedBookings);
+      } catch (error) {
+        console.error("Error fetching upcoming bookings:", error);
+      }
+      setIsLoadingBookings(false);
+    } else {
+      setUpcomingUserBookings([]);
+      setIsLoadingBookings(false);
+    }
   }, [currentUser]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
 
   const getResourceStatusBadge = (status: Resource['status']) => {
@@ -130,7 +130,7 @@ export default function DashboardPage() {
       <section>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-semibold">Frequently Used Resources</h2>
-          {frequentlyUsedResources.length > 0 && ( 
+          {frequentlyUsedResources.length > 0 && (
             <Button asChild variant="outline" size="sm">
               <Link href="/admin/resources">View All</Link>
             </Button>
@@ -145,9 +145,9 @@ export default function DashboardPage() {
                 <CardHeader className="p-0 pb-3">
                   <div className="flex justify-between items-start">
                     <CardTitle className="text-lg hover:text-primary transition-colors">
-                        <Link href={`/resources/${resource.id}`}>
-                            {resource.name}
-                        </Link>
+                      <Link href={`/resources/${resource.id}`}>
+                        {resource.name}
+                      </Link>
                     </CardTitle>
                     {getResourceStatusBadge(resource.status)}
                   </div>
@@ -155,7 +155,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="p-0 flex-grow space-y-3">
                   <div className="relative w-full h-40 rounded-md overflow-hidden">
-                    <Image src={resource.imageUrl} alt={resource.name} layout="fill" objectFit="cover" />
+                    <Image src={resource.imageUrl} alt={resource.name} fill style={{objectFit:"cover"}} />
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{resource.description}</p>
                 </CardContent>
@@ -163,7 +163,7 @@ export default function DashboardPage() {
                   <Button asChild size="sm" className="w-full" disabled={resource.status !== 'Available'}>
                     <Link href={`/bookings?resourceId=${resource.id}`}>
                       <CalendarPlus className="mr-2 h-4 w-4" />
-                       Book Now
+                      Book Now
                     </Link>
                   </Button>
                 </CardFooter>
@@ -183,7 +183,7 @@ export default function DashboardPage() {
         <h2 className="text-2xl font-semibold mb-4">Your Upcoming Bookings</h2>
         {isLoadingBookings ? (
           <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading bookings...</div>
-        ) :currentUser && upcomingUserBookings.length > 0 ? (
+        ) : currentUser && upcomingUserBookings.length > 0 ? (
           <Card className="shadow-lg">
             <CardContent className="p-0">
               <div className="overflow-x-auto rounded-lg border shadow-sm">
@@ -204,20 +204,20 @@ export default function DashboardPage() {
                           <TableCell>
                             <div>{isValid(booking.startTime) ? format(booking.startTime, 'MMM dd, yyyy') : 'Invalid Date'}</div>
                             <div className="text-xs text-muted-foreground">
-                                {isValid(booking.startTime) && isValid(booking.endTime) ? `${format(booking.startTime, 'p')} - ${format(booking.endTime, 'p')}` : 'Invalid Time'}
+                              {isValid(booking.startTime) && isValid(booking.endTime) ? `${format(booking.startTime, 'p')} - ${format(booking.endTime, 'p')}` : 'Invalid Time'}
                             </div>
                           </TableCell>
                           <TableCell>
                             <Badge
-                                className={cn(
-                                    "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
-                                    booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
-                                    booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
-                                    booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500',
-                                    booking.status === 'Waitlisted' && 'bg-purple-500 text-white hover:bg-purple-600'
-                                )}
+                              className={cn(
+                                "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
+                                booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
+                                booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
+                                booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500',
+                                booking.status === 'Waitlisted' && 'bg-purple-500 text-white hover:bg-purple-600'
+                              )}
                             >
-                                {booking.status}
+                              {booking.status}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
@@ -233,23 +233,23 @@ export default function DashboardPage() {
               </div>
             </CardContent>
             {upcomingUserBookings.length > 0 && (
-                <CardFooter className="justify-end pt-4 border-t">
-                    <Button variant="outline" asChild>
-                        <Link href="/bookings">View All Bookings <ChevronRight className="ml-2 h-4 w-4" /></Link>
-                    </Button>
-                </CardFooter>
+              <CardFooter className="justify-end pt-4 border-t">
+                <Button variant="outline" asChild>
+                  <Link href="/bookings">View All Bookings <ChevronRight className="ml-2 h-4 w-4" /></Link>
+                </Button>
+              </CardFooter>
             )}
           </Card>
         ) : (
           <Card className="p-6 text-center shadow-lg border-0">
-             <p className="text-muted-foreground">
-               {currentUser ? "You have no upcoming bookings." : "Please log in to see your bookings."}
-             </p>
-             {currentUser && (
-                <Button asChild className="mt-4">
-                    <Link href="/admin/resources">Find Resources to Book</Link>
-                </Button>
-             )}
+            <p className="text-muted-foreground">
+              {currentUser ? "You have no upcoming bookings." : "Please log in to see your bookings."}
+            </p>
+            {currentUser && (
+              <Button asChild className="mt-4">
+                <Link href="/admin/resources">Find Resources to Book</Link>
+              </Button>
+            )}
           </Card>
         )}
       </section>
