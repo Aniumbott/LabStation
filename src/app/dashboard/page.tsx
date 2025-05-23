@@ -18,8 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format, isValid, isPast, parseISO, compareAsc } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { format, isValid, parseISO, compareAsc } from 'date-fns';
+import { cn, formatDateSafe } from '@/lib/utils';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/auth-context';
 import { db } from '@/lib/firebase';
@@ -35,6 +35,8 @@ export default function DashboardPage() {
   const fetchDashboardData = useCallback(async () => {
     setIsLoadingResources(true);
     try {
+      // Firestore query for frequently used resources (example: limit to 3)
+      // In a real app, "frequently used" might be based on actual usage stats
       const resourcesQuery = query(collection(db, 'resources'), limit(3));
       const resourcesSnapshot = await getDocs(resourcesQuery);
       const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
@@ -48,11 +50,13 @@ export default function DashboardPage() {
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
           features: Array.isArray(data.features) ? data.features : [],
+          // Other fields like availability, purchaseDate etc. can be added if needed on dashboard cards
         } as Resource;
       });
       setFrequentlyUsedResources(fetchedResources);
     } catch (error) {
       console.error("Error fetching frequently used resources:", error);
+      // Optionally set an error state or show a toast
     }
     setIsLoadingResources(false);
 
@@ -60,12 +64,12 @@ export default function DashboardPage() {
       setIsLoadingBookings(true);
       try {
         // Firestore query for upcoming user bookings
-        // REMOVED: orderBy('startTime', 'asc') to avoid specific index error. Sorting is now done client-side.
-        // A Firestore index on (userId ASC, startTime ASC) would be more performant for server-side sorting.
+        // REQUIRES Firestore Index: users (ASC), startTime (ASC)
         const bookingsQuery = query(
           collection(db, 'bookings'),
           where('userId', '==', currentUser.id),
-          where('startTime', '>=', new Date().toISOString()), // Storing startTime as ISO string
+          where('startTime', '>=', new Date().toISOString()),
+          orderBy('startTime', 'asc'),
           limit(5)
         );
         const bookingsSnapshot = await getDocs(bookingsQuery);
@@ -85,15 +89,15 @@ export default function DashboardPage() {
             startTime: bookingData.startTime ? parseISO(bookingData.startTime) : new Date(),
             endTime: bookingData.endTime ? parseISO(bookingData.endTime) : new Date(),
             createdAt: bookingData.createdAt?.toDate ? bookingData.createdAt.toDate() : new Date(bookingData.createdAt || Date.now()),
-            // resourceName is now part of the booking document from Firestore
+            resourceName: resourceNameStr, // Added after fetching resource
           } as Booking;
         });
         let resolvedBookings = await Promise.all(fetchedBookingsPromises);
-        // Client-side sorting
-        resolvedBookings.sort((a, b) => compareAsc(a.startTime, b.startTime));
+        // Sorting by startTime is now handled by Firestore's orderBy
         setUpcomingUserBookings(resolvedBookings);
       } catch (error) {
         console.error("Error fetching upcoming bookings:", error);
+        // Optionally set an error state or show a toast
       }
       setIsLoadingBookings(false);
     } else {
@@ -119,6 +123,22 @@ export default function DashboardPage() {
         return <Badge variant="outline"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     }
   };
+  
+  const getBookingStatusBadge = (status: Booking['status']) => {
+    switch (status) {
+      case 'Confirmed':
+        return <Badge className={cn("bg-green-500 text-white hover:bg-green-600 border-transparent")}>{status}</Badge>;
+      case 'Pending':
+        return <Badge className={cn("bg-yellow-500 text-yellow-950 hover:bg-yellow-600 border-transparent")}>{status}</Badge>;
+      case 'Cancelled':
+        return <Badge className={cn("bg-gray-400 text-white hover:bg-gray-500 border-transparent")}>{status}</Badge>;
+      case 'Waitlisted':
+        return <Badge className={cn("bg-purple-500 text-white hover:bg-purple-600 border-transparent")}>{status}</Badge>; // Removed waitlist position display
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
 
   return (
     <div className="space-y-8">
@@ -131,7 +151,7 @@ export default function DashboardPage() {
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-semibold">Frequently Used Resources</h2>
           {frequentlyUsedResources.length > 0 && (
-            <Button asChild variant="outline" size="sm">
+             <Button asChild variant="outline" size="sm">
               <Link href="/admin/resources">View All</Link>
             </Button>
           )}
@@ -155,7 +175,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="p-0 flex-grow space-y-3">
                   <div className="relative w-full h-40 rounded-md overflow-hidden">
-                    <Image src={resource.imageUrl} alt={resource.name} fill style={{objectFit:"cover"}} />
+                    <Image src={resource.imageUrl || 'https://placehold.co/600x400.png'} alt={resource.name} fill style={{objectFit:"cover"}} />
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{resource.description}</p>
                 </CardContent>
@@ -171,7 +191,7 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : (
-          <Card className="p-6 text-center shadow-lg border-0">
+          <Card className="p-6 text-center shadow-md border-0">
             <p className="text-muted-foreground">No frequently used resources to display. Explore resources via <Link href="/admin/resources" className="text-primary hover:underline">Resources</Link>.</p>
           </Card>
         )}
@@ -202,23 +222,13 @@ export default function DashboardPage() {
                         <TableRow key={booking.id}>
                           <TableCell className="font-medium">{booking.resourceName || 'N/A'}</TableCell>
                           <TableCell>
-                            <div>{isValid(booking.startTime) ? format(booking.startTime, 'MMM dd, yyyy') : 'Invalid Date'}</div>
+                            <div>{formatDateSafe(booking.startTime, 'Invalid Date', 'MMM dd, yyyy')}</div>
                             <div className="text-xs text-muted-foreground">
                               {isValid(booking.startTime) && isValid(booking.endTime) ? `${format(booking.startTime, 'p')} - ${format(booking.endTime, 'p')}` : 'Invalid Time'}
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              className={cn(
-                                "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
-                                booking.status === 'Confirmed' && 'bg-green-500 text-white hover:bg-green-600',
-                                booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
-                                booking.status === 'Cancelled' && 'bg-gray-400 text-white hover:bg-gray-500',
-                                booking.status === 'Waitlisted' && 'bg-purple-500 text-white hover:bg-purple-600'
-                              )}
-                            >
-                              {booking.status}
-                            </Badge>
+                            {getBookingStatusBadge(booking.status)}
                           </TableCell>
                           <TableCell className="text-right">
                             <Button variant="ghost" size="sm" asChild>
@@ -241,7 +251,7 @@ export default function DashboardPage() {
             )}
           </Card>
         ) : (
-          <Card className="p-6 text-center shadow-lg border-0">
+          <Card className="p-6 text-center shadow-md border-0">
             <p className="text-muted-foreground">
               {currentUser ? "You have no upcoming bookings." : "Please log in to see your bookings."}
             </p>
