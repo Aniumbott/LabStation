@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation'; // Added useRouter
 import {
   ClipboardList,
   PlusCircle,
@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { labsList } from '@/lib/mock-data'; // Keep static lists
+import { labsList, initialMockResourceTypes, addAuditLog } from '@/lib/mock-data'; // Removed allAdminMockResources, added addAuditLog
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -43,7 +43,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Calendar as ShadCNCalendar } from '@/components/ui/calendar'; // Renamed to avoid conflict
+import { Calendar as ShadCNCalendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,17 +52,17 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval } from 'date-fns';
+import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, Timestamp } from 'date-fns'; // Removed addDays
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 
 
 export default function AdminResourcesPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
-  const router = useRouter();
+  const router = useRouter(); // Initialized router
 
   const [resources, setResources] = useState<Resource[]>([]);
   const [fetchedResourceTypes, setFetchedResourceTypes] = useState<ResourceType[]>([]);
@@ -71,6 +71,7 @@ export default function AdminResourcesPage() {
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
+  // Filter Dialog State
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterTypeId, setTempFilterTypeId] = useState<string>('all');
@@ -78,10 +79,12 @@ export default function AdminResourcesPage() {
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(undefined);
   const [currentMonthInDialog, setCurrentMonthInDialog] = useState<Date>(startOfDay(new Date()));
 
+  // Active Page Filters
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterTypeId, setActiveFilterTypeId] = useState<string>('all');
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
+
 
   const fetchResourcesAndTypes = useCallback(async () => {
     setIsLoadingData(true);
@@ -92,7 +95,7 @@ export default function AdminResourcesPage() {
         const data = docSnap.data();
         
         let typeName = 'N/A';
-        if (data.resourceTypeId) {
+        if (data.resourceTypeId && typeof data.resourceTypeId === 'string') {
           try {
             const typeDocRef = doc(db, "resourceTypes", data.resourceTypeId);
             const typeSnap = await getDoc(typeDocRef);
@@ -111,6 +114,7 @@ export default function AdminResourcesPage() {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
+          // resourceTypeName: typeName, // No longer directly storing, will be fetched or joined on client
           lab: data.lab || (labsList.length > 0 ? labsList[0] : 'Electronics Lab 1'),
           status: data.status || 'Available',
           description: data.description || '',
@@ -130,8 +134,8 @@ export default function AdminResourcesPage() {
             notes: data.remoteAccess.notes || undefined,
           } : undefined,
           allowQueueing: data.allowQueueing ?? false,
-          availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: typeof a.date === 'string' ? a.date : (a.date instanceof Timestamp ? format(a.date.toDate(), 'yyyy-MM-dd') : (a.date instanceof Date ? format(a.date, 'yyyy-MM-dd') : a.date)) })) : [],
-          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2,9)), startDate: typeof p.startDate === 'string' ? p.startDate : (p.startDate instanceof Timestamp ? format(p.startDate.toDate(), 'yyyy-MM-dd') : (p.startDate instanceof Date ? format(p.startDate, 'yyyy-MM-dd') : p.startDate)), endDate: typeof p.endDate === 'string' ? p.endDate : (p.endDate instanceof Timestamp ? format(p.endDate.toDate(), 'yyyy-MM-dd') : (p.endDate instanceof Date ? format(p.endDate, 'yyyy-MM-dd') : p.endDate)), reason: p.reason })) : [],
+          availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: a.date })) : [],
+          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2,9)), startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [],
           lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
         } as Resource;
@@ -173,7 +177,7 @@ export default function AdminResourcesPage() {
   }, [isFilterDialogOpen, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
 
   const filteredResources = useMemo(() => {
-    return resources.map(resource => { // First map to ensure resourceTypeName is present
+    return resources.map(resource => { 
       const type = fetchedResourceTypes.find(rt => rt.id === resource.resourceTypeId);
       return { ...resource, resourceTypeName: type?.name || 'N/A' };
     }).filter(resource => {
@@ -197,7 +201,7 @@ export default function AdminResourcesPage() {
             if (!period.startDate || !period.endDate) return false;
             try {
                 const periodStart = startOfDay(parseISO(period.startDate));
-                const periodEnd = startOfDay(parseISO(period.endDate)); // end date is inclusive
+                const periodEnd = startOfDay(parseISO(period.endDate)); 
                 return isValidDateFn(periodStart) && isValidDateFn(periodEnd) &&
                        isWithinInterval(dateToFilter, { start: periodStart, end: periodEnd });
             } catch (e) { console.warn("Error parsing unavailability period dates for filter:", e); return false; }
@@ -247,7 +251,7 @@ export default function AdminResourcesPage() {
             description: "Please add resource types first before adding resources.",
             variant: "destructive",
         });
-        router.push('/admin/resource-types'); // Redirect to resource types page
+        router.push('/admin/resource-types'); 
         return;
     }
     setEditingResource(null);
@@ -255,8 +259,9 @@ export default function AdminResourcesPage() {
   }, [fetchedResourceTypes, toast, router]);
 
   const handleOpenEditDialog = (resource: Resource) => {
-    setEditingResource(resource);
-    setIsFormDialogOpen(true);
+     // This function is not used here as edit is on detail page
+    console.warn("handleOpenEditDialog called on AdminResourcesPage, but should be on detail page.");
+    router.push(`/resources/${resource.id}`); // Redirect to detail page for editing
   };
 
 
@@ -271,7 +276,7 @@ export default function AdminResourcesPage() {
       toast({ title: "Invalid Resource Type", description: "Selected resource type is not valid.", variant: "destructive" });
       return;
     }
-
+    
     const purchaseDateForFirestore: Timestamp | null = data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))
                                         ? Timestamp.fromDate(parseISO(data.purchaseDate))
                                         : null;
@@ -287,7 +292,6 @@ export default function AdminResourcesPage() {
         }
       : undefined;
     
-    // Explicitly remove undefined sub-fields or set to null for Firestore
     if (remoteAccessDataForFirestore) {
         Object.keys(remoteAccessDataForFirestore).forEach((key) => {
             if ((remoteAccessDataForFirestore as any)[key] === undefined) {
@@ -296,11 +300,10 @@ export default function AdminResourcesPage() {
         });
         const ra = remoteAccessDataForFirestore;
         const allEffectivelyNull = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && ra.port === null && !ra.notes;
-        if (allEffectivelyNull && !Object.values(ra).some(v => v !== null && v !== '')) { // Check if all are actually null or empty string
-           // remoteAccessDataForFirestore = undefined; // This line was problematic, Firestore expects an object or null, not undefined field value
+        if (allEffectivelyNull && !Object.values(ra).some(v => v !== null && v !== '' && v !== 0)) { 
+            // remoteAccessDataForFirestore = undefined; // Firestore expects an object or null, not undefined for field value
         }
     }
-
 
     const firestorePayload: any = {
       name: data.name,
@@ -315,38 +318,36 @@ export default function AdminResourcesPage() {
       purchaseDate: purchaseDateForFirestore,
       notes: data.notes || null,
       features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-      remoteAccess: remoteAccessDataForFirestore || null, // Save null if remoteAccessData is undefined
+      remoteAccess: remoteAccessDataForFirestore || null, 
       allowQueueing: data.allowQueueing ?? false, 
       lastUpdatedAt: serverTimestamp(),
     };
     
-    Object.keys(firestorePayload).forEach(key => { // Ensure top-level undefined fields are converted to null for updateDoc.
-        if (firestorePayload[key] === undefined && key !== 'remoteAccess') { // remoteAccess handled above
+    Object.keys(firestorePayload).forEach(key => { 
+        if (firestorePayload[key] === undefined && key !== 'remoteAccess') { 
             firestorePayload[key] = null;
         }
     });
 
-
-    const isEditing = !!editingResource;
-    const auditAction = isEditing ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
-    const auditDetails = `Resource '${data.name}' ${isEditing ? 'updated' : 'created'}.`;
+    const isEditing = !!editingResource; // This page now only handles creation
+    const auditAction = 'RESOURCE_CREATED';
+    const auditDetails = `Resource '${data.name}' created.`;
 
     setIsLoadingData(true);
     try {
       if (isEditing && editingResource.id) {
-        const resourceDocRef = doc(db, "resources", editingResource.id);
-        await updateDoc(resourceDocRef, firestorePayload);
-        addAuditLog(currentUser.id, currentUser.name || 'User', auditAction, { entityType: 'Resource', entityId: editingResource.id, details: auditDetails });
-        toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
-      } else {
+        // Edit logic is now on the detail page, this block should ideally not be reached from here.
+        // For safety, redirect or show error if somehow triggered.
+        toast({ title: "Error", description: "Edit resource from its detail page.", variant: "destructive" });
+        router.push(`/resources/${editingResource.id}`);
+      } else { // Creating new resource
         const newResourceData = {
             ...firestorePayload,
             createdAt: serverTimestamp(),
-            availability: [], // Initialize with empty availability
-            unavailabilityPeriods: [], // Initialize with empty unavailability
+            availability: [], 
+            unavailabilityPeriods: [], 
         };
-        // Remove lastUpdatedAt for new doc, createdAt will be used
-        delete newResourceData.lastUpdatedAt;
+        delete newResourceData.lastUpdatedAt; 
         const docRef = await addDoc(collection(db, "resources"), newResourceData);
         addAuditLog(currentUser.id, currentUser.name || 'User', auditAction, { entityType: 'Resource', entityId: docRef.id, details: auditDetails });
         toast({ title: 'Resource Created', description: `Resource "${data.name}" has been created.` });
@@ -360,7 +361,7 @@ export default function AdminResourcesPage() {
     } finally {
       setIsLoadingData(false);
     }
-  }, [currentUser, editingResource, fetchedResourceTypes, fetchResourcesAndTypes, toast, addAuditLog]);
+  }, [currentUser, editingResource, fetchedResourceTypes, fetchResourcesAndTypes, toast, router, addAuditLog]);
 
 
   const activeFilterCount = useMemo(() => [
@@ -372,7 +373,7 @@ export default function AdminResourcesPage() {
 
   const canAddResources = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
 
-  if (!currentUser) { // Should be handled by AppLayout, but as a safeguard
+  if (!currentUser) { 
     return (
       <div className="space-y-8">
         <PageHeader title="Resources" icon={ClipboardList} description="Access Denied." />
@@ -426,7 +427,7 @@ export default function AdminResourcesPage() {
                           type="search"
                           placeholder="Name, manufacturer, model, type..."
                           value={tempSearchTerm}
-                          onChange={(e) => setTempSearchTerm(e.target.value)}
+                          onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
                           className="h-9 pl-8"
                           />
                       </div>
@@ -595,7 +596,7 @@ export default function AdminResourcesPage() {
                 setIsFormDialogOpen(isOpen);
                 if (!isOpen) setEditingResource(null);
             }}
-            initialResource={editingResource}
+            initialResource={editingResource} // This will be null for "Add" on this page
             onSave={handleSaveResource}
             resourceTypes={fetchedResourceTypes} 
         />
@@ -603,5 +604,3 @@ export default function AdminResourcesPage() {
     </div>
   );
 }
-
-    
