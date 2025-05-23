@@ -5,9 +5,9 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2, FilterX } from 'lucide-react';
+import { ClipboardList, PlusCircle, Filter as FilterIcon, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2, FilterX, CheckCircle, AlertTriangle, Construction } from 'lucide-react'; // Added CheckCircle
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { initialMockResourceTypes, labsList, resourceStatusesList, addAuditLog } from '@/lib/mock-data'; // Removed allAdminMockResources
+import { initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data'; // Resource types from mock for form
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -81,8 +81,7 @@ export default function AdminResourcesPage() {
     setIsLoadingData(true);
     try {
       // Fetch Resources
-      const resourcesCollectionRef = collection(db, "resources");
-      const resourcesSnapshot = await getDocs(resourcesCollectionRef);
+      const resourcesSnapshot = await getDocs(collection(db, "resources"));
       const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
         const data = docSnap.data();
         return {
@@ -96,20 +95,19 @@ export default function AdminResourcesPage() {
           manufacturer: data.manufacturer,
           model: data.model,
           serialNumber: data.serialNumber,
-          purchaseDate: data.purchaseDate ? (data.purchaseDate.toDate ? data.purchaseDate.toDate().toISOString() : data.purchaseDate) : undefined,
+          purchaseDate: data.purchaseDate ? (typeof data.purchaseDate.toDate === 'function' ? data.purchaseDate.toDate().toISOString() : data.purchaseDate) : undefined,
           notes: data.notes,
-          features: data.features || [],
+          features: Array.isArray(data.features) ? data.features : [],
           remoteAccess: data.remoteAccess,
           allowQueueing: data.allowQueueing ?? false,
-          availability: data.availability || [],
-          unavailabilityPeriods: data.unavailabilityPeriods || [],
+          availability: Array.isArray(data.availability) ? data.availability.map(a => ({...a, date: typeof a.date === 'string' ? a.date : format(a.date.toDate(), 'yyyy-MM-dd')})) : [],
+          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map(p => ({...p, startDate: typeof p.startDate === 'string' ? p.startDate : format(p.startDate.toDate(), 'yyyy-MM-dd'), endDate: typeof p.endDate === 'string' ? p.endDate : format(p.endDate.toDate(), 'yyyy-MM-dd')})) : [],
         } as Resource;
       });
       setResources(fetchedResources.sort((a,b) => a.name.localeCompare(b.name)));
 
       // Fetch Resource Types
-      const typesCollectionRef = collection(db, "resourceTypes");
-      const typesSnapshot = await getDocs(typesCollectionRef);
+      const typesSnapshot = await getDocs(collection(db, "resourceTypes"));
       const fetchedTypes: ResourceType[] = typesSnapshot.docs.map(docSnap => ({
         id: docSnap.id,
         ...docSnap.data(),
@@ -157,17 +155,22 @@ export default function AdminResourcesPage() {
       currentResources = currentResources.filter(resource => resource.lab === activeFilterLab);
     }
     if (activeSelectedDate) {
-      const dateToFilterStr = format(startOfDay(activeSelectedDate), 'yyyy-MM-dd');
+      const dateToFilter = startOfDay(activeSelectedDate);
+      const dateToFilterStr = format(dateToFilter, 'yyyy-MM-dd');
+      
       currentResources = currentResources.filter(resource => {
         if (resource.status !== 'Available') return false;
 
-        const isUnavailableDueToPeriod = resource.unavailabilityPeriods?.some(period => {
-            const periodStart = startOfDay(parseISO(period.startDate));
-            const periodEnd = startOfDay(parseISO(period.endDate));
-            return isSameDay(startOfDay(activeSelectedDate), periodStart) || isSameDay(startOfDay(activeSelectedDate), periodEnd) || isWithinInterval(startOfDay(activeSelectedDate), { start: periodStart, end: periodEnd });
+        // Check against specific unavailability periods
+        const isSpecificallyUnavailable = resource.unavailabilityPeriods?.some(period => {
+          const periodStart = parseISO(period.startDate);
+          const periodEnd = parseISO(period.endDate);
+          return isValid(periodStart) && isValid(periodEnd) && 
+                 isWithinInterval(dateToFilter, { start: startOfDay(periodStart), end: startOfDay(periodEnd) });
         });
-        if (isUnavailableDueToPeriod) return false;
+        if (isSpecificallyUnavailable) return false;
         
+        // Check if there are defined daily slots for this date
         const dayAvailability = resource.availability?.find(avail => avail.date === dateToFilterStr);
         return dayAvailability && dayAvailability.slots.length > 0;
       });
@@ -196,8 +199,8 @@ export default function AdminResourcesPage() {
     setActiveFilterTypeId('all');
     setActiveFilterLab('all');
     setActiveSelectedDate(undefined);
-    resetDialogFilters();
-    setIsFilterDialogOpen(false);
+    resetDialogFilters(); // Reset temporary dialog state as well
+    setIsFilterDialogOpen(false); // Close dialog if open
   };
 
   const handleOpenNewDialog = () => {
@@ -223,11 +226,11 @@ export default function AdminResourcesPage() {
       lab: data.lab,
       status: data.status,
       description: data.description || '',
-      imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
+      imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
       manufacturer: data.manufacturer || null,
       model: data.model || null,
       serialNumber: data.serialNumber || null,
-      purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : null,
+      purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? Timestamp.fromDate(parseISO(data.purchaseDate)) : null,
       notes: data.notes || null,
       features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
       remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '' && v !== null) ? {
@@ -235,10 +238,11 @@ export default function AdminResourcesPage() {
          hostname: data.remoteAccess.hostname || undefined,
          protocol: data.remoteAccess.protocol || undefined,
          username: data.remoteAccess.username || undefined,
-         port: data.remoteAccess.port ?? undefined,
+         port: data.remoteAccess.port ?? undefined, // Already number or undefined from form
          notes: data.remoteAccess.notes || undefined,
       } : null,
       allowQueueing: data.status === 'Available', // Example logic, adjust as needed
+      // availability and unavailabilityPeriods are managed separately via Resource Detail page dialogs
       availability: editingResource?.availability || [],
       unavailabilityPeriods: editingResource?.unavailabilityPeriods || [],
     };
@@ -248,7 +252,7 @@ export default function AdminResourcesPage() {
       try {
         const resourceDocRef = doc(db, "resources", editingResource.id);
         await updateDoc(resourceDocRef, resourceDataToSave);
-        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: editingResource.id, details: `Resource '${data.name}' updated.`});
+        // Add audit log
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
       } catch (error) {
         console.error("Error updating resource:", error);
@@ -257,7 +261,7 @@ export default function AdminResourcesPage() {
     } else {
       try {
         const docRef = await addDoc(collection(db, "resources"), resourceDataToSave);
-        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'RESOURCE_CREATED', { entityType: 'Resource', entityId: docRef.id, details: `Resource '${data.name}' created.`});
+        // Add audit log
         toast({ title: 'Resource Created', description: `Resource "${data.name}" has been created.` });
       } catch (error) {
         console.error("Error creating resource:", error);
@@ -266,7 +270,7 @@ export default function AdminResourcesPage() {
     }
     setIsFormDialogOpen(false);
     setEditingResource(null);
-    await fetchData();
+    await fetchData(); // Refetch all data
   };
 
   const activeFilterCount = [
@@ -493,3 +497,4 @@ export default function AdminResourcesPage() {
     </div>
   );
 }
+
