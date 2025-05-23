@@ -34,7 +34,7 @@ interface RecurringBlackoutRuleFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialRule: RecurringBlackoutRule | null;
-  onSave: (data: RecurringBlackoutRuleFormValues) => Promise<void>; // Make onSave async
+  onSave: (data: RecurringBlackoutRuleFormValues) => Promise<void>;
 }
 
 export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRule, onSave }: RecurringBlackoutRuleFormDialogProps) {
@@ -50,7 +50,7 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
 
   useEffect(() => {
     if (open) {
-      setIsSubmitting(false); // Reset submitting state
+      setIsSubmitting(false);
       if (initialRule) {
         form.reset({
           name: initialRule.name,
@@ -65,15 +65,13 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
         });
       }
     }
-  }, [open, initialRule, form.reset, form]); // Added form to dependency array
+  }, [open, initialRule, form.reset]);
 
   async function onSubmit(data: RecurringBlackoutRuleFormValues) {
     setIsSubmitting(true);
     try {
         await onSave(data);
-        // Parent component will handle closing the dialog on successful save
     } catch (error) {
-        // Error toast handled by parent
         console.error("Error in RecurringBlackoutRuleFormDialog onSubmit:", error);
     } finally {
         setIsSubmitting(false);
@@ -98,7 +96,7 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
                 <FormItem>
                   <FormLabel>Rule Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Weekend Closure, Weekly Maintenance" {...field} />
+                    <Input placeholder="e.g., Weekend Closure, Weekly Maintenance" {...field} disabled={isSubmitting}/>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -140,6 +138,7 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
                                         )
                                       )
                                 }}
+                                disabled={isSubmitting}
                               />
                             </FormControl>
                             <FormLabel className="font-normal">
@@ -163,14 +162,14 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
                 <FormItem>
                   <FormLabel>Reason (Optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Lab closed, Scheduled cleaning" {...field} value={field.value || ''} />
+                    <Input placeholder="e.g., Lab closed, Scheduled cleaning" {...field} value={field.value || ''} disabled={isSubmitting}/>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>

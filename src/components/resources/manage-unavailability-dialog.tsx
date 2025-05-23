@@ -18,16 +18,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DateRange } from 'react-day-picker';
 import type { Resource, UnavailabilityPeriod } from '@/types';
-import { format, startOfDay, isValid, parseISO, addDays, isBefore } from 'date-fns';
+import { format, startOfDay, isValid as isValidDateFn, parseISO, isBefore, Timestamp } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
-import { Trash2, PlusCircle, Loader2, Save } from 'lucide-react'; // Added Loader2 and Save
+import { Trash2, PlusCircle, Loader2, Save, X } from 'lucide-react';
 
 interface ManageUnavailabilityDialogProps {
   resource: Resource;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSaveUnavailability: (updatedPeriods: UnavailabilityPeriod[]) => Promise<void>; // Make async
+  onSaveUnavailability: (updatedPeriods: UnavailabilityPeriod[]) => Promise<void>;
 }
 
 export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSaveUnavailability }: ManageUnavailabilityDialogProps) {
@@ -39,19 +39,25 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
 
   useEffect(() => {
     if (open) {
-      setIsSubmitting(false); // Reset submitting state
-      setCurrentPeriods(resource.unavailabilityPeriods ? [...resource.unavailabilityPeriods] : []); // Ensure it's a new array
+      setIsSubmitting(false);
+      setCurrentPeriods(resource.unavailabilityPeriods ? 
+        [...resource.unavailabilityPeriods.map(p => ({ // Ensure all periods have an ID
+          ...p, 
+          id: p.id || `unavail-${Date.now()}-${Math.random().toString(36).substring(2,9)}`
+        }))] 
+        : []
+      );
       setSelectedDateRange(undefined);
       setReason('');
     }
   }, [open, resource.unavailabilityPeriods]);
 
   const handleAddPeriod = () => {
-    if (!selectedDateRange || !selectedDateRange.from) { // Only 'from' is essential to start
+    if (!selectedDateRange || !selectedDateRange.from) {
       toast({ title: "Error", description: "Please select a start date for the period.", variant: "destructive" });
       return;
     }
-    const effectiveEndDate = selectedDateRange.to || selectedDateRange.from; // If no 'to', make it a single day
+    const effectiveEndDate = selectedDateRange.to || selectedDateRange.from;
 
     if (isBefore(effectiveEndDate, selectedDateRange.from)) {
       toast({ title: "Error", description: "End date cannot be before start date.", variant: "destructive" });
@@ -65,12 +71,12 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
       reason: reason.trim() || undefined,
     };
 
-    // Check for overlaps with existing periods before adding
+    const newStart = parseISO(newPeriod.startDate);
+    const newEnd = parseISO(newPeriod.endDate);
+
     const overlap = currentPeriods.some(p => {
         const pStart = parseISO(p.startDate);
         const pEnd = parseISO(p.endDate);
-        const newStart = parseISO(newPeriod.startDate);
-        const newEnd = parseISO(newPeriod.endDate);
         return Math.max(pStart.getTime(), newStart.getTime()) <= Math.min(pEnd.getTime(), newEnd.getTime());
     });
 
@@ -78,7 +84,6 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
         toast({ title: "Overlap Detected", description: "This period overlaps with an existing unavailability period.", variant: "destructive" });
         return;
     }
-
 
     const updatedPeriods = [...currentPeriods, newPeriod].sort((a,b) => parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime());
     setCurrentPeriods(updatedPeriods);
@@ -97,9 +102,7 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
     setIsSubmitting(true);
     try {
         await onSaveUnavailability(currentPeriods);
-        // Parent handles closing on success
     } catch (error) {
-        // Error toast handled by parent
         console.error("Error in ManageUnavailabilityDialog handleSaveChanges:", error);
     } finally {
         setIsSubmitting(false);
@@ -131,7 +134,7 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
                     onSelect={setSelectedDateRange}
                     numberOfMonths={1}
                     disabled={(date) => date < startOfDay(new Date())}
-                    className="rounded-md border p-0 [&_button]:h-8 [&_button]:w-8 [&_caption_label]:text-sm"
+                    className="rounded-md border p-0 [&_button]:h-8 [&_button]:w-8 [&_caption_label]:text-sm mt-1"
                   />
                    <p className="text-xs text-muted-foreground mt-1">
                     Selected: {selectedDateRange?.from ? format(selectedDateRange.from, 'PPP') : 'None'} - {selectedDateRange?.to ? format(selectedDateRange.to, 'PPP') : (selectedDateRange?.from ? format(selectedDateRange.from, 'PPP') : 'None')}
@@ -145,6 +148,7 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     disabled={isSubmitting}
+                    className="mt-1"
                   />
                 </div>
                 <Button onClick={handleAddPeriod} size="sm" disabled={isSubmitting || !selectedDateRange?.from}>
@@ -171,8 +175,8 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
                     <TableBody>
                       {currentPeriods.map((period) => (
                         <TableRow key={period.id}>
-                          <TableCell>{format(parseISO(period.startDate), 'PPP')}</TableCell>
-                          <TableCell>{format(parseISO(period.endDate), 'PPP')}</TableCell>
+                          <TableCell>{isValidDateFn(parseISO(period.startDate)) ? format(parseISO(period.startDate), 'PPP') : 'Invalid Date'}</TableCell>
+                          <TableCell>{isValidDateFn(parseISO(period.endDate)) ? format(parseISO(period.endDate), 'PPP') : 'Invalid Date'}</TableCell>
                           <TableCell>{period.reason || <span className="italic text-muted-foreground">N/A</span>}</TableCell>
                           <TableCell className="text-right">
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeletePeriod(period.id)} disabled={isSubmitting}>
@@ -189,12 +193,13 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
                 <p className="text-sm text-muted-foreground">No unavailability periods defined for this resource.</p>
               )}
             </div>
-
           </div>
         </ScrollArea>
         <Separator />
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+            <X className="mr-2 h-4 w-4" />Cancel
+          </Button>
           <Button onClick={handleSaveChanges} disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {isSubmitting ? 'Saving...' : 'Save Changes'}

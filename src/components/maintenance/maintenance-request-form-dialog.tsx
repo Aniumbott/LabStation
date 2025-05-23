@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -21,6 +21,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
 import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource, RoleName } from '@/types';
 import { maintenanceRequestStatuses } from '@/lib/mock-data';
+import { Timestamp } from 'firebase/firestore';
 
 const UNASSIGNED_TECHNICIAN_VALUE = "--unassigned--";
 
@@ -28,7 +29,7 @@ const maintenanceRequestFormSchema = z.object({
   resourceId: z.string().min(1, { message: 'Please select a resource.' }),
   issueDescription: z.string().min(10, { message: 'Issue description must be at least 10 characters.' }).max(1000, { message: 'Description cannot exceed 1000 characters.' }),
   status: z.enum(maintenanceRequestStatuses as [MaintenanceRequestStatus, ...MaintenanceRequestStatus[]], { required_error: 'Please select a status.'}),
-  assignedTechnicianId: z.string().optional().or(z.literal('')),
+  assignedTechnicianId: z.string().optional().or(z.literal('')), // Store as string from select, convert to undefined if '' on save
   resolutionNotes: z.string().max(1000).optional().or(z.literal('')),
 }).refine(data => {
   if ((data.status === 'Resolved' || data.status === 'Closed') && (!data.resolutionNotes || data.resolutionNotes.trim() === '')) {
@@ -46,7 +47,7 @@ interface MaintenanceRequestFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialRequest: MaintenanceRequest | null;
-  onSave: (data: MaintenanceRequestFormValues) => Promise<void>; // Make onSave async
+  onSave: (data: MaintenanceRequestFormValues, requestId?: string) => Promise<void>;
   technicians: User[];
   resources: Resource[];
   currentUserRole?: RoleName;
@@ -56,6 +57,7 @@ interface MaintenanceRequestFormDialogProps {
 export function MaintenanceRequestFormDialog({
     open, onOpenChange, initialRequest, onSave, technicians, resources, currentUserRole
 }: MaintenanceRequestFormDialogProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const form = useForm<MaintenanceRequestFormValues>({
     resolver: zodResolver(maintenanceRequestFormSchema),
     // Default values set in useEffect
@@ -65,12 +67,13 @@ export function MaintenanceRequestFormDialog({
 
   useEffect(() => {
     if (open) {
+      setIsSubmitting(false);
       if (initialRequest) {
         form.reset({
           resourceId: initialRequest.resourceId,
           issueDescription: initialRequest.issueDescription,
           status: initialRequest.status,
-          assignedTechnicianId: initialRequest.assignedTechnicianId || '',
+          assignedTechnicianId: initialRequest.assignedTechnicianId || '', // Default to empty string for select if undefined
           resolutionNotes: initialRequest.resolutionNotes || '',
         });
       } else {
@@ -78,20 +81,28 @@ export function MaintenanceRequestFormDialog({
           resourceId: resources.length > 0 ? resources[0].id : '',
           issueDescription: '',
           status: 'Open',
-          assignedTechnicianId: '',
+          assignedTechnicianId: '', // Default to empty string for select
           resolutionNotes: '',
         });
       }
     }
-  }, [open, initialRequest, resources, form.reset, form]); // Added form to dependency array
+  }, [open, initialRequest, resources, form.reset]);
 
   async function onSubmit(data: MaintenanceRequestFormValues) {
+    setIsSubmitting(true);
     const dataToSave = {
       ...data,
-      assignedTechnicianId: data.assignedTechnicianId === UNASSIGNED_TECHNICIAN_VALUE || data.assignedTechnicianId === '' ? undefined : data.assignedTechnicianId,
+      assignedTechnicianId: data.assignedTechnicianId === UNASSIGNED_TECHNICIAN_VALUE || data.assignedTechnicianId === '' 
+                            ? undefined 
+                            : data.assignedTechnicianId,
     };
-    await onSave(dataToSave);
-    // Parent component (MaintenanceRequestsPage) will handle closing the dialog on successful save
+    try {
+      await onSave(dataToSave, initialRequest?.id);
+    } catch (error) {
+        console.error("Error in MaintenanceRequestFormDialog onSubmit:", error);
+    } finally {
+        setIsSubmitting(false);
+    }
   }
 
   const canEditSensitiveFields = useMemo(() => {
@@ -99,17 +110,13 @@ export function MaintenanceRequestFormDialog({
     return currentUserRole === 'Admin' || currentUserRole === 'Lab Manager' || currentUserRole === 'Technician';
   }, [currentUserRole]);
 
-  const formIsSubmitting = form.formState.isSubmitting;
-
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{initialRequest ? 'Edit Maintenance Request' : 'Log New Maintenance Request'}</DialogTitle>
           <DialogDescription>
-            {/* @ts-ignore client-side augmented property */}
-            {initialRequest ? `Update details for request on "${initialRequest.resourceName}".` : 'Provide information for the new maintenance request.'}
+            {initialRequest ? `Update details for the request.` : 'Provide information for the new maintenance request.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -125,7 +132,7 @@ export function MaintenanceRequestFormDialog({
                         <Select
                             onValueChange={field.onChange}
                             value={field.value || ''}
-                            disabled={!!initialRequest || resources.length === 0}
+                            disabled={!!initialRequest || resources.length === 0 || isSubmitting}
                         >
                             <FormControl><SelectTrigger><SelectValue placeholder={resources.length > 0 ? "Select a resource" : "No resources available"} /></SelectTrigger></FormControl>
                             <SelectContent>
@@ -146,7 +153,7 @@ export function MaintenanceRequestFormDialog({
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Issue Description</FormLabel>
-                        <FormControl><Textarea placeholder="Detailed description of the problem..." {...field} value={field.value || ''} rows={5} /></FormControl>
+                        <FormControl><Textarea placeholder="Detailed description of the problem..." {...field} value={field.value || ''} rows={5} disabled={isSubmitting} /></FormControl>
                         <FormMessage />
                         </FormItem>
                     )}
@@ -158,7 +165,7 @@ export function MaintenanceRequestFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Status</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || 'Open'} disabled={!canEditSensitiveFields && !!initialRequest}>
+                            <Select onValueChange={field.onChange} value={field.value || 'Open'} disabled={(!canEditSensitiveFields && !!initialRequest) || isSubmitting}>
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
                                 <SelectContent>
                                 {maintenanceRequestStatuses.map(statusVal => (
@@ -178,9 +185,9 @@ export function MaintenanceRequestFormDialog({
                             <FormItem>
                             <FormLabel>Assign Technician (Optional)</FormLabel>
                             <Select
-                                onValueChange={(value) => field.onChange(value === UNASSIGNED_TECHNICIAN_VALUE ? '' : value)}
-                                value={field.value || UNASSIGNED_TECHNICIAN_VALUE}
-                                disabled={!canEditSensitiveFields && !!initialRequest}
+                                onValueChange={(value) => field.onChange(value)}
+                                value={field.value || UNASSIGNED_TECHNICIAN_VALUE} // Ensure select shows placeholder if value is empty string
+                                disabled={(!canEditSensitiveFields && !!initialRequest) || isSubmitting}
                             >
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select a technician" /></SelectTrigger></FormControl>
                                 <SelectContent>
@@ -203,7 +210,7 @@ export function MaintenanceRequestFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Resolution Notes {watchStatus === 'Resolved' || watchStatus === 'Closed' ? <span className="text-destructive">*</span> : ''}</FormLabel>
-                            <FormControl><Textarea placeholder="Describe the resolution steps taken..." {...field} value={field.value || ''} rows={4} disabled={!canEditSensitiveFields && !!initialRequest} /></FormControl>
+                            <FormControl><Textarea placeholder="Describe the resolution steps taken..." {...field} value={field.value || ''} rows={4} disabled={(!canEditSensitiveFields && !!initialRequest) || isSubmitting} /></FormControl>
                              <FormDescription>Required if status is Resolved or Closed.
                              {(!canEditSensitiveFields && !!initialRequest) && " Only authorized personnel can add resolution notes."}
                              </FormDescription>
@@ -215,15 +222,15 @@ export function MaintenanceRequestFormDialog({
             </div>
             </ScrollArea>
             <DialogFooter className="pt-6 border-t">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
-              <Button type="submit" disabled={formIsSubmitting || (!canEditSensitiveFields && !!initialRequest && initialRequest.status !== 'Open')}>
-                {formIsSubmitting
+              <Button type="submit" disabled={isSubmitting || (!canEditSensitiveFields && !!initialRequest && initialRequest.status !== 'Open')}>
+                {isSubmitting
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   : (initialRequest ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)
                 }
-                {formIsSubmitting
+                {isSubmitting
                   ? (initialRequest ? 'Saving...' : 'Logging Request...')
                   : (initialRequest ? 'Save Changes' : 'Log Request')
                 }

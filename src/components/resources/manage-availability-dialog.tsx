@@ -15,12 +15,12 @@ import { Calendar } from '@/components/ui/calendar';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Resource } from '@/types';
-import { format, startOfDay, isValid, parseISO, addDays } from 'date-fns';
+import { format, startOfDay, isValid as isValidDateFn, parseISO, Timestamp } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '../ui/separator';
 import { ScrollArea } from '../ui/scroll-area';
 import { Label } from '../ui/label';
-import { Loader2, Save } from 'lucide-react'; // Added Loader2 and Save
+import { Loader2, Save, X } from 'lucide-react';
 
 const timeSlotsExamples = [
   "09:00-17:00 (Full Day)",
@@ -32,7 +32,7 @@ interface ManageAvailabilityDialogProps {
   resource: Resource;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (date: string, newSlots: string[]) => Promise<void>; // Make onSave async
+  onSave: (date: string, newSlots: string[]) => Promise<void>;
 }
 
 export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave }: ManageAvailabilityDialogProps) {
@@ -44,36 +44,35 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
 
   useEffect(() => {
     if (open) {
-        setIsSubmitting(false); // Reset submitting state
-        const initialDate = startOfDay(new Date());
-        setSelectedDate(initialDate); // Always default to today on open or re-evaluate if prop changes
+        setIsSubmitting(false);
+        const initialDate = selectedDate || startOfDay(new Date()); // Use current selectedDate or default
+        setSelectedDate(initialDate);
         
         const dateStr = format(initialDate, 'yyyy-MM-dd');
         const currentAvailability = resource.availability?.find(avail => avail.date === dateStr);
         if (currentAvailability) {
             setAvailabilitySlots(currentAvailability.slots.join(', '));
-            setIsUnavailable(currentAvailability.slots.length === 0 && currentAvailability.slots !== undefined); // Explicitly unavailable
+            setIsUnavailable(currentAvailability.slots.length === 0);
         } else {
-            setAvailabilitySlots(''); // Default for a new date
+            setAvailabilitySlots('');
             setIsUnavailable(false);
         }
     }
-  }, [open, resource.availability]); // Only react to open and resource.availability changing (e.g. new resource selected)
+  }, [open, resource.availability, selectedDate]); // Added selectedDate dependency
 
-  // Effect to update form when selectedDate changes
   useEffect(() => {
-    if (selectedDate) {
+    if (selectedDate && open) { // Only update form if dialog is open
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
       const currentAvailability = resource.availability?.find(avail => avail.date === dateStr);
       if (currentAvailability) {
         setAvailabilitySlots(currentAvailability.slots.join(', '));
-        setIsUnavailable(currentAvailability.slots.length === 0 && currentAvailability.slots !== undefined);
+        setIsUnavailable(currentAvailability.slots.length === 0);
       } else {
         setAvailabilitySlots('');
         setIsUnavailable(false);
       }
     }
-  }, [selectedDate, resource.availability]);
+  }, [selectedDate, resource.availability, open]);
 
 
   const handleDateSelect = (date: Date | undefined) => {
@@ -92,14 +91,14 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
     let finalSlots: string[] = [];
 
     if (isUnavailable) {
-      finalSlots = []; // Explicitly mark as unavailable by empty slots array
+      finalSlots = [];
     } else {
       finalSlots = availabilitySlots
         .split(',')
         .map(s => s.trim())
         .filter(s => {
           const slotRegex = /^\d{2}:\d{2}-\d{2}:\d{2}$/;
-          if (s === '') return false; // Ignore empty strings from split
+          if (s === '') return false;
           if (!slotRegex.test(s)) {
             toast({ title: "Invalid Slot Format", description: `Slot "${s}" is not in HH:mm-HH:mm format. It will be ignored.`, variant: "destructive", duration: 5000 });
             return false;
@@ -123,7 +122,6 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
         });
 
       if (finalSlots.length === 0 && availabilitySlots.trim() !== '' && !isUnavailable) {
-        // User entered text but it was all invalid, effectively making it unavailable
         toast({ title: "No Valid Slots", description: "No valid time slots were entered. Please check format (HH:mm-HH:mm) and times. Saving as unavailable for this date.", variant: "default", duration: 7000 });
       }
     }
@@ -131,7 +129,6 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
         await onSave(dateStr, finalSlots);
         // Parent handles closing dialog on success
     } catch (error) {
-        // Error toast handled by parent's onSave implementation
         console.error("Error in ManageAvailabilityDialog handleSaveClick:", error);
     } finally {
         setIsSubmitting(false);
@@ -200,7 +197,7 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
                   checked={isUnavailable}
                   onCheckedChange={(checked) => {
                       setIsUnavailable(checked as boolean);
-                      if (checked) setAvailabilitySlots(''); // Clear slots if marked unavailable
+                      if (checked) setAvailabilitySlots('');
                   }}
                   disabled={!selectedDate || isSubmitting}
                 />
@@ -222,7 +219,9 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
         </ScrollArea>
         <Separator />
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+            <X className="mr-2 h-4 w-4" />Cancel
+          </Button>
           <Button onClick={handleSaveClick} disabled={!selectedDate || isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {isSubmitting ? 'Saving...' : 'Save Availability'}

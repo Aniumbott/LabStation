@@ -14,7 +14,7 @@ import {
 } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { addNotification, addAuditLog } from '@/lib/mock-data'; // AuditLog and Notification are still mock
+import { addNotification, addAuditLog } from '@/lib/mock-data';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -34,6 +34,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       setIsLoading(true);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('login_message'); // Clear any previous login messages
+      }
+
       if (firebaseUser) {
         const userDocRef = doc(db, "users", firebaseUser.uid);
         try {
@@ -48,12 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 role: userProfileData.role as RoleName,
                 status: userProfileData.status as User['status'],
                 avatarUrl: userProfileData.avatarUrl || firebaseUser.photoURL || 'https://placehold.co/100x100.png',
-                createdAt: userProfileData.createdAt instanceof Timestamp ? userProfileData.createdAt.toDate() : new Date(userProfileData.createdAt || Date.now()),
+                createdAt: userProfileData.createdAt instanceof Timestamp ? userProfileData.createdAt.toDate() : new Date(),
               };
               setCurrentUser(appUser);
               if (typeof window !== 'undefined') {
                 localStorage.setItem('labstation_user', JSON.stringify(appUser));
-                localStorage.removeItem('login_message');
               }
             } else {
               let message = 'Your account is not active.';
@@ -63,12 +66,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 message = 'Your account has been suspended.';
               }
               if (typeof window !== 'undefined') localStorage.setItem('login_message', message);
-              await firebaseSignOut(auth); // Sign out from Firebase if not active in Firestore
+              await firebaseSignOut(auth);
               setCurrentUser(null);
               if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
             }
           } else {
-            console.warn(`User ${firebaseUser.uid} authenticated with Firebase but no Firestore profile found. Signing out.`);
+            console.warn(`User ${firebaseUser.uid} authenticated but no Firestore profile found. Signing out.`);
             if (typeof window !== 'undefined') localStorage.setItem('login_message', 'User profile not found. Please contact support.');
             await firebaseSignOut(auth);
             setCurrentUser(null);
@@ -90,21 +93,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  // Attempt to load user from localStorage on initial client-side mount
   useEffect(() => {
-    if (typeof window !== 'undefined' && !auth.currentUser) { // Only if Firebase hasn't initialized auth yet
+    if (!isLoading && typeof window !== 'undefined' && !auth.currentUser) {
       const storedUser = localStorage.getItem('labstation_user');
       if (storedUser) {
         try {
           const parsedUser: User = JSON.parse(storedUser);
-           // Basic check, onAuthStateChanged will be the ultimate authority
+          // Basic check, onAuthStateChanged is the authority.
+          // If Firebase still thinks no one is logged in, we clear local storage.
           if (parsedUser && parsedUser.id && parsedUser.status === 'active') {
-            // Temporarily set for faster UI update, onAuthStateChanged will confirm
-            // setCurrentUser(parsedUser); 
-            // This can cause issues if Firebase session is truly expired.
-            // It's safer to let onAuthStateChanged be the sole source of truth for setting currentUser initially.
+            // We let onAuthStateChanged handle setting currentUser.
+            // If onAuthStateChanged hasn't run or cleared the user, it implies a discrepancy.
           } else {
-            localStorage.removeItem('labstation_user'); // Clear invalid stored user
+            localStorage.removeItem('labstation_user');
           }
         } catch (e) {
           console.error("Failed to parse user from localStorage", e);
@@ -112,19 +113,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-    // We set isLoading to false initially true and let onAuthStateChanged handle it.
-    // This effect is more about cleanup of potentially stale localStorage data.
-  }, []);
+  }, [isLoading]);
 
 
-  const login = async (email: string, password?: string): Promise<{ success: boolean; message?: string }> => {
+  const login = useCallback(async (email: string, password?: string): Promise<{ success: boolean; message?: string }> => {
     if (!password) return { success: false, message: "Password is required." };
     setIsLoading(true);
     if (typeof window !== 'undefined') localStorage.removeItem('login_message');
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged will now handle setting currentUser and isLoading to false after Firestore check
-      return { success: true }; // Firebase auth success, actual app login depends on onAuthStateChanged
+      // onAuthStateChanged will handle setting currentUser and setting isLoading to false after Firestore check
+      return { success: true };
     } catch (error: any) {
       console.error("Firebase login error:", error);
       let message = "Login failed. Please check your credentials.";
@@ -135,36 +134,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (error.code === 'auth/user-disabled') {
          message = "This user account has been disabled by Firebase.";
       }
-      setIsLoading(false); // Set loading false here on explicit error
+      setIsLoading(false);
       return { success: false, message };
     }
-  };
+  }, []);
 
-  const logout = async (): Promise<void> => {
+  const logout = useCallback(async (): Promise<void> => {
+    setIsLoading(true);
     try {
       await firebaseSignOut(auth);
-      // onAuthStateChanged will set currentUser to null.
-      if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
+      // onAuthStateChanged will set currentUser to null and isLoading to false.
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('labstation_user');
+        localStorage.removeItem('login_message');
+      }
     } catch (error) {
       console.error("Firebase logout error:", error);
-      // Manually clear state just in case
-      setCurrentUser(null);
+      setCurrentUser(null); // Force clear context state
       if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const signup = async (name: string, email: string, password?: string): Promise<{ success: boolean; message: string; userId?: string }> => {
+  const signup = useCallback(async (name: string, email: string, password?: string): Promise<{ success: boolean; message: string; userId?: string }> => {
     if (!password) return { success: false, message: "Password is required." };
     setIsLoading(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
 
-      // Update Firebase Auth profile (optional but good practice)
       await firebaseUpdateProfile(firebaseUser, { displayName: name, photoURL: 'https://placehold.co/100x100.png' });
 
-      // Create user profile in Firestore
       const userDocRef = doc(db, "users", firebaseUser.uid);
       const newUserProfileData = {
         name: name,
@@ -176,18 +176,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
       await setDoc(userDocRef, newUserProfileData);
 
-      // Notify admin (mock notification)
       addNotification(
-        "u1", // Placeholder for actual Admin User ID lookup
+        "admin_user_id_placeholder", // Placeholder, ideally fetch actual admin IDs
         'New Signup Request',
         `User ${name} (${email}) has signed up and is awaiting approval.`,
         'signup_pending_admin',
-        '/admin/users' // Now points to the unified users page
+        '/admin/users'
       );
       addAuditLog(firebaseUser.uid, name, 'USER_CREATED', { entityType: 'User', entityId: firebaseUser.uid, details: `User ${name} (${email}) signed up. Status: pending_approval.`});
 
-
-      await firebaseSignOut(auth); // Sign out user immediately; they need approval
+      await firebaseSignOut(auth);
       setIsLoading(false);
       return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: firebaseUser.uid };
     } catch (error: any) {
@@ -201,11 +199,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return { success: false, message };
     }
-  };
+  }, []);
 
- const updateUserProfile = useCallback(async (updatedFields: Partial<Pick<User, 'name' | 'avatarUrl'>>): Promise<{ success: boolean; message?: string }> => {
+  const updateUserProfile = useCallback(async (updatedFields: Partial<Pick<User, 'name' | 'avatarUrl'>>): Promise<{ success: boolean; message?: string }> => {
     const firebaseUser = auth.currentUser;
-    if (!firebaseUser || !currentUser) { // Check against context's currentUser as well
+    if (!firebaseUser || !currentUser) {
       return { success: false, message: "No user logged in or user data unavailable." };
     }
     
@@ -224,13 +222,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const userDocRef = doc(db, "users", firebaseUser.uid);
+      const userDocSnap = await getDoc(userDocRef); // Fetch current Firestore doc
       const firestoreUpdates: Partial<Pick<User, 'name' | 'avatarUrl'>> = {};
+
       if(updatedFields.name) firestoreUpdates.name = updatedFields.name;
-      // Avatar URL update in Firestore (if different from Auth or if Auth doesn't have one)
+      
       if(updatedFields.avatarUrl && updatedFields.avatarUrl !== (userDocSnap.data()?.avatarUrl || firebaseUser.photoURL)) {
           firestoreUpdates.avatarUrl = updatedFields.avatarUrl;
       } else if (!updatedFields.avatarUrl && firebaseUser.photoURL && firebaseUser.photoURL !== (userDocSnap.data()?.avatarUrl)) {
-          // If form clears avatarUrl but Firebase Auth has one, sync it to Firestore
           firestoreUpdates.avatarUrl = firebaseUser.photoURL;
       }
 
@@ -240,10 +239,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         addAuditLog(currentUser.id, currentUser.name, 'USER_UPDATED', { entityType: 'User', entityId: currentUser.id, details: `Profile updated: ${Object.keys(firestoreUpdates).join(', ')} changed.`});
       }
       
-      // Refetch the user data from Firestore to ensure context has the latest
-      const updatedUserDocSnap = await getDoc(userDocRef);
-      if (updatedUserDocSnap.exists()) {
-        const updatedProfileData = updatedUserDocSnap.data();
+      const updatedUserDocSnapAfterWrite = await getDoc(userDocRef);
+      if (updatedUserDocSnapAfterWrite.exists()) {
+        const updatedProfileData = updatedUserDocSnapAfterWrite.data();
         const updatedAppUser: User = {
           id: firebaseUser.uid,
           name: updatedProfileData.name || firebaseUser.displayName || 'Unnamed User',
@@ -251,7 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role: updatedProfileData.role as RoleName,
           status: updatedProfileData.status as User['status'],
           avatarUrl: updatedProfileData.avatarUrl || firebaseUser.photoURL || 'https://placehold.co/100x100.png',
-          createdAt: updatedProfileData.createdAt instanceof Timestamp ? updatedProfileData.createdAt.toDate() : new Date(updatedProfileData.createdAt || Date.now()),
+          createdAt: updatedProfileData.createdAt instanceof Timestamp ? updatedProfileData.createdAt.toDate() : new Date(),
         };
         setCurrentUser(updatedAppUser);
         if (typeof window !== 'undefined') {
@@ -266,7 +264,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Firebase profile update error:", error);
       return { success: false, message: error.message || "Failed to update profile." };
     }
-  }, [currentUser]); // Added currentUser as a dependency
+  }, [currentUser]);
 
   return (
     <AuthContext.Provider value={{ currentUser, isLoading, login, logout, signup, updateUserProfile }}>

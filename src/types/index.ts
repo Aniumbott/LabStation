@@ -44,15 +44,16 @@ export interface Resource {
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
-  purchaseDate?: Date; // Changed from string to Date for frontend model
+  purchaseDate?: Date; // Changed to Date for frontend model, will be Firestore Timestamp
   notes?: string;
   remoteAccess?: RemoteAccessDetails;
   allowQueueing?: boolean;
+  // lastUpdatedAt and createdAt are managed by Firestore serverTimestamp
 }
 
 export interface BookingUsageDetails {
-  actualStartTime?: Date; // Changed from string to Date
-  actualEndTime?: Date;   // Changed from string to Date
+  actualStartTime?: Date; // Changed to Date
+  actualEndTime?: Date;   // Changed to Date
   outcome?: 'Success' | 'Failure' | 'Interrupted' | 'Not Applicable';
   dataStorageLocation?: string;
   usageComments?: string;
@@ -64,9 +65,9 @@ export interface Booking {
   id: string;
   resourceId: string;
   userId: string;
-  startTime: Date; // JS Date object
-  endTime: Date;   // JS Date object
-  createdAt: Date; // JS Date object
+  startTime: Date; // JS Date object after conversion from Firestore Timestamp
+  endTime: Date;   // JS Date object after conversion from Firestore Timestamp
+  createdAt: Date; // JS Date object after conversion from Firestore Timestamp
   status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted';
   notes?: string;
   usageDetails?: BookingUsageDetails;
@@ -82,7 +83,7 @@ export interface User {
   role: RoleName;
   avatarUrl?: string;
   status: UserStatus;
-  createdAt: Date; // Changed from string to Date
+  createdAt: Date; // JS Date object after conversion from Firestore Timestamp
 }
 
 export type MaintenanceRequestStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed';
@@ -94,8 +95,8 @@ export interface MaintenanceRequest {
   issueDescription: string;
   status: MaintenanceRequestStatus;
   assignedTechnicianId?: string;
-  dateReported: Date; // Changed from string to Date
-  dateResolved?: Date; // Changed from string to Date
+  dateReported: Date;  // JS Date object after conversion from Firestore Timestamp
+  dateResolved?: Date; // JS Date object after conversion from Firestore Timestamp
   resolutionNotes?: string;
 }
 
@@ -119,7 +120,7 @@ export interface Notification {
   message: string;
   type: NotificationType;
   isRead: boolean;
-  createdAt: string; // Keep as ISO string for display, source is Firestore Timestamp
+  createdAt: Date; // JS Date object after conversion from Firestore Timestamp
   linkTo?: string;
 }
 
@@ -151,7 +152,7 @@ export type AuditActionType =
 
 export interface AuditLogEntry {
   id: string;
-  timestamp: string; // Keep as ISO string for display, source is Firestore Timestamp
+  timestamp: Date; // JS Date object after conversion from Firestore Timestamp
   userId: string;
   userName: string;
   action: AuditActionType;

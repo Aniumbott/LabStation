@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { CalendarOff, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Repeat, X, Loader2 } from 'lucide-react';
 import type { BlackoutDate, RecurringBlackoutRule, RoleName } from '@/types';
-import { addAuditLog } from '@/lib/mock-data'; // AuditLog is still mock
+import { addAuditLog } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -40,10 +40,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"; // AlertDialogTrigger is used via AlertDialog
+} from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { format, parseISO, isValid as isValidDate } from 'date-fns';
+import { format, parseISO, isValid as isValidDateFn, Timestamp } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -51,7 +51,7 @@ import { Separator } from '@/components/ui/separator';
 import { BlackoutDateFormDialog, BlackoutDateFormValues } from '@/components/admin/blackout-date-form-dialog';
 import { RecurringBlackoutRuleFormDialog, RecurringBlackoutRuleFormValues } from '@/components/admin/recurring-blackout-rule-form-dialog';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 
 export default function BlackoutDatesPage() {
   const { toast } = useToast();
@@ -69,7 +69,6 @@ export default function BlackoutDatesPage() {
   const [editingRecurringRule, setEditingRecurringRule] = useState<RecurringBlackoutRule | null>(null);
   const [ruleToDelete, setRuleToDelete] = useState<RecurringBlackoutRule | null>(null);
 
-  // Filter Dialog State
   const [isDateFilterDialogOpen, setIsDateFilterDialogOpen] = useState(false);
   const [tempDateSearchTerm, setTempDateSearchTerm] = useState('');
   const [activeDateSearchTerm, setActiveDateSearchTerm] = useState('');
@@ -77,21 +76,17 @@ export default function BlackoutDatesPage() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Fetch Blackout Dates
-      // Firestore Index required: blackoutDates collection: date (ASC)
       const boQuery = query(collection(db, "blackoutDates"), orderBy("date", "asc"));
       const boSnapshot = await getDocs(boQuery);
       setBlackoutDates(boSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate)));
 
-      // Fetch Recurring Rules
-      // Firestore Index required: recurringBlackoutRules collection: name (ASC)
       const rrQuery = query(collection(db, "recurringBlackoutRules"), orderBy("name", "asc"));
       const rrSnapshot = await getDocs(rrQuery);
       setRecurringRules(rrSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as RecurringBlackoutRule)));
 
     } catch (error: any) {
       console.error("Error fetching blackout data:", error);
-      toast({ title: "Error", description: `Failed to load blackout data. ${error.message}`, variant: "destructive" });
+      toast({ title: "Database Error", description: `Failed to load blackout data: ${error.message}`, variant: "destructive" });
       setBlackoutDates([]);
       setRecurringRules([]);
     }
@@ -115,7 +110,6 @@ export default function BlackoutDatesPage() {
                (bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm)) ||
                (bd.date && format(parseISO(bd.date), 'PPP').toLowerCase().includes(lowerSearchTerm));
     });
-    // Already sorted by Firestore query
   }, [blackoutDates, activeDateSearchTerm]);
 
   const handleOpenNewDateDialog = () => {
@@ -130,12 +124,12 @@ export default function BlackoutDatesPage() {
 
   const handleSaveBlackoutDate = async (data: BlackoutDateFormValues) => {
     if (!currentUser) return;
-    const formattedDateOnly = format(data.date, 'yyyy-MM-dd'); // Store date as YYYY-MM-DD string
+    const formattedDateOnly = format(data.date, 'yyyy-MM-dd');
     const displayDate = format(data.date, 'PPP');
 
     const blackoutData = {
-      date: formattedDateOnly,
-      reason: data.reason || null, // Store null if empty
+      date: formattedDateOnly, // Stored as YYYY-MM-DD string
+      reason: data.reason || null,
     };
 
     setIsLoading(true);
@@ -146,6 +140,7 @@ export default function BlackoutDatesPage() {
         addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_UPDATED', { entityType: 'BlackoutDate', entityId: editingBlackoutDate.id, details: `Blackout Date for ${displayDate} updated. Reason: ${blackoutData.reason || 'N/A'}`});
         toast({ title: 'Blackout Date Updated', description: `Blackout date for ${displayDate} has been updated.` });
       } else {
+        // For new dates, Firestore will auto-generate ID. We don't pre-set 'id' here.
         const docRef = await addDoc(collection(db, "blackoutDates"), blackoutData);
         addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_CREATED', { entityType: 'BlackoutDate', entityId: docRef.id, details: `Blackout Date for ${displayDate} created. Reason: ${blackoutData.reason || 'N/A'}`});
         toast({ title: 'Blackout Date Added', description: `Blackout date for ${displayDate} has been added.` });
@@ -153,29 +148,31 @@ export default function BlackoutDatesPage() {
       setIsDateFormDialogOpen(false);
       setEditingBlackoutDate(null);
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving blackout date:", error);
-      toast({ title: "Save Failed", description: "Could not save blackout date.", variant: "destructive"});
-      setIsLoading(false); // Ensure loading is false on error
+      toast({ title: "Save Failed", description: `Could not save blackout date: ${error.message}`, variant: "destructive"});
+    } finally {
+        setIsLoading(false);
     }
   };
 
   const handleDeleteBlackoutDate = async (blackoutDateId: string) => {
     if(!currentUser) return;
-    const deletedDate = blackoutDates.find(bd => bd.id === blackoutDateId);
-    if (!deletedDate) return;
+    const deletedDateObj = blackoutDates.find(bd => bd.id === blackoutDateId);
+    if (!deletedDateObj) return;
 
     setIsLoading(true);
     try {
       const docRef = doc(db, "blackoutDates", blackoutDateId);
       await deleteDoc(docRef);
-      addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Blackout Date for ${format(parseISO(deletedDate.date), 'PPP')} (Reason: ${deletedDate.reason || 'N/A'}) deleted.`});
-      toast({ title: "Blackout Date Removed", description: `Blackout date for "${format(parseISO(deletedDate.date), 'PPP')}" has been removed.`, variant: "destructive" });
+      addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Blackout Date for ${format(parseISO(deletedDateObj.date), 'PPP')} (Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`});
+      toast({ title: "Blackout Date Removed", description: `Blackout date for "${format(parseISO(deletedDateObj.date), 'PPP')}" has been removed.`, variant: "destructive" });
       setDateToDelete(null);
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error deleting blackout date:", error);
-        toast({ title: "Delete Failed", description: "Could not remove blackout date.", variant: "destructive"});
+        toast({ title: "Delete Failed", description: `Could not remove blackout date: ${error.message}`, variant: "destructive"});
+    } finally {
         setIsLoading(false);
     }
   };
@@ -229,36 +226,38 @@ export default function BlackoutDatesPage() {
       setIsRecurringFormDialogOpen(false);
       setEditingRecurringRule(null);
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving recurring rule:", error);
-      toast({ title: "Save Failed", description: "Could not save recurring rule.", variant: "destructive"});
-      setIsLoading(false);
+      toast({ title: "Save Failed", description: `Could not save recurring rule: ${error.message}`, variant: "destructive"});
+    } finally {
+        setIsLoading(false);
     }
   };
 
   const handleDeleteRecurringRule = async (ruleId: string) => {
     if(!currentUser) return;
-    const deletedRule = recurringRules.find(r => r.id === ruleId);
-    if (!deletedRule) return;
+    const deletedRuleObj = recurringRules.find(r => r.id === ruleId);
+    if (!deletedRuleObj) return;
 
     setIsLoading(true);
     try {
       const docRef = doc(db, "recurringBlackoutRules", ruleId);
       await deleteDoc(docRef);
-      addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Recurring rule '${deletedRule.name}' deleted.`});
-      toast({ title: "Recurring Rule Removed", description: `Recurring rule "${deletedRule.name}" has been removed.`, variant: "destructive" });
+      addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Recurring rule '${deletedRuleObj.name}' deleted.`});
+      toast({ title: "Recurring Rule Removed", description: `Recurring rule "${deletedRuleObj.name}" has been removed.`, variant: "destructive" });
       setRuleToDelete(null);
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting recurring rule:", error);
-      toast({ title: "Delete Failed", description: "Could not remove recurring rule.", variant: "destructive"});
+      toast({ title: "Delete Failed", description: `Could not remove recurring rule: ${error.message}`, variant: "destructive"});
+    } finally {
       setIsLoading(false);
     }
   };
 
   const canManageBlackouts = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
 
-  if (isLoading && blackoutDates.length === 0 && recurringRules.length === 0) { // Show loader only on initial full load
+  if (isLoading && blackoutDates.length === 0 && recurringRules.length === 0) {
     return <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading blackout data...</div>;
   }
 
@@ -269,6 +268,16 @@ export default function BlackoutDatesPage() {
           title="Lab Blackout Dates & Recurring Closures"
           description="Define specific dates and recurring rules when the entire lab is closed or unavailable."
           icon={CalendarOff}
+          actions={ canManageBlackouts && // Group buttons only if user can manage
+            <div className="flex items-center gap-2"> {/* Combined container for Add buttons */}
+               <Button onClick={handleOpenNewDateDialog} size="sm">
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Blackout Date
+                </Button>
+                <Button onClick={handleOpenNewRecurringDialog} size="sm">
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Recurring Rule
+                </Button>
+            </div>
+          }
         />
 
         <Card>
@@ -277,56 +286,49 @@ export default function BlackoutDatesPage() {
               <CardTitle>Specific Blackout Dates</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">Manage individual lab closure dates.</p>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Dialog open={isDateFilterDialogOpen} onOpenChange={setIsDateFilterDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <FilterIcon className="mr-2 h-4 w-4" />
-                    Filter Dates
-                    {activeDateFilterCount > 0 && (
-                      <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
-                        {activeDateFilterCount}
-                      </Badge>
-                    )}
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Filter Blackout Dates</DialogTitle>
-                    <DialogDescription>Refine the list of blackout dates by keyword (reason or date).</DialogDescription>
-                  </DialogHeader>
-                  <Separator className="my-4" />
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="blackoutSearchDialog" className="text-sm font-medium mb-1 block">Search (Reason/Date)</Label>
-                      <div className="relative">
-                        <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          id="blackoutSearchDialog"
-                          type="search"
-                          placeholder="e.g., Holiday, Maintenance, May 20..."
-                          value={tempDateSearchTerm}
-                          onChange={(e) => setTempDateSearchTerm(e.target.value)}
-                          className="h-9 pl-8"
-                        />
-                      </div>
+            <Dialog open={isDateFilterDialogOpen} onOpenChange={setIsDateFilterDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <FilterIcon className="mr-2 h-4 w-4" />
+                  Filter Dates
+                  {activeDateFilterCount > 0 && (
+                    <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
+                      {activeDateFilterCount}
+                    </Badge>
+                  )}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Filter Blackout Dates</DialogTitle>
+                  <DialogDescription>Refine the list of blackout dates by keyword (reason or date).</DialogDescription>
+                </DialogHeader>
+                <Separator className="my-4" />
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="blackoutSearchDialog" className="text-sm font-medium mb-1 block">Search (Reason/Date)</Label>
+                    <div className="relative">
+                      <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="blackoutSearchDialog"
+                        type="search"
+                        placeholder="e.g., Holiday, Maintenance, May 20..."
+                        value={tempDateSearchTerm}
+                        onChange={(e) => setTempDateSearchTerm(e.target.value)}
+                        className="h-9 pl-8"
+                      />
                     </div>
                   </div>
-                  <DialogFooter className="pt-6 border-t">
-                    <Button variant="ghost" onClick={resetDateDialogFilters} className="mr-auto">
-                      <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
-                    </Button>
-                    <Button variant="outline" onClick={() => setIsDateFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
-                    <Button onClick={handleApplyDateDialogFilters}>Apply Filters</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-              {canManageBlackouts && (
-                <Button onClick={handleOpenNewDateDialog} size="sm">
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Blackout Date
-                </Button>
-              )}
-            </div>
+                </div>
+                <DialogFooter className="pt-6 border-t mt-4">
+                  <Button variant="ghost" onClick={resetDateDialogFilters} className="mr-auto">
+                    <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
+                  </Button>
+                  <Button variant="outline" onClick={() => setIsDateFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
+                  <Button onClick={handleApplyDateDialogFilters}>Apply Filters</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </CardHeader>
           <CardContent>
             {isLoading && filteredBlackoutDates.length === 0 && !activeDateSearchTerm ? (
@@ -344,7 +346,7 @@ export default function BlackoutDatesPage() {
                   <TableBody>
                     {filteredBlackoutDates.map((bd) => (
                       <TableRow key={bd.id}>
-                        <TableCell className="font-medium">{isValidDate(parseISO(bd.date)) ? format(parseISO(bd.date), 'PPP') : 'Invalid Date'}</TableCell>
+                        <TableCell className="font-medium">{isValidDateFn(parseISO(bd.date)) ? format(parseISO(bd.date), 'PPP') : 'Invalid Date'}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{bd.reason || 'N/A'}</TableCell>
                         {canManageBlackouts && (
                           <TableCell className="text-right space-x-1">
@@ -357,7 +359,7 @@ export default function BlackoutDatesPage() {
                               </TooltipTrigger>
                               <TooltipContent><p>Edit Blackout Date</p></TooltipContent>
                             </Tooltip>
-                            <AlertDialog> {/* Removed AlertDialogTrigger from TooltipTrigger child */}
+                            <AlertDialog>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <AlertDialogTrigger asChild>
@@ -375,7 +377,7 @@ export default function BlackoutDatesPage() {
                                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                     <AlertDialogDescription>
                                       This action cannot be undone. This will remove the blackout date
-                                      <span className="font-semibold"> "{isValidDate(parseISO(dateToDelete.date)) ? format(parseISO(dateToDelete.date), 'PPP') : ''}"</span>.
+                                      <span className="font-semibold"> "{isValidDateFn(parseISO(dateToDelete.date)) ? format(parseISO(dateToDelete.date), 'PPP') : ''}"</span>.
                                       All resources will be considered available on this day unless specified otherwise.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
@@ -410,7 +412,7 @@ export default function BlackoutDatesPage() {
                       <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                     </Button>
                   ) : (
-                     canManageBlackouts && !isLoading && ( // Ensure not loading before showing "Add First"
+                     canManageBlackouts && !isLoading && blackoutDates.length === 0 && (
                       <Button onClick={handleOpenNewDateDialog} size="sm">
                         <PlusCircle className="mr-2 h-4 w-4" /> Add First Blackout Date
                       </Button>
@@ -430,11 +432,7 @@ export default function BlackoutDatesPage() {
               <CardTitle>Recurring Lab Closures</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">Manage weekly or other recurring unavailability rules.</p>
             </div>
-            {canManageBlackouts && (
-              <Button onClick={handleOpenNewRecurringDialog} size="sm">
-                <PlusCircle className="mr-2 h-4 w-4" /> Add Recurring Rule
-              </Button>
-            )}
+            {/* Removed Add button from here as it's in PageHeader actions */}
           </CardHeader>
           <CardContent>
              {isLoading && recurringRules.length === 0 ? (
@@ -467,7 +465,7 @@ export default function BlackoutDatesPage() {
                               </TooltipTrigger>
                               <TooltipContent><p>Edit Recurring Rule</p></TooltipContent>
                             </Tooltip>
-                            <AlertDialog> {/* Removed AlertDialogTrigger from TooltipTrigger child */}
+                            <AlertDialog>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <AlertDialogTrigger asChild>
@@ -510,7 +508,7 @@ export default function BlackoutDatesPage() {
                   <Repeat className="mx-auto h-10 w-10 mb-3 opacity-50" />
                   <p className="font-medium">No Recurring Lab Closure Rules Defined</p>
                   <p className="text-xs mb-3">Add rules for regular closures like weekends or weekly maintenance.</p>
-                   {canManageBlackouts && !isLoading && ( // Ensure not loading before showing "Add First"
+                   {canManageBlackouts && !isLoading && recurringRules.length === 0 && (
                       <Button onClick={handleOpenNewRecurringDialog} size="sm">
                         <PlusCircle className="mr-2 h-4 w-4" /> Add First Recurring Rule
                       </Button>

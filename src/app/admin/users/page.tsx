@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
+import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, ThumbsUp, ThumbsDown, Loader2, X } from 'lucide-react';
 import type { User, RoleName, UserStatus } from '@/types';
 import {
   Table,
@@ -55,7 +55,7 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, Timestamp, query, orderBy } from 'firebase/firestore';
 
 
-const userStatusesList: (UserStatus | 'all')[] = ['all', 'active', 'pending_approval', 'suspended'];
+const userStatusesListForFilter: (UserStatus | 'all')[] = ['all', 'active', 'pending_approval', 'suspended'];
 
 const roleIcons: Record<User['role'], React.ElementType> = {
   'Admin': ShieldAlert,
@@ -86,7 +86,7 @@ const getStatusBadgeVariant = (status: UserStatus): "default" | "secondary" | "d
 
 export default function UsersPage() {
   const { toast } = useToast();
-  const { currentUser: loggedInUser } = useAuth(); // Renamed to avoid conflict with mapped 'user'
+  const { currentUser: loggedInUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
@@ -94,22 +94,18 @@ export default function UsersPage() {
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
-  // Active filters for the page
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+  const [tempSearchTerm, setTempSearchTerm] = useState('');
+  const [tempFilterRole, setTempFilterRole] = useState<RoleName | 'all'>('all');
+  const [tempFilterStatus, setTempFilterStatus] = useState<UserStatus | 'all'>('all');
+
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterRole, setActiveFilterRole] = useState<RoleName | 'all'>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<UserStatus | 'all'>('all');
 
-  // Filter Dialog State
-  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-  const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
-  const [tempFilterRole, setTempFilterRole] = useState<RoleName | 'all'>(activeFilterRole);
-  const [tempFilterStatus, setTempFilterStatus] = useState<UserStatus | 'all'>(activeFilterStatus);
-
   const fetchUsers = useCallback(async () => {
     setIsLoadingUsers(true);
     try {
-      // Firestore Index required: users collection: status (ASC), name (ASC) - for combined filtering/sorting
-      // Or more simply: users collection: name (ASC) if primary sort is by name
       const usersQuery = query(collection(db, "users"), orderBy("name", "asc"));
       const querySnapshot = await getDocs(usersQuery);
       const fetchedUsers: User[] = querySnapshot.docs.map((docSnap) => {
@@ -121,20 +117,19 @@ export default function UsersPage() {
             role: data.role || 'Researcher',
             status: data.status || 'pending_approval',
             avatarUrl: data.avatarUrl || 'https://placehold.co/100x100.png',
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt || Date.now()),
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
         } as User;
       });
-      // Further client-side sort to bring pending_approval to top if not handled by Firestore query
       fetchedUsers.sort((a,b) => {
         if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
         if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
-        return a.name.localeCompare(b.name);
+        return (a.name || '').localeCompare(b.name || '');
       });
       setUsers(fetchedUsers);
     } catch (error) {
       console.error("Error fetching users: ", error);
       toast({ title: "Error", description: "Failed to fetch users from database.", variant: "destructive" });
-      setUsers([]); // Set to empty on error
+      setUsers([]);
     }
     setIsLoadingUsers(false);
   }, [toast]);
@@ -142,7 +137,6 @@ export default function UsersPage() {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
-
 
   useEffect(() => {
     if (isFilterDialogOpen) {
@@ -181,7 +175,7 @@ export default function UsersPage() {
     setActiveFilterRole('all');
     setActiveFilterStatus('all');
     resetDialogFilters();
-    setIsFilterDialogOpen(false);
+    setIsFilterDialogOpen(false); // Also close dialog if open
   };
 
   const handleOpenNewUserDialog = () => {
@@ -200,47 +194,46 @@ export default function UsersPage() {
       return;
     }
     
-    setIsLoadingUsers(true);
+    setIsLoadingUsers(true); // Use main page loader for simplicity during save
     if (editingUser) {
       try {
         const userDocRef = doc(db, "users", editingUser.id);
         await updateDoc(userDocRef, {
           name: data.name,
           role: data.role,
+          // Email and status are not editable by admin in this form, status is via Approve/Suspend
         });
         addAuditLog(loggedInUser.id, loggedInUser.name, 'USER_UPDATED', { entityType: 'User', entityId: editingUser.id, details: `User ${data.name} (ID: ${editingUser.id}) details updated. Role set to ${data.role}.` });
         toast({ title: 'User Updated', description: `User ${data.name} has been updated.` });
       } catch (error) {
         console.error("Error updating user:", error);
-        toast({ title: "Error", description: "Failed to update user.", variant: "destructive" });
+        toast({ title: "Update Failed", description: "Could not update user profile.", variant: "destructive" });
       }
-    } else {
+    } else { // Admin creating a new user profile (not a Firebase Auth user)
       try {
-        // This flow is for an Admin creating a Firestore profile ONLY.
-        // This does NOT create a Firebase Auth user.
-        const newUserId = `admin_created_${Date.now()}`;
+        const newUserId = `admin_created_${Date.now()}`; // Not ideal for production, use Firestore auto-ID or a robust UUID
         const userDocRef = doc(db, "users", newUserId);
         await setDoc(userDocRef, {
           name: data.name,
-          email: data.email,
+          email: data.email, // Admin sets email for this profile
           role: data.role,
           avatarUrl: 'https://placehold.co/100x100.png',
-          status: 'active' as User['status'],
+          status: 'active' as User['status'], // Admin created users are active by default
           createdAt: serverTimestamp(),
         });
-        addAuditLog(loggedInUser.id, loggedInUser.name, 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User profile for ${data.name} created by admin with role ${data.role}. This user cannot log in without a corresponding Auth account.` });
+        addAuditLog(loggedInUser.id, loggedInUser.name, 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User profile for ${data.name} (${data.email}) created by admin with role ${data.role}. This user cannot log in without a corresponding Auth account.` });
         toast({ title: 'User Profile Created', description: `User profile for ${data.name} with role ${data.role} has been created. They cannot log in without a Firebase Auth account.` });
       } catch (error: any) {
         console.error("Error creating user profile by admin:", error);
-        toast({ title: "Error", description: "Failed to create user profile.", variant: "destructive" });
+        toast({ title: "Creation Failed", description: "Could not create user profile.", variant: "destructive" });
       }
     }
     setIsFormDialogOpen(false);
     setEditingUser(null);
-    await fetchUsers();
+    await fetchUsers(); // Refreshes list and implicitly sets isLoadingUsers to false
   };
 
- const handleDeleteUser = async (userId: string) => {
+  const handleDeleteUser = async (userId: string) => {
     if (!loggedInUser || loggedInUser.role !== 'Admin') {
         toast({ title: "Permission Denied", description: "You are not authorized to perform this action.", variant: "destructive" });
         return;
@@ -254,12 +247,11 @@ export default function UsersPage() {
       toast({ title: "User Profile Deleted", description: `User "${userToDeleteDetails?.name}" Firestore profile has been removed. Firebase Auth user may still exist if one was associated.`, variant: "destructive" });
     } catch (error) {
       console.error("Error deleting user profile:", error);
-      toast({ title: "Error", description: "Failed to delete user profile.", variant: "destructive" });
+      toast({ title: "Delete Failed", description: "Could not delete user profile.", variant: "destructive" });
     }
     setUserToDelete(null);
     await fetchUsers();
   };
-
 
   const handleApproveUser = async (userId: string) => {
     if (!loggedInUser || loggedInUser.role !== 'Admin') {
@@ -286,11 +278,11 @@ export default function UsersPage() {
             'signup_approved',
             '/login'
         );
+        await fetchUsers(); // Refetch to update status and actions in UI
     } catch (error) {
         console.error("Error approving user:", error);
         toast({ title: 'Approval Failed', description: `Could not approve user ${userToApproveDetails.name}.`, variant: 'destructive' });
-    } finally {
-        await fetchUsers(); // Ensure list is fresh even if an error occurred elsewhere
+        setIsLoadingUsers(false); // Ensure loader stops on error
     }
   };
 
@@ -317,12 +309,10 @@ export default function UsersPage() {
     }
   };
 
-
   const activeFilterCount = [activeSearchTerm !== '', activeFilterRole !== 'all', activeFilterStatus !== 'all'].filter(Boolean).length;
   const canAddUsers = loggedInUser?.role === 'Admin';
-  const canManageUsers = loggedInUser?.role === 'Admin';
-  const canApproveRejectSignups = loggedInUser?.role === 'Admin';
-
+  const canManageUsersGeneral = loggedInUser?.role === 'Admin'; // Used for edit/delete active users
+  const canApproveRejectSignups = loggedInUser?.role === 'Admin'; // Used for approve/reject pending users
 
   return (
     <div className="space-y-8">
@@ -344,7 +334,7 @@ export default function UsersPage() {
                   )}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="w-full max-w-xs sm:max-w-sm md:max-w-md">
+              <DialogContent className="w-full max-w-md">
                 <DialogHeader>
                   <DialogTitle>Filter Users</DialogTitle>
                   <DialogDescription>
@@ -352,10 +342,10 @@ export default function UsersPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <Separator className="my-4" />
-                <div className="space-y-4">
+                <div className="flex flex-col gap-4">
                   <div>
-                    <Label htmlFor="userSearchDialog" className="text-sm font-medium mb-1 block">Search by Name/Email</Label>
-                    <div className="relative">
+                    <Label htmlFor="userSearchDialog">Search by Name/Email</Label>
+                    <div className="relative mt-1">
                        <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                         id="userSearchDialog"
@@ -368,9 +358,9 @@ export default function UsersPage() {
                     </div>
                   </div>
                    <div>
-                    <Label htmlFor="userRoleDialog" className="text-sm font-medium mb-1 block">Role</Label>
+                    <Label htmlFor="userRoleDialog">Role</Label>
                     <Select value={tempFilterRole} onValueChange={(value) => setTempFilterRole(value as RoleName | 'all')} >
-                      <SelectTrigger id="userRoleDialog" className="h-9">
+                      <SelectTrigger id="userRoleDialog" className="h-9 mt-1">
                         <SelectValue placeholder="Select Role" />
                       </SelectTrigger>
                       <SelectContent>
@@ -382,20 +372,20 @@ export default function UsersPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="userStatusDialog" className="text-sm font-medium mb-1 block">Status</Label>
+                    <Label htmlFor="userStatusDialog">Status</Label>
                     <Select value={tempFilterStatus} onValueChange={(value) => setTempFilterStatus(value as UserStatus | 'all')} >
-                      <SelectTrigger id="userStatusDialog" className="h-9">
+                      <SelectTrigger id="userStatusDialog" className="h-9 mt-1">
                         <SelectValue placeholder="Select Status" />
                       </SelectTrigger>
                       <SelectContent>
-                        {userStatusesList.map(status => (
+                        {userStatusesListForFilter.map(status => (
                           <SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
-                <DialogFooter className="pt-6 border-t">
+                <DialogFooter className="pt-6 border-t mt-4">
                   <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
@@ -460,7 +450,7 @@ export default function UsersPage() {
                         <>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleApproveUser(user.id)}>
+                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleApproveUser(user.id)} disabled={isLoadingUsers}>
                                 <ThumbsUp className="h-4 w-4 text-green-600" />
                                 <span className="sr-only">Approve User</span>
                               </Button>
@@ -471,7 +461,7 @@ export default function UsersPage() {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToReject(user)}>
+                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToReject(user)} disabled={isLoadingUsers}>
                                     <ThumbsDown className="h-4 w-4" />
                                     <span className="sr-only">Reject User</span>
                                   </Button>
@@ -498,11 +488,11 @@ export default function UsersPage() {
                           </AlertDialog>
                         </>
                       )}
-                      {user.status === 'active' && canManageUsers && loggedInUser && user.id !== loggedInUser.id && (
+                      {user.status === 'active' && canManageUsersGeneral && loggedInUser && user.id !== loggedInUser.id && (
                         <>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditUserDialog(user)}>
+                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditUserDialog(user)} disabled={isLoadingUsers}>
                                 <Edit className="h-4 w-4" />
                                 <span className="sr-only">Edit User</span>
                               </Button>
@@ -513,7 +503,7 @@ export default function UsersPage() {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToDelete(user)}>
+                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToDelete(user)} disabled={isLoadingUsers}>
                                       <Trash2 className="h-4 w-4" />
                                       <span className="sr-only">Delete User Profile</span>
                                   </Button>
@@ -571,7 +561,7 @@ export default function UsersPage() {
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             ) : (
-              !filteredUsers.length && canAddUsers && (
+              !isLoadingUsers && users.length === 0 && canAddUsers && ( // Ensure not loading and users array is truly empty
                 <Button onClick={handleOpenNewUserDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First User Profile
                 </Button>

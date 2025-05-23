@@ -22,7 +22,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Save, X, PlusCircle, Network, Info, Loader2 } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
 import { labsList, resourceStatusesList } from '@/lib/mock-data';
-import { parseISO, format, isValid as isValidDate } from 'date-fns';
+import { parseISO, format, isValid as isValidDateFn } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
 import { Checkbox } from '../ui/checkbox';
 
@@ -39,9 +39,9 @@ const resourceFormSchema = z.object({
   manufacturer: z.string().max(100).optional().or(z.literal('')),
   model: z.string().max(100).optional().or(z.literal('')),
   serialNumber: z.string().max(100).optional().or(z.literal('')),
-  purchaseDate: z.string().optional().refine((val) => {
-    if (!val || val === '') return true;
-    return isValidDate(parseISO(val));
+  purchaseDate: z.string().optional().refine((val) => { // Stored as string from input type="date"
+    if (!val || val === '') return true; // Optional
+    return isValidDateFn(parseISO(val)); // Validate if it's a parsable date string
   }, { message: "Invalid date format for purchase date." }).or(z.literal('')),
   notes: z.string().max(500).optional().or(z.literal('')),
   features: z.string().max(200, {message: "Features list cannot exceed 200 characters."}).optional().or(z.literal('')),
@@ -50,7 +50,7 @@ const resourceFormSchema = z.object({
     hostname: z.string().max(255).optional().or(z.literal('')),
     protocol: z.enum(VALID_REMOTE_PROTOCOLS).or(z.literal('')).optional(),
     username: z.string().max(100).optional().or(z.literal('')),
-    port: z.coerce.number().int().min(1).max(65535).optional(), // Use coerce for string to number, allow undefined
+    port: z.string().optional().transform((val) => (val === '' || val === undefined ? undefined : Number(val))).refine(val => val === undefined || (Number.isInteger(val) && val >=1 && val <=65535), {message: "Port must be a number between 1 and 65535."}).optional(),
     notes: z.string().max(500).optional().or(z.literal('')),
   }).optional(),
   allowQueueing: z.boolean().optional(),
@@ -62,7 +62,7 @@ interface ResourceFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialResource: Resource | null;
-  onSave: (data: ResourceFormValues, resourceId?: string) => Promise<void>; // Make onSave async
+  onSave: (data: ResourceFormValues, resourceId?: string) => Promise<void>;
   resourceTypes: ResourceType[];
 }
 
@@ -73,7 +73,7 @@ export function ResourceFormDialog({
 
   const form = useForm<ResourceFormValues>({
     resolver: zodResolver(resourceFormSchema),
-    // Default values are set in useEffect based on initialResource
+    // Default values are set in useEffect
   });
 
   useEffect(() => {
@@ -90,8 +90,8 @@ export function ResourceFormDialog({
           manufacturer: initialResource.manufacturer || '',
           model: initialResource.model || '',
           serialNumber: initialResource.serialNumber || '',
-          purchaseDate: initialResource.purchaseDate && isValidDate(new Date(initialResource.purchaseDate))
-                          ? format(new Date(initialResource.purchaseDate), 'yyyy-MM-dd')
+          purchaseDate: initialResource.purchaseDate && isValidDateFn(new Date(initialResource.purchaseDate))
+                          ? format(new Date(initialResource.purchaseDate), 'yyyy-MM-dd') // Format Date object for input
                           : '',
           notes: initialResource.notes || '',
           features: Array.isArray(initialResource.features) ? initialResource.features.join(', ') : '',
@@ -100,7 +100,7 @@ export function ResourceFormDialog({
             hostname: initialResource.remoteAccess?.hostname || '',
             protocol: initialResource.remoteAccess?.protocol || '',
             username: initialResource.remoteAccess?.username || '',
-            port: initialResource.remoteAccess?.port ?? undefined,
+            port: initialResource.remoteAccess?.port?.toString() ?? '', // Convert number to string for input
             notes: initialResource.remoteAccess?.notes || '',
           },
           allowQueueing: initialResource.allowQueueing ?? false,
@@ -112,7 +112,7 @@ export function ResourceFormDialog({
           lab: labsList.length > 0 ? labsList[0] : undefined,
           status: 'Available',
           description: '',
-          imageUrl: '', // Default handled by parent onSave
+          imageUrl: '',
           manufacturer: '',
           model: '',
           serialNumber: '',
@@ -124,23 +124,22 @@ export function ResourceFormDialog({
             hostname: '',
             protocol: '',
             username: '',
-            port: undefined,
+            port: '',
             notes: '',
           },
           allowQueueing: false,
         });
       }
     }
-  }, [open, initialResource, resourceTypes, form.reset, form]);
+  }, [open, initialResource, resourceTypes, form.reset]);
 
   async function onSubmit(data: ResourceFormValues) {
     setIsSubmitting(true);
     try {
       await onSave(data, initialResource?.id);
-      // onOpenChange(false); // Parent should handle closing on successful save
     } catch (error) {
-      // Error toast is likely handled by the parent onSave's try/catch
       console.error("Error during resource save submission:", error);
+      // Toast for error is typically handled in the parent onSave function
     } finally {
       setIsSubmitting(false);
     }
@@ -184,7 +183,7 @@ export function ResourceFormDialog({
                               <SelectContent>
                               {resourceTypes.length > 0 ? resourceTypes.map(type => (
                                   <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-                              )) : <SelectItem value="disabled" disabled>No resource types available. Add one first.</SelectItem>}
+                              )) : <SelectItem value="disabled_placeholder" disabled>No resource types available.</SelectItem>}
                               </SelectContent>
                           </Select>
                           {resourceTypes.length === 0 && <FormDescription className="text-destructive">Please define resource types first.</FormDescription>}
@@ -348,7 +347,6 @@ export function ResourceFormDialog({
                     )}
                  />
 
-
                 <Separator />
                 <div>
                     <h3 className="text-md font-medium mb-3 flex items-center"><Network className="mr-2 h-5 w-5 text-primary" /> Remote Access Details (Optional)</h3>
@@ -410,8 +408,8 @@ export function ResourceFormDialog({
                                         type="text" // Use text to allow empty, Zod coerces
                                         placeholder="e.g., 22, 3389"
                                         {...field}
-                                        value={field.value ?? ''}
-                                        onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.value)}
+                                        value={field.value ?? ''} // Ensure controlled component, handle undefined as empty string for input
+                                        onChange={e => field.onChange(e.target.value)} // Pass string value directly
                                      /></FormControl>
                                     <FormMessage />
                                     </FormItem>
@@ -445,7 +443,7 @@ export function ResourceFormDialog({
             </div>
             </ScrollArea>
             <DialogFooter className="pt-6 border-t">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                     <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting || (resourceTypes.length === 0 && !initialResource) }>
