@@ -1,11 +1,11 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Wrench, PlusCircle, Edit, Filter as FilterIcon, FilterX, Search as SearchIcon, ListFilter, CheckCircle, AlertCircle, PenToolIcon } from 'lucide-react';
+import { Wrench, PlusCircle, Edit, Filter as FilterIcon, FilterX, Search as SearchIcon, ListFilter, CheckCircle, AlertCircle, PenToolIcon, Loader2, Info } from 'lucide-react';
 import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource, RoleName } from '@/types';
-import { initialMaintenanceRequests, maintenanceRequestStatuses, initialMockUsers, allAdminMockResources, addNotification, addAuditLog } from '@/lib/mock-data';
+import { maintenanceRequestStatuses, addNotification, addAuditLog } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid as isValidDate } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,6 +41,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { MaintenanceRequestFormDialog, MaintenanceRequestFormValues } from '@/components/maintenance/maintenance-request-form-dialog';
 import { cn } from '@/lib/utils';
+import { db } from '@/lib/firebase';
+import { collection, query, getDocs, addDoc, updateDoc, doc, serverTimestamp, Timestamp, getDoc, orderBy } from 'firebase/firestore';
+
 
 const getStatusBadge = (status: MaintenanceRequestStatus) => {
   switch (status) {
@@ -60,7 +63,11 @@ const getStatusBadge = (status: MaintenanceRequestStatus) => {
 export default function MaintenanceRequestsPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth(); 
-  const [requests, setRequests] = useState<MaintenanceRequest[]>(() => JSON.parse(JSON.stringify(initialMaintenanceRequests)));
+  const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
+  const [allResources, setAllResources] = useState<Resource[]>([]);
+  const [allTechnicians, setAllTechnicians] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<MaintenanceRequest | null>(null);
 
@@ -72,10 +79,69 @@ export default function MaintenanceRequestsPage() {
 
   // Temp filters for Dialog
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-  const [tempSearchTerm, setTempSearchTerm] = useState('');
-  const [tempFilterStatus, setTempFilterStatus] = useState<MaintenanceRequestStatus | 'all'>('all');
-  const [tempFilterResourceId, setTempFilterResourceId] = useState<string>('all');
-  const [tempFilterTechnicianId, setTempFilterTechnicianId] = useState<string>('all');
+  const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
+  const [tempFilterStatus, setTempFilterStatus] = useState<MaintenanceRequestStatus | 'all'>(activeFilterStatus);
+  const [tempFilterResourceId, setTempFilterResourceId] = useState<string>(activeFilterResourceId);
+  const [tempFilterTechnicianId, setTempFilterTechnicianId] = useState<string>(activeFilterTechnicianId);
+
+  const fetchMaintenanceData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      // Fetch Maintenance Requests
+      const requestsQuery = query(collection(db, "maintenanceRequests"), orderBy("dateReported", "desc"));
+      const requestsSnapshot = await getDocs(requestsQuery);
+      const fetchedRequestsPromises = requestsSnapshot.docs.map(async (docSnap) => {
+        const data = docSnap.data();
+        let resourceName = 'Unknown Resource';
+        let reportedByUserName = 'Unknown User';
+        let assignedTechnicianName: string | undefined = undefined;
+
+        if (data.resourceId) {
+          const resourceDoc = await getDoc(doc(db, 'resources', data.resourceId));
+          if (resourceDoc.exists()) resourceName = resourceDoc.data()?.name || resourceName;
+        }
+        if (data.reportedByUserId) {
+          const userDoc = await getDoc(doc(db, 'users', data.reportedByUserId));
+          if (userDoc.exists()) reportedByUserName = userDoc.data()?.name || reportedByUserName;
+        }
+        if (data.assignedTechnicianId) {
+          const techDoc = await getDoc(doc(db, 'users', data.assignedTechnicianId));
+          if (techDoc.exists()) assignedTechnicianName = techDoc.data()?.name;
+        }
+        return {
+          id: docSnap.id,
+          ...data,
+          dateReported: data.dateReported.toDate().toISOString(),
+          dateResolved: data.dateResolved ? data.dateResolved.toDate().toISOString() : undefined,
+          resourceName,
+          reportedByUserName,
+          assignedTechnicianName,
+        } as MaintenanceRequest;
+      });
+      const resolvedRequests = await Promise.all(fetchedRequestsPromises);
+      setRequests(resolvedRequests);
+
+      // Fetch All Resources (for filter and form)
+      const resourcesSnapshot = await getDocs(collection(db, "resources"));
+      const fetchedResources = resourcesSnapshot.docs.map(d => ({id: d.id, ...d.data()} as Resource));
+      setAllResources(fetchedResources.sort((a,b) => a.name.localeCompare(b.name)));
+
+      // Fetch All Technicians (for filter and form)
+      const techniciansQuery = query(collection(db, "users"), where("role", "==", "Technician"));
+      const techniciansSnapshot = await getDocs(techniciansQuery);
+      const fetchedTechnicians = techniciansSnapshot.docs.map(d => ({id: d.id, ...d.data()} as User));
+      setAllTechnicians(fetchedTechnicians.sort((a,b) => (a.name || '').localeCompare(b.name || '')));
+
+    } catch (error) {
+      console.error("Error fetching maintenance data:", error);
+      toast({ title: "Error", description: "Failed to load maintenance data.", variant: "destructive" });
+    }
+    setIsLoading(false);
+  }, [toast]);
+
+  useEffect(() => {
+    fetchMaintenanceData();
+  }, [fetchMaintenanceData]);
 
   useEffect(() => {
     if (isFilterDialogOpen) {
@@ -86,7 +152,6 @@ export default function MaintenanceRequestsPage() {
     }
   }, [isFilterDialogOpen, activeSearchTerm, activeFilterStatus, activeFilterResourceId, activeFilterTechnicianId]);
 
-  const technicians = useMemo(() => initialMockUsers.filter(user => user.role === 'Technician'), []);
 
   const filteredRequests = useMemo(() => {
     let currentRequests = [...requests];
@@ -112,7 +177,7 @@ export default function MaintenanceRequestsPage() {
         currentRequests = currentRequests.filter(req => req.assignedTechnicianId === activeFilterTechnicianId);
        }
     }
-    return currentRequests.sort((a, b) => new Date(b.dateReported).getTime() - new Date(a.dateReported).getTime());
+    return currentRequests; // Already sorted by Firestore query
   }, [requests, activeSearchTerm, activeFilterStatus, activeFilterResourceId, activeFilterTechnicianId]);
 
   const handleApplyFilters = () => {
@@ -153,82 +218,95 @@ export default function MaintenanceRequestsPage() {
     setIsFormDialogOpen(true);
   };
 
-  const handleSaveRequest = (data: MaintenanceRequestFormValues) => {
-    const resource = allAdminMockResources.find(r => r.id === data.resourceId);
-    const technician = technicians.find(t => t.id === data.assignedTechnicianId);
+  const handleSaveRequest = async (data: MaintenanceRequestFormValues) => {
+    if (!currentUser) {
+      toast({ title: "Error", description: "You must be logged in.", variant: "destructive"});
+      return;
+    }
     
+    const resource = allResources.find(r => r.id === data.resourceId);
     if (!resource) {
       toast({ title: "Error", description: "Selected resource not found.", variant: "destructive" });
       return;
     }
     
+    const requestData: Partial<MaintenanceRequest> = {
+      resourceId: data.resourceId,
+      issueDescription: data.issueDescription,
+      status: data.status,
+      assignedTechnicianId: data.assignedTechnicianId || null, // Store null if unassigned
+      resolutionNotes: data.resolutionNotes || null,
+    };
+
+    setIsLoading(true);
     if (editingRequest) {
-      const updatedRequest: MaintenanceRequest = {
-        ...editingRequest,
-        ...data,
-        resourceName: resource.name,
-        assignedTechnicianName: technician?.name,
-        dateResolved: (data.status === 'Resolved' || data.status === 'Closed') && !editingRequest.dateResolved ? new Date().toISOString() : editingRequest.dateResolved,
-      };
-      setRequests(requests.map(req => req.id === editingRequest.id ? updatedRequest : req));
-      const globalIndex = initialMaintenanceRequests.findIndex(r => r.id === editingRequest.id);
-      if (globalIndex !== -1) initialMaintenanceRequests[globalIndex] = updatedRequest;
-      
-      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: updatedRequest.id, details: `Maintenance request for '${resource.name}' updated. Status: ${updatedRequest.status}.`});
-      toast({ title: 'Request Updated', description: `Maintenance request for "${resource.name}" has been updated.` });
-      
-      if (updatedRequest.status === 'Resolved' && editingRequest.status !== 'Resolved' && updatedRequest.reportedByUserId) {
-        addNotification(
-          updatedRequest.reportedByUserId,
-          'Maintenance Resolved',
-          `The issue reported for ${resource.name} has been resolved.`,
-          'maintenance_resolved',
-          '/maintenance'
-        );
-      } else if (updatedRequest.assignedTechnicianId && updatedRequest.assignedTechnicianId !== editingRequest.assignedTechnicianId) {
-         addNotification(
-          updatedRequest.assignedTechnicianId,
-          'Maintenance Task Assigned',
-          `You have been assigned a maintenance task for ${resource.name}: ${updatedRequest.issueDescription.substring(0,50)}...`,
-          'maintenance_assigned',
-          '/maintenance'
-        );
-      }
-
-    } else {
-      if (!currentUser) {
-        toast({ title: "Error", description: "You must be logged in to log a request.", variant: "destructive"});
-        return;
-      }
-      const newRequest: MaintenanceRequest = {
-        id: `mr${requests.length + 1 + Date.now()}`,
-        ...data,
-        resourceName: resource.name,
-        reportedByUserId: currentUser.id,
-        reportedByUserName: currentUser.name,
-        assignedTechnicianName: technician?.name,
-        dateReported: new Date().toISOString(),
-        dateResolved: (data.status === 'Resolved' || data.status === 'Closed') ? new Date().toISOString() : undefined,
-      };
-      setRequests(prevRequests => [newRequest, ...prevRequests].sort((a, b) => new Date(b.dateReported).getTime() - new Date(a.dateReported).getTime()));
-      initialMaintenanceRequests.unshift(newRequest); 
-      initialMaintenanceRequests.sort((a, b) => new Date(b.dateReported).getTime() - new Date(a.dateReported).getTime());
-
-      addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: newRequest.id, details: `New maintenance request for '${resource.name}' logged.`});
-      toast({ title: 'Request Logged', description: `New maintenance request for "${resource.name}" has been logged.` });
-      
-      const targetTechnicianId = newRequest.assignedTechnicianId || (technicians.length > 0 ? technicians[0].id : 'u1'); 
-      if(targetTechnicianId){
-        addNotification(
-            targetTechnicianId,
-            'New Maintenance Request',
-            `New request for ${resource.name}: ${newRequest.issueDescription.substring(0, 50)}...`,
-            'maintenance_new',
+      try {
+        if (data.status === 'Resolved' || data.status === 'Closed') {
+          if (!editingRequest.dateResolved) { // Only set dateResolved if it wasn't already set
+            requestData.dateResolved = new Date().toISOString();
+          }
+        } else {
+          requestData.dateResolved = null; // Clear dateResolved if status is not Resolved/Closed
+        }
+        const requestDocRef = doc(db, "maintenanceRequests", editingRequest.id);
+        await updateDoc(requestDocRef, requestData);
+        
+        addAuditLog(currentUser.id, currentUser.name || 'User', 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingRequest.id, details: `Maintenance request for '${resource.name}' updated. Status: ${data.status}.`});
+        toast({ title: 'Request Updated', description: `Maintenance request for "${resource.name}" has been updated.` });
+        
+        // Notifications
+        if ( (data.status === 'Resolved' && editingRequest.status !== 'Resolved') && editingRequest.reportedByUserId) {
+          addNotification(
+            editingRequest.reportedByUserId,
+            'Maintenance Resolved',
+            `The issue reported for ${resource.name} has been resolved.`,
+            'maintenance_resolved',
             '/maintenance'
-        );
+          );
+        } else if (data.assignedTechnicianId && data.assignedTechnicianId !== editingRequest.assignedTechnicianId) {
+           addNotification(
+            data.assignedTechnicianId,
+            'Maintenance Task Assigned',
+            `You have been assigned a maintenance task for ${resource.name}: ${data.issueDescription.substring(0,50)}...`,
+            'maintenance_assigned',
+            '/maintenance'
+          );
+        }
+      } catch (error) {
+        console.error("Error updating maintenance request:", error);
+        toast({ title: "Update Failed", description: "Could not update maintenance request.", variant: "destructive" });
+      }
+    } else { // New Request
+      try {
+        const newRequestPayload = {
+          ...requestData,
+          reportedByUserId: currentUser.id,
+          dateReported: serverTimestamp(), // Firestore server timestamp
+          dateResolved: (data.status === 'Resolved' || data.status === 'Closed') ? serverTimestamp() : null,
+        };
+        const docRef = await addDoc(collection(db, "maintenanceRequests"), newRequestPayload);
+        
+        addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New maintenance request for '${resource.name}' logged.`});
+        toast({ title: 'Request Logged', description: `New maintenance request for "${resource.name}" has been logged.` });
+        
+        const targetTechnicianId = data.assignedTechnicianId || (allTechnicians.length > 0 ? allTechnicians[0].id : null); 
+        if(targetTechnicianId){ // Notify assigned tech or a default one if specified
+          addNotification(
+              targetTechnicianId,
+              'New Maintenance Request',
+              `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}...`,
+              'maintenance_new',
+              '/maintenance'
+          );
+        }
+      } catch (error) {
+         console.error("Error logging maintenance request:", error);
+        toast({ title: "Logging Failed", description: "Could not log maintenance request.", variant: "destructive" });
       }
     }
     setIsFormDialogOpen(false);
+    setEditingRequest(null);
+    await fetchMaintenanceData(); // Re-fetch all data
   };
   
   const activeFilterCount = [
@@ -302,7 +380,7 @@ export default function MaintenanceRequestsPage() {
                             <SelectTrigger id="maintenanceResourceDialog" className="h-9"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Resources</SelectItem>
-                                {allAdminMockResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                                {allResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                             </SelectContent>
                         </Select>
                       </div>
@@ -314,7 +392,7 @@ export default function MaintenanceRequestsPage() {
                           <SelectContent>
                               <SelectItem value="all">All Technicians</SelectItem>
                               <SelectItem value="unassigned">Unassigned</SelectItem> 
-                              {technicians.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                              {allTechnicians.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                           </SelectContent>
                       </Select>
                     </div>
@@ -335,7 +413,9 @@ export default function MaintenanceRequestsPage() {
           }
         />
 
-        {filteredRequests.length > 0 ? (
+        {isLoading ? (
+            <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading requests...</div>
+        ) : filteredRequests.length > 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>Active Requests ({filteredRequests.length})</CardTitle>
@@ -361,7 +441,7 @@ export default function MaintenanceRequestsPage() {
                         <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{request.issueDescription}</TableCell>
                         <TableCell>{request.reportedByUserName}</TableCell>
                         <TableCell>
-                          {isValid(parseISO(request.dateReported)) ? format(parseISO(request.dateReported), 'MMM dd, yyyy') : 'Invalid Date'}
+                          {isValidDate(parseISO(request.dateReported)) ? format(parseISO(request.dateReported), 'MMM dd, yyyy') : 'Invalid Date'}
                         </TableCell>
                         <TableCell>{getStatusBadge(request.status)}</TableCell>
                         <TableCell>{request.assignedTechnicianName || <span className="text-xs italic text-muted-foreground">Unassigned</span>}</TableCell>
@@ -412,11 +492,14 @@ export default function MaintenanceRequestsPage() {
       </div>
       <MaintenanceRequestFormDialog
         open={isFormDialogOpen}
-        onOpenChange={setIsFormDialogOpen}
+        onOpenChange={(isOpen) => {
+            setIsFormDialogOpen(isOpen);
+            if (!isOpen) setEditingRequest(null);
+        }}
         initialRequest={editingRequest}
         onSave={handleSaveRequest}
-        technicians={technicians}
-        resources={allAdminMockResources}
+        technicians={allTechnicians}
+        resources={allResources}
         currentUserRole={currentUser?.role}
       />
     </TooltipProvider>

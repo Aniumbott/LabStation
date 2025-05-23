@@ -1,11 +1,10 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter, Clock } from 'lucide-react';
-import type { Booking, Resource } from '@/types'; 
-// Removed initialBookings, allAdminMockResources, processQueueForResource from mock-data import
+import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter, Clock, Info } from 'lucide-react';
+import type { Booking, Resource, User } from '@/types'; 
 import { addNotification, addAuditLog } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
@@ -41,69 +40,84 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-// Firestore imports would go here in a future step
-// import { db } from '@/lib/firebase';
-// import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy } from 'firebase/firestore';
 
 
 export default function BookingRequestsPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
-  // Initialize with empty array, will be populated from Firestore later
   const [allBookingsState, setAllBookingsState] = useState<Booking[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // Add loading state for Firestore
+  const [allResources, setAllResources] = useState<Resource[]>([]);
+  const [isLoading, setIsLoading] = useState(true); 
+  
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+  const [tempSearchTerm, setTempSearchTerm] = useState('');
+  const [tempFilterResourceId, setTempFilterResourceId] = useState<string>('all');
+  const [tempFilterStatus, setTempFilterStatus] = useState<Booking['status'] | 'all'>('Pending'); 
 
-  // Filter states
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<Booking['status'] | 'all'>('Pending'); 
   
-  // Dialog states for filters
-  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-  const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
-  const [tempFilterResourceId, setTempFilterResourceId] = useState<string>(activeFilterResourceId);
-  const [tempFilterStatus, setTempFilterStatus] = useState<Booking['status'] | 'all'>(activeFilterStatus);
+  const fetchBookingRequests = useCallback(async () => {
+    if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Lab Manager')) {
+      setAllBookingsState([]);
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const bookingsRef = collection(db, "bookings");
+      const q = query(bookingsRef, where("status", "in", ["Pending", "Waitlisted"]), orderBy("startTime", "asc"));
+      const querySnapshot = await getDocs(q);
+      const fetchedBookingsPromises: Promise<Booking>[] = querySnapshot.docs.map(async (docSnap) => {
+        const data = docSnap.data();
+        let resourceName = 'Unknown Resource';
+        let userName = 'Unknown User';
 
-  // TODO: Implement fetchBookingsFromFirestore function in a future step
+        if (data.resourceId) {
+          const resourceDoc = await getDoc(doc(db, 'resources', data.resourceId));
+          if (resourceDoc.exists()) resourceName = resourceDoc.data()?.name || resourceName;
+        }
+        if (data.userId) {
+          const userDoc = await getDoc(doc(db, 'users', data.userId));
+          if (userDoc.exists()) userName = userDoc.data()?.name || userName;
+        }
+        return {
+          id: docSnap.id,
+          ...data,
+          startTime: data.startTime.toDate(),
+          endTime: data.endTime.toDate(),
+          createdAt: data.createdAt.toDate(),
+          resourceName,
+          userName,
+        } as Booking;
+      });
+      const fetchedBookings = await Promise.all(fetchedBookingsPromises);
+      setAllBookingsState(fetchedBookings);
+    } catch (error) {
+      console.error("Error fetching booking requests: ", error);
+      toast({ title: "Error", description: "Failed to fetch booking requests.", variant: "destructive" });
+    }
+    setIsLoading(false);
+  }, [currentUser, toast]);
+
+  const fetchAllResourcesForFilter = useCallback(async () => {
+    try {
+        const resourcesSnapshot = await getDocs(collection(db, "resources"));
+        const fetchedResources = resourcesSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Resource));
+        setAllResources(fetchedResources.sort((a,b) => a.name.localeCompare(b.name)));
+    } catch (error) {
+        console.error("Error fetching resources for filter: ", error);
+        toast({ title: "Error", description: "Could not load resources for filtering.", variant: "destructive" });
+    }
+  }, [toast]);
+
   useEffect(() => {
-    // This is where you would fetch data from Firestore
-    // For now, it will remain empty or show a loader
-    // async function fetchPendingBookings() {
-    //   if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Lab Manager')) {
-    //     setAllBookingsState([]);
-    //     setIsLoading(false);
-    //     return;
-    //   }
-    //   setIsLoading(true);
-    //   try {
-    //     const bookingsRef = collection(db, "bookings");
-    //     const q = query(bookingsRef, where("status", "in", ["Pending", "Waitlisted"]));
-    //     const querySnapshot = await getDocs(q);
-    //     const fetchedBookings: Booking[] = [];
-    //     // Fetch related resource and user names if needed, or denormalize slightly in Firestore
-    //     // For simplicity here, we assume resourceName and userName are still on booking object,
-    //     // but in an ideal Firestore setup, they'd be fetched or denormalized carefully.
-    //     querySnapshot.forEach((docSnap) => {
-    //       const data = docSnap.data();
-    //       fetchedBookings.push({
-    //         id: docSnap.id,
-    //         ...data,
-    //         // Ensure dates are Date objects
-    //         startTime: data.startTime.toDate ? data.startTime.toDate() : new Date(data.startTime),
-    //         endTime: data.endTime.toDate ? data.endTime.toDate() : new Date(data.endTime),
-    //         createdAt: data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
-    //       } as Booking);
-    //     });
-    //     setAllBookingsState(fetchedBookings);
-    //   } catch (error) {
-    //     console.error("Error fetching booking requests: ", error);
-    //     toast({ title: "Error", description: "Failed to fetch booking requests.", variant: "destructive" });
-    //   }
-    //   setIsLoading(false);
-    // }
-    // fetchPendingBookings();
-    setIsLoading(false); // For now, just set loading to false as we have no data
-  }, [currentUser, toast]); 
+    fetchBookingRequests();
+    fetchAllResourcesForFilter();
+  }, [fetchBookingRequests, fetchAllResourcesForFilter]); 
 
   const bookingsForApproval = useMemo(() => {
     let filtered = allBookingsState;
@@ -111,8 +125,8 @@ export default function BookingRequestsPage() {
     const lowerSearch = activeSearchTerm.toLowerCase();
     if (activeSearchTerm) {
       filtered = filtered.filter(b => 
-        (b.resourceName && b.resourceName.toLowerCase().includes(lowerSearch)) || // resourceName will be undefined for now
-        (b.userName && b.userName.toLowerCase().includes(lowerSearch)) || // userName will be undefined for now
+        (b.resourceName && b.resourceName.toLowerCase().includes(lowerSearch)) ||
+        (b.userName && b.userName.toLowerCase().includes(lowerSearch)) ||
         (b.notes && b.notes.toLowerCase().includes(lowerSearch))
       );
     }
@@ -121,109 +135,66 @@ export default function BookingRequestsPage() {
       filtered = filtered.filter(b => b.resourceId === activeFilterResourceId);
     }
     
-    if (activeFilterStatus === 'all') {
-        filtered = filtered.filter(b => b.status === 'Pending' || b.status === 'Waitlisted');
-    } else if (activeFilterStatus) {
+    if (activeFilterStatus !== 'all') {
         filtered = filtered.filter(b => b.status === activeFilterStatus);
     }
+    // If 'all', no status filter is applied beyond the initial query for Pending/Waitlisted
 
-    return filtered.sort((a, b) => {
-        const dateA = a.startTime; // Already Date objects if fetched correctly
-        const dateB = b.startTime;
-        if (!isValidDate(dateA) || !isValidDate(dateB)) return 0;
-        return dateA.getTime() - dateB.getTime();
-    });
+    return filtered; // Already sorted by Firestore query
   }, [allBookingsState, activeSearchTerm, activeFilterResourceId, activeFilterStatus]);
 
   const handleApproveBooking = async (bookingId: string) => {
-    // TODO: Refactor to update Firestore document
-    // const bookingDocRef = doc(db, "bookings", bookingId);
-    // try {
-    //   await updateDoc(bookingDocRef, { status: 'Confirmed' });
-    //   const approvedBooking = allBookingsState.find(b => b.id === bookingId);
-    //   if (approvedBooking && currentUser) {
-    //     toast({
-    //       title: 'Booking Approved',
-    //       description: `Booking for "${approvedBooking.resourceName}" by ${approvedBooking.userName} has been confirmed.`,
-    //     });
-    //     addAuditLog(currentUser.id, currentUser.name || 'Admin', 'BOOKING_APPROVED', { entityType: 'Booking', entityId: approvedBooking.id, details: `Booking for ${approvedBooking.resourceName} by ${approvedBooking.userName} approved.`});
-    //     addNotification(
-    //       approvedBooking.userId,
-    //       'Booking Confirmed',
-    //       `Your booking for ${approvedBooking.resourceName} on ${format(new Date(approvedBooking.startTime), 'MMM dd, HH:mm')} has been confirmed.`,
-    //       'booking_confirmed',
-    //       `/bookings?bookingId=${approvedBooking.id}`
-    //     );
-    //     // Re-fetch bookings
-    //     // fetchPendingBookings();
-    //   }
-    // } catch (error) {
-    //   console.error("Error approving booking:", error);
-    //   toast({ title: "Error", description: "Failed to approve booking.", variant: "destructive" });
-    // }
-    toast({ title: "Mock Action", description: "Approve booking functionality to be updated for Firestore." });
-    // Temporary mock update for UI consistency until Firestore is integrated
-    const bookingIndex = allBookingsState.findIndex(b => b.id === bookingId);
-    if (bookingIndex !== -1 && currentUser) {
-      const updatedBookings = [...allBookingsState];
-      const approvedBooking = { ...updatedBookings[bookingIndex], status: 'Confirmed' as Booking['status']};
-      updatedBookings.splice(bookingIndex, 1); // Remove from pending list
-      setAllBookingsState(updatedBookings); 
-      addAuditLog(currentUser.id, currentUser.name || 'Admin', 'BOOKING_APPROVED', { entityType: 'Booking', entityId: approvedBooking.id, details: `Booking for ${approvedBooking.resourceName} by ${approvedBooking.userName} approved.`});
-      addNotification(
-        approvedBooking.userId,
-        'Booking Confirmed',
-        `Your booking for ${approvedBooking.resourceName} on ${format(new Date(approvedBooking.startTime), 'MMM dd, HH:mm')} has been confirmed.`,
-        'booking_confirmed',
-        `/bookings?bookingId=${approvedBooking.id}`
-      );
+    const bookingDocRef = doc(db, "bookings", bookingId);
+    try {
+      await updateDoc(bookingDocRef, { status: 'Confirmed' });
+      const approvedBooking = allBookingsState.find(b => b.id === bookingId);
+      if (approvedBooking && currentUser) {
+        toast({
+          title: 'Booking Approved',
+          description: `Booking for "${approvedBooking.resourceName}" by ${approvedBooking.userName} has been confirmed.`,
+        });
+        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'BOOKING_APPROVED', { entityType: 'Booking', entityId: approvedBooking.id, details: `Booking for ${approvedBooking.resourceName} by ${approvedBooking.userName} approved.`});
+        addNotification(
+          approvedBooking.userId,
+          'Booking Confirmed',
+          `Your booking for ${approvedBooking.resourceName} on ${format(new Date(approvedBooking.startTime), 'MMM dd, HH:mm')} has been confirmed.`,
+          'booking_confirmed',
+          `/bookings?bookingId=${approvedBooking.id}`
+        );
+        fetchBookingRequests(); // Re-fetch bookings
+      }
+    } catch (error) {
+      console.error("Error approving booking:", error);
+      toast({ title: "Error", description: "Failed to approve booking.", variant: "destructive" });
     }
   };
 
   const handleRejectBooking = async (bookingId: string) => {
-    // TODO: Refactor to update Firestore document
-    // const bookingDocRef = doc(db, "bookings", bookingId);
-    // try {
-    //   await updateDoc(bookingDocRef, { status: 'Cancelled' });
-    //   const rejectedBooking = allBookingsState.find(b => b.id === bookingId);
-    //   if (rejectedBooking && currentUser) {
-    //     toast({
-    //       title: 'Booking Rejected',
-    //       description: `Booking for "${rejectedBooking.resourceName}" by ${rejectedBooking.userName} has been cancelled.`,
-    //       variant: 'destructive',
-    //     });
-    //     addAuditLog(currentUser.id, currentUser.name || 'Admin', 'BOOKING_REJECTED', { entityType: 'Booking', entityId: rejectedBooking.id, details: `Booking for ${rejectedBooking.resourceName} by ${rejectedBooking.userName} rejected/cancelled.`});
-    //     addNotification(
-    //       rejectedBooking.userId,
-    //       'Booking Rejected',
-    //       `Your booking for ${rejectedBooking.resourceName} on ${format(new Date(rejectedBooking.startTime), 'MMM dd, HH:mm')} has been rejected and cancelled.`,
-    //       'booking_rejected',
-    //       `/bookings?bookingId=${rejectedBooking.id}`
-    //     );
-            // Queue processing logic removed as processQueueForResource is no longer available
-            // This needs to be re-implemented with Firestore logic
-    //     // fetchPendingBookings();
-    //   }
-    // } catch (error) {
-    //   console.error("Error rejecting booking:", error);
-    //   toast({ title: "Error", description: "Failed to reject booking.", variant: "destructive" });
-    // }
-    toast({ title: "Mock Action", description: "Reject booking functionality to be updated for Firestore." });
-    // Temporary mock update for UI consistency until Firestore is integrated
-    const bookingIndex = allBookingsState.findIndex(b => b.id === bookingId);
-    if (bookingIndex !== -1 && currentUser) {
-      const updatedBookings = [...allBookingsState];
-      const rejectedBooking = { ...updatedBookings[bookingIndex], status: 'Cancelled' as Booking['status']};
-      updatedBookings.splice(bookingIndex, 1); // Remove from pending list
-      setAllBookingsState(updatedBookings);
-      addAuditLog(currentUser.id, currentUser.name || 'Admin', 'BOOKING_REJECTED', { entityType: 'Booking', entityId: rejectedBooking.id, details: `Booking for ${rejectedBooking.resourceName} by ${rejectedBooking.userName} rejected/cancelled.`});
-      addNotification(
-        rejectedBooking.userId,
-        'Booking Rejected',
-        `Your booking for ${rejectedBooking.resourceName} on ${format(new Date(rejectedBooking.startTime), 'MMM dd, HH:mm')} has been rejected and cancelled.`,
-        'booking_rejected',
-        `/bookings?bookingId=${rejectedBooking.id}`
-      );
+    const bookingDocRef = doc(db, "bookings", bookingId);
+    try {
+      await updateDoc(bookingDocRef, { status: 'Cancelled' });
+      const rejectedBooking = allBookingsState.find(b => b.id === bookingId);
+      if (rejectedBooking && currentUser) {
+        toast({
+          title: 'Booking Rejected',
+          description: `Booking for "${rejectedBooking.resourceName}" by ${rejectedBooking.userName} has been cancelled.`,
+          variant: 'destructive',
+        });
+        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'BOOKING_REJECTED', { entityType: 'Booking', entityId: rejectedBooking.id, details: `Booking for ${rejectedBooking.resourceName} by ${rejectedBooking.userName} rejected/cancelled.`});
+        addNotification(
+          rejectedBooking.userId,
+          'Booking Rejected',
+          `Your booking for ${rejectedBooking.resourceName} on ${format(new Date(rejectedBooking.startTime), 'MMM dd, HH:mm')} has been rejected and cancelled.`,
+          'booking_rejected',
+          `/bookings?bookingId=${rejectedBooking.id}`
+        );
+        // Queue processing logic (processQueueForResource) is removed here.
+        // It needs to be re-implemented as a Firebase Cloud Function for robustness.
+        fetchBookingRequests(); // Re-fetch bookings
+      }
+    } catch (error) {
+      console.error("Error rejecting booking:", error);
+      toast({ title: "Error", description: "Failed to reject booking.", variant: "destructive" });
     }
   };
   
@@ -251,7 +222,7 @@ export default function BookingRequestsPage() {
   const activeFilterCount = [
     activeSearchTerm !== '',
     activeFilterResourceId !== 'all',
-    activeFilterStatus !== 'Pending', // Default is Pending, so filter is active if not Pending or all
+    activeFilterStatus !== 'Pending',
   ].filter(Boolean).length;
 
   const formatDateField = (dateInput: Date): string => {
@@ -263,18 +234,6 @@ export default function BookingRequestsPage() {
   };
 
   const bookingStatusesForFilterDialog: Array<Booking['status'] | 'all'> = ['all', 'Pending', 'Waitlisted'];
-
-  // Placeholder for actual resource names, to be fetched or denormalized
-  const getResourceNameById = (resourceId: string): string => {
-    // In a real scenario, you'd fetch this from a resources state or context
-    // or have it denormalized on the booking object from Firestore.
-    // For now, this will effectively be missing.
-    return resourceId; 
-  };
-  const getUserNameById = (userId: string): string => {
-    // Similar to getResourceNameById, this would be fetched.
-    return `User ${userId.substring(0, 6)}...`;
-  };
 
 
   return (
@@ -327,11 +286,10 @@ export default function BookingRequestsPage() {
                           <SelectTrigger id="requestResourceDialog" className="h-9"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
                           <SelectContent>
                               <SelectItem value="all">All Resources</SelectItem>
-                              {/* Resource options would be populated from fetched resources in a real app */}
-                              {Array.from(new Set(allBookingsState.map(b => b.resourceId)))
-                                  .map(resourceId => {
-                                      return <SelectItem key={resourceId} value={resourceId}>{getResourceNameById(resourceId)}</SelectItem>;
-                                  })
+                              {allResources
+                                  .map(resource => (
+                                      <SelectItem key={resource.id} value={resource.id}>{resource.name}</SelectItem>
+                                  ))
                               }
                           </SelectContent>
                       </Select>
@@ -362,7 +320,7 @@ export default function BookingRequestsPage() {
         />
 
         {isLoading ? (
-          <div className="flex justify-center items-center py-10"><Clock className="mr-2 h-6 w-6 animate-spin" /> Loading requests...</div>
+          <div className="flex justify-center items-center py-10"><Clock className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading requests...</div>
         ) : bookingsForApproval.length > 0 ? (
           <Card>
             <CardHeader>
@@ -384,8 +342,8 @@ export default function BookingRequestsPage() {
                   <TableBody>
                     {bookingsForApproval.map((booking) => (
                       <TableRow key={booking.id}>
-                        <TableCell className="font-medium">{booking.resourceName || getResourceNameById(booking.resourceId)}</TableCell>
-                        <TableCell>{booking.userName || getUserNameById(booking.userId)}</TableCell>
+                        <TableCell className="font-medium">{booking.resourceName}</TableCell>
+                        <TableCell>{booking.userName}</TableCell>
                         <TableCell>
                           <div>{formatDateField(booking.startTime)}</div>
                           <div className="text-xs text-muted-foreground">

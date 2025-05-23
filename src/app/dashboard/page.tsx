@@ -3,7 +3,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Construction } from 'lucide-react';
+import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Construction, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,38 +20,87 @@ import {
 } from "@/components/ui/table";
 import { format, isValid, isPast, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { allAdminMockResources, initialBookings } from '@/lib/mock-data';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/auth-context';
-
+import { db } from '@/lib/firebase';
+import { collection, query, where, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore';
 
 export default function DashboardPage() {
   const { currentUser } = useAuth();
   const [frequentlyUsedResources, setFrequentlyUsedResources] = useState<Resource[]>([]);
   const [upcomingUserBookings, setUpcomingUserBookings] = useState<Booking[]>([]);
+  const [isLoadingResources, setIsLoadingResources] = useState(true);
+  const [isLoadingBookings, setIsLoadingBookings] = useState(true);
 
   useEffect(() => {
-    // In a real app, this might be fetched based on user's past activity or admin-defined popular items.
-    // For now, just showing the first few resources from the mock data.
-    setFrequentlyUsedResources(allAdminMockResources.slice(0, 2)); 
-  }, []);
-  
-  useEffect(() => {
-    if (currentUser) {
-      const userBookings = initialBookings
-        .filter(b => 
-          b.userId === currentUser.id && 
-          b.status !== 'Cancelled' && 
-          b.startTime && 
-          isValid(new Date(b.startTime)) && 
-          !isPast(new Date(b.startTime)) // Only upcoming
-        )
-        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-        .slice(0, 5); // Limit to 5 upcoming bookings for the dashboard
-      setUpcomingUserBookings(userBookings);
-    } else {
-      setUpcomingUserBookings([]);
+    async function fetchDashboardData() {
+      // Fetch Frequently Used Resources (placeholder: first 2 resources)
+      setIsLoadingResources(true);
+      try {
+        const resourcesQuery = query(collection(db, 'resources'), limit(2));
+        const resourcesSnapshot = await getDocs(resourcesQuery);
+        const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
+          const data = docSnap.data();
+           return {
+            id: docSnap.id,
+            name: data.name || 'Unnamed Resource',
+            resourceTypeId: data.resourceTypeId || '',
+            lab: data.lab || 'Unknown Lab',
+            status: data.status || 'Available',
+            description: data.description || '',
+            imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
+            // other fields as needed for display
+          } as Resource; // Cast, ensure all required fields are present or defaulted
+        });
+        setFrequentlyUsedResources(fetchedResources);
+      } catch (error) {
+        console.error("Error fetching frequently used resources:", error);
+      }
+      setIsLoadingResources(false);
+
+      // Fetch Upcoming User Bookings
+      if (currentUser) {
+        setIsLoadingBookings(true);
+        try {
+          const bookingsQuery = query(
+            collection(db, 'bookings'),
+            where('userId', '==', currentUser.id),
+            where('startTime', '>=', new Date()), // Only upcoming
+            orderBy('startTime', 'asc'),
+            limit(5)
+          );
+          const bookingsSnapshot = await getDocs(bookingsQuery);
+          const fetchedBookingsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
+            const bookingData = docSnap.data();
+            let resourceName = 'Unknown Resource';
+            if (bookingData.resourceId) {
+              const resourceDocRef = doc(db, 'resources', bookingData.resourceId);
+              const resourceDocSnap = await getDoc(resourceDocRef);
+              if (resourceDocSnap.exists()) {
+                resourceName = resourceDocSnap.data()?.name || 'Unknown Resource';
+              }
+            }
+            return {
+              id: docSnap.id,
+              ...bookingData,
+              startTime: bookingData.startTime.toDate(),
+              endTime: bookingData.endTime.toDate(),
+              createdAt: bookingData.createdAt.toDate(),
+              resourceName, // Add fetched resource name
+            } as Booking;
+          });
+          const fetchedBookings = await Promise.all(fetchedBookingsPromises);
+          setUpcomingUserBookings(fetchedBookings);
+        } catch (error) {
+          console.error("Error fetching upcoming bookings:", error);
+        }
+        setIsLoadingBookings(false);
+      } else {
+        setUpcomingUserBookings([]);
+        setIsLoadingBookings(false);
+      }
     }
+    fetchDashboardData();
   }, [currentUser]);
 
 
@@ -84,7 +133,9 @@ export default function DashboardPage() {
             </Button>
           )}
         </div>
-        {frequentlyUsedResources.length > 0 ? (
+        {isLoadingResources ? (
+          <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading resources...</div>
+        ) : frequentlyUsedResources.length > 0 ? (
           <div className="w-fit grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2">
             {frequentlyUsedResources.map((resource) => (
               <Card key={resource.id} className="w-full md:max-w-lg flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300 p-4">
@@ -97,7 +148,7 @@ export default function DashboardPage() {
                     </CardTitle>
                     {getResourceStatusBadge(resource.status)}
                   </div>
-                  <CardDescription>{resource.lab} - {allAdminMockResources.find(r => r.id === resource.id)?.resourceTypeName || 'N/A'}</CardDescription>
+                  <CardDescription>{resource.lab}</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0 flex-grow space-y-3">
                   <div className="relative w-full h-40 rounded-md overflow-hidden">
@@ -117,7 +168,7 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : (
-          <Card className="p-6 text-center shadow-lg">
+          <Card className="p-6 text-center shadow-lg border-0">
             <p className="text-muted-foreground">No frequently used resources to display. Explore resources via <Link href="/admin/resources" className="text-primary hover:underline">Resources</Link>.</p>
           </Card>
         )}
@@ -127,7 +178,9 @@ export default function DashboardPage() {
 
       <section>
         <h2 className="text-2xl font-semibold mb-4">Your Upcoming Bookings</h2>
-        {currentUser && upcomingUserBookings.length > 0 ? (
+        {isLoadingBookings ? (
+          <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading bookings...</div>
+        ) :currentUser && upcomingUserBookings.length > 0 ? (
           <Card className="shadow-lg">
             <CardContent className="p-0">
               <div className="overflow-x-auto rounded-lg border shadow-sm">
@@ -135,21 +188,22 @@ export default function DashboardPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Resource</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Time</TableHead>
+                      <TableHead>Date & Time</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {upcomingUserBookings.map((booking) => {
-                      const startTimeDate = booking.startTime instanceof Date ? booking.startTime : parseISO(booking.startTime as unknown as string);
-                      const endTimeDate = booking.endTime instanceof Date ? booking.endTime : parseISO(booking.endTime as unknown as string);
                       return (
                         <TableRow key={booking.id}>
                           <TableCell className="font-medium">{booking.resourceName}</TableCell>
-                          <TableCell>{isValid(startTimeDate) ? format(startTimeDate, 'MMM dd, yyyy') : 'Invalid Date'}</TableCell>
-                          <TableCell>{isValid(startTimeDate) && isValid(endTimeDate) ? `${format(startTimeDate, 'p')} - ${format(endTimeDate, 'p')}` : 'Invalid Time'}</TableCell>
+                          <TableCell>
+                            <div>{isValid(booking.startTime) ? format(booking.startTime, 'MMM dd, yyyy') : 'Invalid Date'}</div>
+                            <div className="text-xs text-muted-foreground">
+                                {isValid(booking.startTime) && isValid(booking.endTime) ? `${format(booking.startTime, 'p')} - ${format(booking.endTime, 'p')}` : 'Invalid Time'}
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <Badge
                                 className={cn(
@@ -165,7 +219,7 @@ export default function DashboardPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <Button variant="ghost" size="sm" asChild>
-                              <Link href={`/bookings?bookingId=${booking.id}&date=${isValid(startTimeDate) ? format(startTimeDate, 'yyyy-MM-dd') : ''}`}>View/Edit</Link>
+                              <Link href={`/bookings?bookingId=${booking.id}&date=${isValid(booking.startTime) ? format(booking.startTime, 'yyyy-MM-dd') : ''}`}>View/Edit</Link>
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -184,7 +238,7 @@ export default function DashboardPage() {
             )}
           </Card>
         ) : (
-          <Card className="p-6 text-center shadow-lg">
+          <Card className="p-6 text-center shadow-lg border-0">
              <p className="text-muted-foreground">
                {currentUser ? "You have no upcoming bookings." : "Please log in to see your bookings."}
              </p>

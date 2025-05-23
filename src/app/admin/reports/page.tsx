@@ -1,20 +1,13 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { BarChart3, ClipboardList, AlertTriangle, Users, PieChart as PieChartIcon, Percent, Clock, Hourglass } from 'lucide-react';
+import { BarChart3, ClipboardList, AlertTriangle, Users, PieChart as PieChartIcon, Percent, Clock, Hourglass, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import {
-  allAdminMockResources,
-  initialBookings,
-  initialMaintenanceRequests,
-  maintenanceRequestStatuses,
-  initialMockUsers,
-  userRolesList,
-} from '@/lib/mock-data';
 import type { Resource, Booking, MaintenanceRequest, User, RoleName, MaintenanceRequestStatus } from '@/types';
+import { maintenanceRequestStatuses, userRolesList } from '@/lib/mock-data';
 import {
   ChartContainer,
   ChartTooltip,
@@ -35,17 +28,19 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { cn } from '@/lib/utils';
-import { differenceInDays, parseISO, startOfHour, format as formatDate, subDays, isValid } from 'date-fns';
+import { differenceInDays, parseISO, startOfHour, format as formatDate, subDays, isValid as isValidDate } from 'date-fns';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 
 interface ReportItem {
   name: string;
   count: number;
-  fill?: string; // For PieChart colors
+  fill?: string; 
 }
 
 interface UtilizationItem {
   name: string;
-  utilization: number; // Percentage
+  utilization: number; 
 }
 
 interface PeakHourItem {
@@ -76,10 +71,48 @@ const chartLegendConfig = {
 
 
 export default function ReportsPage() {
+  const [allResources, setAllResources] = useState<Resource[]>([]);
+  const [allBookings, setAllBookings] = useState<Booking[]>([]);
+  const [allMaintenanceRequests, setAllMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchDataForReports = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const resourcesSnapshot = await getDocs(collection(db, "resources"));
+      setAllResources(resourcesSnapshot.docs.map(d => ({id: d.id, ...d.data()} as Resource)));
+
+      const bookingsSnapshot = await getDocs(collection(db, "bookings"));
+      setAllBookings(bookingsSnapshot.docs.map(d => ({
+          id: d.id, ...d.data(), 
+          startTime: d.data().startTime.toDate(), 
+          endTime: d.data().endTime.toDate(),
+          createdAt: d.data().createdAt.toDate()
+      } as Booking)));
+
+      const maintenanceSnapshot = await getDocs(collection(db, "maintenanceRequests"));
+      setAllMaintenanceRequests(maintenanceSnapshot.docs.map(d => ({
+          id: d.id, ...d.data(), 
+          dateReported: d.data().dateReported.toDate().toISOString(),
+          dateResolved: d.data().dateResolved ? d.data().dateResolved.toDate().toISOString() : undefined
+      } as MaintenanceRequest)));
+
+    } catch (error) {
+      console.error("Error fetching data for reports:", error);
+    }
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchDataForReports();
+  }, [fetchDataForReports]);
+
+
   const bookingsPerResource: ReportItem[] = useMemo(() => {
+    if (isLoading) return [];
     const report: ReportItem[] = [];
-    allAdminMockResources.forEach(resource => {
-      const count = initialBookings.filter(
+    allResources.forEach(resource => {
+      const count = allBookings.filter(
         booking => booking.resourceId === resource.id && booking.status !== 'Cancelled'
       ).length;
       if (count > 0) {
@@ -87,7 +120,7 @@ export default function ReportsPage() {
       }
     });
     return report.sort((a, b) => b.count - a.count).slice(0, 10);
-  }, []);
+  }, [allResources, allBookings, isLoading]);
 
   const bookingsChartConfig = useMemo(() => {
     const config: ChartConfig = {};
@@ -103,15 +136,16 @@ export default function ReportsPage() {
 
 
   const maintenanceByStatus: ReportItem[] = useMemo(() => {
+    if (isLoading) return [];
     const report: ReportItem[] = [];
     maintenanceRequestStatuses.forEach(status => {
-      const count = initialMaintenanceRequests.filter(req => req.status === status).length;
+      const count = allMaintenanceRequests.filter(req => req.status === status).length;
       if (count > 0) {
         report.push({ name: status, count, fill: CHART_COLORS.maintenance[status] });
       }
     });
     return report;
-  }, []);
+  }, [allMaintenanceRequests, isLoading]);
   
   const maintenanceChartConfig = useMemo(() => {
     const config: ChartConfig = {};
@@ -125,17 +159,17 @@ export default function ReportsPage() {
   }, [maintenanceByStatus]);
 
   const resourceUtilization: UtilizationItem[] = useMemo(() => {
+    if (isLoading) return [];
     const report: UtilizationItem[] = [];
     const today = new Date();
     const thirtyDaysAgo = subDays(today, 30);
 
-    allAdminMockResources.forEach(resource => {
+    allResources.forEach(resource => {
       const bookedDays = new Set<string>();
-      initialBookings.forEach(booking => {
-        // Ensure booking.startTime is treated as a Date object
-        const bookingDate = typeof booking.startTime === 'string' ? parseISO(booking.startTime) : booking.startTime;
+      allBookings.forEach(booking => {
+        const bookingDate = booking.startTime; // Already a Date object
         if (booking.resourceId === resource.id && booking.status === 'Confirmed') {
-          if (isValid(bookingDate) && bookingDate >= thirtyDaysAgo && bookingDate <= today) {
+          if (isValidDate(bookingDate) && bookingDate >= thirtyDaysAgo && bookingDate <= today) {
             bookedDays.add(formatDate(bookingDate, 'yyyy-MM-dd'));
           }
         }
@@ -146,7 +180,7 @@ export default function ReportsPage() {
       }
     });
     return report.sort((a, b) => b.utilization - a.utilization).slice(0, 7);
-  }, []);
+  }, [allResources, allBookings, isLoading]);
 
   const utilizationChartConfig = useMemo(() => {
     const config: ChartConfig = {};
@@ -161,11 +195,12 @@ export default function ReportsPage() {
   }, [resourceUtilization]);
 
   const peakBookingHours: PeakHourItem[] = useMemo(() => {
+    if (isLoading) return [];
     const hourCounts: { [hour: string]: number } = {};
-    initialBookings.forEach(booking => {
+    allBookings.forEach(booking => {
       if (booking.status === 'Confirmed') {
-        const bookingDate = typeof booking.startTime === 'string' ? parseISO(booking.startTime) : booking.startTime;
-        if (isValid(bookingDate)) {
+        const bookingDate = booking.startTime; // Already a Date object
+        if (isValidDate(bookingDate)) {
             const hour = formatDate(startOfHour(bookingDate), 'HH:00');
             hourCounts[hour] = (hourCounts[hour] || 0) + 1;
         }
@@ -174,7 +209,7 @@ export default function ReportsPage() {
     return Object.entries(hourCounts)
       .map(([hour, count]) => ({ hour, count }))
       .sort((a, b) => parseInt(a.hour.split(':')[0]) - parseInt(b.hour.split(':')[0]));
-  }, []);
+  }, [allBookings, isLoading]);
   
   const peakHoursChartConfig = useMemo(() => {
      const config: ChartConfig = {};
@@ -190,10 +225,11 @@ export default function ReportsPage() {
 
 
   const waitlistedPerResource: ReportItem[] = useMemo(() => {
+    if (isLoading) return [];
     const report: ReportItem[] = [];
-    allAdminMockResources.forEach(resource => {
+    allResources.forEach(resource => {
       if (resource.allowQueueing) {
-        const count = initialBookings.filter(
+        const count = allBookings.filter(
           booking => booking.resourceId === resource.id && booking.status === 'Waitlisted'
         ).length;
         if (count > 0) {
@@ -202,7 +238,7 @@ export default function ReportsPage() {
       }
     });
     return report.sort((a, b) => b.count - a.count);
-  }, []);
+  }, [allResources, allBookings, isLoading]);
   
   const waitlistChartConfig = useMemo(() => {
     const config: ChartConfig = {};
@@ -216,6 +252,14 @@ export default function ReportsPage() {
     return config;
   }, [waitlistedPerResource]);
 
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-[calc(100vh-200px)] text-muted-foreground">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="ml-3 text-sm">Loading report data...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -248,7 +292,7 @@ export default function ReportsPage() {
                       angle={-45}
                       textAnchor="end"
                       interval={0}
-                      height={70} // Increased height for angled labels
+                      height={70}
                       className="text-xs"
                     />
                     <YAxis tickLine={false} axisLine={false} tickMargin={8} allowDecimals={false} />
@@ -386,5 +430,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    

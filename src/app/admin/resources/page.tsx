@@ -5,10 +5,9 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
+import { ClipboardList, PlusCircle, Filter as FilterIcon, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2, FilterX } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
-// Removed allAdminMockResources from here, labsList also comes from mock-data
-import { initialMockResourceTypes, labsList } from '@/lib/mock-data';
+import { initialMockResourceTypes, labsList, resourceStatusesList, addAuditLog } from '@/lib/mock-data'; // Removed allAdminMockResources
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -43,10 +42,6 @@ import { cn } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, where } from 'firebase/firestore';
 
-// This page now defines its own resource list fetched from Firestore
-// No longer exporting allAdminMockResources for detail page to use,
-// detail page will fetch its own resource.
-
 const getStatusBadge = (status: ResourceStatus) => {
   switch (status) {
     case 'Available':
@@ -63,10 +58,9 @@ const getStatusBadge = (status: ResourceStatus) => {
 export default function AdminResourcesPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
-  const [resources, setResources] = useState<Resource[]>([]); // Initialize with empty array
-  const [isLoadingResources, setIsLoadingResources] = useState(true);
-  const [resourceTypes, setResourceTypes] = useState<ResourceType[]>([]);
-
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [fetchedResourceTypes, setFetchedResourceTypes] = useState<ResourceType[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
@@ -83,8 +77,8 @@ export default function AdminResourcesPage() {
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
 
-  const fetchResourcesAndTypes = useCallback(async () => {
-    setIsLoadingResources(true);
+  const fetchData = useCallback(async () => {
+    setIsLoadingData(true);
     try {
       // Fetch Resources
       const resourcesCollectionRef = collection(db, "resources");
@@ -93,10 +87,22 @@ export default function AdminResourcesPage() {
         const data = docSnap.data();
         return {
           id: docSnap.id,
-          ...data,
-          // Ensure date fields are handled correctly (e.g., purchaseDate if stored as Timestamp)
+          name: data.name || 'Unnamed Resource',
+          resourceTypeId: data.resourceTypeId || '',
+          lab: data.lab || labsList[0],
+          status: data.status || 'Available',
+          description: data.description || '',
+          imageUrl: data.imageUrl || 'https://placehold.co/100x100.png',
+          manufacturer: data.manufacturer,
+          model: data.model,
+          serialNumber: data.serialNumber,
           purchaseDate: data.purchaseDate ? (data.purchaseDate.toDate ? data.purchaseDate.toDate().toISOString() : data.purchaseDate) : undefined,
-          // availability and unavailabilityPeriods should be fine if stored as arrays of objects
+          notes: data.notes,
+          features: data.features || [],
+          remoteAccess: data.remoteAccess,
+          allowQueueing: data.allowQueueing ?? false,
+          availability: data.availability || [],
+          unavailabilityPeriods: data.unavailabilityPeriods || [],
         } as Resource;
       });
       setResources(fetchedResources.sort((a,b) => a.name.localeCompare(b.name)));
@@ -108,18 +114,18 @@ export default function AdminResourcesPage() {
         id: docSnap.id,
         ...docSnap.data(),
       } as ResourceType));
-      setResourceTypes(fetchedTypes.sort((a, b) => a.name.localeCompare(b.name)));
+      setFetchedResourceTypes(fetchedTypes.sort((a, b) => a.name.localeCompare(b.name)));
 
     } catch (error) {
       console.error("Error fetching resources or types: ", error);
       toast({ title: "Error", description: "Failed to fetch data from database.", variant: "destructive" });
     }
-    setIsLoadingResources(false);
+    setIsLoadingData(false);
   }, [toast]);
 
   useEffect(() => {
-    fetchResourcesAndTypes();
-  }, [fetchResourcesAndTypes]);
+    fetchData();
+  }, [fetchData]);
 
 
   useEffect(() => {
@@ -150,7 +156,7 @@ export default function AdminResourcesPage() {
     if (activeFilterLab !== 'all') {
       currentResources = currentResources.filter(resource => resource.lab === activeFilterLab);
     }
-     if (activeSelectedDate) {
+    if (activeSelectedDate) {
       const dateToFilterStr = format(startOfDay(activeSelectedDate), 'yyyy-MM-dd');
       currentResources = currentResources.filter(resource => {
         if (resource.status !== 'Available') return false;
@@ -166,7 +172,7 @@ export default function AdminResourcesPage() {
         return dayAvailability && dayAvailability.slots.length > 0;
       });
     }
-    return currentResources; // Already sorted by name on fetch
+    return currentResources;
   }, [resources, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
 
   const handleApplyDialogFilters = () => {
@@ -205,7 +211,7 @@ export default function AdminResourcesPage() {
       return;
     }
 
-    const resourceType = resourceTypes.find(rt => rt.id === data.resourceTypeId);
+    const resourceType = fetchedResourceTypes.find(rt => rt.id === data.resourceTypeId);
     if (!resourceType) {
         toast({ title: "Error", description: "Selected resource type not found.", variant: "destructive"});
         return;
@@ -229,16 +235,15 @@ export default function AdminResourcesPage() {
          hostname: data.remoteAccess.hostname || undefined,
          protocol: data.remoteAccess.protocol || undefined,
          username: data.remoteAccess.username || undefined,
-         port: data.remoteAccess.port ?? undefined, // Already number or undefined from form
+         port: data.remoteAccess.port ?? undefined,
          notes: data.remoteAccess.notes || undefined,
       } : null,
-      allowQueueing: data.status === 'Available', // Example logic
-      availability: editingResource?.availability || [], // Preserve existing or default to empty
-      unavailabilityPeriods: editingResource?.unavailabilityPeriods || [], // Preserve existing or default to empty
+      allowQueueing: data.status === 'Available', // Example logic, adjust as needed
+      availability: editingResource?.availability || [],
+      unavailabilityPeriods: editingResource?.unavailabilityPeriods || [],
     };
 
-
-    setIsLoadingResources(true);
+    setIsLoadingData(true);
     if (editingResource) {
       try {
         const resourceDocRef = doc(db, "resources", editingResource.id);
@@ -251,10 +256,7 @@ export default function AdminResourcesPage() {
       }
     } else {
       try {
-        const docRef = await addDoc(collection(db, "resources"), {
-          ...resourceDataToSave,
-          // id is not needed here as Firestore auto-generates it
-        });
+        const docRef = await addDoc(collection(db, "resources"), resourceDataToSave);
         addAuditLog(currentUser.id, currentUser.name || 'Admin', 'RESOURCE_CREATED', { entityType: 'Resource', entityId: docRef.id, details: `Resource '${data.name}' created.`});
         toast({ title: 'Resource Created', description: `Resource "${data.name}" has been created.` });
       } catch (error) {
@@ -264,7 +266,7 @@ export default function AdminResourcesPage() {
     }
     setIsFormDialogOpen(false);
     setEditingResource(null);
-    await fetchResourcesAndTypes(); // Re-fetch all data
+    await fetchData();
   };
 
   const activeFilterCount = [
@@ -328,7 +330,7 @@ export default function AdminResourcesPage() {
                         <SelectTrigger id="resourceTypeFilterDialog" className="h-9"><SelectValue placeholder="Filter by Type" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">All Types</SelectItem>
-                          {resourceTypes.map(type => ( // Use fetched resourceTypes
+                          {fetchedResourceTypes.map(type => (
                             <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
                           ))}
                         </SelectContent>
@@ -392,7 +394,7 @@ export default function AdminResourcesPage() {
         }
       />
 
-      {isLoadingResources ? (
+      {isLoadingData ? (
         <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading resources...</div>
       ) : filteredResources.length > 0 ? (
         <div className="overflow-x-auto rounded-lg border shadow-sm">
@@ -409,7 +411,7 @@ export default function AdminResourcesPage() {
             </TableHeader>
             <TableBody>
               {filteredResources.map((resource) => {
-                const resourceType = resourceTypes.find(rt => rt.id === resource.resourceTypeId);
+                const resourceType = fetchedResourceTypes.find(rt => rt.id === resource.resourceTypeId);
                 const resourceTypeNameDisplay = resourceType ? resourceType.name : 'N/A';
 
                 return (
@@ -486,8 +488,7 @@ export default function AdminResourcesPage() {
         }}
         initialResource={editingResource}
         onSave={handleSaveResource}
-        // Pass fetched resourceTypes to the form dialog
-        resourceTypes={resourceTypes} 
+        resourceTypes={fetchedResourceTypes} 
       />
     </div>
   );
