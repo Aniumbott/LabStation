@@ -15,18 +15,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/label"; // Keep if used outside react-hook-form context
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { UserPlus, Save, X } from 'lucide-react';
 import type { User, RoleName } from '@/types';
-
-const userRoles: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
+import { userRolesList } from '@/lib/mock-data'; // Import userRolesList
 
 const userFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email({ message: 'Please enter a valid email address.' }),
-  role: z.enum(userRoles, { required_error: 'Please select a role.' }),
+  role: z.enum(userRolesList as [string, ...string[]], { required_error: 'Please select a role.' }), // Use imported list
 });
 
 export type UserFormValues = z.infer<typeof userFormSchema>;
@@ -44,7 +43,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
     defaultValues: {
       name: '',
       email: '',
-      role: undefined,
+      role: 'Researcher', // Default role for new users
     },
   });
 
@@ -57,10 +56,10 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
           role: initialUser.role,
         });
       } else {
-        form.reset({
+        form.reset({ // Reset for new user
           name: '',
           email: '',
-          role: undefined,
+          role: 'Researcher', // Default role for new users
         });
       }
     }
@@ -74,9 +73,9 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-full max-w-xs sm:max-w-sm md:max-w-md">
         <DialogHeader>
-          <DialogTitle>{initialUser ? 'Edit User' : 'Add New User'}</DialogTitle>
+          <DialogTitle>{initialUser ? 'Edit User' : 'Add New User Profile'}</DialogTitle>
           <DialogDescription>
-            {initialUser ? `Modify the details for ${initialUser.name}.` : 'Fill in the information for the new user.'}
+            {initialUser ? `Modify the details for ${initialUser.name}.` : 'Fill in the information for the new user profile. This does not create a Firebase Auth account.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -101,9 +100,15 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
                 <FormItem>
                   <FormLabel>Email Address</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="e.g., ada.lovelace@labstation.com" {...field} />
+                    <Input 
+                        type="email" 
+                        placeholder="e.g., ada.lovelace@labstation.com" 
+                        {...field} 
+                        disabled={!!initialUser} // Disable email editing for existing users
+                    />
                   </FormControl>
-                  <FormMessage />
+                  {initialUser && <FormMessage>Email cannot be changed for existing users here.</FormMessage>}
+                  {!initialUser && <FormMessage />}
                 </FormItem>
               )}
             />
@@ -120,7 +125,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {userRoles.map((role) => (
+                      {userRolesList.map((role) => (
                         <SelectItem key={role} value={role}>
                           {role}
                         </SelectItem>
@@ -137,8 +142,8 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting
-                  ? (initialUser ? 'Saving...' : 'Creating...')
-                  : (initialUser ? <><Save className="mr-2 h-4 w-4" /> Save Changes</> : <><UserPlus className="mr-2 h-4 w-4" /> Create User</>)
+                  ? (initialUser ? 'Saving...' : 'Creating Profile...')
+                  : (initialUser ? <><Save className="mr-2 h-4 w-4" /> Save Changes</> : <><UserPlus className="mr-2 h-4 w-4" /> Create Profile</>)
                 }
               </Button>
             </DialogFooter>
