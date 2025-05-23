@@ -5,9 +5,9 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2, FilterX, X } from 'lucide-react';
+import { ClipboardList, PlusCircle, Filter as FilterIcon, CheckCircle, AlertTriangle, Construction, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2, FilterX, X } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { labsList } from '@/lib/mock-data';
+import { labsList, resourceStatusesList } from '@/lib/mock-data'; // Removed initialMockResourceTypes
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -37,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, startOfDay, isValid, parseISO, isWithinInterval, addDays as dateFnsAddDays } from 'date-fns';
+import { format, startOfDay, isValid as isValidDate, parseISO, isWithinInterval, addDays as dateFnsAddDays, compareAsc } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, where, orderBy } from 'firebase/firestore';
@@ -69,10 +69,13 @@ export default function AdminResourcesPage() {
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
 
-  const fetchData = useCallback(async () => {
+  const fetchResourcesAndTypes = useCallback(async () => {
     setIsLoadingData(true);
     try {
-      const resourcesSnapshot = await getDocs(query(collection(db, "resources"), orderBy("name", "asc")));
+      // Fetch Resources
+      // Firestore Index required: resources collection: name (ASC)
+      const resourcesQuery = query(collection(db, "resources"), orderBy("name", "asc"));
+      const resourcesSnapshot = await getDocs(resourcesQuery);
       const fetchedResourcesPromises = resourcesSnapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
         return {
@@ -86,35 +89,40 @@ export default function AdminResourcesPage() {
           manufacturer: data.manufacturer,
           model: data.model,
           serialNumber: data.serialNumber,
-          purchaseDate: data.purchaseDate instanceof Timestamp ? data.purchaseDate.toDate() : (typeof data.purchaseDate === 'string' ? parseISO(data.purchaseDate) : undefined),
+          purchaseDate: data.purchaseDate instanceof Timestamp ? data.purchaseDate.toDate() : undefined,
           notes: data.notes,
           features: Array.isArray(data.features) ? data.features : [],
           remoteAccess: data.remoteAccess,
           allowQueueing: data.allowQueueing ?? false,
-          availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: typeof a.date === 'string' ? a.date : (a.date?.toDate ? format(a.date.toDate(), 'yyyy-MM-dd') : a.date) })) : [],
-          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)), startDate: typeof p.startDate === 'string' ? p.startDate : (p.startDate?.toDate ? format(p.startDate.toDate(), 'yyyy-MM-dd') : p.startDate), endDate: typeof p.endDate === 'string' ? p.endDate : (p.endDate?.toDate ? format(p.endDate.toDate(), 'yyyy-MM-dd') : p.endDate), reason: p.reason })) : [],
+          availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: a.date })) : [], // Assuming date is YYYY-MM-DD string
+          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)), startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [], // Assuming dates are YYYY-MM-DD string
         } as Resource;
       });
       const fetchedResources = await Promise.all(fetchedResourcesPromises);
       setResources(fetchedResources);
 
-      const typesSnapshot = await getDocs(query(collection(db, "resourceTypes"), orderBy("name", "asc")));
+      // Fetch Resource Types (for filter and form dialog)
+      // Firestore Index required: resourceTypes collection: name (ASC)
+      const typesQuery = query(collection(db, "resourceTypes"), orderBy("name", "asc"));
+      const typesSnapshot = await getDocs(typesQuery);
       const rTypes: ResourceType[] = typesSnapshot.docs.map(docSnap => ({
         id: docSnap.id,
-        ...docSnap.data(),
-      } as ResourceType));
+        ...(docSnap.data() as Omit<ResourceType, 'id'>),
+      }));
       setFetchedResourceTypes(rTypes);
 
     } catch (error) {
       console.error("Error fetching resources or types: ", error);
       toast({ title: "Error", description: "Failed to fetch data from database. Check console for details.", variant: "destructive" });
+      setResources([]);
+      setFetchedResourceTypes([]);
     }
     setIsLoadingData(false);
   }, [toast]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchResourcesAndTypes();
+  }, [fetchResourcesAndTypes]);
 
 
   useEffect(() => {
@@ -128,46 +136,42 @@ export default function AdminResourcesPage() {
   }, [isFilterDialogOpen, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
 
   const filteredResources = useMemo(() => {
-    let currentResources = [...resources];
-    const lowerSearchTerm = activeSearchTerm.toLowerCase();
+    return resources.filter(resource => {
+      const lowerSearchTerm = activeSearchTerm.toLowerCase();
+      const nameMatch = resource.name.toLowerCase().includes(lowerSearchTerm);
+      const descriptionMatch = resource.description && resource.description.toLowerCase().includes(lowerSearchTerm);
+      const manufacturerMatch = resource.manufacturer && resource.manufacturer.toLowerCase().includes(lowerSearchTerm);
+      const modelMatch = resource.model && resource.model.toLowerCase().includes(lowerSearchTerm);
+      const searchMatch = nameMatch || descriptionMatch || manufacturerMatch || modelMatch;
 
-    if (activeSearchTerm) {
-      currentResources = currentResources.filter(resource =>
-        resource.name.toLowerCase().includes(lowerSearchTerm) ||
-        (resource.description && resource.description.toLowerCase().includes(lowerSearchTerm)) ||
-        (resource.manufacturer && resource.manufacturer.toLowerCase().includes(lowerSearchTerm)) ||
-        (resource.model && resource.model.toLowerCase().includes(lowerSearchTerm))
-      );
-    }
-    if (activeFilterTypeId !== 'all') {
-      currentResources = currentResources.filter(resource => resource.resourceTypeId === activeFilterTypeId);
-    }
-    if (activeFilterLab !== 'all') {
-      currentResources = currentResources.filter(resource => resource.lab === activeFilterLab);
-    }
-    if (activeSelectedDate) {
-      const dateToFilter = startOfDay(activeSelectedDate);
-      const dateToFilterStr = format(dateToFilter, 'yyyy-MM-dd');
-      
-      currentResources = currentResources.filter(resource => {
-        if (resource.status !== 'Available') return false;
+      const typeMatch = activeFilterTypeId === 'all' || resource.resourceTypeId === activeFilterTypeId;
+      const labMatch = activeFilterLab === 'all' || resource.lab === activeFilterLab;
 
-        const isSpecificallyUnavailable = resource.unavailabilityPeriods?.some(period => {
-          if (!period.startDate || !period.endDate) return false;
-          try {
-            const periodStart = parseISO(period.startDate);
-            const periodEnd = parseISO(period.endDate); 
-            return isValid(periodStart) && isValid(periodEnd) && 
-                   isWithinInterval(dateToFilter, { start: startOfDay(periodStart), end: startOfDay(periodEnd) });
-          } catch (e) { return false; }
-        });
-        if (isSpecificallyUnavailable) return false;
-        
-        const dayAvailability = resource.availability?.find(avail => avail.date === dateToFilterStr);
-        return dayAvailability && Array.isArray(dayAvailability.slots) && dayAvailability.slots.length > 0;
-      });
-    }
-    return currentResources;
+      let dateMatch = true;
+      if (activeSelectedDate) {
+        if (resource.status !== 'Available') {
+          dateMatch = false;
+        } else {
+          const dateToFilterStr = format(activeSelectedDate, 'yyyy-MM-dd');
+          const isSpecificallyUnavailable = resource.unavailabilityPeriods?.some(period => {
+            if (!period.startDate || !period.endDate) return false;
+            try {
+              const periodStart = parseISO(period.startDate);
+              const periodEnd = parseISO(period.endDate);
+              return isValidDate(periodStart) && isValidDate(periodEnd) &&
+                     isWithinInterval(activeSelectedDate, { start: startOfDay(periodStart), end: startOfDay(periodEnd) });
+            } catch (e) { return false; }
+          });
+          if (isSpecificallyUnavailable) {
+            dateMatch = false;
+          } else {
+            const dayAvailability = resource.availability?.find(avail => avail.date === dateToFilterStr);
+            dateMatch = !!(dayAvailability && Array.isArray(dayAvailability.slots) && dayAvailability.slots.length > 0);
+          }
+        }
+      }
+      return searchMatch && typeMatch && labMatch && dateMatch;
+    });
   }, [resources, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
 
   const handleApplyDialogFilters = () => {
@@ -221,11 +225,11 @@ export default function AdminResourcesPage() {
     }
 
     let purchaseDateToSave: Timestamp | null = null;
-    if (data.purchaseDate && isValid(parseISO(data.purchaseDate))) {
+    if (data.purchaseDate && isValidDate(parseISO(data.purchaseDate))) {
       purchaseDateToSave = Timestamp.fromDate(parseISO(data.purchaseDate));
     }
 
-    const resourceDataToSave: Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods' | 'purchaseDate'> & { purchaseDate?: Timestamp | null } = {
+    const resourceData: Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods' | 'purchaseDate'> & { purchaseDate?: Timestamp | null, createdAt?: Timestamp, lastUpdatedAt?: Timestamp } = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
       lab: data.lab,
@@ -243,55 +247,53 @@ export default function AdminResourcesPage() {
          hostname: data.remoteAccess.hostname || undefined,
          protocol: data.remoteAccess.protocol || undefined,
          username: data.remoteAccess.username || undefined,
-         port: data.remoteAccess.port ?? undefined, 
+         port: data.remoteAccess.port,
          notes: data.remoteAccess.notes || undefined,
       } : undefined,
       allowQueueing: data.allowQueueing ?? false,
     };
-    
-    // Remove undefined fields before saving to Firestore
-    const cleanDbData = Object.fromEntries(Object.entries(resourceDataToSave).filter(([_, v]) => v !== undefined));
 
-    setIsLoadingData(true);
+    const cleanDbData = Object.fromEntries(Object.entries(resourceData).filter(([_, v]) => v !== undefined));
     const auditAction = resourceId ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
     const auditDetails = `Resource '${data.name}' ${resourceId ? 'updated' : 'created'}.`;
 
-    if (resourceId) {
-      try {
+    setIsLoadingData(true);
+    try {
+      if (resourceId) {
         const resourceDocRef = doc(db, "resources", resourceId);
-        // Fetch existing availability/unavailability to preserve them if not editable here
-        const existingDoc = await getDoc(resourceDocRef);
-        const existingData = existingDoc.data();
-        
+        const existingDocSnap = await getDoc(resourceDocRef);
+        const existingData = existingDocSnap.data();
+
         const dataWithExistingSchedules = {
             ...cleanDbData,
+            lastUpdatedAt: serverTimestamp(),
+            // Preserve existing availability/unavailability unless form handles them
             availability: existingData?.availability || [],
             unavailabilityPeriods: existingData?.unavailabilityPeriods || [],
         };
         await updateDoc(resourceDocRef, dataWithExistingSchedules);
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
-      } catch (error) {
-        console.error("Error updating resource:", error);
-        toast({ title: "Error", description: "Failed to update resource. Check console.", variant: "destructive" });
-      }
-    } else {
-      try {
+      } else {
         const dataForNewResource = {
             ...cleanDbData,
-            availability: [], 
-            unavailabilityPeriods: [],
+            createdAt: serverTimestamp(),
+            lastUpdatedAt: serverTimestamp(),
+            availability: [], // Initialize with empty availability
+            unavailabilityPeriods: [], // Initialize with empty unavailability
         };
-        const docRef = await addDoc(collection(db, "resources"), dataForNewResource);
+        await addDoc(collection(db, "resources"), dataForNewResource);
         toast({ title: 'Resource Created', description: `Resource "${data.name}" has been created.` });
-      } catch (error) {
-        console.error("Error creating resource:", error);
-        toast({ title: "Error", description: "Failed to create resource. Check console.", variant: "destructive" });
       }
+      addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'Resource', entityId: resourceId || 'NEW_RESOURCE', details: auditDetails });
+      setIsFormDialogOpen(false);
+      setEditingResource(null);
+      await fetchResourcesAndTypes();
+    } catch (error) {
+        console.error(`Error ${resourceId ? 'updating' : 'creating'} resource:`, error);
+        toast({ title: "Database Error", description: `Failed to ${resourceId ? 'update' : 'create'} resource.`, variant: "destructive" });
+        setIsLoadingData(false); // Ensure loading is false on error
     }
-    addAuditLog(currentUser.id, currentUser.name || 'Admin/Manager', auditAction, { entityType: 'Resource', entityId: resourceId || 'NEW_RESOURCE', details: auditDetails });
-    setIsFormDialogOpen(false);
-    setEditingResource(null);
-    await fetchData(); 
+    // setIsLoadingData is set to false in fetchResourcesAndTypes finally block
   };
 
   const activeFilterCount = [
@@ -300,7 +302,7 @@ export default function AdminResourcesPage() {
     activeFilterLab !== 'all',
     activeSelectedDate !== undefined
   ].filter(Boolean).length;
-  
+
   const canAddResources = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
 
   return (
@@ -342,7 +344,7 @@ export default function AdminResourcesPage() {
                         type="search"
                         placeholder="Name, manufacturer, model..."
                         value={tempSearchTerm}
-                        onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
+                        onChange={(e) => setTempSearchTerm(e.target.value)}
                         className="h-9 pl-8"
                         />
                     </div>
@@ -384,7 +386,7 @@ export default function AdminResourcesPage() {
                             onSelect={setTempSelectedDate}
                             month={currentMonthInDialog}
                             onMonthChange={setCurrentMonthInDialog}
-                            disabled={(date) => date < startOfDay(new Date()) } 
+                            disabled={(date) => date < startOfDay(new Date()) }
                             footer={ tempSelectedDate &&
                                 <Button
                                     variant="ghost"
@@ -505,7 +507,7 @@ export default function AdminResourcesPage() {
           </CardContent>
         </Card>
       )}
-      {isFormDialogOpen && ( 
+      {isFormDialogOpen && (
         <ResourceFormDialog
             open={isFormDialogOpen}
             onOpenChange={(isOpen) => {
@@ -514,11 +516,9 @@ export default function AdminResourcesPage() {
             }}
             initialResource={editingResource}
             onSave={handleSaveResource}
-            resourceTypes={fetchedResourceTypes} 
+            resourceTypes={fetchedResourceTypes}
         />
       )}
     </div>
   );
 }
-
-    

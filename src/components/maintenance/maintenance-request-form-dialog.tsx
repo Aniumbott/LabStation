@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Save, X, PlusCircle } from 'lucide-react';
+import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
 import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource, RoleName } from '@/types';
 import { maintenanceRequestStatuses } from '@/lib/mock-data';
 
@@ -46,7 +46,7 @@ interface MaintenanceRequestFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialRequest: MaintenanceRequest | null;
-  onSave: (data: MaintenanceRequestFormValues) => void;
+  onSave: (data: MaintenanceRequestFormValues) => Promise<void>; // Make onSave async
   technicians: User[];
   resources: Resource[];
   currentUserRole?: RoleName;
@@ -58,13 +58,7 @@ export function MaintenanceRequestFormDialog({
 }: MaintenanceRequestFormDialogProps) {
   const form = useForm<MaintenanceRequestFormValues>({
     resolver: zodResolver(maintenanceRequestFormSchema),
-    defaultValues: {
-      resourceId: '',
-      issueDescription: '',
-      status: 'Open',
-      assignedTechnicianId: '',
-      resolutionNotes: '',
-    },
+    // Default values set in useEffect
   });
 
   const watchStatus = form.watch('status');
@@ -89,17 +83,23 @@ export function MaintenanceRequestFormDialog({
         });
       }
     }
-  }, [open, initialRequest, resources, form.reset]);
+  }, [open, initialRequest, resources, form.reset, form]); // Added form to dependency array
 
-  function onSubmit(data: MaintenanceRequestFormValues) {
+  async function onSubmit(data: MaintenanceRequestFormValues) {
     const dataToSave = {
       ...data,
       assignedTechnicianId: data.assignedTechnicianId === UNASSIGNED_TECHNICIAN_VALUE || data.assignedTechnicianId === '' ? undefined : data.assignedTechnicianId,
     };
-    onSave(dataToSave);
+    await onSave(dataToSave);
+    // Parent component (MaintenanceRequestsPage) will handle closing the dialog on successful save
   }
 
-  const canEditSensitiveFields = currentUserRole && (currentUserRole === 'Admin' || currentUserRole === 'Lab Manager' || currentUserRole === 'Technician');
+  const canEditSensitiveFields = useMemo(() => {
+    if (!currentUserRole) return false;
+    return currentUserRole === 'Admin' || currentUserRole === 'Lab Manager' || currentUserRole === 'Technician';
+  }, [currentUserRole]);
+
+  const formIsSubmitting = form.formState.isSubmitting;
 
 
   return (
@@ -108,6 +108,7 @@ export function MaintenanceRequestFormDialog({
         <DialogHeader>
           <DialogTitle>{initialRequest ? 'Edit Maintenance Request' : 'Log New Maintenance Request'}</DialogTitle>
           <DialogDescription>
+            {/* @ts-ignore client-side augmented property */}
             {initialRequest ? `Update details for request on "${initialRequest.resourceName}".` : 'Provide information for the new maintenance request.'}
           </DialogDescription>
         </DialogHeader>
@@ -124,16 +125,17 @@ export function MaintenanceRequestFormDialog({
                         <Select
                             onValueChange={field.onChange}
                             value={field.value || ''}
-                            disabled={!!initialRequest} 
+                            disabled={!!initialRequest || resources.length === 0}
                         >
-                            <FormControl><SelectTrigger><SelectValue placeholder="Select a resource" /></SelectTrigger></FormControl>
+                            <FormControl><SelectTrigger><SelectValue placeholder={resources.length > 0 ? "Select a resource" : "No resources available"} /></SelectTrigger></FormControl>
                             <SelectContent>
                             {resources.map(res => (
                                 <SelectItem key={res.id} value={res.id}>{res.name} ({res.lab})</SelectItem>
                             ))}
                             </SelectContent>
                         </Select>
-                        {initialRequest && <FormDescription>Resource cannot be changed after logging.</FormDescription>}
+                        {!!initialRequest && <FormDescription>Resource cannot be changed after logging.</FormDescription>}
+                        {resources.length === 0 && <FormDescription className="text-destructive">No resources found. Add resources first.</FormDescription>}
                         <FormMessage />
                         </FormItem>
                     )}
@@ -164,7 +166,7 @@ export function MaintenanceRequestFormDialog({
                                 ))}
                                 </SelectContent>
                             </Select>
-                            {!canEditSensitiveFields && !!initialRequest && <FormDescription>Status can only be changed by authorized personnel.</FormDescription>}
+                            {(!canEditSensitiveFields && !!initialRequest) && <FormDescription>Status can only be changed by authorized personnel.</FormDescription>}
                             <FormMessage />
                             </FormItem>
                         )}
@@ -188,7 +190,7 @@ export function MaintenanceRequestFormDialog({
                                 ))}
                                 </SelectContent>
                             </Select>
-                            {!canEditSensitiveFields && !!initialRequest && <FormDescription>Technician assignment can only be changed by authorized personnel.</FormDescription>}
+                            {(!canEditSensitiveFields && !!initialRequest) && <FormDescription>Technician assignment can only be changed by authorized personnel.</FormDescription>}
                             <FormMessage />
                             </FormItem>
                         )}
@@ -203,7 +205,7 @@ export function MaintenanceRequestFormDialog({
                             <FormLabel>Resolution Notes {watchStatus === 'Resolved' || watchStatus === 'Closed' ? <span className="text-destructive">*</span> : ''}</FormLabel>
                             <FormControl><Textarea placeholder="Describe the resolution steps taken..." {...field} value={field.value || ''} rows={4} disabled={!canEditSensitiveFields && !!initialRequest} /></FormControl>
                              <FormDescription>Required if status is Resolved or Closed.
-                             {!canEditSensitiveFields && !!initialRequest && " Only authorized personnel can add resolution notes."}
+                             {(!canEditSensitiveFields && !!initialRequest) && " Only authorized personnel can add resolution notes."}
                              </FormDescription>
                             <FormMessage />
                             </FormItem>
@@ -216,10 +218,14 @@ export function MaintenanceRequestFormDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting || (!canEditSensitiveFields && !!initialRequest && initialRequest.status !== 'Open')}>
-                {form.formState.isSubmitting
+              <Button type="submit" disabled={formIsSubmitting || (!canEditSensitiveFields && !!initialRequest && initialRequest.status !== 'Open')}>
+                {formIsSubmitting
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  : (initialRequest ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)
+                }
+                {formIsSubmitting
                   ? (initialRequest ? 'Saving...' : 'Logging Request...')
-                  : (initialRequest ? <><Save className="mr-2 h-4 w-4" /> Save Changes</> : <><PlusCircle className="mr-2 h-4 w-4" /> Log Request</>)
+                  : (initialRequest ? 'Save Changes' : 'Log Request')
                 }
               </Button>
             </DialogFooter>
@@ -229,5 +235,3 @@ export function MaintenanceRequestFormDialog({
     </Dialog>
   );
 }
-
-    

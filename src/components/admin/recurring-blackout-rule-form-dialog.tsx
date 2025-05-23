@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
-import { Save, X, PlusCircle } from 'lucide-react';
+import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
 import type { RecurringBlackoutRule, DayOfWeek } from '@/types';
-import { daysOfWeekArray } from '@/types'; // Import the array of DayOfWeek
+import { daysOfWeekArray } from '@/types';
 
 
 const recurringBlackoutRuleFormSchema = z.object({
@@ -35,7 +34,7 @@ interface RecurringBlackoutRuleFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialRule: RecurringBlackoutRule | null;
-  onSave: (data: RecurringBlackoutRuleFormValues) => void;
+  onSave: (data: RecurringBlackoutRuleFormValues) => Promise<void>; // Make onSave async
 }
 
 export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRule, onSave }: RecurringBlackoutRuleFormDialogProps) {
@@ -47,9 +46,11 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
       reason: '',
     },
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
+      setIsSubmitting(false); // Reset submitting state
       if (initialRule) {
         form.reset({
           name: initialRule.name,
@@ -64,10 +65,19 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
         });
       }
     }
-  }, [open, initialRule, form.reset]);
+  }, [open, initialRule, form.reset, form]); // Added form to dependency array
 
-  function onSubmit(data: RecurringBlackoutRuleFormValues) {
-    onSave(data);
+  async function onSubmit(data: RecurringBlackoutRuleFormValues) {
+    setIsSubmitting(true);
+    try {
+        await onSave(data);
+        // Parent component will handle closing the dialog on successful save
+    } catch (error) {
+        // Error toast handled by parent
+        console.error("Error in RecurringBlackoutRuleFormDialog onSubmit:", error);
+    } finally {
+        setIsSubmitting(false);
+    }
   }
 
   return (
@@ -94,7 +104,7 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={form.control}
               name="daysOfWeek"
@@ -163,10 +173,14 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting 
-                  ? (initialRule ? 'Saving...' : 'Adding Rule...') 
-                  : (initialRule ? <><Save className="mr-2 h-4 w-4" /> Save Changes</> : <><PlusCircle className="mr-2 h-4 w-4" /> Add Rule</>)
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  : (initialRule ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)
+                }
+                {isSubmitting
+                  ? (initialRule ? 'Saving...' : 'Adding Rule...')
+                  : (initialRule ? 'Save Changes' : 'Add Rule')
                 }
               </Button>
             </DialogFooter>

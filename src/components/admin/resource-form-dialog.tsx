@@ -13,18 +13,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Save, X, PlusCircle, Network, Info } from 'lucide-react';
+import { Save, X, PlusCircle, Network, Info, Loader2 } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
 import { labsList, resourceStatusesList } from '@/lib/mock-data';
 import { parseISO, format, isValid as isValidDate } from 'date-fns';
-import { Separator } from '@/components/ui/separator';
 import { Timestamp } from 'firebase/firestore';
 import { Checkbox } from '../ui/checkbox';
 
@@ -42,9 +40,8 @@ const resourceFormSchema = z.object({
   model: z.string().max(100).optional().or(z.literal('')),
   serialNumber: z.string().max(100).optional().or(z.literal('')),
   purchaseDate: z.string().optional().refine((val) => {
-    if (!val || val === '') return true; // Allow empty for optional
-    const date = parseISO(val);
-    return isValidDate(date);
+    if (!val || val === '') return true;
+    return isValidDate(parseISO(val));
   }, { message: "Invalid date format for purchase date." }).or(z.literal('')),
   notes: z.string().max(500).optional().or(z.literal('')),
   features: z.string().max(200, {message: "Features list cannot exceed 200 characters."}).optional().or(z.literal('')),
@@ -53,7 +50,7 @@ const resourceFormSchema = z.object({
     hostname: z.string().max(255).optional().or(z.literal('')),
     protocol: z.enum(VALID_REMOTE_PROTOCOLS).or(z.literal('')).optional(),
     username: z.string().max(100).optional().or(z.literal('')),
-    port: z.coerce.number().int().min(1).max(65535).optional(),
+    port: z.coerce.number().int().min(1).max(65535).optional(), // Use coerce for string to number, allow undefined
     notes: z.string().max(500).optional().or(z.literal('')),
   }).optional(),
   allowQueueing: z.boolean().optional(),
@@ -65,8 +62,8 @@ interface ResourceFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialResource: Resource | null;
-  onSave: (data: ResourceFormValues, resourceId?: string) => void;
-  resourceTypes: ResourceType[]; 
+  onSave: (data: ResourceFormValues, resourceId?: string) => Promise<void>; // Make onSave async
+  resourceTypes: ResourceType[];
 }
 
 export function ResourceFormDialog({
@@ -76,34 +73,12 @@ export function ResourceFormDialog({
 
   const form = useForm<ResourceFormValues>({
     resolver: zodResolver(resourceFormSchema),
-    defaultValues: {
-      name: '',
-      resourceTypeId: resourceTypes.length > 0 ? resourceTypes[0].id : '',
-      lab: labsList.length > 0 ? labsList[0] : undefined,
-      status: 'Available',
-      description: '',
-      imageUrl: '',
-      manufacturer: '',
-      model: '',
-      serialNumber: '',
-      purchaseDate: '',
-      notes: '',
-      features: '',
-      remoteAccess: {
-        ipAddress: '',
-        hostname: '',
-        protocol: '',
-        username: '',
-        port: undefined,
-        notes: '',
-      },
-      allowQueueing: false,
-    },
+    // Default values are set in useEffect based on initialResource
   });
 
   useEffect(() => {
     if (open) {
-      setIsSubmitting(false); // Reset submitting state when dialog opens
+      setIsSubmitting(false);
       if (initialResource) {
         form.reset({
           name: initialResource.name,
@@ -115,8 +90,8 @@ export function ResourceFormDialog({
           manufacturer: initialResource.manufacturer || '',
           model: initialResource.model || '',
           serialNumber: initialResource.serialNumber || '',
-          purchaseDate: initialResource.purchaseDate && isValidDate(new Date(initialResource.purchaseDate)) 
-                          ? format(new Date(initialResource.purchaseDate), 'yyyy-MM-dd') 
+          purchaseDate: initialResource.purchaseDate && isValidDate(new Date(initialResource.purchaseDate))
+                          ? format(new Date(initialResource.purchaseDate), 'yyyy-MM-dd')
                           : '',
           notes: initialResource.notes || '',
           features: Array.isArray(initialResource.features) ? initialResource.features.join(', ') : '',
@@ -137,7 +112,7 @@ export function ResourceFormDialog({
           lab: labsList.length > 0 ? labsList[0] : undefined,
           status: 'Available',
           description: '',
-          imageUrl: 'https://placehold.co/600x400.png',
+          imageUrl: '', // Default handled by parent onSave
           manufacturer: '',
           model: '',
           serialNumber: '',
@@ -156,34 +131,18 @@ export function ResourceFormDialog({
         });
       }
     }
-  }, [open, initialResource, resourceTypes, form.reset]);
+  }, [open, initialResource, resourceTypes, form.reset, form]);
 
   async function onSubmit(data: ResourceFormValues) {
     setIsSubmitting(true);
-    const dataToSave: ResourceFormValues = {
-        ...data,
-        imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
-        purchaseDate: data.purchaseDate ? data.purchaseDate : undefined, // Keep as string or undefined
-        remoteAccess: data.remoteAccess ? {
-            ...data.remoteAccess,
-            port: data.remoteAccess.port, 
-            protocol: data.remoteAccess.protocol === NONE_PROTOCOL_VALUE ? undefined : data.remoteAccess.protocol,
-            ipAddress: data.remoteAccess.ipAddress || undefined,
-            hostname: data.remoteAccess.hostname || undefined,
-            username: data.remoteAccess.username || undefined,
-            notes: data.remoteAccess.notes || undefined,
-        } : undefined,
-    };
-    if (dataToSave.remoteAccess && Object.values(dataToSave.remoteAccess).every(val => val === undefined || val === '')) {
-      dataToSave.remoteAccess = undefined;
-    }
     try {
-        await onSave(dataToSave, initialResource?.id);
-        // onOpenChange(false); // Parent handles closing on successful save
+      await onSave(data, initialResource?.id);
+      // onOpenChange(false); // Parent should handle closing on successful save
     } catch (error) {
-        // Error toast is handled in parent
+      // Error toast is likely handled by the parent onSave's try/catch
+      console.error("Error during resource save submission:", error);
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   }
 
@@ -201,68 +160,68 @@ export function ResourceFormDialog({
             <ScrollArea className="max-h-[70vh] overflow-y-auto pr-2">
             <div className="space-y-6 py-2 pb-4">
                 <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Resource Name</FormLabel>
-                    <FormControl><Input placeholder="e.g., Keysight Oscilloscope MSOX3054T" {...field} /></FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                      <FormItem>
+                      <FormLabel>Resource Name</FormLabel>
+                      <FormControl><Input placeholder="e.g., Keysight Oscilloscope MSOX3054T" {...field} /></FormControl>
+                      <FormMessage />
+                      </FormItem>
+                  )}
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
-                    control={form.control}
-                    name="resourceTypeId"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Resource Type</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ''} disabled={resourceTypes.length === 0}>
-                            <FormControl><SelectTrigger>
-                                <SelectValue placeholder={resourceTypes.length > 0 ? "Select a type" : "No types defined"} />
-                            </SelectTrigger></FormControl>
-                            <SelectContent>
-                            {resourceTypes.length > 0 ? resourceTypes.map(type => (
-                                <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-                            )) : <SelectItem value="disabled" disabled>No resource types available. Add one first.</SelectItem>}
-                            </SelectContent>
-                        </Select>
-                        {resourceTypes.length === 0 && <FormDescription className="text-destructive">Please define resource types first.</FormDescription>}
-                        <FormMessage />
-                        </FormItem>
-                    )}
+                      control={form.control}
+                      name="resourceTypeId"
+                      render={({ field }) => (
+                          <FormItem>
+                          <FormLabel>Resource Type</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || ''} disabled={resourceTypes.length === 0}>
+                              <FormControl><SelectTrigger>
+                                  <SelectValue placeholder={resourceTypes.length > 0 ? "Select a type" : "No types defined"} />
+                              </SelectTrigger></FormControl>
+                              <SelectContent>
+                              {resourceTypes.length > 0 ? resourceTypes.map(type => (
+                                  <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
+                              )) : <SelectItem value="disabled" disabled>No resource types available. Add one first.</SelectItem>}
+                              </SelectContent>
+                          </Select>
+                          {resourceTypes.length === 0 && <FormDescription className="text-destructive">Please define resource types first.</FormDescription>}
+                          <FormMessage />
+                          </FormItem>
+                      )}
                     />
                     <FormField
-                    control={form.control}
-                    name="lab"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Lab</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ''}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="Select a lab" /></SelectTrigger></FormControl>
-                            <SelectContent>
-                            {labsList.map(labName => (
-                                <SelectItem key={labName} value={labName}>{labName}</SelectItem>
-                            ))}
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                        </FormItem>
-                    )}
+                      control={form.control}
+                      name="lab"
+                      render={({ field }) => (
+                          <FormItem>
+                          <FormLabel>Lab</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || ''}>
+                              <FormControl><SelectTrigger><SelectValue placeholder="Select a lab" /></SelectTrigger></FormControl>
+                              <SelectContent>
+                              {labsList.map(labName => (
+                                  <SelectItem key={labName} value={labName}>{labName}</SelectItem>
+                              ))}
+                              </SelectContent>
+                          </Select>
+                          <FormMessage />
+                          </FormItem>
+                      )}
                     />
                 </div>
 
                 <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Description (Optional)</FormLabel>
-                    <FormControl><Textarea placeholder="Detailed description of the resource..." {...field} value={field.value ?? ''} rows={3} /></FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                      <FormItem>
+                      <FormLabel>Description (Optional)</FormLabel>
+                      <FormControl><Textarea placeholder="Detailed description of the resource..." {...field} value={field.value ?? ''} rows={3} /></FormControl>
+                      <FormMessage />
+                      </FormItem>
+                  )}
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
@@ -323,14 +282,14 @@ export function ResourceFormDialog({
                         )}
                     />
                 </div>
-               
+
                 <FormField
                     control={form.control}
                     name="status"
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ''}>
+                        <Select onValueChange={field.onChange} value={field.value || 'Available'}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
                             <SelectContent>
                             {resourceStatusesList.map(statusVal => (
@@ -342,7 +301,7 @@ export function ResourceFormDialog({
                         </FormItem>
                     )}
                 />
-                
+
                 <FormField
                     control={form.control}
                     name="features"
@@ -400,7 +359,7 @@ export function ResourceFormDialog({
                                 name="remoteAccess.ipAddress"
                                 render={({ field }) => (
                                     <FormItem>
-                                    <FormLabel>IP Address</FormLabel>
+                                    <FormLabel>IP Address (Optional)</FormLabel>
                                     <FormControl><Input placeholder="e.g., 192.168.1.100" {...field} value={field.value ?? ''} /></FormControl>
                                     <FormMessage />
                                     </FormItem>
@@ -411,7 +370,7 @@ export function ResourceFormDialog({
                                 name="remoteAccess.hostname"
                                 render={({ field }) => (
                                     <FormItem>
-                                    <FormLabel>Hostname</FormLabel>
+                                    <FormLabel>Hostname (Optional)</FormLabel>
                                     <FormControl><Input placeholder="e.g., scope-01.lab.internal" {...field} value={field.value ?? ''} /></FormControl>
                                     <FormMessage />
                                     </FormItem>
@@ -424,7 +383,7 @@ export function ResourceFormDialog({
                                 name="remoteAccess.protocol"
                                 render={({ field }) => (
                                     <FormItem>
-                                    <FormLabel>Protocol</FormLabel>
+                                    <FormLabel>Protocol (Optional)</FormLabel>
                                     <Select
                                       onValueChange={(v) => field.onChange(v === NONE_PROTOCOL_VALUE ? '' : v)}
                                       value={field.value === '' || field.value === undefined || field.value === null ? NONE_PROTOCOL_VALUE : field.value}
@@ -446,12 +405,12 @@ export function ResourceFormDialog({
                                 name="remoteAccess.port"
                                 render={({ field }) => (
                                     <FormItem>
-                                    <FormLabel>Port</FormLabel>
-                                    <FormControl><Input 
+                                    <FormLabel>Port (Optional)</FormLabel>
+                                    <FormControl><Input
                                         type="text" // Use text to allow empty, Zod coerces
-                                        placeholder="e.g., 22, 3389" 
-                                        {...field} 
-                                        value={field.value ?? ''} 
+                                        placeholder="e.g., 22, 3389"
+                                        {...field}
+                                        value={field.value ?? ''}
                                         onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.value)}
                                      /></FormControl>
                                     <FormMessage />
@@ -463,7 +422,7 @@ export function ResourceFormDialog({
                                 name="remoteAccess.username"
                                 render={({ field }) => (
                                     <FormItem>
-                                    <FormLabel>Username</FormLabel>
+                                    <FormLabel>Username (Optional)</FormLabel>
                                     <FormControl><Input placeholder="e.g., labuser" {...field}  value={field.value ?? ''}/></FormControl>
                                     <FormMessage />
                                     </FormItem>
@@ -475,7 +434,7 @@ export function ResourceFormDialog({
                             name="remoteAccess.notes"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Connection Notes</FormLabel>
+                                <FormLabel>Connection Notes (Optional)</FormLabel>
                                 <FormControl><Textarea placeholder="e.g., VPN required, specific client versions, credential location..." {...field} value={field.value ?? ''} rows={2} /></FormControl>
                                 <FormMessage />
                                 </FormItem>
@@ -483,7 +442,6 @@ export function ResourceFormDialog({
                         />
                     </div>
                 </div>
-
             </div>
             </ScrollArea>
             <DialogFooter className="pt-6 border-t">
@@ -507,5 +465,3 @@ export function ResourceFormDialog({
     </Dialog>
   );
 }
-
-    

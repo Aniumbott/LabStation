@@ -1,11 +1,11 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { CalendarOff, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Repeat } from 'lucide-react';
+import { CalendarOff, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Repeat, X, Loader2 } from 'lucide-react';
 import type { BlackoutDate, RecurringBlackoutRule, RoleName } from '@/types';
-import { initialBlackoutDates, initialRecurringBlackoutRules, addAuditLog } from '@/lib/mock-data';
+import { addAuditLog } from '@/lib/mock-data'; // AuditLog is still mock
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -40,8 +40,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@/components/ui/alert-dialog"; // AlertDialogTrigger is used via AlertDialog
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { format, parseISO, isValid as isValidDate } from 'date-fns';
@@ -51,27 +50,57 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { BlackoutDateFormDialog, BlackoutDateFormValues } from '@/components/admin/blackout-date-form-dialog';
 import { RecurringBlackoutRuleFormDialog, RecurringBlackoutRuleFormValues } from '@/components/admin/recurring-blackout-rule-form-dialog';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 
 export default function BlackoutDatesPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
 
-  const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>(() => JSON.parse(JSON.stringify(initialBlackoutDates)));
+  const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
+  const [recurringRules, setRecurringRules] = useState<RecurringBlackoutRule[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   const [isDateFormDialogOpen, setIsDateFormDialogOpen] = useState(false);
   const [editingBlackoutDate, setEditingBlackoutDate] = useState<BlackoutDate | null>(null);
   const [dateToDelete, setDateToDelete] = useState<BlackoutDate | null>(null);
-  
-  // Specific Date Filter Dialog State
-  const [isDateFilterDialogOpen, setIsDateFilterDialogOpen] = useState(false);
-  const [tempDateSearchTerm, setTempDateSearchTerm] = useState('');
-  const [activeDateSearchTerm, setActiveDateSearchTerm] = useState('');
 
-
-  const [recurringRules, setRecurringRules] = useState<RecurringBlackoutRule[]>(() => JSON.parse(JSON.stringify(initialRecurringBlackoutRules)));
   const [isRecurringFormDialogOpen, setIsRecurringFormDialogOpen] = useState(false);
   const [editingRecurringRule, setEditingRecurringRule] = useState<RecurringBlackoutRule | null>(null);
   const [ruleToDelete, setRuleToDelete] = useState<RecurringBlackoutRule | null>(null);
 
+  // Filter Dialog State
+  const [isDateFilterDialogOpen, setIsDateFilterDialogOpen] = useState(false);
+  const [tempDateSearchTerm, setTempDateSearchTerm] = useState('');
+  const [activeDateSearchTerm, setActiveDateSearchTerm] = useState('');
+
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      // Fetch Blackout Dates
+      // Firestore Index required: blackoutDates collection: date (ASC)
+      const boQuery = query(collection(db, "blackoutDates"), orderBy("date", "asc"));
+      const boSnapshot = await getDocs(boQuery);
+      setBlackoutDates(boSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate)));
+
+      // Fetch Recurring Rules
+      // Firestore Index required: recurringBlackoutRules collection: name (ASC)
+      const rrQuery = query(collection(db, "recurringBlackoutRules"), orderBy("name", "asc"));
+      const rrSnapshot = await getDocs(rrQuery);
+      setRecurringRules(rrSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as RecurringBlackoutRule)));
+
+    } catch (error: any) {
+      console.error("Error fetching blackout data:", error);
+      toast({ title: "Error", description: `Failed to load blackout data. ${error.message}`, variant: "destructive" });
+      setBlackoutDates([]);
+      setRecurringRules([]);
+    }
+    setIsLoading(false);
+  }, [toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   useEffect(() => {
     if (isDateFilterDialogOpen) {
@@ -80,15 +109,13 @@ export default function BlackoutDatesPage() {
   }, [isDateFilterDialogOpen, activeDateSearchTerm]);
 
   const filteredBlackoutDates = useMemo(() => {
-    let currentDates = [...blackoutDates];
-    const lowerSearchTerm = activeDateSearchTerm.toLowerCase();
-    if (activeDateSearchTerm) {
-      currentDates = currentDates.filter(bd =>
-        (bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm)) ||
-        (bd.date && format(parseISO(bd.date), 'PPP').toLowerCase().includes(lowerSearchTerm))
-      );
-    }
-    return currentDates.sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
+    return blackoutDates.filter(bd => {
+        const lowerSearchTerm = activeDateSearchTerm.toLowerCase();
+        return !activeDateSearchTerm ||
+               (bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm)) ||
+               (bd.date && format(parseISO(bd.date), 'PPP').toLowerCase().includes(lowerSearchTerm));
+    });
+    // Already sorted by Firestore query
   }, [blackoutDates, activeDateSearchTerm]);
 
   const handleOpenNewDateDialog = () => {
@@ -101,57 +128,58 @@ export default function BlackoutDatesPage() {
     setIsDateFormDialogOpen(true);
   };
 
-  const handleSaveBlackoutDate = (data: BlackoutDateFormValues) => {
-    const formattedDate = format(data.date, 'PPP');
-    if (editingBlackoutDate) {
-      const updatedDate = { ...editingBlackoutDate, ...data, date: format(data.date, 'yyyy-MM-dd') };
-      const updatedDates = blackoutDates.map(bd =>
-        bd.id === editingBlackoutDate.id ? updatedDate : bd
-      );
-      setBlackoutDates(updatedDates);
-      const globalIndex = initialBlackoutDates.findIndex(bd => bd.id === editingBlackoutDate.id);
-      if (globalIndex !== -1) initialBlackoutDates[globalIndex] = updatedDate;
-      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'BLACKOUT_DATE_UPDATED', { entityType: 'BlackoutDate', entityId: updatedDate.id, details: `Blackout Date for ${formattedDate} updated. Reason: ${updatedDate.reason || 'N/A'}`});
-      toast({
-        title: 'Blackout Date Updated',
-        description: `Blackout date for ${formattedDate} has been updated.`,
-      });
-    } else {
-      const newDate: BlackoutDate = {
-        id: `bo${initialBlackoutDates.length + 1 + Date.now()}`,
-        date: format(data.date, 'yyyy-MM-dd'),
-        reason: data.reason,
-      };
-      setBlackoutDates(prev => [...prev, newDate].sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime()));
-      initialBlackoutDates.push(newDate);
-      initialBlackoutDates.sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
-      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'BLACKOUT_DATE_CREATED', { entityType: 'BlackoutDate', entityId: newDate.id, details: `Blackout Date for ${formattedDate} created. Reason: ${newDate.reason || 'N/A'}`});
-      toast({
-        title: 'Blackout Date Added',
-        description: `Blackout date for ${formattedDate} has been added.`,
-      });
+  const handleSaveBlackoutDate = async (data: BlackoutDateFormValues) => {
+    if (!currentUser) return;
+    const formattedDateOnly = format(data.date, 'yyyy-MM-dd'); // Store date as YYYY-MM-DD string
+    const displayDate = format(data.date, 'PPP');
+
+    const blackoutData = {
+      date: formattedDateOnly,
+      reason: data.reason || null, // Store null if empty
+    };
+
+    setIsLoading(true);
+    try {
+      if (editingBlackoutDate) {
+        const docRef = doc(db, "blackoutDates", editingBlackoutDate.id);
+        await updateDoc(docRef, blackoutData);
+        addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_UPDATED', { entityType: 'BlackoutDate', entityId: editingBlackoutDate.id, details: `Blackout Date for ${displayDate} updated. Reason: ${blackoutData.reason || 'N/A'}`});
+        toast({ title: 'Blackout Date Updated', description: `Blackout date for ${displayDate} has been updated.` });
+      } else {
+        const docRef = await addDoc(collection(db, "blackoutDates"), blackoutData);
+        addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_CREATED', { entityType: 'BlackoutDate', entityId: docRef.id, details: `Blackout Date for ${displayDate} created. Reason: ${blackoutData.reason || 'N/A'}`});
+        toast({ title: 'Blackout Date Added', description: `Blackout date for ${displayDate} has been added.` });
+      }
+      setIsDateFormDialogOpen(false);
+      setEditingBlackoutDate(null);
+      await fetchData();
+    } catch (error) {
+      console.error("Error saving blackout date:", error);
+      toast({ title: "Save Failed", description: "Could not save blackout date.", variant: "destructive"});
+      setIsLoading(false); // Ensure loading is false on error
     }
-    setIsDateFormDialogOpen(false);
   };
 
-  const handleDeleteBlackoutDate = (blackoutDateId: string) => {
+  const handleDeleteBlackoutDate = async (blackoutDateId: string) => {
+    if(!currentUser) return;
     const deletedDate = blackoutDates.find(bd => bd.id === blackoutDateId);
-    setBlackoutDates(currentDates => currentDates.filter(bd => bd.id !== blackoutDateId));
-    
-    const globalIndex = initialBlackoutDates.findIndex(bd => bd.id === blackoutDateId);
-    if (globalIndex !== -1) initialBlackoutDates.splice(globalIndex, 1);
-    
-    if(deletedDate) {
-      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Blackout Date for ${format(parseISO(deletedDate.date), 'PPP')} (Reason: ${deletedDate.reason || 'N/A'}) deleted.`});
-      toast({
-        title: "Blackout Date Removed",
-        description: `Blackout date for "${format(parseISO(deletedDate.date), 'PPP')}" has been removed.`,
-        variant: "destructive"
-      });
+    if (!deletedDate) return;
+
+    setIsLoading(true);
+    try {
+      const docRef = doc(db, "blackoutDates", blackoutDateId);
+      await deleteDoc(docRef);
+      addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Blackout Date for ${format(parseISO(deletedDate.date), 'PPP')} (Reason: ${deletedDate.reason || 'N/A'}) deleted.`});
+      toast({ title: "Blackout Date Removed", description: `Blackout date for "${format(parseISO(deletedDate.date), 'PPP')}" has been removed.`, variant: "destructive" });
+      setDateToDelete(null);
+      await fetchData();
+    } catch (error) {
+        console.error("Error deleting blackout date:", error);
+        toast({ title: "Delete Failed", description: "Could not remove blackout date.", variant: "destructive"});
+        setIsLoading(false);
     }
-    setDateToDelete(null);
   };
-  
+
   const handleApplyDateDialogFilters = () => {
     setActiveDateSearchTerm(tempDateSearchTerm);
     setIsDateFilterDialogOpen(false);
@@ -166,9 +194,9 @@ export default function BlackoutDatesPage() {
     resetDateDialogFilters();
     setIsDateFilterDialogOpen(false);
   };
-  
+
   const activeDateFilterCount = [activeDateSearchTerm !== ''].filter(Boolean).length;
-  
+
   const handleOpenNewRecurringDialog = () => {
     setEditingRecurringRule(null);
     setIsRecurringFormDialogOpen(true);
@@ -179,56 +207,60 @@ export default function BlackoutDatesPage() {
     setIsRecurringFormDialogOpen(true);
   };
 
-  const handleSaveRecurringRule = (data: RecurringBlackoutRuleFormValues) => {
-    if (editingRecurringRule) {
-      const updatedRule = { ...editingRecurringRule, ...data };
-      const updatedRules = recurringRules.map(r =>
-        r.id === editingRecurringRule.id ? updatedRule : r
-      );
-      setRecurringRules(updatedRules);
-      const globalIndex = initialRecurringBlackoutRules.findIndex(r => r.id === editingRecurringRule.id);
-      if (globalIndex !== -1) initialRecurringBlackoutRules[globalIndex] = updatedRule;
-      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'RECURRING_RULE_UPDATED', { entityType: 'RecurringBlackoutRule', entityId: updatedRule.id, details: `Recurring rule '${updatedRule.name}' updated.`});
-      toast({
-        title: 'Recurring Rule Updated',
-        description: `Recurring rule "${data.name}" has been updated.`,
-      });
-    } else {
-      const newRule: RecurringBlackoutRule = {
-        id: `rb${initialRecurringBlackoutRules.length + 1 + Date.now()}`,
-        ...data,
-      };
-      setRecurringRules(prev => [...prev, newRule].sort((a,b) => a.name.localeCompare(b.name)));
-      initialRecurringBlackoutRules.push(newRule);
-      initialRecurringBlackoutRules.sort((a,b) => a.name.localeCompare(b.name));
-      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'RECURRING_RULE_CREATED', { entityType: 'RecurringBlackoutRule', entityId: newRule.id, details: `Recurring rule '${newRule.name}' created.`});
-      toast({
-        title: 'Recurring Rule Added',
-        description: `Recurring rule "${data.name}" has been added.`,
-      });
+  const handleSaveRecurringRule = async (data: RecurringBlackoutRuleFormValues) => {
+    if (!currentUser) return;
+    const ruleData = {
+      name: data.name,
+      daysOfWeek: data.daysOfWeek,
+      reason: data.reason || null,
+    };
+    setIsLoading(true);
+    try {
+      if (editingRecurringRule) {
+        const docRef = doc(db, "recurringBlackoutRules", editingRecurringRule.id);
+        await updateDoc(docRef, ruleData);
+        addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_UPDATED', { entityType: 'RecurringBlackoutRule', entityId: editingRecurringRule.id, details: `Recurring rule '${ruleData.name}' updated.`});
+        toast({ title: 'Recurring Rule Updated', description: `Recurring rule "${data.name}" has been updated.` });
+      } else {
+        const docRef = await addDoc(collection(db, "recurringBlackoutRules"), ruleData);
+        addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_CREATED', { entityType: 'RecurringBlackoutRule', entityId: docRef.id, details: `Recurring rule '${ruleData.name}' created.`});
+        toast({ title: 'Recurring Rule Added', description: `Recurring rule "${data.name}" has been added.` });
+      }
+      setIsRecurringFormDialogOpen(false);
+      setEditingRecurringRule(null);
+      await fetchData();
+    } catch (error) {
+      console.error("Error saving recurring rule:", error);
+      toast({ title: "Save Failed", description: "Could not save recurring rule.", variant: "destructive"});
+      setIsLoading(false);
     }
-    setIsRecurringFormDialogOpen(false);
   };
 
-  const handleDeleteRecurringRule = (ruleId: string) => {
+  const handleDeleteRecurringRule = async (ruleId: string) => {
+    if(!currentUser) return;
     const deletedRule = recurringRules.find(r => r.id === ruleId);
-    setRecurringRules(currentRules => currentRules.filter(r => r.id !== ruleId));
-    
-    const globalIndex = initialRecurringBlackoutRules.findIndex(r => r.id === ruleId);
-    if (globalIndex !== -1) initialRecurringBlackoutRules.splice(globalIndex, 1);
+    if (!deletedRule) return;
 
-    if (deletedRule) {
-      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Recurring rule '${deletedRule.name}' deleted.`});
-      toast({
-        title: "Recurring Rule Removed",
-        description: `Recurring rule "${deletedRule.name}" has been removed.`,
-        variant: "destructive"
-      });
+    setIsLoading(true);
+    try {
+      const docRef = doc(db, "recurringBlackoutRules", ruleId);
+      await deleteDoc(docRef);
+      addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Recurring rule '${deletedRule.name}' deleted.`});
+      toast({ title: "Recurring Rule Removed", description: `Recurring rule "${deletedRule.name}" has been removed.`, variant: "destructive" });
+      setRuleToDelete(null);
+      await fetchData();
+    } catch (error) {
+      console.error("Error deleting recurring rule:", error);
+      toast({ title: "Delete Failed", description: "Could not remove recurring rule.", variant: "destructive"});
+      setIsLoading(false);
     }
-    setRuleToDelete(null);
   };
-  
+
   const canManageBlackouts = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
+
+  if (isLoading && blackoutDates.length === 0 && recurringRules.length === 0) { // Show loader only on initial full load
+    return <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading blackout data...</div>;
+  }
 
   return (
     <TooltipProvider>
@@ -274,7 +306,7 @@ export default function BlackoutDatesPage() {
                           type="search"
                           placeholder="e.g., Holiday, Maintenance, May 20..."
                           value={tempDateSearchTerm}
-                          onChange={(e) => setTempDateSearchTerm(e.target.value.toLowerCase())}
+                          onChange={(e) => setTempDateSearchTerm(e.target.value)}
                           className="h-9 pl-8"
                         />
                       </div>
@@ -284,7 +316,7 @@ export default function BlackoutDatesPage() {
                     <Button variant="ghost" onClick={resetDateDialogFilters} className="mr-auto">
                       <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                     </Button>
-                    <Button variant="outline" onClick={() => setIsDateFilterDialogOpen(false)}>Cancel</Button>
+                    <Button variant="outline" onClick={() => setIsDateFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
                     <Button onClick={handleApplyDateDialogFilters}>Apply Filters</Button>
                   </DialogFooter>
                 </DialogContent>
@@ -297,7 +329,9 @@ export default function BlackoutDatesPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {filteredBlackoutDates.length > 0 ? (
+            {isLoading && filteredBlackoutDates.length === 0 && !activeDateSearchTerm ? (
+                <div className="text-center py-10 text-muted-foreground"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary mb-2" />Fetching dates...</div>
+            ) : filteredBlackoutDates.length > 0 ? (
               <div className="overflow-x-auto rounded-lg border shadow-sm">
                 <Table>
                   <TableHeader>
@@ -323,7 +357,7 @@ export default function BlackoutDatesPage() {
                               </TooltipTrigger>
                               <TooltipContent><p>Edit Blackout Date</p></TooltipContent>
                             </Tooltip>
-                            <AlertDialog>
+                            <AlertDialog> {/* Removed AlertDialogTrigger from TooltipTrigger child */}
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <AlertDialogTrigger asChild>
@@ -376,7 +410,7 @@ export default function BlackoutDatesPage() {
                       <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                     </Button>
                   ) : (
-                     canManageBlackouts && !filteredBlackoutDates.length && (
+                     canManageBlackouts && !isLoading && ( // Ensure not loading before showing "Add First"
                       <Button onClick={handleOpenNewDateDialog} size="sm">
                         <PlusCircle className="mr-2 h-4 w-4" /> Add First Blackout Date
                       </Button>
@@ -403,7 +437,9 @@ export default function BlackoutDatesPage() {
             )}
           </CardHeader>
           <CardContent>
-            {recurringRules.length > 0 ? (
+             {isLoading && recurringRules.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary mb-2" />Fetching rules...</div>
+            ) : recurringRules.length > 0 ? (
               <div className="overflow-x-auto rounded-lg border shadow-sm">
                 <Table>
                   <TableHeader>
@@ -431,7 +467,7 @@ export default function BlackoutDatesPage() {
                               </TooltipTrigger>
                               <TooltipContent><p>Edit Recurring Rule</p></TooltipContent>
                             </Tooltip>
-                            <AlertDialog>
+                            <AlertDialog> {/* Removed AlertDialogTrigger from TooltipTrigger child */}
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <AlertDialogTrigger asChild>
@@ -474,7 +510,7 @@ export default function BlackoutDatesPage() {
                   <Repeat className="mx-auto h-10 w-10 mb-3 opacity-50" />
                   <p className="font-medium">No Recurring Lab Closure Rules Defined</p>
                   <p className="text-xs mb-3">Add rules for regular closures like weekends or weekly maintenance.</p>
-                   {canManageBlackouts && !recurringRules.length && (
+                   {canManageBlackouts && !isLoading && ( // Ensure not loading before showing "Add First"
                       <Button onClick={handleOpenNewRecurringDialog} size="sm">
                         <PlusCircle className="mr-2 h-4 w-4" /> Add First Recurring Rule
                       </Button>

@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Save, X, PlusCircle, Calendar as CalendarIcon } from 'lucide-react';
+import { Save, X, PlusCircle, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import type { BlackoutDate } from '@/types';
 import { format, parseISO, isValid, startOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -37,7 +37,7 @@ interface BlackoutDateFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialBlackoutDate: BlackoutDate | null;
-  onSave: (data: BlackoutDateFormValues) => void;
+  onSave: (data: BlackoutDateFormValues) => Promise<void>; // Make onSave async
 }
 
 export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate, onSave }: BlackoutDateFormDialogProps) {
@@ -48,14 +48,16 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
       reason: '',
     },
   });
-
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
+      setIsSubmitting(false); // Reset submitting state
       if (initialBlackoutDate) {
+        const dateToSet = initialBlackoutDate.date && isValid(parseISO(initialBlackoutDate.date)) ? parseISO(initialBlackoutDate.date) : startOfDay(new Date());
         form.reset({
-          date: initialBlackoutDate.date && isValid(parseISO(initialBlackoutDate.date)) ? parseISO(initialBlackoutDate.date) : startOfDay(new Date()),
+          date: dateToSet,
           reason: initialBlackoutDate.reason || '',
         });
       } else {
@@ -65,10 +67,19 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
         });
       }
     }
-  }, [open, initialBlackoutDate, form.reset]);
+  }, [open, initialBlackoutDate, form.reset, form]); // Added form to dependencies
 
-  function onSubmit(data: BlackoutDateFormValues) {
-    onSave(data);
+  async function onSubmit(data: BlackoutDateFormValues) {
+    setIsSubmitting(true);
+    try {
+      await onSave(data);
+      // Parent component will handle closing the dialog on successful save
+    } catch (error) {
+      // Error toast handled by parent
+      console.error("Error in BlackoutDateFormDialog onSubmit:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -77,7 +88,7 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
         <DialogHeader>
           <DialogTitle>{initialBlackoutDate ? 'Edit Blackout Date' : 'Add New Blackout Date'}</DialogTitle>
           <DialogDescription>
-            {initialBlackoutDate ? `Modify the blackout date for ${format(initialBlackoutDate.date ? parseISO(initialBlackoutDate.date) : new Date(), 'PPP')}.` : 'Select a date and optionally provide a reason for lab closure.'}
+            {initialBlackoutDate ? `Modify the blackout date for ${format(initialBlackoutDate.date && isValid(parseISO(initialBlackoutDate.date)) ? parseISO(initialBlackoutDate.date) : new Date(), 'PPP')}.` : 'Select a date and optionally provide a reason for lab closure.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -98,7 +109,7 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
                             !field.value && "text-muted-foreground"
                           )}
                         >
-                          {field.value ? (
+                          {field.value && isValid(field.value) ? ( // Check if field.value is valid Date
                             format(field.value, "PPP")
                           ) : (
                             <span>Pick a date</span>
@@ -115,7 +126,7 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
                             if(date) field.onChange(startOfDay(date));
                             setIsCalendarOpen(false);
                         }}
-                        disabled={(date) => date < startOfDay(new Date()) && !initialBlackoutDate } // Allow past dates if editing existing one
+                        disabled={(date) => date < startOfDay(new Date()) && !initialBlackoutDate }
                         initialFocus
                       />
                     </PopoverContent>
@@ -141,10 +152,14 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting 
-                  ? (initialBlackoutDate ? 'Saving...' : 'Adding...') 
-                  : (initialBlackoutDate ? <><Save className="mr-2 h-4 w-4" /> Save Changes</> : <><PlusCircle className="mr-2 h-4 w-4" /> Add Date</>)
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  : (initialBlackoutDate ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)
+                }
+                {isSubmitting
+                  ? (initialBlackoutDate ? 'Saving...' : 'Adding...')
+                  : (initialBlackoutDate ? 'Save Changes' : 'Add Date')
                 }
               </Button>
             </DialogFooter>

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
 import type { User, RoleName, UserStatus } from '@/types';
@@ -52,11 +52,10 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
 import { userRolesList, addNotification, addAuditLog } from '@/lib/mock-data';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, type Timestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, Timestamp, query, orderBy } from 'firebase/firestore';
 
 
 const userStatusesList: (UserStatus | 'all')[] = ['all', 'active', 'pending_approval', 'suspended'];
-
 
 const roleIcons: Record<User['role'], React.ElementType> = {
   'Admin': ShieldAlert,
@@ -87,7 +86,7 @@ const getStatusBadgeVariant = (status: UserStatus): "default" | "secondary" | "d
 
 export default function UsersPage() {
   const { toast } = useToast();
-  const { currentUser } = useAuth();
+  const { currentUser: loggedInUser } = useAuth(); // Renamed to avoid conflict with mapped 'user'
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
@@ -95,57 +94,54 @@ export default function UsersPage() {
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
+  // Active filters for the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterRole, setActiveFilterRole] = useState<RoleName | 'all'>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<UserStatus | 'all'>('all');
 
+  // Filter Dialog State
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
   const [tempFilterRole, setTempFilterRole] = useState<RoleName | 'all'>(activeFilterRole);
   const [tempFilterStatus, setTempFilterStatus] = useState<UserStatus | 'all'>(activeFilterStatus);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setIsLoadingUsers(true);
     try {
-      const usersCollectionRef = collection(db, "users");
-      const querySnapshot = await getDocs(usersCollectionRef);
-      const fetchedUsers: User[] = [];
-      querySnapshot.forEach((docSnap) => {
+      // Firestore Index required: users collection: status (ASC), name (ASC) - for combined filtering/sorting
+      // Or more simply: users collection: name (ASC) if primary sort is by name
+      const usersQuery = query(collection(db, "users"), orderBy("name", "asc"));
+      const querySnapshot = await getDocs(usersQuery);
+      const fetchedUsers: User[] = querySnapshot.docs.map((docSnap) => {
         const data = docSnap.data();
-        let createdAtStr: string | undefined;
-        if (data.createdAt && typeof data.createdAt.toDate === 'function') {
-          createdAtStr = (data.createdAt as Timestamp).toDate().toISOString();
-        } else if (typeof data.createdAt === 'string') {
-          createdAtStr = data.createdAt;
-        } else {
-           createdAtStr = new Date().toISOString(); // Fallback for older data without createdAt
-        }
-
-        fetchedUsers.push({
+        return {
             id: docSnap.id,
             name: data.name || 'N/A',
             email: data.email || 'N/A',
             role: data.role || 'Researcher',
             status: data.status || 'pending_approval',
             avatarUrl: data.avatarUrl || 'https://placehold.co/100x100.png',
-            createdAt: createdAtStr,
-        } as User);
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt || Date.now()),
+        } as User;
       });
-      setUsers(fetchedUsers.sort((a,b) => {
+      // Further client-side sort to bring pending_approval to top if not handled by Firestore query
+      fetchedUsers.sort((a,b) => {
         if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
         if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
-        return (a.name || '').localeCompare(b.name || '');
-      }));
+        return a.name.localeCompare(b.name);
+      });
+      setUsers(fetchedUsers);
     } catch (error) {
       console.error("Error fetching users: ", error);
       toast({ title: "Error", description: "Failed to fetch users from database.", variant: "destructive" });
+      setUsers([]); // Set to empty on error
     }
     setIsLoadingUsers(false);
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [fetchUsers]);
 
 
   useEffect(() => {
@@ -157,21 +153,14 @@ export default function UsersPage() {
   }, [isFilterDialogOpen, activeSearchTerm, activeFilterRole, activeFilterStatus]);
 
   const filteredUsers = useMemo(() => {
-    let currentUsers = [...users];
-    const lowerSearchTerm = activeSearchTerm.toLowerCase();
-    if (activeSearchTerm) {
-      currentUsers = currentUsers.filter(user =>
-        (user.name && user.name.toLowerCase().includes(lowerSearchTerm)) ||
-        (user.email && user.email.toLowerCase().includes(lowerSearchTerm))
-      );
-    }
-    if (activeFilterRole !== 'all') {
-      currentUsers = currentUsers.filter(user => user.role === activeFilterRole);
-    }
-    if (activeFilterStatus !== 'all') {
-      currentUsers = currentUsers.filter(user => user.status === activeFilterStatus);
-    }
-    return currentUsers;
+    return users.filter(user => {
+      const lowerSearchTerm = activeSearchTerm.toLowerCase();
+      const nameMatch = user.name && user.name.toLowerCase().includes(lowerSearchTerm);
+      const emailMatch = user.email && user.email.toLowerCase().includes(lowerSearchTerm);
+      const roleMatch = activeFilterRole === 'all' || user.role === activeFilterRole;
+      const statusMatch = activeFilterStatus === 'all' || user.status === activeFilterStatus;
+      return (nameMatch || emailMatch) && roleMatch && statusMatch;
+    });
   }, [users, activeSearchTerm, activeFilterRole, activeFilterStatus]);
 
   const handleApplyDialogFilters = () => {
@@ -206,80 +195,74 @@ export default function UsersPage() {
   };
 
   const handleSaveUser = async (data: UserFormValues) => {
-    if (!currentUser || currentUser.role !== 'Admin') {
+    if (!loggedInUser || loggedInUser.role !== 'Admin') {
       toast({ title: "Permission Denied", description: "You are not authorized to perform this action.", variant: "destructive" });
       return;
     }
     
-    setIsLoadingUsers(true); // Indicate loading state
-    if (editingUser) { // Editing existing user
+    setIsLoadingUsers(true);
+    if (editingUser) {
       try {
         const userDocRef = doc(db, "users", editingUser.id);
         await updateDoc(userDocRef, {
           name: data.name,
           role: data.role,
-          // Email and status are not updated here; status is via Approve/Suspend actions.
         });
-        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'USER_UPDATED', { entityType: 'User', entityId: editingUser.id, details: `User ${data.name} (ID: ${editingUser.id}) details updated. Role set to ${data.role}.` });
+        addAuditLog(loggedInUser.id, loggedInUser.name, 'USER_UPDATED', { entityType: 'User', entityId: editingUser.id, details: `User ${data.name} (ID: ${editingUser.id}) details updated. Role set to ${data.role}.` });
         toast({ title: 'User Updated', description: `User ${data.name} has been updated.` });
       } catch (error) {
         console.error("Error updating user:", error);
         toast({ title: "Error", description: "Failed to update user.", variant: "destructive" });
       }
-    } else { 
-      // Admin creating a user profile. This ONLY creates a Firestore profile.
-      // It does NOT create a Firebase Auth user. This user won't be able to log in.
+    } else {
       try {
-        const newUserId = `admin_created_${Date.now()}`; // Simple unique ID
+        // This flow is for an Admin creating a Firestore profile ONLY.
+        // This does NOT create a Firebase Auth user.
+        const newUserId = `admin_created_${Date.now()}`;
         const userDocRef = doc(db, "users", newUserId);
-        const newUserProfileData = {
+        await setDoc(userDocRef, {
           name: data.name,
-          email: data.email, // Email must be unique if it's to be used for login later via other means
+          email: data.email,
           role: data.role,
           avatarUrl: 'https://placehold.co/100x100.png',
-          status: 'active' as User['status'], // Admin-created users are active by default
+          status: 'active' as User['status'],
           createdAt: serverTimestamp(),
-        };
-        await setDoc(userDocRef, newUserProfileData);
-        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User profile for ${data.name} created by admin with role ${data.role}. This user cannot log in without a corresponding Auth account.` });
+        });
+        addAuditLog(loggedInUser.id, loggedInUser.name, 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User profile for ${data.name} created by admin with role ${data.role}. This user cannot log in without a corresponding Auth account.` });
         toast({ title: 'User Profile Created', description: `User profile for ${data.name} with role ${data.role} has been created. They cannot log in without a Firebase Auth account.` });
       } catch (error: any) {
         console.error("Error creating user profile by admin:", error);
-        let description = "Failed to create user profile.";
-        if (error.code === 'permission-denied') description = "Permission denied to create user profile.";
-        toast({ title: "Error", description, variant: "destructive" });
+        toast({ title: "Error", description: "Failed to create user profile.", variant: "destructive" });
       }
     }
     setIsFormDialogOpen(false);
-    await fetchUsers(); // Re-fetch users to show changes
+    setEditingUser(null);
+    await fetchUsers();
   };
 
  const handleDeleteUser = async (userId: string) => {
-    if (!currentUser || currentUser.role !== 'Admin') {
+    if (!loggedInUser || loggedInUser.role !== 'Admin') {
         toast({ title: "Permission Denied", description: "You are not authorized to perform this action.", variant: "destructive" });
         return;
     }
     const userToDeleteDetails = users.find(u => u.id === userId);
     setIsLoadingUsers(true);
     try {
-      // This only deletes the Firestore profile.
-      // Deleting the Firebase Auth user requires Admin SDK or Cloud Function.
       const userDocRef = doc(db, "users", userId);
       await deleteDoc(userDocRef);
-      
-      addAuditLog(currentUser.id, currentUser.name || 'Admin', 'USER_DELETED', { entityType: 'User', entityId: userId, details: `User profile for ${userToDeleteDetails?.name || userId} (ID: ${userId}) deleted.` });
+      addAuditLog(loggedInUser.id, loggedInUser.name, 'USER_DELETED', { entityType: 'User', entityId: userId, details: `User profile for ${userToDeleteDetails?.name || userId} (ID: ${userId}) deleted. Associated Firebase Auth user may still exist.` });
       toast({ title: "User Profile Deleted", description: `User "${userToDeleteDetails?.name}" Firestore profile has been removed. Firebase Auth user may still exist if one was associated.`, variant: "destructive" });
     } catch (error) {
       console.error("Error deleting user profile:", error);
       toast({ title: "Error", description: "Failed to delete user profile.", variant: "destructive" });
     }
     setUserToDelete(null);
-    await fetchUsers(); 
+    await fetchUsers();
   };
 
 
   const handleApproveUser = async (userId: string) => {
-    if (!currentUser || currentUser.role !== 'Admin') {
+    if (!loggedInUser || loggedInUser.role !== 'Admin') {
       toast({ title: "Permission Denied", description: "You are not authorized to perform this action.", variant: "destructive" });
       return;
     }
@@ -293,11 +276,10 @@ export default function UsersPage() {
         const userDocRef = doc(db, "users", userId);
         await updateDoc(userDocRef, { status: 'active' });
         
-        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'USER_APPROVED', { entityType: 'User', entityId: userId, details: `User ${userToApproveDetails.name} (ID: ${userId}) approved.`});
+        addAuditLog(loggedInUser.id, loggedInUser.name, 'USER_APPROVED', { entityType: 'User', entityId: userId, details: `User ${userToApproveDetails.name} (ID: ${userId}) approved.`});
         toast({ title: 'User Approved', description: `User ${userToApproveDetails.name} has been approved and is now active.` });
         
-        // Notify the approved user
-        await addNotification(
+        addNotification(
             userId,
             'Account Approved!',
             'Your LabStation account has been approved. You can now log in.',
@@ -307,12 +289,13 @@ export default function UsersPage() {
     } catch (error) {
         console.error("Error approving user:", error);
         toast({ title: 'Approval Failed', description: `Could not approve user ${userToApproveDetails.name}.`, variant: 'destructive' });
+    } finally {
+        await fetchUsers(); // Ensure list is fresh even if an error occurred elsewhere
     }
-    await fetchUsers(); 
   };
 
   const handleConfirmRejectUser = async () => {
-    if (!userToReject || !currentUser || currentUser.role !== 'Admin') {
+    if (!userToReject || !loggedInUser || loggedInUser.role !== 'Admin') {
         toast({ title: "Permission Denied or No User Selected", variant: "destructive" });
         setUserToReject(null);
         return;
@@ -320,26 +303,25 @@ export default function UsersPage() {
     const userDetails = users.find(u => u.id === userToReject.id);
     setIsLoadingUsers(true);
     try {
-      // This deletes the Firestore profile for the pending user.
-      // The Firebase Auth user (created during signup attempt) would also need to be deleted via Admin SDK for full cleanup.
       const userDocRef = doc(db, "users", userToReject.id);
-      await deleteDoc(userDocRef);
+      await deleteDoc(userDocRef); // Deletes Firestore profile for pending user
 
-      addAuditLog(currentUser.id, currentUser.name || 'Admin', 'USER_REJECTED', { entityType: 'User', entityId: userToReject.id, details: `Signup request for ${userDetails?.name || userToReject.id} (ID: ${userToReject.id}) rejected and profile removed.` });
+      addAuditLog(loggedInUser.id, loggedInUser.name, 'USER_REJECTED', { entityType: 'User', entityId: userToReject.id, details: `Signup request for ${userDetails?.name || userToReject.id} (ID: ${userToReject.id}) rejected and profile removed. Associated Firebase Auth user may still exist.` });
       toast({ title: 'Signup Request Rejected', description: `Signup request for ${userDetails?.name} has been rejected and removed. Firebase Auth user may still exist if one was created.`, variant: 'destructive' });
     } catch (error) {
       console.error("Error rejecting user:", error);
       toast({ title: 'Rejection Failed', description: `Could not reject user ${userDetails?.name}.`, variant: 'destructive' });
+    } finally {
+        setUserToReject(null);
+        await fetchUsers();
     }
-    setUserToReject(null);
-    await fetchUsers(); 
   };
 
 
   const activeFilterCount = [activeSearchTerm !== '', activeFilterRole !== 'all', activeFilterStatus !== 'all'].filter(Boolean).length;
-  const canAddUsers = currentUser?.role === 'Admin';
-  const canManageUsers = currentUser?.role === 'Admin';
-  const canApproveRejectSignups = currentUser?.role === 'Admin';
+  const canAddUsers = loggedInUser?.role === 'Admin';
+  const canManageUsers = loggedInUser?.role === 'Admin';
+  const canApproveRejectSignups = loggedInUser?.role === 'Admin';
 
 
   return (
@@ -380,7 +362,7 @@ export default function UsersPage() {
                         type="search"
                         placeholder="Name or email..."
                         value={tempSearchTerm}
-                        onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
+                        onChange={(e) => setTempSearchTerm(e.target.value)}
                         className="h-9 pl-8"
                         />
                     </div>
@@ -417,7 +399,7 @@ export default function UsersPage() {
                   <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
-                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
+                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
                   <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
@@ -516,7 +498,7 @@ export default function UsersPage() {
                           </AlertDialog>
                         </>
                       )}
-                      {user.status === 'active' && canManageUsers && user.id !== currentUser?.id && ( 
+                      {user.status === 'active' && canManageUsers && loggedInUser && user.id !== loggedInUser.id && (
                         <>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -560,7 +542,7 @@ export default function UsersPage() {
                           </AlertDialog>
                         </>
                       )}
-                      {((user.status === 'suspended' || user.id === currentUser?.id) && user.status !== 'pending_approval') && (
+                      {((user.status === 'suspended' || (loggedInUser && user.id === loggedInUser.id)) && user.status !== 'pending_approval') && (
                         <span className="text-xs italic text-muted-foreground">No actions</span>
                       )}
                     </TableCell>
@@ -598,12 +580,17 @@ export default function UsersPage() {
           </CardContent>
         </Card>
       )}
-      <UserFormDialog
-        open={isFormDialogOpen}
-        onOpenChange={setIsFormDialogOpen}
-        initialUser={editingUser}
-        onSave={handleSaveUser}
-      />
+      {isFormDialogOpen && (
+        <UserFormDialog
+            open={isFormDialogOpen}
+            onOpenChange={(isOpen) => {
+                setIsFormDialogOpen(isOpen);
+                if (!isOpen) setEditingUser(null);
+            }}
+            initialUser={editingUser}
+            onSave={handleSaveUser}
+        />
+      )}
     </div>
   );
 }
