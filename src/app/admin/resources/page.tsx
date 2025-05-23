@@ -6,8 +6,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
 import { ClipboardList, PlusCircle, Filter as FilterIcon, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2, FilterX } from 'lucide-react';
-import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { labsList } from '@/lib/mock-data';
+import type { Resource, ResourceType } from '@/types';
+import { labsList, resourceStatusesList, initialMockResourceTypes } from '@/lib/mock-data'; // initialMockResourceTypes is still used for form dialog
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -42,7 +42,6 @@ import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, where } from 'firebase/firestore';
 
-
 export default function AdminResourcesPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
@@ -54,12 +53,15 @@ export default function AdminResourcesPage() {
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+  
+  // Temporary filter states for the dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterTypeId, setTempFilterTypeId] = useState<string>('all');
   const [tempFilterLab, setTempFilterLab] = useState<string>('all');
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(undefined);
   const [currentMonthInDialog, setCurrentMonthInDialog] = useState<Date>(startOfDay(new Date()));
 
+  // Active filter states applied to the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterTypeId, setActiveFilterTypeId] = useState<string>('all');
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
@@ -71,11 +73,20 @@ export default function AdminResourcesPage() {
       const resourcesSnapshot = await getDocs(collection(db, "resources"));
       const fetchedResourcesPromises = resourcesSnapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
+        let typeName = 'N/A';
+        if (data.resourceTypeId) {
+            const typeDocRef = doc(db, "resourceTypes", data.resourceTypeId);
+            const typeSnap = await getDoc(typeDocRef);
+            if (typeSnap.exists()) {
+                typeName = typeSnap.data()?.name || 'Unknown Type';
+            }
+        }
         
         return {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
+          // resourceTypeName: typeName, // We fetch this separately or join if needed, but for display let's just use resourceTypeId for now or pass full type objects
           lab: data.lab || labsList[0],
           status: data.status || 'Available',
           description: data.description || '',
@@ -83,24 +94,24 @@ export default function AdminResourcesPage() {
           manufacturer: data.manufacturer,
           model: data.model,
           serialNumber: data.serialNumber,
-          purchaseDate: data.purchaseDate ? (typeof data.purchaseDate.toDate === 'function' ? data.purchaseDate.toDate().toISOString() : data.purchaseDate) : undefined,
+          purchaseDate: data.purchaseDate ? (typeof data.purchaseDate === 'string' ? data.purchaseDate : (data.purchaseDate as Timestamp).toDate().toISOString()) : undefined,
           notes: data.notes,
           features: Array.isArray(data.features) ? data.features : [],
           remoteAccess: data.remoteAccess,
           allowQueueing: data.allowQueueing ?? false,
-          availability: Array.isArray(data.availability) ? data.availability.map(a => ({...a, date: typeof a.date === 'string' ? a.date : format(a.date.toDate(), 'yyyy-MM-dd')})) : [],
-          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map(p => ({...p, startDate: typeof p.startDate === 'string' ? p.startDate : format(p.startDate.toDate(), 'yyyy-MM-dd'), endDate: typeof p.endDate === 'string' ? p.endDate : format(p.endDate.toDate(), 'yyyy-MM-dd')})) : [],
+          availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: typeof a.date === 'string' ? a.date : (a.date?.toDate ? format(a.date.toDate(), 'yyyy-MM-dd') : a.date) })) : [],
+          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || \`unavail-\${Date.now()}-\${Math.random()}\`, startDate: typeof p.startDate === 'string' ? p.startDate : (p.startDate?.toDate ? format(p.startDate.toDate(), 'yyyy-MM-dd') : p.startDate), endDate: typeof p.endDate === 'string' ? p.endDate : (p.endDate?.toDate ? format(p.endDate.toDate(), 'yyyy-MM-dd') : p.endDate), reason: p.reason })) : [],
         } as Resource;
       });
       const fetchedResources = await Promise.all(fetchedResourcesPromises);
       setResources(fetchedResources.sort((a,b) => a.name.localeCompare(b.name)));
 
       const typesSnapshot = await getDocs(collection(db, "resourceTypes"));
-      const fetchedTypes: ResourceType[] = typesSnapshot.docs.map(docSnap => ({
+      const rTypes: ResourceType[] = typesSnapshot.docs.map(docSnap => ({
         id: docSnap.id,
         ...docSnap.data(),
       } as ResourceType));
-      setFetchedResourceTypes(fetchedTypes.sort((a, b) => a.name.localeCompare(b.name)));
+      setFetchedResourceTypes(rTypes.sort((a, b) => a.name.localeCompare(b.name)));
 
     } catch (error) {
       console.error("Error fetching resources or types: ", error);
@@ -115,6 +126,7 @@ export default function AdminResourcesPage() {
 
 
   useEffect(() => {
+    // When dialog opens, sync temp filters with active ones
     if (isFilterDialogOpen) {
       setTempSearchTerm(activeSearchTerm);
       setTempFilterTypeId(activeFilterTypeId);
@@ -149,14 +161,16 @@ export default function AdminResourcesPage() {
       currentResources = currentResources.filter(resource => {
         if (resource.status !== 'Available') return false;
 
+        // Check against resource-specific unavailability periods
         const isSpecificallyUnavailable = resource.unavailabilityPeriods?.some(period => {
           const periodStart = parseISO(period.startDate);
-          const periodEnd = parseISO(period.endDate);
+          const periodEnd = parseISO(period.endDate); // end date is inclusive
           return isValid(periodStart) && isValid(periodEnd) && 
                  isWithinInterval(dateToFilter, { start: startOfDay(periodStart), end: startOfDay(periodEnd) });
         });
         if (isSpecificallyUnavailable) return false;
         
+        // Check against resource's daily availability slots
         const dayAvailability = resource.availability?.find(avail => avail.date === dateToFilterStr);
         return dayAvailability && dayAvailability.slots.length > 0;
       });
@@ -172,7 +186,7 @@ export default function AdminResourcesPage() {
     setIsFilterDialogOpen(false);
   };
 
-  const resetDialogFilters = () => {
+  const resetDialogFilters = () => { // Resets only the dialog's temp filters
     setTempSearchTerm('');
     setTempFilterTypeId('all');
     setTempFilterLab('all');
@@ -180,17 +194,22 @@ export default function AdminResourcesPage() {
     setCurrentMonthInDialog(startOfDay(new Date()));
   };
 
-  const resetAllActivePageFilters = () => {
+  const resetAllActivePageFilters = () => { // Resets active page filters and dialog
     setActiveSearchTerm('');
     setActiveFilterTypeId('all');
     setActiveFilterLab('all');
     setActiveSelectedDate(undefined);
-    resetDialogFilters(); 
-    setIsFilterDialogOpen(false); 
+    resetDialogFilters(); // Also reset dialog temp state
+    setIsFilterDialogOpen(false); // Close dialog if open
   };
 
   const handleOpenNewDialog = () => {
     setEditingResource(null);
+    setIsFormDialogOpen(true);
+  };
+
+  const handleOpenEditDialog = (resource: Resource) => {
+    setEditingResource(resource);
     setIsFormDialogOpen(true);
   };
 
@@ -206,18 +225,18 @@ export default function AdminResourcesPage() {
         return;
     }
 
-    const resourceDataToSave = {
+    const resourceDataToSave: Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods'> & { purchaseDate?: Timestamp | null, availability?: any[], unavailabilityPeriods?: any[]} = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
       lab: data.lab,
       status: data.status,
       description: data.description || '',
       imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
-      manufacturer: data.manufacturer || null,
-      model: data.model || null,
-      serialNumber: data.serialNumber || null,
+      manufacturer: data.manufacturer || undefined,
+      model: data.model || undefined,
+      serialNumber: data.serialNumber || undefined,
       purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? Timestamp.fromDate(parseISO(data.purchaseDate)) : null,
-      notes: data.notes || null,
+      notes: data.notes || undefined,
       features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
       remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '' && v !== null) ? {
          ipAddress: data.remoteAccess.ipAddress || undefined,
@@ -226,17 +245,21 @@ export default function AdminResourcesPage() {
          username: data.remoteAccess.username || undefined,
          port: data.remoteAccess.port ?? undefined, 
          notes: data.remoteAccess.notes || undefined,
-      } : null,
-      allowQueueing: data.status === 'Available', 
-      availability: editingResource?.availability || [],
-      unavailabilityPeriods: editingResource?.unavailabilityPeriods || [],
+      } : undefined,
+      allowQueueing: data.status === 'Available',
     };
 
     setIsLoadingData(true);
     if (editingResource) {
       try {
         const resourceDocRef = doc(db, "resources", editingResource.id);
-        await updateDoc(resourceDocRef, resourceDataToSave);
+        // Preserve existing availability and unavailabilityPeriods if not modified by this form directly
+        const dataWithExistingSchedules = {
+            ...resourceDataToSave,
+            availability: editingResource.availability || [],
+            unavailabilityPeriods: editingResource.unavailabilityPeriods || [],
+        };
+        await updateDoc(resourceDocRef, dataWithExistingSchedules);
         addAuditLog(currentUser.id, currentUser.name || 'Admin', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: editingResource.id, details: `Resource '${data.name}' updated.`});
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
       } catch (error) {
@@ -245,7 +268,13 @@ export default function AdminResourcesPage() {
       }
     } else {
       try {
-        const docRef = await addDoc(collection(db, "resources"), resourceDataToSave);
+         // For new resources, availability and unavailabilityPeriods start empty
+        const dataForNewResource = {
+            ...resourceDataToSave,
+            availability: [],
+            unavailabilityPeriods: [],
+        };
+        const docRef = await addDoc(collection(db, "resources"), dataForNewResource);
         addAuditLog(currentUser.id, currentUser.name || 'Admin', 'RESOURCE_CREATED', { entityType: 'Resource', entityId: docRef.id, details: `Resource '${data.name}' created.`});
         toast({ title: 'Resource Created', description: `Resource "${data.name}" has been created.` });
       } catch (error) {
@@ -469,7 +498,7 @@ export default function AdminResourcesPage() {
           </CardContent>
         </Card>
       )}
-      {isFormDialogOpen && ( // Conditionally render dialog to ensure fetchedResourceTypes is ready
+      {isFormDialogOpen && fetchedResourceTypes.length > 0 && ( 
         <ResourceFormDialog
             open={isFormDialogOpen}
             onOpenChange={(isOpen) => {
@@ -481,6 +510,22 @@ export default function AdminResourcesPage() {
             resourceTypes={fetchedResourceTypes} 
         />
       )}
+       {isFormDialogOpen && fetchedResourceTypes.length === 0 && isLoadingData === false && (
+         <Dialog open={isFormDialogOpen} onOpenChange={setIsFormDialogOpen}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Cannot Add Resource</DialogTitle>
+                    <DialogDescription>
+                        No resource types are defined. Please add resource types before adding resources.
+                         <Button variant="link" asChild className="p-0 ml-1 h-auto"><Link href="/admin/resource-types">Go to Resource Types</Link></Button>
+                    </DialogDescription>
+                </DialogHeader>
+                 <DialogFooter>
+                    <Button onClick={() => setIsFormDialogOpen(false)}>OK</Button>
+                </DialogFooter>
+            </DialogContent>
+         </Dialog>
+       )}
     </div>
   );
 }

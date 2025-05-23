@@ -1,10 +1,14 @@
 
-import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
-import { format, parseISO, isValid } from 'date-fns';
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+import { format, parseISO, isValid as isValidDateFn } from 'date-fns';
+import React from "react"; // CRUCIAL for JSX
+import { Badge } from "@/components/ui/badge"; // CRUCIAL for Badge component
+import { CheckCircle, AlertTriangle, Construction } from "lucide-react"; // CRUCIAL for icons
+import type { ResourceStatus } from "@/types"; // CRUCIAL for type safety
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+  return twMerge(clsx(inputs));
 }
 
 /**
@@ -27,45 +31,58 @@ export function formatDateSafe(
 
   if (typeof dateInput === 'string') {
     if (dateInput === '' || dateInput.toUpperCase() === 'N/A') return emptyVal;
-    // Primarily expect ISO strings, parseISO is robust for them
+    // Try parsing as ISO string first
     dateToFormat = parseISO(dateInput);
-    // If parseISO results in an invalid date, new Date(dateInput) might catch other formats,
-    // but it's less reliable for arbitrary strings. isValid will catch it.
-    if (!isValid(dateToFormat)) {
-        try {
-            // Fallback for non-ISO strings that new Date might understand
-            dateToFormat = new Date(dateInput);
-        } catch (e) {
-             // If new Date also fails, return original string if it's not a known emptyVal
-            return dateInput.toUpperCase() !== 'N/A' ? dateInput : emptyVal;
+    if (!isValidDateFn(dateToFormat)) {
+      // If ISO parsing fails, try new Date() as a fallback for other formats
+      try {
+        const potentialDate = new Date(dateInput);
+        if (isValidDateFn(potentialDate)) {
+          dateToFormat = potentialDate;
+        } else {
+          return dateInput.toUpperCase() !== 'N/A' ? dateInput : emptyVal;
         }
+      } catch (e) {
+        return dateInput.toUpperCase() !== 'N/A' ? dateInput : emptyVal;
+      }
     }
   } else if (dateInput instanceof Date) {
     dateToFormat = dateInput;
-  } else {
-    // Handle cases where it might be a Firestore Timestamp-like object (if not converted earlier)
-    // This check might be needed if Timestamps are passed directly before conversion
+  // @ts-ignore - Handling potential Firebase Timestamp if not already converted
+  } else if (dateInput && typeof (dateInput as any).toDate === 'function') {
     // @ts-ignore
-    if (typeof dateInput.toDate === 'function') {
-      // @ts-ignore
-      dateToFormat = dateInput.toDate();
-    } else {
-      // If not a string, Date, or object with toDate, try to convert to string.
-      // This is a last resort and might not produce a valid date.
-      const S = String(dateInput);
-      dateToFormat = parseISO(S);
-      if (!isValid(dateToFormat)) {
-          return S; // Return the string conversion if parsing fails
-      }
+    dateToFormat = (dateInput as any).toDate();
+  } else {
+    const S = String(dateInput);
+    dateToFormat = parseISO(S);
+    if (!isValidDateFn(dateToFormat)) {
+        return S !== 'null' && S !== 'undefined' ? S : emptyVal;
     }
   }
 
-  if (isValid(dateToFormat)) {
-    return format(dateToFormat, dateFormat);
+  if (isValidDateFn(dateToFormat)) {
+    try {
+      return format(dateToFormat, dateFormat);
+    } catch (e) {
+        return emptyVal;
+    }
   } else {
-    // If after all attempts, the date is invalid, return emptyVal or original string
     return typeof dateInput === 'string' && dateInput !== '' && dateInput.toUpperCase() !== 'N/A'
       ? dateInput
       : emptyVal;
+  }
+}
+
+export function getResourceStatusBadge(status: ResourceStatus): JSX.Element {
+  switch (status) {
+    case 'Available':
+      return <Badge className={cn("bg-green-500 hover:bg-green-600 text-white border-transparent")}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+    case 'Booked':
+      return <Badge className={cn("bg-yellow-500 hover:bg-yellow-600 text-yellow-950 border-transparent")}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+    case 'Maintenance':
+      return <Badge className={cn("bg-orange-500 hover:bg-orange-600 text-white border-transparent")}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+    default:
+      const exhaustiveCheck: never = status;
+      return <Badge variant="outline">{String(exhaustiveCheck || status || "Unknown")}</Badge>;
   }
 }

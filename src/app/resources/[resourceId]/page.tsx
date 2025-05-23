@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
 import type { Resource, ResourceType, Booking, UnavailabilityPeriod } from '@/types';
-import { format, parseISO, isValid, isPast, startOfDay as fnsStartOfDay, compareAsc } from 'date-fns';
+import { format, parseISO, isValid, isPast, startOfDay as fnsStartOfDay, compareAsc, isWithinInterval } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, type ResourceFormValues } from '@/components/admin/resource-form-dialog';
@@ -30,6 +30,7 @@ import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavai
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, Timestamp, collection, query, where, getDocs, orderBy, serverTimestamp } from 'firebase/firestore';
 import { labsList, resourceStatusesList } from '@/lib/mock-data';
+
 
 function ResourceDetailPageSkeleton() {
   return (
@@ -60,7 +61,7 @@ function ResourceDetailPageSkeleton() {
               <Skeleton className="h-4 w-5/6 rounded-md bg-muted" />
             </CardContent>
           </Card>
-           <Card className="shadow-lg">
+           <Card className="shadow-lg"> {/* Placeholder for past bookings */}
             <CardHeader><Skeleton className="h-6 w-1/2 rounded-md bg-muted mb-2" /></CardHeader>
             <CardContent className="space-y-2">
               <Skeleton className="h-4 w-full rounded-md bg-muted" />
@@ -105,13 +106,13 @@ function ResourceDetailPageSkeleton() {
 }
 
 const DetailItem = ({ icon: Icon, label, value, isLink = false }: { icon: React.ElementType, label: string, value?: string | number | null | undefined, isLink?: boolean }) => {
-    if (value === undefined || value === null) return null;
-    const displayValue = String(value).trim();
-    if (displayValue === '') return <div className="flex items-start text-sm py-1.5">
+    if (value === undefined || value === null || String(value).trim() === '') return <div className="flex items-start text-sm py-1.5">
         <Icon className="h-4 w-4 mr-3 mt-0.5 text-muted-foreground flex-shrink-0" />
         <span className="font-medium text-muted-foreground w-32">{label}:</span>
         <span className="text-muted-foreground italic">N/A</span>
       </div>;
+    
+    const displayValue = String(value);
 
     return (
       <div className="flex items-start text-sm py-1.5">
@@ -127,6 +128,32 @@ const DetailItem = ({ icon: Icon, label, value, isLink = false }: { icon: React.
       </div>
     );
 };
+
+function NotFoundMessage({ resourceId }: { resourceId: string | null }) {
+  const router = useRouter();
+  return (
+    <div className="space-y-8">
+      <PageHeader title="Resource Not Found" icon={AlertTriangle}
+          actions={
+            <Button variant="outline" asChild onClick={() => router.push('/admin/resources')}>
+              <Link href="/admin/resources">
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Back to Resources
+              </Link>
+          </Button>
+          }
+      />
+      <Card className="max-w-2xl mx-auto shadow-lg border-destructive">
+        <CardHeader className="items-center">
+          <CardTitle className="text-destructive">Resource Not Found</CardTitle>
+        </CardHeader>
+        <CardContent className="text-center">
+          <p className="text-muted-foreground">The resource with ID "{resourceId || 'unknown'}" could not be found in Firestore.</p>
+          <p className="text-muted-foreground text-xs mt-1">Please check the ID or ensure the resource exists in the database.</p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 
 export default function ResourceDetailPage() {
@@ -162,7 +189,7 @@ export default function ResourceDetailPage() {
 
       if (docSnap.exists()) {
         const data = docSnap.data();
-        console.log("Document data:", data);
+        console.log("Raw document data:", data);
         const fetchedResource: Resource = {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
@@ -174,7 +201,7 @@ export default function ResourceDetailPage() {
           manufacturer: data.manufacturer || undefined,
           model: data.model || undefined,
           serialNumber: data.serialNumber || undefined,
-          purchaseDate: data.purchaseDate ? (typeof data.purchaseDate.toDate === 'function' ? data.purchaseDate.toDate().toISOString() : data.purchaseDate as string) : undefined,
+          purchaseDate: data.purchaseDate ? (typeof data.purchaseDate === 'string' ? data.purchaseDate : (data.purchaseDate as Timestamp).toDate().toISOString()) : undefined,
           notes: data.notes || undefined,
           remoteAccess: data.remoteAccess || undefined,
           allowQueueing: data.allowQueueing ?? false,
@@ -268,7 +295,7 @@ export default function ResourceDetailPage() {
         setResourceUserBookings(bookingsData);
       } catch (error) {
         console.error("Error fetching user bookings for resource:", error);
-        toast({ title: "Error", description: "Could not load your past bookings for this resource.", variant: "destructive" });
+        toast({ title: "Error", description: "Could not load your past bookings for this resource. Firestore index might be required.", variant: "destructive" });
         setResourceUserBookings([]);
       }
     };
@@ -276,7 +303,7 @@ export default function ResourceDetailPage() {
     if (resource && currentUser) { 
       fetchBookingsForResourceUser();
     }
-  }, [resource, resourceId, currentUser, toast]); 
+  }, [resourceId, currentUser, resource, toast]); 
 
 
   const canManageResource = useMemo(() => {
@@ -294,20 +321,8 @@ export default function ResourceDetailPage() {
       .sort((a, b) => compareAsc(b.startTime, a.startTime));
   }, [resource, currentUser, resourceUserBookings]);
 
-  const sortedUnavailabilityPeriods = useMemo(() => {
-    if (!resource || !Array.isArray(resource.unavailabilityPeriods)) return [];
-    return [...resource.unavailabilityPeriods].sort((a, b) => {
-      try { 
-        const dateA = a.startDate ? parseISO(a.startDate).getTime() : 0;
-        const dateB = b.startDate ? parseISO(b.startDate).getTime() : 0;
-        return dateA - dateB;
-      }
-      catch(e) { return 0;}
-    });
-  }, [resource]);
-
   const upcomingAvailability = useMemo(() => {
-    if (!resource || !resource.availability) return [];
+    if (!resource || !Array.isArray(resource.availability)) return [];
     const today = fnsStartOfDay(new Date());
     return resource.availability.filter(avail => {
       if (!avail || !avail.date) return false;
@@ -322,6 +337,14 @@ export default function ResourceDetailPage() {
         return dateA - dateB;
       }
       catch(e) { return 0; }
+    });
+  }, [resource]);
+  
+  const sortedUnavailabilityPeriods = useMemo(() => {
+    if (!resource || !Array.isArray(resource.unavailabilityPeriods)) return [];
+    return [...resource.unavailabilityPeriods].sort((a, b) => {
+      try { return parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime(); }
+      catch(e) { return 0;}
     });
   }, [resource]);
 
@@ -413,7 +436,7 @@ export default function ResourceDetailPage() {
         }
       }
       
-      const updatedAvailability = currentAvailability.filter(avail => avail.slots.length > 0 || currentAvailability.find(existing => existing.date === avail.date));
+      const updatedAvailability = currentAvailability.filter(avail => avail.slots.length > 0 || currentAvailability.find(existing => existing.date === avail.date && existing.slots.length > 0));
       updatedAvailability.sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
       
       try {
@@ -444,40 +467,16 @@ export default function ResourceDetailPage() {
     }
   };
 
+  const canBookResource = resource && resource.status === 'Available';
+
   if (isLoading) {
     return <ResourceDetailPageSkeleton />;
   }
 
   if (!resource) {
-    return (
-      <div className="space-y-8">
-        <PageHeader title="Resource Not Found" icon={AlertTriangle}
-            actions={
-             <Button variant="outline" asChild onClick={() => router.push('/admin/resources')}>
-                <Link href="/admin/resources">
-                    <ArrowLeft className="mr-2 h-4 w-4" /> Back to Resources
-                </Link>
-            </Button>
-            }
-        />
-        <Card className="max-w-2xl mx-auto shadow-lg border-destructive">
-          <CardHeader className="items-center">
-            <CardTitle className="text-destructive">Resource Not Found</CardTitle>
-          </CardHeader>
-          <CardContent className="text-center">
-            <p className="text-muted-foreground">The resource with ID "{resourceId || 'unknown'}" could not be found in Firestore.</p>
-            <p className="text-muted-foreground text-xs mt-1">Please check the ID or ensure the resource exists in the database.</p>
-            <p className="text-xs text-muted-foreground mt-2">Attempted to fetch ID: {resourceId || "None provided in URL"}</p>
-            <div className="mt-2">
-             <code className="text-xs bg-muted p-1 rounded">Error details logged to console.</code>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <NotFoundMessage resourceId={resourceId} />;
   }
   
-  const canBookResource = resource.status === 'Available';
 
   return (
     <TooltipProvider>
@@ -757,7 +756,7 @@ export default function ResourceDetailPage() {
             onOpenChange={setIsFormDialogOpen}
             initialResource={resource}
             onSave={handleSaveResource}
-            resourceTypes={fetchedResourceTypesForDialog}
+            resourceTypes={fetchedResourceTypesForDialog} 
         />
       )}
        {resource && (
