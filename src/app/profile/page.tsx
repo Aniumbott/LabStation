@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from '@/components/layout/page-header';
-import { UserCog, Shield, KeyRound, Image as ImageIcon, Save, Info, LogOut, Loader2, Edit3, Eye, EyeOff } from 'lucide-react';
+import { UserCog, Shield, KeyRound, Image as ImageIcon, Save, Info, LogOut, Loader2, Edit3, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import type { User } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -72,11 +72,11 @@ export default function ProfilePage() {
           variant: "destructive",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Profile update error:", error);
       toast({
         title: "Error",
-        description: "An unexpected error occurred while updating your profile.",
+        description: error.message || "An unexpected error occurred while updating your profile.",
         variant: "destructive",
       });
     } finally {
@@ -114,7 +114,7 @@ export default function ProfilePage() {
     setPasswordChangeSuccess("Password changed successfully (mock). Please use your new password next time you log in.");
     toast({
       title: "Password Changed (Mock)",
-      description: "Your password has been 'changed'.",
+      description: "Your password has been 'changed'. This is a mock and does not affect your actual login.",
     });
     setCurrentPassword('');
     setNewPassword('');
@@ -159,7 +159,7 @@ export default function ProfilePage() {
     );
   }
 
-  if (!currentUser) return null; // Should be caught by above, but defensive
+  if (!currentUser) return null; 
 
   return (
     <div className="space-y-8">
@@ -209,6 +209,10 @@ export default function ProfilePage() {
                     disabled={isSavingName}
                   />
                 </div>
+                 <Button onClick={handleSaveNameChanges} disabled={isSavingName || (currentUser && editableName.trim() === currentUser.name) || !editableName.trim()} className="w-full sm:w-auto mt-2">
+                    {isSavingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    {isSavingName ? 'Saving Name...' : 'Save Name Changes'}
+                 </Button>
                 <div>
                   <Label htmlFor="profileEmail" className="font-medium">Email Address</Label>
                   <div className="flex items-center mt-1">
@@ -227,10 +231,6 @@ export default function ProfilePage() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">Email address cannot be changed currently.</p>
                 </div>
-                 <Button onClick={handleSaveNameChanges} disabled={isSavingName || editableName.trim() === currentUser.name || !editableName.trim()} className="w-full sm:w-auto">
-                    {isSavingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    {isSavingName ? 'Saving Name...' : 'Save Name Changes'}
-                 </Button>
               </div>
             </div>
 
@@ -333,18 +333,15 @@ export default function ProfilePage() {
             </div>
           </CardContent>
           <Separator />
-          <CardFooter className="p-6 flex justify-between items-center">
+          <CardFooter className="p-6 flex justify-start"> {/* Changed to justify-start for Logout button */}
             <Button variant="destructive" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Logout
             </Button>
-             <Button onClick={handleSaveNameChanges} disabled={isSavingName || editableName.trim() === currentUser.name || !editableName.trim()} className="w-full sm:w-auto">
-                {isSavingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {isSavingName ? 'Saving Name...' : 'Save Name Changes'}
-             </Button>
           </CardFooter>
         </Card>
       </TooltipProvider>
     </div>
   );
 }
+
