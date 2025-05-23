@@ -15,7 +15,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // Keep if used outside react-hook-form context
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { UserPlus, Save, X } from 'lucide-react';
@@ -25,7 +24,7 @@ import { userRolesList } from '@/lib/mock-data'; // Import userRolesList
 const userFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email({ message: 'Please enter a valid email address.' }),
-  role: z.enum(userRolesList as [string, ...string[]], { required_error: 'Please select a role.' }), // Use imported list
+  role: z.enum(userRolesList as [string, ...string[]], { required_error: 'Please select a role.' }),
 });
 
 export type UserFormValues = z.infer<typeof userFormSchema>;
@@ -43,7 +42,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
     defaultValues: {
       name: '',
       email: '',
-      role: 'Researcher', // Default role for new users
+      role: 'Researcher',
     },
   });
 
@@ -56,10 +55,10 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
           role: initialUser.role,
         });
       } else {
-        form.reset({ // Reset for new user
+        form.reset({
           name: '',
           email: '',
-          role: 'Researcher', // Default role for new users
+          role: 'Researcher',
         });
       }
     }
@@ -73,9 +72,9 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-full max-w-xs sm:max-w-sm md:max-w-md">
         <DialogHeader>
-          <DialogTitle>{initialUser ? 'Edit User' : 'Add New User Profile'}</DialogTitle>
+          <DialogTitle>{initialUser ? 'Edit User Profile' : 'Add New User Profile (Admin)'}</DialogTitle>
           <DialogDescription>
-            {initialUser ? `Modify the details for ${initialUser.name}.` : 'Fill in the information for the new user profile. This does not create a Firebase Auth account.'}
+            {initialUser ? `Modify the Firestore profile for ${initialUser.name}. Email cannot be changed.` : 'Fill in the information for the new user profile. This does not create a Firebase Auth account.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -107,7 +106,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
                         disabled={!!initialUser} // Disable email editing for existing users
                     />
                   </FormControl>
-                  {initialUser && <FormMessage>Email cannot be changed for existing users here.</FormMessage>}
+                  {!!initialUser && <FormMessage className="text-xs text-muted-foreground">Email cannot be changed for existing user profiles.</FormMessage>}
                   {!initialUser && <FormMessage />}
                 </FormItem>
               )}

@@ -3,19 +3,18 @@
 
 import type { User, RoleName } from '@/types';
 import type { ReactNode } from 'react';
-import { createContext, useContext, useEffect, useState, useCallback }
-from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   updateProfile as firebaseUpdateProfile,
-  type User as FirebaseUser
+  type User as FirebaseUser,
 } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { addNotification } from '@/lib/mock-data'; // Keep for admin notification on new signup
+import { addNotification, addAuditLog } from '@/lib/mock-data';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -45,32 +44,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (userProfileData.status === 'active') {
               const appUser: User = {
                 id: firebaseUser.uid,
-                name: firebaseUser.displayName || userProfileData.name || '', // Prioritize Firebase Auth displayName
-                email: firebaseUser.email || '', // Prioritize Firebase Auth email
+                name: firebaseUser.displayName || userProfileData.name || '',
+                email: firebaseUser.email || '',
                 role: userProfileData.role,
                 status: userProfileData.status,
                 avatarUrl: firebaseUser.photoURL || userProfileData.avatarUrl,
-                createdAt: userProfileData.createdAt, // Ensure this field exists or handle if not
+                createdAt: userProfileData.createdAt && typeof userProfileData.createdAt === 'object' && 'toDate' in userProfileData.createdAt
+                  // @ts-ignore Firestore Timestamp
+                  ? userProfileData.createdAt.toDate().toISOString()
+                  // @ts-ignore
+                  : userProfileData.createdAt || new Date().toISOString(),
               };
               setCurrentUser(appUser);
               if (typeof window !== 'undefined') localStorage.removeItem('login_message');
             } else {
-              if (typeof window !== 'undefined') {
-                if (userProfileData.status === 'pending_approval') {
-                  localStorage.setItem('login_message', 'Account pending approval. Please wait for an admin.');
-                } else if (userProfileData.status === 'suspended') {
-                  localStorage.setItem('login_message', 'Your account has been suspended.');
-                }
+              let message = 'Your account is not active.';
+              if (userProfileData.status === 'pending_approval') {
+                message = 'Account pending approval. Please wait for an admin.';
+              } else if (userProfileData.status === 'suspended') {
+                message = 'Your account has been suspended.';
               }
+              if (typeof window !== 'undefined') localStorage.setItem('login_message', message);
               await firebaseSignOut(auth);
               setCurrentUser(null);
             }
           } else {
-            // No Firestore profile, means signup might be incomplete or user deleted from Firestore
-            // This case is tricky: if just signed up, profile might not be there yet.
-            // For robustness, if no profile, treat as not fully logged in for app purposes.
              console.warn(`User ${firebaseUser.uid} authenticated with Firebase but no Firestore profile found. Signing out.`);
-             if (typeof window !== 'undefined') localStorage.setItem('login_message', 'User profile not found. Please contact support or try signing up again.');
+             if (typeof window !== 'undefined') localStorage.setItem('login_message', 'User profile not found. Please contact support or try signing up again if this is unexpected.');
             await firebaseSignOut(auth);
             setCurrentUser(null);
           }
@@ -82,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } else {
         setCurrentUser(null);
+        if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
       }
       setIsLoading(false);
     });
@@ -94,8 +95,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window !== 'undefined') localStorage.removeItem('login_message');
 
     try {
+      // Firebase Authentication
       await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged will handle setting currentUser and isLoading=false
+      // onAuthStateChanged will handle fetching Firestore profile, setting currentUser, and isLoading=false
+      // If onAuthStateChanged determines user isn't active, it will sign them out from Firebase too.
       return { success: true };
     } catch (error: any) {
       console.error("Firebase login error:", error);
@@ -105,9 +108,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (error.code === 'auth/too-many-requests') {
         message = "Access to this account has been temporarily disabled due to many failed login attempts.";
       } else if (error.code === 'auth/user-disabled') {
-         message = "This user account has been disabled.";
+         message = "This user account has been disabled by Firebase.";
       }
-      setIsLoading(false); // Ensure loading is false on direct error
+      setIsLoading(false);
       return { success: false, message };
     }
   };
@@ -116,6 +119,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await firebaseSignOut(auth);
       // onAuthStateChanged will set currentUser to null and isLoading to false.
+      // Also clear local storage explicitly
+      if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
     } catch (error) {
       console.error("Firebase logout error:", error);
       setCurrentUser(null); // Manually clear on error
@@ -124,50 +129,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signup = async (name: string, email: string, password?: string): Promise<{ success: boolean; message: string; userId?: string }> => {
-    if (!password) return { success: false, message: "Password is required.", userId: undefined };
+    if (!password) return { success: false, message: "Password is required." };
     setIsLoading(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
 
-      // Update Firebase Auth profile (optional, but good for displayName)
       await firebaseUpdateProfile(firebaseUser, { displayName: name });
 
-      // Create user document in Firestore
       const userDocRef = doc(db, "users", firebaseUser.uid);
-      const newUserProfileData: Omit<User, 'id'> = {
+      const newUserProfileData = {
         name: name,
-        email: firebaseUser.email || email, // Use email from FirebaseUser if available
-        role: 'Researcher', // Default role
-        status: 'pending_approval', // Default status
+        email: firebaseUser.email || email,
+        role: 'Researcher' as RoleName,
+        status: 'pending_approval' as User['status'],
         avatarUrl: firebaseUser.photoURL || 'https://placehold.co/100x100.png',
-        createdAt: new Date().toISOString(), // Or serverTimestamp() if you prefer Firestore's handling
+        createdAt: serverTimestamp(), // Use Firestore server timestamp
       };
       await setDoc(userDocRef, newUserProfileData);
 
-      // For mock-data based notification system:
-      // Find an admin to notify. In a real app, this might involve querying admins or a topic.
-      // For simplicity, we can try to notify a known admin ID if it exists, or just log.
-      // This part is tricky without knowing admin UIDs.
-      // For the demo, we can assume a known admin user ID if it exists in mock-data or skip if not.
-      // const adminUser = initialMockUsers.find(u => u.role === 'Admin'); // This line will break as initialMockUsers is removed
-      // if (adminUser) {
-      // This is tricky now. We'll have to find a way to notify admins.
-      // For now, let's rely on admins checking the Users page.
-      // A better approach would be a Cloud Function listening to new user docs.
-      console.log(`New user ${name} (${email}) signed up. Needs approval. Admin UID to notify would be needed.`);
-      // Add a generic notification or specific if admin ID is known.
-      // For example, if you have a fixed admin UID 'admin_user_id_placeholder':
-      // addNotification(
-      //     'admin_user_id_placeholder',
-      //     'New Signup Request',
-      //     `User ${name} (${email}) has signed up and is awaiting approval.`,
-      //     'signup_pending_admin',
-      //     '/admin/users'
-      // );
+      // Add admin notification for new signup
+      // Assuming admin 'u1' from previous mock data is a placeholder for a real admin UID
+      // In a real system, you'd have a better way to target admins or a collection for pending tasks.
+      const adminToNotify = "ADMIN_USER_ID_PLACEHOLDER"; // Replace with actual Admin UID or system
+      if(adminToNotify !== "ADMIN_USER_ID_PLACEHOLDER"){
+         await addNotification(
+            adminToNotify,
+            'New Signup Request',
+            `User ${name} (${email}) has signed up and is awaiting approval.`,
+            'signup_pending_admin',
+            '/admin/users' // Link to users page where pending users are visible
+        );
+      } else {
+        console.warn("Admin UID for signup notification not configured.")
+      }
 
 
-      await firebaseSignOut(auth); // Sign out user immediately after signup; they need approval
+      await firebaseSignOut(auth); // Sign out user immediately; they need approval
       setIsLoading(false);
       return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: firebaseUser.uid };
     } catch (error: any) {
@@ -185,13 +183,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
  const updateUserProfile = useCallback(async (updatedFields: Partial<Pick<User, 'name' | 'avatarUrl'>>): Promise<{ success: boolean; message?: string }> => {
     const firebaseUser = auth.currentUser;
-    if (!firebaseUser || !currentUser) { // Check against context's currentUser as well
+    if (!firebaseUser || !currentUser) {
       return { success: false, message: "No user logged in." };
     }
     
     setIsLoading(true);
     try {
-      // Update Firebase Auth profile
       const updatesForAuth: { displayName?: string; photoURL?: string } = {};
       if (updatedFields.name && updatedFields.name !== firebaseUser.displayName) {
         updatesForAuth.displayName = updatedFields.name;
@@ -203,9 +200,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await firebaseUpdateProfile(firebaseUser, updatesForAuth);
       }
 
-      // Update Firestore user document
       const userDocRef = doc(db, "users", firebaseUser.uid);
-      const firestoreUpdates: Partial<Omit<User, 'id' | 'email' | 'role' | 'status' | 'createdAt'>> = {};
+      const firestoreUpdates: Partial<Pick<User, 'name' | 'avatarUrl'>> = {};
       if(updatedFields.name) firestoreUpdates.name = updatedFields.name;
       if(updatedFields.avatarUrl) firestoreUpdates.avatarUrl = updatedFields.avatarUrl;
       
@@ -213,7 +209,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await updateDoc(userDocRef, firestoreUpdates);
       }
       
-      // Update local currentUser state
       setCurrentUser(prevUser => {
         if (!prevUser) return null;
         const updatedAppUser = {
@@ -221,6 +216,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           name: updatedFields.name || prevUser.name,
           avatarUrl: updatedFields.avatarUrl || prevUser.avatarUrl,
         };
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('labstation_user', JSON.stringify(updatedAppUser));
+        }
         return updatedAppUser;
       });
       
@@ -231,7 +229,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Firebase profile update error:", error);
       return { success: false, message: error.message || "Failed to update profile." };
     }
-  }, [currentUser]); // Added currentUser to dependency array
+  }, [currentUser]);
+
+  // Attempt to load user from localStorage on initial mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedUser = localStorage.getItem('labstation_user');
+      if (storedUser) {
+        try {
+          const parsedUser: User = JSON.parse(storedUser);
+          // Basic validation: check if essential fields exist and if this user still "exists" in Firebase Auth
+          // A more robust check might involve re-validating the session with Firebase if needed.
+          // For this mock, if local user matches an existing auth user, we assume it's valid.
+          if (parsedUser && parsedUser.id && auth.currentUser && auth.currentUser.uid === parsedUser.id) {
+             // Further check: Fetch from Firestore to ensure status is still active.
+             // This is now handled by onAuthStateChanged, so the localStorage load is more of a quick pre-fill.
+             // onAuthStateChanged will be the ultimate source of truth.
+          } else {
+             // localStorage user doesn't match current auth state, clear it.
+             localStorage.removeItem('labstation_user');
+          }
+        } catch (e) {
+          console.error("Failed to parse user from localStorage", e);
+          localStorage.removeItem('labstation_user');
+        }
+      }
+    }
+  }, []);
+
 
   return (
     <AuthContext.Provider value={{ currentUser, isLoading, login, logout, signup, updateUserProfile }}>

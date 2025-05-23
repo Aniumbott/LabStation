@@ -52,7 +52,7 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
 import { userRolesList, addNotification, addAuditLog } from '@/lib/mock-data';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, updateDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, type Timestamp } from 'firebase/firestore';
 
 
 const userStatusesList: (UserStatus | 'all')[] = ['all', 'active', 'pending_approval', 'suspended'];
@@ -111,20 +111,24 @@ export default function UsersPage() {
       const querySnapshot = await getDocs(usersCollectionRef);
       const fetchedUsers: User[] = [];
       querySnapshot.forEach((docSnap) => {
-        // Ensure createdAt is properly handled if it's a Firestore Timestamp
         const data = docSnap.data();
-        let createdAtStr = data.createdAt;
+        let createdAtStr: string | undefined;
         if (data.createdAt && typeof data.createdAt.toDate === 'function') {
-          createdAtStr = data.createdAt.toDate().toISOString();
-        } else if (data.createdAt && typeof data.createdAt === 'object' && data.createdAt.seconds) {
-          // Handle cases where it might be a plain object from serverTimestamp() if not yet converted
-           createdAtStr = new Date(data.createdAt.seconds * 1000).toISOString();
+          createdAtStr = (data.createdAt as Timestamp).toDate().toISOString();
+        } else if (typeof data.createdAt === 'string') {
+          createdAtStr = data.createdAt;
+        } else {
+           createdAtStr = new Date().toISOString(); // Fallback for older data without createdAt
         }
 
-        fetchedUsers.push({ 
-            id: docSnap.id, 
-            ...data,
-            createdAt: createdAtStr 
+        fetchedUsers.push({
+            id: docSnap.id,
+            name: data.name || 'N/A',
+            email: data.email || 'N/A',
+            role: data.role || 'Researcher',
+            status: data.status || 'pending_approval',
+            avatarUrl: data.avatarUrl || 'https://placehold.co/100x100.png',
+            createdAt: createdAtStr,
         } as User);
       });
       setUsers(fetchedUsers.sort((a,b) => {
@@ -207,49 +211,47 @@ export default function UsersPage() {
       return;
     }
     
+    setIsLoadingUsers(true); // Indicate loading state
     if (editingUser) { // Editing existing user
       try {
         const userDocRef = doc(db, "users", editingUser.id);
         await updateDoc(userDocRef, {
           name: data.name,
-          // email: data.email, // Email should generally not be updatable this way without re-auth.
           role: data.role,
+          // Email and status are not updated here; status is via Approve/Suspend actions.
         });
         addAuditLog(currentUser.id, currentUser.name || 'Admin', 'USER_UPDATED', { entityType: 'User', entityId: editingUser.id, details: `User ${data.name} (ID: ${editingUser.id}) details updated. Role set to ${data.role}.` });
         toast({ title: 'User Updated', description: `User ${data.name} has been updated.` });
-        fetchUsers(); // Re-fetch users to show changes
       } catch (error) {
         console.error("Error updating user:", error);
         toast({ title: "Error", description: "Failed to update user.", variant: "destructive" });
       }
     } else { 
-      // Admin creating a user profile - This is less common than user signup.
-      // This flow doesn't create a Firebase Auth user, only a Firestore profile.
-      // A more complete admin user creation would involve Firebase Admin SDK.
+      // Admin creating a user profile. This ONLY creates a Firestore profile.
+      // It does NOT create a Firebase Auth user. This user won't be able to log in.
       try {
-        // For simplicity, we're not creating an Auth user here. This is just a profile.
-        // A unique ID is needed if not using Firebase Auth UID.
-        // This manual creation is highly discouraged for production.
-        const newUserId = `manual_admin_created_${Date.now()}`; 
+        const newUserId = `admin_created_${Date.now()}`; // Simple unique ID
         const userDocRef = doc(db, "users", newUserId);
-        const newUserProfile: Partial<User> = {
+        const newUserProfileData = {
           name: data.name,
-          email: data.email,
+          email: data.email, // Email must be unique if it's to be used for login later via other means
           role: data.role,
           avatarUrl: 'https://placehold.co/100x100.png',
-          status: 'active', // Admin-created users are active by default
-          createdAt: new Date().toISOString(),
+          status: 'active' as User['status'], // Admin-created users are active by default
+          createdAt: serverTimestamp(),
         };
-        await setDoc(userDocRef, newUserProfile);
-        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User ${data.name} created by admin with role ${data.role}.` });
-        toast({ title: 'User Profile Created', description: `User profile for ${data.name} with role ${data.role} has been created.` });
-        fetchUsers();
-      } catch (error) {
+        await setDoc(userDocRef, newUserProfileData);
+        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User profile for ${data.name} created by admin with role ${data.role}. This user cannot log in without a corresponding Auth account.` });
+        toast({ title: 'User Profile Created', description: `User profile for ${data.name} with role ${data.role} has been created. They cannot log in without a Firebase Auth account.` });
+      } catch (error: any) {
         console.error("Error creating user profile by admin:", error);
-        toast({ title: "Error", description: "Failed to create user profile.", variant: "destructive" });
+        let description = "Failed to create user profile.";
+        if (error.code === 'permission-denied') description = "Permission denied to create user profile.";
+        toast({ title: "Error", description, variant: "destructive" });
       }
     }
     setIsFormDialogOpen(false);
+    await fetchUsers(); // Re-fetch users to show changes
   };
 
  const handleDeleteUser = async (userId: string) => {
@@ -258,21 +260,21 @@ export default function UsersPage() {
         return;
     }
     const userToDeleteDetails = users.find(u => u.id === userId);
+    setIsLoadingUsers(true);
     try {
       // This only deletes the Firestore profile.
       // Deleting the Firebase Auth user requires Admin SDK or Cloud Function.
-      // For a full cleanup, ensure associated Auth user is also deleted if this app managed their creation.
       const userDocRef = doc(db, "users", userId);
       await deleteDoc(userDocRef);
       
       addAuditLog(currentUser.id, currentUser.name || 'Admin', 'USER_DELETED', { entityType: 'User', entityId: userId, details: `User profile for ${userToDeleteDetails?.name || userId} (ID: ${userId}) deleted.` });
-      toast({ title: "User Profile Deleted", description: `User "${userToDeleteDetails?.name}" Firestore profile has been removed. Auth user may still exist.`, variant: "destructive" });
-      fetchUsers(); // Re-fetch to update list
+      toast({ title: "User Profile Deleted", description: `User "${userToDeleteDetails?.name}" Firestore profile has been removed. Firebase Auth user may still exist if one was associated.`, variant: "destructive" });
     } catch (error) {
       console.error("Error deleting user profile:", error);
       toast({ title: "Error", description: "Failed to delete user profile.", variant: "destructive" });
     }
     setUserToDelete(null);
+    await fetchUsers(); 
   };
 
 
@@ -286,6 +288,7 @@ export default function UsersPage() {
         toast({ title: "Error", description: "User not found.", variant: "destructive" });
         return;
     }
+    setIsLoadingUsers(true);
     try {
         const userDocRef = doc(db, "users", userId);
         await updateDoc(userDocRef, { status: 'active' });
@@ -293,18 +296,19 @@ export default function UsersPage() {
         addAuditLog(currentUser.id, currentUser.name || 'Admin', 'USER_APPROVED', { entityType: 'User', entityId: userId, details: `User ${userToApproveDetails.name} (ID: ${userId}) approved.`});
         toast({ title: 'User Approved', description: `User ${userToApproveDetails.name} has been approved and is now active.` });
         
-        addNotification(
+        // Notify the approved user
+        await addNotification(
             userId,
             'Account Approved!',
             'Your LabStation account has been approved. You can now log in.',
             'signup_approved',
             '/login'
         );
-        fetchUsers(); // Re-fetch to update status in the list
     } catch (error) {
         console.error("Error approving user:", error);
         toast({ title: 'Approval Failed', description: `Could not approve user ${userToApproveDetails.name}.`, variant: 'destructive' });
     }
+    await fetchUsers(); 
   };
 
   const handleConfirmRejectUser = async () => {
@@ -314,6 +318,7 @@ export default function UsersPage() {
         return;
     }
     const userDetails = users.find(u => u.id === userToReject.id);
+    setIsLoadingUsers(true);
     try {
       // This deletes the Firestore profile for the pending user.
       // The Firebase Auth user (created during signup attempt) would also need to be deleted via Admin SDK for full cleanup.
@@ -321,13 +326,13 @@ export default function UsersPage() {
       await deleteDoc(userDocRef);
 
       addAuditLog(currentUser.id, currentUser.name || 'Admin', 'USER_REJECTED', { entityType: 'User', entityId: userToReject.id, details: `Signup request for ${userDetails?.name || userToReject.id} (ID: ${userToReject.id}) rejected and profile removed.` });
-      toast({ title: 'Signup Request Rejected', description: `Signup request for ${userDetails?.name} has been rejected and removed. Auth user may still exist.`, variant: 'destructive' });
-      fetchUsers(); // Re-fetch to update list
+      toast({ title: 'Signup Request Rejected', description: `Signup request for ${userDetails?.name} has been rejected and removed. Firebase Auth user may still exist if one was created.`, variant: 'destructive' });
     } catch (error) {
       console.error("Error rejecting user:", error);
       toast({ title: 'Rejection Failed', description: `Could not reject user ${userDetails?.name}.`, variant: 'destructive' });
     }
     setUserToReject(null);
+    await fetchUsers(); 
   };
 
 
@@ -528,7 +533,7 @@ export default function UsersPage() {
                                 <AlertDialogTrigger asChild>
                                   <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToDelete(user)}>
                                       <Trash2 className="h-4 w-4" />
-                                      <span className="sr-only">Delete User</span>
+                                      <span className="sr-only">Delete User Profile</span>
                                   </Button>
                                 </AlertDialogTrigger>
                               </TooltipTrigger>
@@ -572,7 +577,7 @@ export default function UsersPage() {
             <UsersIconLucide className="mx-auto h-12 w-12 mb-4 opacity-50" />
             <p className="text-lg font-medium">
                 {activeFilterCount > 0 ? "No Users Match Filters" : "No Users Found"}
-            </P>
+            </p>
             <p className="text-sm mb-4">
                 {activeFilterCount > 0
                     ? "Try adjusting your search or filter criteria."
@@ -586,7 +591,7 @@ export default function UsersPage() {
             ) : (
               !filteredUsers.length && canAddUsers && (
                 <Button onClick={handleOpenNewUserDialog}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add First User
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add First User Profile
                 </Button>
               )
             )}
