@@ -40,12 +40,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { MaintenanceRequestFormDialog, MaintenanceRequestFormValues } from '@/components/maintenance/maintenance-request-form-dialog';
-import { cn } from '@/lib/utils';
+import { cn, formatDateSafe } from '@/lib/utils';
 import { db } from '@/lib/firebase';
-import { collection, query, getDocs, addDoc, updateDoc, doc, serverTimestamp, Timestamp, getDoc, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, Timestamp, getDoc, orderBy } from 'firebase/firestore';
 
 
-const getStatusBadge = (status: MaintenanceRequestStatus) => {
+const getMaintenanceStatusBadge = (status: MaintenanceRequestStatus) => {
   switch (status) {
     case 'Open':
       return <Badge variant="destructive" className="bg-red-500 text-white border-transparent"><AlertCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
@@ -108,11 +108,12 @@ export default function MaintenanceRequestsPage() {
           const techDoc = await getDoc(doc(db, 'users', data.assignedTechnicianId));
           if (techDoc.exists()) assignedTechnicianName = techDoc.data()?.name;
         }
+        
         return {
           id: docSnap.id,
           ...data,
-          dateReported: data.dateReported.toDate().toISOString(),
-          dateResolved: data.dateResolved ? data.dateResolved.toDate().toISOString() : undefined,
+          dateReported: data.dateReported ? (data.dateReported as Timestamp).toDate().toISOString() : new Date().toISOString(),
+          dateResolved: data.dateResolved ? (data.dateResolved as Timestamp).toDate().toISOString() : undefined,
           resourceName,
           reportedByUserName,
           assignedTechnicianName,
@@ -158,9 +159,9 @@ export default function MaintenanceRequestsPage() {
     const lowerSearchTerm = activeSearchTerm.toLowerCase();
     if (activeSearchTerm) {
       currentRequests = currentRequests.filter(req =>
-        req.resourceName.toLowerCase().includes(lowerSearchTerm) ||
-        req.reportedByUserName.toLowerCase().includes(lowerSearchTerm) ||
-        req.issueDescription.toLowerCase().includes(lowerSearchTerm) ||
+        (req.resourceName && req.resourceName.toLowerCase().includes(lowerSearchTerm)) ||
+        (req.reportedByUserName && req.reportedByUserName.toLowerCase().includes(lowerSearchTerm)) ||
+        (req.issueDescription && req.issueDescription.toLowerCase().includes(lowerSearchTerm)) ||
         (req.assignedTechnicianName && req.assignedTechnicianName.toLowerCase().includes(lowerSearchTerm))
       );
     }
@@ -180,7 +181,7 @@ export default function MaintenanceRequestsPage() {
     return currentRequests; // Already sorted by Firestore query
   }, [requests, activeSearchTerm, activeFilterStatus, activeFilterResourceId, activeFilterTechnicianId]);
 
-  const handleApplyFilters = () => {
+  const handleApplyDialogFilters = () => {
     setActiveSearchTerm(tempSearchTerm);
     setActiveFilterStatus(tempFilterStatus);
     setActiveFilterResourceId(tempFilterResourceId);
@@ -195,7 +196,7 @@ export default function MaintenanceRequestsPage() {
     setTempFilterTechnicianId('all');
   };
 
-  const resetAllActiveFilters = () => {
+  const resetAllActivePageFilters = () => {
     setActiveSearchTerm('');
     setActiveFilterStatus('all');
     setActiveFilterResourceId('all');
@@ -230,7 +231,8 @@ export default function MaintenanceRequestsPage() {
       return;
     }
     
-    const requestData: Partial<MaintenanceRequest> = {
+    // Prepare data for Firestore, excluding fields that shouldn't be directly written
+    const requestDataToSave: any = { // Use 'any' for flexibility here, will be strongly typed for Firestore call
       resourceId: data.resourceId,
       issueDescription: data.issueDescription,
       status: data.status,
@@ -238,18 +240,19 @@ export default function MaintenanceRequestsPage() {
       resolutionNotes: data.resolutionNotes || null,
     };
 
+
     setIsLoading(true);
     if (editingRequest) {
       try {
         if (data.status === 'Resolved' || data.status === 'Closed') {
-          if (!editingRequest.dateResolved) { // Only set dateResolved if it wasn't already set
-            requestData.dateResolved = new Date().toISOString();
+          if (!editingRequest.dateResolved) { 
+            requestDataToSave.dateResolved = serverTimestamp();
           }
         } else {
-          requestData.dateResolved = null; // Clear dateResolved if status is not Resolved/Closed
+          requestDataToSave.dateResolved = null; // Clear dateResolved if status is not Resolved/Closed
         }
         const requestDocRef = doc(db, "maintenanceRequests", editingRequest.id);
-        await updateDoc(requestDocRef, requestData);
+        await updateDoc(requestDocRef, requestDataToSave);
         
         addAuditLog(currentUser.id, currentUser.name || 'User', 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingRequest.id, details: `Maintenance request for '${resource.name}' updated. Status: ${data.status}.`});
         toast({ title: 'Request Updated', description: `Maintenance request for "${resource.name}" has been updated.` });
@@ -264,13 +267,15 @@ export default function MaintenanceRequestsPage() {
             '/maintenance'
           );
         } else if (data.assignedTechnicianId && data.assignedTechnicianId !== editingRequest.assignedTechnicianId) {
-           addNotification(
-            data.assignedTechnicianId,
-            'Maintenance Task Assigned',
-            `You have been assigned a maintenance task for ${resource.name}: ${data.issueDescription.substring(0,50)}...`,
-            'maintenance_assigned',
-            '/maintenance'
-          );
+           if(data.assignedTechnicianId) { // Ensure technicianId is not null/empty string before sending notification
+            addNotification(
+              data.assignedTechnicianId,
+              'Maintenance Task Assigned',
+              `You have been assigned a maintenance task for ${resource.name}: ${data.issueDescription.substring(0,50)}...`,
+              'maintenance_assigned',
+              '/maintenance'
+            );
+          }
         }
       } catch (error) {
         console.error("Error updating maintenance request:", error);
@@ -279,25 +284,35 @@ export default function MaintenanceRequestsPage() {
     } else { // New Request
       try {
         const newRequestPayload = {
-          ...requestData,
+          ...requestDataToSave,
           reportedByUserId: currentUser.id,
-          dateReported: serverTimestamp(), // Firestore server timestamp
+          dateReported: serverTimestamp(), 
           dateResolved: (data.status === 'Resolved' || data.status === 'Closed') ? serverTimestamp() : null,
         };
         const docRef = await addDoc(collection(db, "maintenanceRequests"), newRequestPayload);
         
-        addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New maintenance request for '${resource.name}' logged.`});
+        addAuditLog(currentUser.id, currentUser.name || 'System', 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New maintenance request for '${resource.name}' logged.`});
         toast({ title: 'Request Logged', description: `New maintenance request for "${resource.name}" has been logged.` });
         
-        const targetTechnicianId = data.assignedTechnicianId || (allTechnicians.length > 0 ? allTechnicians[0].id : null); 
-        if(targetTechnicianId){ // Notify assigned tech or a default one if specified
+        if(requestDataToSave.assignedTechnicianId){ 
           addNotification(
-              targetTechnicianId,
-              'New Maintenance Request',
-              `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}...`,
-              'maintenance_new',
+              requestDataToSave.assignedTechnicianId,
+              'New Maintenance Request Assigned',
+              `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... has been assigned to you.`,
+              'maintenance_assigned', // Use 'maintenance_assigned' for direct assignment
               '/maintenance'
           );
+        } else { // Notify all technicians or a general admin if unassigned
+            const adminsAndManagersSnapshot = await getDocs(query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager', 'Technician'])));
+            adminsAndManagersSnapshot.forEach(adminDoc => {
+                 addNotification(
+                    adminDoc.id,
+                    'New Unassigned Maintenance Request',
+                    `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`,
+                    'maintenance_new',
+                    '/maintenance'
+                );
+            });
         }
       } catch (error) {
          console.error("Error logging maintenance request:", error);
@@ -306,7 +321,7 @@ export default function MaintenanceRequestsPage() {
     }
     setIsFormDialogOpen(false);
     setEditingRequest(null);
-    await fetchMaintenanceData(); // Re-fetch all data
+    await fetchMaintenanceData(); 
   };
   
   const activeFilterCount = [
@@ -402,7 +417,7 @@ export default function MaintenanceRequestsPage() {
                       <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                     </Button>
                     <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleApplyFilters}>Apply Filters</Button>
+                    <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -441,9 +456,9 @@ export default function MaintenanceRequestsPage() {
                         <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{request.issueDescription}</TableCell>
                         <TableCell>{request.reportedByUserName}</TableCell>
                         <TableCell>
-                          {isValidDate(parseISO(request.dateReported)) ? format(parseISO(request.dateReported), 'MMM dd, yyyy') : 'Invalid Date'}
+                          {formatDateSafe(request.dateReported, 'Invalid Date', 'MMM dd, yyyy')}
                         </TableCell>
-                        <TableCell>{getStatusBadge(request.status)}</TableCell>
+                        <TableCell>{getMaintenanceStatusBadge(request.status)}</TableCell>
                         <TableCell>{request.assignedTechnicianName || <span className="text-xs italic text-muted-foreground">Unassigned</span>}</TableCell>
                         {canEditMaintenanceRequest && (
                           <TableCell className="text-right space-x-1">
@@ -478,13 +493,15 @@ export default function MaintenanceRequestsPage() {
                   : "All systems operational, or no issues reported yet."}
               </p>
               {activeFilterCount > 0 ? (
-                <Button variant="outline" onClick={resetAllActiveFilters}>
+                <Button variant="outline" onClick={resetAllActivePageFilters}>
                   <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
               ) : (
-                <Button onClick={handleOpenNewDialog}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Log First Maintenance Request
-                </Button>
+                 currentUser && ( // Only show "Log First" if a user is logged in
+                  <Button onClick={handleOpenNewDialog}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Log First Maintenance Request
+                  </Button>
+                )
               )}
             </CardContent>
           </Card>
