@@ -1,4 +1,6 @@
 
+import type { Timestamp } from 'firebase/firestore';
+
 export interface ResourceType {
   id: string; // Firestore document ID
   name: string;
@@ -22,17 +24,16 @@ export interface AvailabilitySlot {
 }
 
 export interface UnavailabilityPeriod {
-  id: string; // Can be a sub-collection or just an ID within the array
+  id: string; 
   startDate: string; // YYYY-MM-DD
   endDate: string;   // YYYY-MM-DD
   reason?: string;
 }
 
 export interface Resource {
-  id: string; // Firestore document ID
+  id: string; 
   name: string;
-  resourceTypeId: string; // ID of document in 'resourceTypes' collection
-  // resourceTypeName: string; // REMOVED - Fetch from ResourceType
+  resourceTypeId: string; 
   lab: 'Electronics Lab 1' | 'RF Lab' | 'Prototyping Lab' | 'General Test Area';
   status: ResourceStatus;
   description: string;
@@ -43,31 +44,29 @@ export interface Resource {
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
-  purchaseDate?: string; // Firestore Timestamp (store as ISO string if not directly using Timestamp type in frontend model)
+  purchaseDate?: Date | undefined; // JS Date object after fetching
   notes?: string;
   remoteAccess?: RemoteAccessDetails;
   allowQueueing?: boolean;
 }
 
 export interface BookingUsageDetails {
-  actualStartTime?: string; // Firestore Timestamp (ISO string)
-  actualEndTime?: string;   // Firestore Timestamp (ISO string)
+  actualStartTime?: Date | undefined; // JS Date object
+  actualEndTime?: Date | undefined;   // JS Date object
   outcome?: 'Success' | 'Failure' | 'Interrupted' | 'Not Applicable';
-  dataStorageLocation?: string;
+  dataStorageLocation?: string; 
   usageComments?: string;
 }
-export const BookingUsageOutcomes: Array<BookingUsageDetails['outcome'] | undefined> = ['Success', 'Failure', 'Interrupted', 'Not Applicable', undefined];
+export const BookingUsageOutcomes: Array<BookingUsageDetails['outcome']> = ['Success', 'Failure', 'Interrupted', 'Not Applicable'];
 
 
 export interface Booking {
-  id: string; // Firestore document ID
-  resourceId: string; // ID of document in 'resources' collection
-  // resourceName: string; // REMOVED - Fetch from Resource
-  userId: string; // Firebase Auth UID of the user
-  // userName: string; // REMOVED - Fetch from User
-  startTime: Date; // Or string (ISO) then convert. For Firestore, use Timestamp.
-  endTime: Date;   // Or string (ISO)
-  createdAt: Date; // Or string (ISO)
+  id: string; 
+  resourceId: string; 
+  userId: string; 
+  startTime: Date; // JS Date object after fetching
+  endTime: Date;   // JS Date object
+  createdAt: Date; // JS Date object
   status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted';
   notes?: string;
   usageDetails?: BookingUsageDetails;
@@ -77,29 +76,26 @@ export type RoleName = 'Admin' | 'Lab Manager' | 'Technician' | 'Researcher';
 export type UserStatus = 'active' | 'pending_approval' | 'suspended';
 
 export interface User {
-  id: string; // Firebase Auth UID, also Firestore document ID
+  id: string; 
   name: string;
   email: string;
   role: RoleName;
   avatarUrl?: string;
   status: UserStatus;
-  createdAt?: string; // Firestore Timestamp (ISO string)
+  createdAt?: Date | undefined; // JS Date object
 }
 
 export type MaintenanceRequestStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed';
 
 export interface MaintenanceRequest {
-  id: string; // Firestore document ID
-  resourceId: string; // ID of document in 'resources' collection
-  // resourceName: string; // REMOVED - Fetch from Resource
-  reportedByUserId: string; // Firebase Auth UID
-  // reportedByUserName: string; // REMOVED - Fetch from User
+  id: string; 
+  resourceId: string; 
+  reportedByUserId: string; 
   issueDescription: string;
   status: MaintenanceRequestStatus;
-  assignedTechnicianId?: string; // Firebase Auth UID
-  // assignedTechnicianName?: string; // REMOVED - Fetch from User (Technician)
-  dateReported: string; // Firestore Timestamp (ISO string)
-  dateResolved?: string; // Firestore Timestamp (ISO string)
+  assignedTechnicianId?: string; 
+  dateReported: Date; // JS Date object
+  dateResolved?: Date | undefined; // JS Date object
   resolutionNotes?: string;
 }
 
@@ -117,18 +113,18 @@ export type NotificationType =
   | 'signup_pending_admin';
 
 export interface Notification {
-  id: string; // Firestore document ID
-  userId: string; // Firebase Auth UID of the recipient
+  id: string; 
+  userId: string; 
   title: string;
   message: string;
   type: NotificationType;
   isRead: boolean;
-  createdAt: string; // Firestore Timestamp (ISO string)
+  createdAt: string; // ISO string for display, original is Firestore Timestamp
   linkTo?: string;
 }
 
 export interface BlackoutDate {
-  id: string; // Firestore document ID (or use date as ID if unique)
+  id: string; 
   date: string; // YYYY-MM-DD format
   reason?: string;
 }
@@ -138,7 +134,7 @@ export const daysOfWeekArray: DayOfWeek[] = ['Sunday', 'Monday', 'Tuesday', 'Wed
 
 
 export interface RecurringBlackoutRule {
-  id: string; // Firestore document ID
+  id: string; 
   name: string;
   daysOfWeek: DayOfWeek[];
   reason?: string;
@@ -154,12 +150,14 @@ export type AuditActionType =
   | 'RECURRING_RULE_CREATED' | 'RECURRING_RULE_UPDATED' | 'RECURRING_RULE_DELETED';
 
 export interface AuditLogEntry {
-  id: string; // Firestore document ID
-  timestamp: string; // Firestore Timestamp (ISO string)
-  userId: string;    // Firebase Auth UID of acting user
-  userName: string;  // Denormalized name of acting user for log readability
+  id: string; 
+  timestamp: string; // ISO string for display, original is Firestore Timestamp
+  userId: string;    
+  userName: string;  
   action: AuditActionType;
   entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule';
-  entityId?: string; // Document ID of the affected entity
+  entityId?: string; 
   details: string;
 }
+
+    

@@ -5,15 +5,15 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, CalendarDays, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, CalendarDays, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, AlertTriangle, PackageSearch, CheckCircle } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
-import type { Resource, ResourceType, Booking, UnavailabilityPeriod } from '@/types';
-import { format, parseISO, isValid, isPast, startOfDay as fnsStartOfDay, compareAsc, isWithinInterval } from 'date-fns';
+import type { Resource, ResourceType, ResourceStatus, Booking, UnavailabilityPeriod } from '@/types';
+import { format, parseISO, isValid, isPast, startOfDay as fnsStartOfDay, compareAsc, isWithinInterval, isSameDay, isAfter } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, type ResourceFormValues } from '@/components/admin/resource-form-dialog';
@@ -30,6 +30,7 @@ import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavai
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, Timestamp, collection, query, where, getDocs, orderBy, serverTimestamp } from 'firebase/firestore';
 import { labsList, resourceStatusesList } from '@/lib/mock-data';
+import { addAuditLog } from '@/lib/mock-data';
 
 
 function ResourceDetailPageSkeleton() {
@@ -42,6 +43,7 @@ function ResourceDetailPageSkeleton() {
         actions={
           <div className="flex items-center gap-2">
             <Skeleton className="h-9 w-24 rounded-md bg-muted" />
+            <Skeleton className="h-9 w-9 rounded-md bg-muted" />
             <Skeleton className="h-9 w-9 rounded-md bg-muted" />
             <Skeleton className="h-9 w-9 rounded-md bg-muted" />
           </div>
@@ -61,7 +63,14 @@ function ResourceDetailPageSkeleton() {
               <Skeleton className="h-4 w-5/6 rounded-md bg-muted" />
             </CardContent>
           </Card>
-           <Card className="shadow-lg"> {/* Placeholder for past bookings */}
+           <Card className="shadow-lg">
+            <CardHeader><Skeleton className="h-6 w-1/2 rounded-md bg-muted mb-2" /></CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-4 w-full rounded-md bg-muted" />
+              <Skeleton className="h-4 w-5/6 rounded-md bg-muted" />
+            </CardContent>
+          </Card>
+          <Card className="shadow-lg">
             <CardHeader><Skeleton className="h-6 w-1/2 rounded-md bg-muted mb-2" /></CardHeader>
             <CardContent className="space-y-2">
               <Skeleton className="h-4 w-full rounded-md bg-muted" />
@@ -105,20 +114,24 @@ function ResourceDetailPageSkeleton() {
   );
 }
 
-const DetailItem = ({ icon: Icon, label, value, isLink = false }: { icon: React.ElementType, label: string, value?: string | number | null | undefined, isLink?: boolean }) => {
-    if (value === undefined || value === null || String(value).trim() === '') return <div className="flex items-start text-sm py-1.5">
-        <Icon className="h-4 w-4 mr-3 mt-0.5 text-muted-foreground flex-shrink-0" />
-        <span className="font-medium text-muted-foreground w-32">{label}:</span>
-        <span className="text-muted-foreground italic">N/A</span>
-      </div>;
+const DetailItem = ({ icon: Icon, label, value, isLink = false, className }: { icon: React.ElementType, label: string, value?: string | number | null | undefined, isLink?: boolean, className?: string }) => {
+    if (value === undefined || value === null || String(value).trim() === '') {
+      return (
+        <div className={cn("flex items-start text-sm py-1.5", className)}>
+          <Icon className="h-4 w-4 mr-3 mt-0.5 text-muted-foreground flex-shrink-0" />
+          <span className="font-medium text-muted-foreground w-32">{label}:</span>
+          <span className="text-muted-foreground italic">N/A</span>
+        </div>
+      );
+    }
     
     const displayValue = String(value);
 
     return (
-      <div className="flex items-start text-sm py-1.5">
+      <div className={cn("flex items-start text-sm py-1.5", className)}>
         <Icon className="h-4 w-4 mr-3 mt-0.5 text-muted-foreground flex-shrink-0" />
         <span className="font-medium text-muted-foreground w-32">{label}:</span>
-        {isLink && (displayValue.startsWith('http') || displayValue.startsWith('//')) ? (
+        {isLink && (displayValue.startsWith('http') || displayValue.startsWith('//') || displayValue.startsWith('mailto:')) ? (
           <a href={displayValue} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex-1 break-all">
             {displayValue} <ExternalLink className="inline-block h-3 w-3 ml-1" />
           </a>
@@ -133,7 +146,7 @@ function NotFoundMessage({ resourceId }: { resourceId: string | null }) {
   const router = useRouter();
   return (
     <div className="space-y-8">
-      <PageHeader title="Resource Not Found" icon={AlertTriangle}
+      <PageHeader title="Resource Not Found" icon={PackageSearch}
           actions={
             <Button variant="outline" asChild onClick={() => router.push('/admin/resources')}>
               <Link href="/admin/resources">
@@ -144,10 +157,10 @@ function NotFoundMessage({ resourceId }: { resourceId: string | null }) {
       />
       <Card className="max-w-2xl mx-auto shadow-lg border-destructive">
         <CardHeader className="items-center">
-          <CardTitle className="text-destructive">Resource Not Found</CardTitle>
+          <CardTitle className="text-destructive">Error 404</CardTitle>
         </CardHeader>
         <CardContent className="text-center">
-          <p className="text-muted-foreground">The resource with ID "{resourceId || 'unknown'}" could not be found in Firestore.</p>
+          <p className="text-muted-foreground">The resource with ID "{resourceId || 'unknown'}" could not be found.</p>
           <p className="text-muted-foreground text-xs mt-1">Please check the ID or ensure the resource exists in the database.</p>
         </CardContent>
       </Card>
@@ -194,19 +207,19 @@ export default function ResourceDetailPage() {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
-          lab: data.lab || 'Unknown Lab',
+          lab: data.lab || labsList[0],
           status: data.status || 'Available',
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
           manufacturer: data.manufacturer || undefined,
           model: data.model || undefined,
           serialNumber: data.serialNumber || undefined,
-          purchaseDate: data.purchaseDate ? (typeof data.purchaseDate === 'string' ? data.purchaseDate : (data.purchaseDate as Timestamp).toDate().toISOString()) : undefined,
+          purchaseDate: data.purchaseDate instanceof Timestamp ? data.purchaseDate.toDate() : undefined,
           notes: data.notes || undefined,
           remoteAccess: data.remoteAccess || undefined,
           allowQueueing: data.allowQueueing ?? false,
           availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: typeof a.date === 'string' ? a.date : (a.date?.toDate ? format(a.date.toDate(), 'yyyy-MM-dd') : a.date) })) : [],
-          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({id: p.id || `unavail-${Date.now()}-${Math.random()}`, startDate: typeof p.startDate === 'string' ? p.startDate : (p.startDate?.toDate ? format(p.startDate.toDate(), 'yyyy-MM-dd') : p.startDate), endDate: typeof p.endDate === 'string' ? p.endDate : (p.endDate?.toDate ? format(p.endDate.toDate(), 'yyyy-MM-dd') : p.endDate), reason: p.reason })) : [],
+          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || `unavail-${Date.now()}-${Math.random().toString(36).substring(2,9)}`, startDate: typeof p.startDate === 'string' ? p.startDate : (p.startDate?.toDate ? format(p.startDate.toDate(), 'yyyy-MM-dd') : p.startDate), endDate: typeof p.endDate === 'string' ? p.endDate : (p.endDate?.toDate ? format(p.endDate.toDate(), 'yyyy-MM-dd') : p.endDate), reason: p.reason })) : [],
           features: Array.isArray(data.features) ? data.features : [],
         };
         setResource(fetchedResource);
@@ -252,7 +265,7 @@ export default function ResourceDetailPage() {
   }, [fetchResourceData]);
   
   useEffect(() => {
-    async function fetchResourceTypesForDialog() {
+    async function fetchResourceTypesForDialogInternal() {
         if (!isFormDialogOpen) return;
         try {
             const typesSnapshot = await getDocs(collection(db, "resourceTypes"));
@@ -264,7 +277,7 @@ export default function ResourceDetailPage() {
             toast({ title: "Error", description: "Could not load resource types for form.", variant: "destructive" });
         }
     }
-    fetchResourceTypesForDialog();
+    fetchResourceTypesForDialogInternal();
   }, [isFormDialogOpen, toast]);
 
   useEffect(() => {
@@ -287,15 +300,15 @@ export default function ResourceDetailPage() {
           return {
             id: docSnap.id,
             ...data,
-            startTime: data.startTime?.toDate ? data.startTime.toDate() : (data.startTime ? parseISO(data.startTime as string) : new Date()),
-            endTime: data.endTime?.toDate ? data.endTime.toDate() : (data.endTime ? parseISO(data.endTime as string) : new Date()),
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? parseISO(data.createdAt as string) : new Date()),
+            startTime: data.startTime instanceof Timestamp ? data.startTime.toDate() : (data.startTime ? parseISO(data.startTime as string): new Date()),
+            endTime: data.endTime instanceof Timestamp ? data.endTime.toDate() : (data.endTime ? parseISO(data.endTime as string): new Date()),
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? parseISO(data.createdAt as string): new Date()),
           } as Booking;
         });
         setResourceUserBookings(bookingsData);
-      } catch (error) {
+      } catch (error:any) {
         console.error("Error fetching user bookings for resource:", error);
-        toast({ title: "Error", description: "Could not load your past bookings for this resource. Firestore index might be required.", variant: "destructive" });
+         toast({ title: "Error Fetching Bookings", description: "Could not load your past bookings for this resource. A Firestore index might be required. Check console for details: " + error.message , variant: "destructive", duration: 7000 });
         setResourceUserBookings([]);
       }
     };
@@ -304,11 +317,6 @@ export default function ResourceDetailPage() {
       fetchBookingsForResourceUser();
     }
   }, [resourceId, currentUser, resource, toast]); 
-
-
-  const canManageResource = useMemo(() => {
-    return currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
-  }, [currentUser]);
 
   const userPastBookingsForResource = useMemo(() => {
     if (!resource || !currentUser || !resourceUserBookings || resourceUserBookings.length === 0) return [];
@@ -321,6 +329,10 @@ export default function ResourceDetailPage() {
       .sort((a, b) => compareAsc(b.startTime, a.startTime));
   }, [resource, currentUser, resourceUserBookings]);
 
+  const canManageResource = useMemo(() => {
+    return currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
+  }, [currentUser]);
+
   const upcomingAvailability = useMemo(() => {
     if (!resource || !Array.isArray(resource.availability)) return [];
     const today = fnsStartOfDay(new Date());
@@ -328,7 +340,7 @@ export default function ResourceDetailPage() {
       if (!avail || !avail.date) return false;
       try {
           const availDate = parseISO(avail.date);
-          return isValid(availDate) && availDate >= today && Array.isArray(avail.slots) && avail.slots.length > 0;
+          return isValid(availDate) && !isBefore(availDate, today) && Array.isArray(avail.slots) && avail.slots.length > 0;
       } catch (e) { return false; }
     }).sort((a, b) => {
       try { 
@@ -336,7 +348,7 @@ export default function ResourceDetailPage() {
         const dateB = b.date ? parseISO(b.date).getTime() : 0;
         return dateA - dateB;
       }
-      catch(e) { return 0; }
+      catch(e) { return 0;}
     });
   }, [resource]);
   
@@ -348,18 +360,19 @@ export default function ResourceDetailPage() {
     });
   }, [resource]);
 
-  const handleSaveResource = async (data: ResourceFormValues) => {
-    if (!resource || !currentUser || !canManageResource) {
+  const handleSaveResource = async (data: ResourceFormValues, existingResourceId?: string) => {
+    if (!currentUser || !canManageResource) {
         toast({ title: "Permission Denied", description: "You are not authorized to update this resource.", variant: "destructive" });
         return;
     }
+    if (!existingResourceId) return; // Should not happen if editing
     
     let purchaseDateToSave: Timestamp | null = null;
     if (data.purchaseDate && isValid(parseISO(data.purchaseDate))) {
         purchaseDateToSave = Timestamp.fromDate(parseISO(data.purchaseDate));
     }
 
-    const resourceDataToSave: Partial<Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods'>> & {purchaseDate?: Timestamp | null} = {
+    const resourceDataToSave: Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods' | 'purchaseDate'> & { purchaseDate?: Timestamp | null } = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
       lab: data.lab,
@@ -372,7 +385,7 @@ export default function ResourceDetailPage() {
       purchaseDate: purchaseDateToSave, 
       notes: data.notes || undefined,
       features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-      remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '' && v !== null) ? {
+      remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(val => val !== undefined && val !== '' && val !== null) ? {
          ipAddress: data.remoteAccess.ipAddress || undefined,
          hostname: data.remoteAccess.hostname || undefined,
          protocol: data.remoteAccess.protocol || undefined,
@@ -380,18 +393,28 @@ export default function ResourceDetailPage() {
          port: data.remoteAccess.port ?? undefined,
          notes: data.remoteAccess.notes || undefined,
       } : undefined,
-      allowQueueing: data.allowQueueing ?? resource.allowQueueing,
+      allowQueueing: data.allowQueueing ?? resource?.allowQueueing ?? false,
     };
     
     const cleanDbData = Object.fromEntries(Object.entries(resourceDataToSave).filter(([_, v]) => v !== undefined));
 
 
     try {
-        const resourceDocRef = doc(db, "resources", resource.id);
-        await updateDoc(resourceDocRef, cleanDbData);
-        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Resource '${data.name}' updated.`});
+        const resourceDocRef = doc(db, "resources", existingResourceId);
+        // Fetch existing availability/unavailability to preserve them
+        const existingDoc = await getDoc(resourceDocRef);
+        const existingData = existingDoc.data();
+
+        const dataWithExistingSchedules = {
+            ...cleanDbData,
+            availability: resource?.availability || existingData?.availability || [],
+            unavailabilityPeriods: resource?.unavailabilityPeriods || existingData?.unavailabilityPeriods || [],
+        };
+
+        await updateDoc(resourceDocRef, dataWithExistingSchedules);
+        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: existingResourceId, details: `Resource '${data.name}' updated.`});
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
-        fetchResourceData(); 
+        fetchResourceData(); // Re-fetch to update the page
     } catch (error) {
         console.error("Error updating resource:", error);
         toast({ title: "Update Failed", description: "Could not update resource.", variant: "destructive" });
@@ -419,7 +442,7 @@ export default function ResourceDetailPage() {
 
   const handleSaveAvailability = async (date: string, newSlots: string[]) => {
     if (resource && currentUser && canManageResource) {
-      const currentAvailability = resource.availability ? [...resource.availability] : [];
+      let currentAvailability = resource.availability ? [...resource.availability] : [];
       const dateIndex = currentAvailability.findIndex(avail => avail.date === date);
 
       if (newSlots.length > 0) {
@@ -658,7 +681,7 @@ export default function ResourceDetailPage() {
                 <DetailItem icon={Wrench} label="Manufacturer" value={resource.manufacturer} />
                 <DetailItem icon={Archive} label="Model" value={resource.model} />
                 <DetailItem icon={Info} label="Serial #" value={resource.serialNumber} />
-                <DetailItem icon={ShoppingCart} label="Purchase Date" value={formatDateSafe(resource.purchaseDate, undefined, 'PPP')} />
+                <DetailItem icon={ShoppingCart} label="Purchase Date" value={resource.purchaseDate ? formatDateSafe(resource.purchaseDate, undefined, 'PPP') : undefined} />
               </div>
 
               {resource.remoteAccess && Object.values(resource.remoteAccess).some(val => val) && (
@@ -779,3 +802,5 @@ export default function ResourceDetailPage() {
     </TooltipProvider>
   );
 }
+
+    

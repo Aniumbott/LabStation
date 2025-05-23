@@ -1,13 +1,13 @@
 
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2, FilterX } from 'lucide-react';
-import type { Resource, ResourceType, ResourceStatus } from '@/types';
-import { initialMockResourceTypes, labsList } from '@/lib/mock-data';
+import { ClipboardList, PlusCircle, Filter as FilterIcon, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2, FilterX, X } from 'lucide-react';
+import type { Resource, ResourceStatus, ResourceType } from '@/types';
+import { labsList } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -28,10 +28,9 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -42,11 +41,13 @@ import { format, startOfDay, isValid, parseISO, isWithinInterval, addDays as dat
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, where, orderBy } from 'firebase/firestore';
-import { useRouter } from 'next/navigation'; // Added useRouter import
+import { useRouter } from 'next/navigation';
 
 export default function AdminResourcesPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
+  const router = useRouter();
+
   const [resources, setResources] = useState<Resource[]>([]);
   const [fetchedResourceTypes, setFetchedResourceTypes] = useState<ResourceType[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -54,14 +55,15 @@ export default function AdminResourcesPage() {
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
+  // Filter Dialog State
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-  
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterTypeId, setTempFilterTypeId] = useState<string>('all');
   const [tempFilterLab, setTempFilterLab] = useState<string>('all');
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(undefined);
   const [currentMonthInDialog, setCurrentMonthInDialog] = useState<Date>(startOfDay(new Date()));
 
+  // Active Page Filters
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterTypeId, setActiveFilterTypeId] = useState<string>('all');
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
@@ -73,19 +75,18 @@ export default function AdminResourcesPage() {
       const resourcesSnapshot = await getDocs(query(collection(db, "resources"), orderBy("name", "asc")));
       const fetchedResourcesPromises = resourcesSnapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
-        
         return {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
-          lab: data.lab || labsList[0], // Assuming labsList has at least one entry
+          lab: data.lab || labsList[0],
           status: data.status || 'Available',
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
           manufacturer: data.manufacturer,
           model: data.model,
           serialNumber: data.serialNumber,
-          purchaseDate: data.purchaseDate ? (typeof data.purchaseDate === 'string' ? data.purchaseDate : (data.purchaseDate as Timestamp).toDate().toISOString()) : undefined,
+          purchaseDate: data.purchaseDate instanceof Timestamp ? data.purchaseDate.toDate() : (typeof data.purchaseDate === 'string' ? parseISO(data.purchaseDate) : undefined),
           notes: data.notes,
           features: Array.isArray(data.features) ? data.features : [],
           remoteAccess: data.remoteAccess,
@@ -155,7 +156,7 @@ export default function AdminResourcesPage() {
           if (!period.startDate || !period.endDate) return false;
           try {
             const periodStart = parseISO(period.startDate);
-            const periodEnd = parseISO(period.endDate); // End of the day for end date
+            const periodEnd = parseISO(period.endDate); 
             return isValid(periodStart) && isValid(periodEnd) && 
                    isWithinInterval(dateToFilter, { start: startOfDay(periodStart), end: startOfDay(periodEnd) });
           } catch (e) { return false; }
@@ -206,15 +207,8 @@ export default function AdminResourcesPage() {
     setEditingResource(null);
     setIsFormDialogOpen(true);
   };
-  const router = useRouter();
 
-
-  const handleOpenEditDialog = (resource: Resource) => {
-    setEditingResource(resource);
-    setIsFormDialogOpen(true);
-  };
-
-  const handleSaveResource = async (data: ResourceFormValues) => {
+  const handleSaveResource = async (data: ResourceFormValues, resourceId?: string) => {
     if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Lab Manager')) {
       toast({ title: "Permission Denied", description: "You are not authorized to perform this action.", variant: "destructive" });
       return;
@@ -226,7 +220,12 @@ export default function AdminResourcesPage() {
         return;
     }
 
-    const resourceDataToSave: Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods'> & { purchaseDate?: Timestamp | null, availability?: any[], unavailabilityPeriods?: any[]} = {
+    let purchaseDateToSave: Timestamp | null = null;
+    if (data.purchaseDate && isValid(parseISO(data.purchaseDate))) {
+      purchaseDateToSave = Timestamp.fromDate(parseISO(data.purchaseDate));
+    }
+
+    const resourceDataToSave: Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods' | 'purchaseDate'> & { purchaseDate?: Timestamp | null } = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
       lab: data.lab,
@@ -236,7 +235,7 @@ export default function AdminResourcesPage() {
       manufacturer: data.manufacturer || undefined,
       model: data.model || undefined,
       serialNumber: data.serialNumber || undefined,
-      purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? Timestamp.fromDate(parseISO(data.purchaseDate)) : null,
+      purchaseDate: purchaseDateToSave,
       notes: data.notes || undefined,
       features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
       remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '' && v !== null) ? {
@@ -250,20 +249,24 @@ export default function AdminResourcesPage() {
       allowQueueing: data.allowQueueing ?? false,
     };
     
+    // Remove undefined fields before saving to Firestore
     const cleanDbData = Object.fromEntries(Object.entries(resourceDataToSave).filter(([_, v]) => v !== undefined));
 
-
     setIsLoadingData(true);
-    const auditAction = editingResource ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
-    const auditDetails = `Resource '${data.name}' ${editingResource ? 'updated' : 'created'}.`;
+    const auditAction = resourceId ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
+    const auditDetails = `Resource '${data.name}' ${resourceId ? 'updated' : 'created'}.`;
 
-    if (editingResource) {
+    if (resourceId) {
       try {
-        const resourceDocRef = doc(db, "resources", editingResource.id);
+        const resourceDocRef = doc(db, "resources", resourceId);
+        // Fetch existing availability/unavailability to preserve them if not editable here
+        const existingDoc = await getDoc(resourceDocRef);
+        const existingData = existingDoc.data();
+        
         const dataWithExistingSchedules = {
             ...cleanDbData,
-            availability: editingResource.availability || [],
-            unavailabilityPeriods: editingResource.unavailabilityPeriods || [],
+            availability: existingData?.availability || [],
+            unavailabilityPeriods: existingData?.unavailabilityPeriods || [],
         };
         await updateDoc(resourceDocRef, dataWithExistingSchedules);
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
@@ -279,15 +282,13 @@ export default function AdminResourcesPage() {
             unavailabilityPeriods: [],
         };
         const docRef = await addDoc(collection(db, "resources"), dataForNewResource);
-        // No audit log for new resource ID as it's generated by Firestore
         toast({ title: 'Resource Created', description: `Resource "${data.name}" has been created.` });
       } catch (error) {
         console.error("Error creating resource:", error);
         toast({ title: "Error", description: "Failed to create resource. Check console.", variant: "destructive" });
       }
     }
-    // Firestore Audit Log
-    // addAuditLog(currentUser.id, currentUser.name || 'Admin/Manager', auditAction, { entityType: 'Resource', entityId: editingResource?.id || 'NEW_RESOURCE', details: auditDetails });
+    addAuditLog(currentUser.id, currentUser.name || 'Admin/Manager', auditAction, { entityType: 'Resource', entityId: resourceId || 'NEW_RESOURCE', details: auditDetails });
     setIsFormDialogOpen(false);
     setEditingResource(null);
     await fetchData(); 
@@ -404,7 +405,7 @@ export default function AdminResourcesPage() {
                    <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
-                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
+                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
                   <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
@@ -504,7 +505,7 @@ export default function AdminResourcesPage() {
           </CardContent>
         </Card>
       )}
-      {isFormDialogOpen && fetchedResourceTypes.length >= 0 && ( 
+      {isFormDialogOpen && ( 
         <ResourceFormDialog
             open={isFormDialogOpen}
             onOpenChange={(isOpen) => {
@@ -519,3 +520,5 @@ export default function AdminResourcesPage() {
     </div>
   );
 }
+
+    

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -20,11 +20,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Save, X, PlusCircle, Network } from 'lucide-react';
-import type { Resource, ResourceStatus } from '@/types';
-import { initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data';
+import { Save, X, PlusCircle, Network, Info } from 'lucide-react';
+import type { Resource, ResourceStatus, ResourceType } from '@/types';
+import { labsList, resourceStatusesList } from '@/lib/mock-data';
 import { parseISO, format, isValid as isValidDate } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
+import { Timestamp } from 'firebase/firestore';
+import { Checkbox } from '../ui/checkbox';
 
 const VALID_REMOTE_PROTOCOLS = ['RDP', 'SSH', 'VNC', 'Other'] as const;
 const NONE_PROTOCOL_VALUE = "--none-protocol--";
@@ -35,12 +37,12 @@ const resourceFormSchema = z.object({
   lab: z.enum(labsList as [string, ...string[]], { required_error: 'Please select a lab.' }),
   status: z.enum(resourceStatusesList as [ResourceStatus, ...ResourceStatus[]], { required_error: 'Please select a status.'}),
   description: z.string().max(500, { message: 'Description cannot exceed 500 characters.' }).optional().or(z.literal('')),
-  imageUrl: z.string().url({ message: 'Please enter a valid URL.' }).optional().or(z.literal('')),
+  imageUrl: z.string().url({ message: 'Please enter a valid URL for the image.' }).optional().or(z.literal('')),
   manufacturer: z.string().max(100).optional().or(z.literal('')),
   model: z.string().max(100).optional().or(z.literal('')),
   serialNumber: z.string().max(100).optional().or(z.literal('')),
   purchaseDate: z.string().optional().refine((val) => {
-    if (!val || val === '') return true;
+    if (!val || val === '') return true; // Allow empty for optional
     const date = parseISO(val);
     return isValidDate(date);
   }, { message: "Invalid date format for purchase date." }).or(z.literal('')),
@@ -54,6 +56,7 @@ const resourceFormSchema = z.object({
     port: z.coerce.number().int().min(1).max(65535).optional(),
     notes: z.string().max(500).optional().or(z.literal('')),
   }).optional(),
+  allowQueueing: z.boolean().optional(),
 });
 
 export type ResourceFormValues = z.infer<typeof resourceFormSchema>;
@@ -62,17 +65,20 @@ interface ResourceFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialResource: Resource | null;
-  onSave: (data: ResourceFormValues) => void;
+  onSave: (data: ResourceFormValues, resourceId?: string) => void;
+  resourceTypes: ResourceType[]; 
 }
 
 export function ResourceFormDialog({
-    open, onOpenChange, initialResource, onSave,
+    open, onOpenChange, initialResource, onSave, resourceTypes
 }: ResourceFormDialogProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const form = useForm<ResourceFormValues>({
     resolver: zodResolver(resourceFormSchema),
     defaultValues: {
       name: '',
-      resourceTypeId: initialMockResourceTypes.length > 0 ? initialMockResourceTypes[0].id : '',
+      resourceTypeId: resourceTypes.length > 0 ? resourceTypes[0].id : '',
       lab: labsList.length > 0 ? labsList[0] : undefined,
       status: 'Available',
       description: '',
@@ -90,12 +96,14 @@ export function ResourceFormDialog({
         username: '',
         port: undefined,
         notes: '',
-      }
+      },
+      allowQueueing: false,
     },
   });
 
   useEffect(() => {
     if (open) {
+      setIsSubmitting(false); // Reset submitting state when dialog opens
       if (initialResource) {
         form.reset({
           name: initialResource.name,
@@ -107,9 +115,11 @@ export function ResourceFormDialog({
           manufacturer: initialResource.manufacturer || '',
           model: initialResource.model || '',
           serialNumber: initialResource.serialNumber || '',
-          purchaseDate: initialResource.purchaseDate && isValidDate(parseISO(initialResource.purchaseDate)) ? format(parseISO(initialResource.purchaseDate), 'yyyy-MM-dd') : '',
+          purchaseDate: initialResource.purchaseDate && isValidDate(new Date(initialResource.purchaseDate)) 
+                          ? format(new Date(initialResource.purchaseDate), 'yyyy-MM-dd') 
+                          : '',
           notes: initialResource.notes || '',
-          features: initialResource.features?.join(', ') || '',
+          features: Array.isArray(initialResource.features) ? initialResource.features.join(', ') : '',
           remoteAccess: {
             ipAddress: initialResource.remoteAccess?.ipAddress || '',
             hostname: initialResource.remoteAccess?.hostname || '',
@@ -117,16 +127,17 @@ export function ResourceFormDialog({
             username: initialResource.remoteAccess?.username || '',
             port: initialResource.remoteAccess?.port ?? undefined,
             notes: initialResource.remoteAccess?.notes || '',
-          }
+          },
+          allowQueueing: initialResource.allowQueueing ?? false,
         });
       } else {
         form.reset({
           name: '',
-          resourceTypeId: initialMockResourceTypes.length > 0 ? initialMockResourceTypes[0].id : '',
+          resourceTypeId: resourceTypes.length > 0 ? resourceTypes[0].id : '',
           lab: labsList.length > 0 ? labsList[0] : undefined,
           status: 'Available',
           description: '',
-          imageUrl: 'https://placehold.co/300x200.png',
+          imageUrl: 'https://placehold.co/600x400.png',
           manufacturer: '',
           model: '',
           serialNumber: '',
@@ -140,21 +151,23 @@ export function ResourceFormDialog({
             username: '',
             port: undefined,
             notes: '',
-          }
+          },
+          allowQueueing: false,
         });
       }
     }
-  }, [open, initialResource, form.reset]);
+  }, [open, initialResource, resourceTypes, form.reset]);
 
-  function onSubmit(data: ResourceFormValues) {
+  async function onSubmit(data: ResourceFormValues) {
+    setIsSubmitting(true);
     const dataToSave: ResourceFormValues = {
         ...data,
-        imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
-        purchaseDate: data.purchaseDate ? data.purchaseDate : undefined,
+        imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+        purchaseDate: data.purchaseDate ? data.purchaseDate : undefined, // Keep as string or undefined
         remoteAccess: data.remoteAccess ? {
             ...data.remoteAccess,
-            port: data.remoteAccess.port, // Already number or undefined
-            protocol: data.remoteAccess.protocol === '' ? undefined : data.remoteAccess.protocol,
+            port: data.remoteAccess.port, 
+            protocol: data.remoteAccess.protocol === NONE_PROTOCOL_VALUE ? undefined : data.remoteAccess.protocol,
             ipAddress: data.remoteAccess.ipAddress || undefined,
             hostname: data.remoteAccess.hostname || undefined,
             username: data.remoteAccess.username || undefined,
@@ -164,7 +177,14 @@ export function ResourceFormDialog({
     if (dataToSave.remoteAccess && Object.values(dataToSave.remoteAccess).every(val => val === undefined || val === '')) {
       dataToSave.remoteAccess = undefined;
     }
-    onSave(dataToSave);
+    try {
+        await onSave(dataToSave, initialResource?.id);
+        // onOpenChange(false); // Parent handles closing on successful save
+    } catch (error) {
+        // Error toast is handled in parent
+    } finally {
+        setIsSubmitting(false);
+    }
   }
 
   return (
@@ -198,14 +218,17 @@ export function ResourceFormDialog({
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Resource Type</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ''}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger></FormControl>
+                        <Select onValueChange={field.onChange} value={field.value || ''} disabled={resourceTypes.length === 0}>
+                            <FormControl><SelectTrigger>
+                                <SelectValue placeholder={resourceTypes.length > 0 ? "Select a type" : "No types defined"} />
+                            </SelectTrigger></FormControl>
                             <SelectContent>
-                            {initialMockResourceTypes.map(type => (
+                            {resourceTypes.length > 0 ? resourceTypes.map(type => (
                                 <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-                            ))}
+                            )) : <SelectItem value="disabled" disabled>No resource types available. Add one first.</SelectItem>}
                             </SelectContent>
                         </Select>
+                        {resourceTypes.length === 0 && <FormDescription className="text-destructive">Please define resource types first.</FormDescription>}
                         <FormMessage />
                         </FormItem>
                     )}
@@ -235,7 +258,7 @@ export function ResourceFormDialog({
                 name="description"
                 render={({ field }) => (
                     <FormItem>
-                    <FormLabel>Description</FormLabel>
+                    <FormLabel>Description (Optional)</FormLabel>
                     <FormControl><Textarea placeholder="Detailed description of the resource..." {...field} value={field.value ?? ''} rows={3} /></FormControl>
                     <FormMessage />
                     </FormItem>
@@ -247,8 +270,19 @@ export function ResourceFormDialog({
                         name="imageUrl"
                         render={({ field }) => (
                             <FormItem>
-                            <FormLabel>Image URL</FormLabel>
-                            <FormControl><Input type="url" placeholder="https://placehold.co/300x200.png" {...field} value={field.value ?? ''} /></FormControl>
+                            <FormLabel>Image URL (Optional)</FormLabel>
+                            <FormControl><Input type="url" placeholder="https://placehold.co/600x400.png" {...field} value={field.value ?? ''} /></FormControl>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                     <FormField
+                        control={form.control}
+                        name="purchaseDate"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Purchase Date (Optional)</FormLabel>
+                            <FormControl><Input type="date" {...field} value={field.value ?? ''} /></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -289,19 +323,8 @@ export function ResourceFormDialog({
                         )}
                     />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                        control={form.control}
-                        name="purchaseDate"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Purchase Date (Optional)</FormLabel>
-                            <FormControl><Input type="date" {...field} value={field.value ?? ''} /></FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
+               
+                <FormField
                     control={form.control}
                     name="status"
                     render={({ field }) => (
@@ -318,14 +341,14 @@ export function ResourceFormDialog({
                         <FormMessage />
                         </FormItem>
                     )}
-                    />
-                </div>
+                />
+                
                 <FormField
                     control={form.control}
                     name="features"
                     render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Features (Optional)</FormLabel>
+                        <FormLabel>Key Features (Optional)</FormLabel>
                         <FormControl><Textarea placeholder="e.g., 500 MHz Bandwidth, 4 Analog Channels, 16 Digital Channels" {...field} value={field.value ?? ''} rows={2}/></FormControl>
                         <FormDescription>Enter comma-separated values.</FormDescription>
                         <FormMessage />
@@ -343,6 +366,29 @@ export function ResourceFormDialog({
                         </FormItem>
                     )}
                 />
+                 <FormField
+                    control={form.control}
+                    name="allowQueueing"
+                    render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 shadow-sm">
+                        <FormControl>
+                            <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                            <FormLabel>
+                            Allow Waitlisting/Queueing
+                            </FormLabel>
+                            <FormDescription>
+                            Permit users to join a waitlist if this resource is already booked.
+                            </FormDescription>
+                        </div>
+                        </FormItem>
+                    )}
+                 />
+
 
                 <Separator />
                 <div>
@@ -402,8 +448,8 @@ export function ResourceFormDialog({
                                     <FormItem>
                                     <FormLabel>Port</FormLabel>
                                     <FormControl><Input 
-                                        type="text"
-                                        placeholder="e.g., 22 (SSH), 3389 (RDP)" 
+                                        type="text" // Use text to allow empty, Zod coerces
+                                        placeholder="e.g., 22, 3389" 
                                         {...field} 
                                         value={field.value ?? ''} 
                                         onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.value)}
@@ -441,15 +487,17 @@ export function ResourceFormDialog({
             </div>
             </ScrollArea>
             <DialogFooter className="pt-6 border-t">
-              <DialogClose asChild>
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                     <X className="mr-2 h-4 w-4" /> Cancel
-                </Button>
-              </DialogClose>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting
+              </Button>
+              <Button type="submit" disabled={isSubmitting || (resourceTypes.length === 0 && !initialResource) }>
+                {isSubmitting
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  : (initialResource ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)
+                }
+                {isSubmitting
                   ? (initialResource ? 'Saving...' : 'Creating...')
-                  : (initialResource ? <><Save className="mr-2 h-4 w-4" /> Save Changes</> : <><PlusCircle className="mr-2 h-4 w-4" /> Create Resource</>)
+                  : (initialResource ? 'Save Changes' : 'Create Resource')
                 }
               </Button>
             </DialogFooter>
@@ -459,3 +507,5 @@ export function ResourceFormDialog({
     </Dialog>
   );
 }
+
+    
