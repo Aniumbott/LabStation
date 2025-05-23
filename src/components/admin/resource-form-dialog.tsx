@@ -19,7 +19,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Save, X, PlusCircle, Network, Info, Loader2, Checkbox } from 'lucide-react';
+import { Save, X, PlusCircle, Network, Info, Loader2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox'; // Corrected import
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
 import { labsList, resourceStatusesList } from '@/lib/mock-data';
 import { parseISO, format, isValid as isValidDateFn } from 'date-fns';
@@ -29,7 +30,6 @@ import { Separator } from '@/components/ui/separator';
 const VALID_REMOTE_PROTOCOLS = ['RDP', 'SSH', 'VNC', 'Other'] as const;
 const NONE_PROTOCOL_VALUE = "--none-protocol--";
 
-// Zod schema for resource form validation
 const resourceFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, { message: 'Name cannot exceed 100 characters.' }),
   resourceTypeId: z.string().min(1, { message: 'Please select a resource type.' }),
@@ -40,7 +40,10 @@ const resourceFormSchema = z.object({
   manufacturer: z.string().max(100).optional().or(z.literal('')),
   model: z.string().max(100).optional().or(z.literal('')),
   serialNumber: z.string().max(100).optional().or(z.literal('')),
-  purchaseDate: z.string().optional().refine((val) => val === '' || !val || isValidDateFn(parseISO(val)), { // Allow empty string or valid date
+  purchaseDate: z.string().optional().refine((val) => {
+    if (val === '' || val === undefined || val === null) return true; // Allow empty or undefined
+    return isValidDateFn(parseISO(val));
+  }, {
     message: "Invalid date format. Use YYYY-MM-DD or leave empty.",
   }).or(z.literal('')),
   notes: z.string().max(500).optional().or(z.literal('')),
@@ -51,8 +54,12 @@ const resourceFormSchema = z.object({
     protocol: z.enum(VALID_REMOTE_PROTOCOLS).or(z.literal('')).optional(),
     username: z.string().max(100).optional().or(z.literal('')),
     port: z.preprocess(
-      (val) => (String(val ?? '').trim() === '' ? undefined : val), // Convert empty or nullish to undefined
-      z.coerce.number().int().min(1).max(65535).optional().nullable() // Zod will coerce to number or undefined. Nullable allows it to be null.
+      (val) => (String(val ?? '').trim() === '' ? undefined : String(val).trim()),
+      z.string().transform((val) => { // Use transform to handle empty string or invalid number to undefined
+        if (val === undefined || val === '') return undefined;
+        const num = Number(val);
+        return isNaN(num) ? undefined : num;
+      }).pipe(z.number().int().min(1).max(65535).optional().nullable())
     ),
     notes: z.string().max(500).optional().or(z.literal('')),
   }).optional(),
@@ -76,17 +83,17 @@ export function ResourceFormDialog({
 
   const form = useForm<ResourceFormValues>({
     resolver: zodResolver(resourceFormSchema),
-    defaultValues: { // Initialized by useEffect
+    defaultValues: { // Default values will be set by useEffect
         name: '',
         resourceTypeId: '',
-        lab: undefined, // Let Zod handle if it's required based on labsList
+        lab: undefined, // labsList[0] if labsList is not empty, otherwise undefined
         status: 'Available',
         description: '',
         imageUrl: '',
         manufacturer: '',
         model: '',
         serialNumber: '',
-        purchaseDate: '',
+        purchaseDate: '', // Stored as "YYYY-MM-DD" string from form
         notes: '',
         features: '',
         remoteAccess: {
@@ -95,7 +102,7 @@ export function ResourceFormDialog({
         allowQueueing: false,
     },
   });
-  
+
   const resetForm = useCallback(() => {
     if (initialResource) {
       form.reset({
@@ -118,7 +125,7 @@ export function ResourceFormDialog({
           hostname: initialResource.remoteAccess?.hostname || '',
           protocol: initialResource.remoteAccess?.protocol || '',
           username: initialResource.remoteAccess?.username || '',
-          port: initialResource.remoteAccess?.port ?? undefined, // Ensure undefined for empty
+          port: initialResource.remoteAccess?.port ?? undefined,
           notes: initialResource.remoteAccess?.notes || '',
         },
         allowQueueing: initialResource.allowQueueing ?? false,
@@ -143,31 +150,32 @@ export function ResourceFormDialog({
         allowQueueing: false,
       });
     }
-  }, [initialResource, resourceTypes, form.reset]);
+  }, [initialResource, resourceTypes, form.reset]); // form.reset added here
 
   useEffect(() => {
     if (open) {
-      setIsSubmitting(false); // Reset submitting state when dialog opens
+      setIsSubmitting(false);
       resetForm();
     }
   }, [open, initialResource, resourceTypes, form.reset, resetForm]);
+
 
   async function onSubmit(data: ResourceFormValues) {
     setIsSubmitting(true);
     try {
         const processedData: ResourceFormValues = {
             ...data,
-            imageUrl: data.imageUrl || '',
+            imageUrl: data.imageUrl || '', 
             remoteAccess: data.remoteAccess ? {
                 ...data.remoteAccess,
-                port: data.remoteAccess.port === undefined || data.remoteAccess.port === null ? undefined : Number(data.remoteAccess.port),
+                port: data.remoteAccess.port === null || data.remoteAccess.port === undefined ? undefined : Number(data.remoteAccess.port),
             } : undefined,
         };
         
         if (processedData.remoteAccess) {
             const ra = processedData.remoteAccess;
-            const allEmpty = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && (ra.port === undefined || ra.port === null) && !ra.notes;
-            if (allEmpty) {
+            const allEmptyOrInvalid = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && (ra.port === undefined || ra.port === null) && !ra.notes;
+            if (allEmptyOrInvalid) {
                 processedData.remoteAccess = undefined;
             }
         }
@@ -192,7 +200,7 @@ export function ResourceFormDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <ScrollArea className="max-h-[70vh] overflow-y-auto pr-2">
-            <div className="space-y-6 py-2 pb-4">
+            <div className="space-y-6 py-2 pb-4 px-1">
                 <FormField
                   control={form.control}
                   name="name"
@@ -272,7 +280,7 @@ export function ResourceFormDialog({
                      <FormField
                         control={form.control}
                         name="purchaseDate"
-                        render={({ field }) => (
+                        render={({ field }) => ( // field.value is YYYY-MM-DD string or empty
                             <FormItem>
                             <FormLabel>Purchase Date (Optional)</FormLabel>
                             <FormControl><Input type="date" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
@@ -393,7 +401,7 @@ export function ResourceFormDialog({
                                 name="remoteAccess.ipAddress"
                                 render={({ field }) => (
                                     <FormItem>
-                                    <FormLabel>IP Address</FormLabel>
+                                    <FormLabel>IP Address (Optional)</FormLabel>
                                     <FormControl><Input placeholder="e.g., 192.168.1.100" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
                                     <FormMessage />
                                     </FormItem>
@@ -404,7 +412,7 @@ export function ResourceFormDialog({
                                 name="remoteAccess.hostname"
                                 render={({ field }) => (
                                     <FormItem>
-                                    <FormLabel>Hostname</FormLabel>
+                                    <FormLabel>Hostname (Optional)</FormLabel>
                                     <FormControl><Input placeholder="e.g., scope-01.lab.internal" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
                                     <FormMessage />
                                     </FormItem>
@@ -417,7 +425,7 @@ export function ResourceFormDialog({
                                 name="remoteAccess.protocol"
                                 render={({ field }) => (
                                     <FormItem>
-                                    <FormLabel>Protocol</FormLabel>
+                                    <FormLabel>Protocol (Optional)</FormLabel>
                                     <Select
                                       onValueChange={(v) => field.onChange(v === NONE_PROTOCOL_VALUE ? '' : v)}
                                       value={field.value === '' || field.value === undefined || field.value === null ? NONE_PROTOCOL_VALUE : field.value}
@@ -438,15 +446,15 @@ export function ResourceFormDialog({
                              <FormField
                                 control={form.control}
                                 name="remoteAccess.port"
-                                render={({ field }) => ( // Pass event to onChange to get string value for Zod preprocess
+                                render={({ field }) => ( 
                                     <FormItem>
-                                    <FormLabel>Port</FormLabel>
+                                    <FormLabel>Port (Optional)</FormLabel>
                                     <FormControl><Input
-                                        type="text" 
+                                        type="text" // Keep as text for Zod preprocess to handle empty string
                                         placeholder="e.g., 22, 3389"
                                         {...field}
-                                        value={field.value ?? ''}
-                                        onChange={e => field.onChange(e.target.value)}
+                                        value={field.value === null || field.value === undefined ? '' : String(field.value)} 
+                                        onChange={e => field.onChange(e.target.value)} 
                                         disabled={isSubmitting}
                                      /></FormControl>
                                     <FormMessage />
@@ -458,7 +466,7 @@ export function ResourceFormDialog({
                                 name="remoteAccess.username"
                                 render={({ field }) => (
                                     <FormItem>
-                                    <FormLabel>Username</FormLabel>
+                                    <FormLabel>Username (Optional)</FormLabel>
                                     <FormControl><Input placeholder="e.g., labuser" {...field}  value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
                                     <FormMessage />
                                     </FormItem>
@@ -470,7 +478,7 @@ export function ResourceFormDialog({
                             name="remoteAccess.notes"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Connection Notes</FormLabel>
+                                <FormLabel>Connection Notes (Optional)</FormLabel>
                                 <FormControl><Textarea placeholder="e.g., VPN required, specific client versions, credential location..." {...field} value={field.value ?? ''} rows={2} disabled={isSubmitting}/></FormControl>
                                 <FormMessage />
                                 </FormItem>
@@ -501,3 +509,5 @@ export function ResourceFormDialog({
     </Dialog>
   );
 }
+
+    
