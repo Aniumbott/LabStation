@@ -3,12 +3,12 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Construction, Loader2 } from 'lucide-react';
+import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Construction, Loader2, ThumbsUp, Clock, X } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { Resource, Booking, ResourceStatus } from '@/types';
+import type { Resource, Booking } from '@/types';
 import { Separator } from '@/components/ui/separator';
 import {
   Table,
@@ -35,7 +35,9 @@ export default function DashboardPage() {
   const fetchDashboardData = useCallback(async () => {
     setIsLoadingResources(true);
     try {
-      const resourcesQuery = query(collection(db, 'resources'), limit(3));
+      // Firestore Index Recommendation (usually auto-created for simple orderBy or limit):
+      // resources (lastUpdatedAt DESC) or similar if you want to fetch based on recent activity
+      const resourcesQuery = query(collection(db, 'resources'), limit(3)); // Example: fetch any 3
       const resourcesSnapshot = await getDocs(resourcesQuery);
       const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
         const data = docSnap.data();
@@ -48,6 +50,9 @@ export default function DashboardPage() {
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
           features: Array.isArray(data.features) ? data.features : [],
+          purchaseDate: data.purchaseDate instanceof Timestamp ? data.purchaseDate.toDate() : undefined,
+          lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
         } as Resource;
       });
       setFrequentlyUsedResources(fetchedResources);
@@ -59,11 +64,11 @@ export default function DashboardPage() {
     if (currentUser) {
       setIsLoadingBookings(true);
       try {
-        // Firestore Index Required: bookings collection: userId (ASC), startTime (ASC)
+        // Firestore Index Required: bookings (userId ASC, startTime ASC)
         const bookingsQuery = query(
           collection(db, 'bookings'),
           where('userId', '==', currentUser.id),
-          where('startTime', '>=', new Date().toISOString()), 
+          where('startTime', '>=', Timestamp.fromDate(new Date())),
           orderBy('startTime', 'asc'),
           limit(5)
         );
@@ -81,13 +86,15 @@ export default function DashboardPage() {
           return {
             id: docSnap.id,
             ...bookingData,
-            startTime: bookingData.startTime ? (bookingData.startTime.toDate ? bookingData.startTime.toDate() : parseISO(bookingData.startTime as string)) : new Date(),
-            endTime: bookingData.endTime ? (bookingData.endTime.toDate ? bookingData.endTime.toDate() : parseISO(bookingData.endTime as string)) : new Date(),
-            createdAt: bookingData.createdAt?.toDate ? bookingData.createdAt.toDate() : new Date(bookingData.createdAt || Date.now()),
-            resourceName: resourceNameStr,
+            startTime: bookingData.startTime instanceof Timestamp ? bookingData.startTime.toDate() : new Date(),
+            endTime: bookingData.endTime instanceof Timestamp ? bookingData.endTime.toDate() : new Date(),
+            createdAt: bookingData.createdAt instanceof Timestamp ? bookingData.createdAt.toDate() : new Date(),
+            // resourceName: resourceNameStr, // This will be joined client-side
           } as Booking;
         });
         let resolvedBookings = await Promise.all(fetchedBookingsPromises);
+        // Client-side sort as orderBy might be removed for index flexibility, though Firestore sorting is preferred.
+        // resolvedBookings.sort((a, b) => compareAsc(a.startTime, b.startTime)); 
         setUpcomingUserBookings(resolvedBookings);
       } catch (error) {
         console.error("Error fetching upcoming bookings:", error);
@@ -106,13 +113,13 @@ export default function DashboardPage() {
   const getBookingStatusBadge = (status: Booking['status']) => {
     switch (status) {
       case 'Confirmed':
-        return <Badge className={cn("bg-green-500 text-white hover:bg-green-600 border-transparent")}>{status}</Badge>;
+        return <Badge className={cn("bg-green-500 text-white hover:bg-green-600 border-transparent")}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Pending':
-        return <Badge className={cn("bg-yellow-500 text-yellow-950 hover:bg-yellow-600 border-transparent")}>{status}</Badge>;
+        return <Badge className={cn("bg-yellow-500 text-yellow-950 hover:bg-yellow-600 border-transparent")}><Clock className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Cancelled':
-        return <Badge className={cn("bg-gray-400 text-white hover:bg-gray-500 border-transparent")}>{status}</Badge>;
-      case 'Waitlisted':
-         return <Badge className={cn("bg-purple-500 text-white hover:bg-purple-600 border-transparent")}>{status}</Badge>;
+        return <Badge className={cn("bg-gray-400 text-white hover:bg-gray-500 border-transparent")}><X className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+       case 'Waitlisted':
+         return <Badge className={cn("bg-purple-500 text-white hover:bg-purple-600 border-transparent")}>{status}</Badge>; // Icon can be added e.g. UserIcon
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -199,9 +206,15 @@ export default function DashboardPage() {
                   </TableHeader>
                   <TableBody>
                     {upcomingUserBookings.map((booking) => {
+                      // Client-side join for resourceName if not denormalized
+                      // For this view, resourceName might be better denormalized or fetched efficiently
+                      // Keeping it simple: look up from frequentlyUsedResources if it happens to be there, else 'Loading...'
+                      const resource = frequentlyUsedResources.find(r => r.id === booking.resourceId);
+                      const resourceNameDisplay = resource?.name || 'Loading...'; 
+                      
                       return (
                         <TableRow key={booking.id}>
-                          <TableCell className="font-medium">{booking.resourceName || 'N/A'}</TableCell>
+                          <TableCell className="font-medium">{resourceNameDisplay}</TableCell>
                           <TableCell>
                             <div>{formatDateSafe(booking.startTime, 'Invalid Date', 'MMM dd, yyyy')}</div>
                             <div className="text-xs text-muted-foreground">

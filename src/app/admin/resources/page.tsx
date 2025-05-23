@@ -9,19 +9,10 @@ import React, {
 } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import {
-  ClipboardList,
-  PlusCircle,
-  Filter as FilterIcon,
-  FilterX,
-  CalendarPlus,
-  Search as SearchIcon,
-  Calendar as CalendarIconLucide, 
-  Loader2,
-  X
-} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, X, CalendarPlus } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { labsList } from '@/lib/mock-data';
+import { labsList, initialMockResourceTypes } from '@/lib/mock-data'; // Removed allAdminMockResources
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -50,8 +41,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-// Corrected date-fns import: Timestamp removed
-import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval } from 'date-fns';
+import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, Timestamp as FirestoreTimestamp } from 'date-fns'; // Renamed Timestamp import to avoid conflict
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import {
@@ -62,14 +52,13 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
-  Timestamp, // Correct import for Firebase Timestamp
   query,
   orderBy,
   where,
+  Timestamp // This is Firestore Timestamp
 } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/layout/page-header';
-import { useRouter } from 'next/navigation';
 import { addAuditLog } from '@/lib/mock-data';
 
 
@@ -124,12 +113,12 @@ export default function AdminResourcesPage() {
             hostname: data.remoteAccess.hostname,
             protocol: data.remoteAccess.protocol || '',
             username: data.remoteAccess.username,
-            port: data.remoteAccess.port ?? undefined,
+            port: data.remoteAccess.port ?? undefined, 
             notes: data.remoteAccess.notes,
           } : undefined,
           allowQueueing: data.allowQueueing ?? false,
-          availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: typeof a.date === 'string' ? a.date : (a.date?.toDate ? format(a.date.toDate(), 'yyyy-MM-dd') : a.date) })) : [],
-          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2,9)), startDate: typeof p.startDate === 'string' ? p.startDate : (p.startDate?.toDate ? format(p.startDate.toDate(), 'yyyy-MM-dd') : p.startDate), endDate: typeof p.endDate === 'string' ? p.endDate : (p.endDate?.toDate ? format(p.endDate.toDate(), 'yyyy-MM-dd') : p.endDate), reason: p.reason })) : [],
+          availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: a.date })) : [], // Dates are strings 'YYYY-MM-DD'
+          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2,9)), startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [], // Dates are strings 'YYYY-MM-DD'
           lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
         } as Resource;
@@ -195,7 +184,7 @@ export default function AdminResourcesPage() {
             if (!period.startDate || !period.endDate) return false;
             try {
                 const periodStart = startOfDay(parseISO(period.startDate));
-                const periodEnd = startOfDay(parseISO(period.endDate));
+                const periodEnd = startOfDay(parseISO(period.endDate)); // Check if periodEnd itself needs to be inclusive
                 return isValidDateFn(periodStart) && isValidDateFn(periodEnd) &&
                        isWithinInterval(dateToFilter, { start: periodStart, end: periodEnd });
             } catch (e) { console.warn("Error parsing unavailability period dates for filter:", e); return false; }
@@ -205,6 +194,7 @@ export default function AdminResourcesPage() {
             dateMatch = false;
         } else {
             const dayAvailability = resource.availability?.find(avail => avail.date === dateToFilterStr);
+            // Resource is available on this date if status is Available AND it has slots defined for the day
             dateMatch = !!(dayAvailability && Array.isArray(dayAvailability.slots) && dayAvailability.slots.length > 0 && resource.status === 'Available');
         }
       }
@@ -270,10 +260,9 @@ export default function AdminResourcesPage() {
     let purchaseDateForFirestore: Timestamp | null = null;
     if (data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))) {
         purchaseDateForFirestore = Timestamp.fromDate(parseISO(data.purchaseDate));
-    } else if (data.purchaseDate === '') {
+    } else if (data.purchaseDate === '' || data.purchaseDate === undefined) { // Explicitly handle empty string as null
         purchaseDateForFirestore = null;
     }
-
 
     const remoteAccessDataForFirestore = data.remoteAccess
       ? {
@@ -304,26 +293,23 @@ export default function AdminResourcesPage() {
       lastUpdatedAt: serverTimestamp(),
     };
     
-    // Clean up payload: convert undefined to null (except for remoteAccess object itself)
     Object.keys(firestorePayload).forEach(key => {
-        if (firestorePayload[key] === undefined && key !== 'remoteAccess') {
+        if (firestorePayload[key] === undefined && key !== 'remoteAccess' && key !== 'allowQueueing') {
             firestorePayload[key] = null;
         }
     });
-    if (firestorePayload.remoteAccess) { // If remoteAccess object exists
+    if (firestorePayload.remoteAccess) {
         Object.keys(firestorePayload.remoteAccess).forEach((key) => {
             if ((firestorePayload.remoteAccess as any)[key] === undefined) {
-                 (firestorePayload.remoteAccess as any)[key] = null; // Convert undefined sub-fields to null
+                 (firestorePayload.remoteAccess as any)[key] = null;
             }
         });
-        // If all sub-fields of remoteAccess are null or empty, set remoteAccess itself to undefined
         const ra = firestorePayload.remoteAccess;
-        const allRemoteAccessNullOrEmpty = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && ra.port === null && !ra.notes;
-        if (allRemoteAccessNullOrEmpty) {
-            firestorePayload.remoteAccess = undefined; // This will cause Firestore to omit the field
+        const allRemoteAccessEffectivelyNull = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && ra.port === null && !ra.notes;
+        if (allRemoteAccessEffectivelyNull) {
+            firestorePayload.remoteAccess = undefined; 
         }
     }
-
 
     const isEditing = !!editingResource;
     const auditAction = isEditing ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
@@ -343,7 +329,7 @@ export default function AdminResourcesPage() {
             availability: [], 
             unavailabilityPeriods: [], 
         };
-        if (!isEditing) { 
+        if (!isEditing && newResourceData.hasOwnProperty('lastUpdatedAt')) { 
           delete newResourceData.lastUpdatedAt;
         }
         const docRef = await addDoc(collection(db, "resources"), newResourceData);
@@ -359,7 +345,7 @@ export default function AdminResourcesPage() {
     } finally {
       setIsLoadingData(false);
     }
-  }, [currentUser, editingResource, fetchedResourceTypes, fetchResourcesAndTypes, toast, addAuditLog]);
+  }, [currentUser, editingResource, fetchedResourceTypes, fetchResourcesAndTypes, toast]);
 
 
   const activeFilterCount = useMemo(() => [
@@ -407,7 +393,7 @@ export default function AdminResourcesPage() {
                 </DialogHeader>
                 <Separator className="my-4" />
                 <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
-                  <div className="space-y-6 py-1 px-1">
+                  <div className="space-y-6 py-4 px-1">
                     <div>
                       <Label htmlFor="resourceSearchDialog">Search (Name/Keyword)</Label>
                       <div className="relative mt-1">
@@ -477,14 +463,12 @@ export default function AdminResourcesPage() {
                     </div>
                   </div>
                 </ScrollArea>
-                <DialogFooter className="pt-6 border-t mt-4 flex-col sm:flex-row">
-                   <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto order-1 sm:order-none">
+                <DialogFooter className="pt-6 border-t mt-4">
+                   <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
-                  <div className="flex justify-end gap-2 order-none sm:order-1">
-                    <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
-                    <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
-                  </div>
+                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
+                  <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -588,7 +572,7 @@ export default function AdminResourcesPage() {
             }}
             initialResource={editingResource}
             onSave={handleSaveResource}
-            resourceTypes={fetchedResourceTypes}
+            resourceTypes={fetchedResourceTypes} // Pass fetched types
         />
       )}
     </div>

@@ -5,7 +5,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, AlertCircle, CheckCircle, Construction, User as UserIcon } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, AlertCircle, CheckCircle, Construction, User as UserIconLucide, Calendar as CalendarIcon } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,11 +13,11 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
 import type { Resource, ResourceType, Booking, UnavailabilityPeriod, RoleName } from '@/types';
-import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay, isBefore, compareAsc, isWithinInterval, isSameDay, addDays as dateFnsAddDays } from 'date-fns';
+import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay, isBefore, compareAsc, isWithinInterval, isSameDay, addDays as dateFnsAddDays, Timestamp as FirestoreTimestamp } from 'date-fns'; // Renamed Timestamp import
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, type ResourceFormValues } from '@/components/admin/resource-form-dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'; // Removed AlertDialogTrigger
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import {
   Tooltip,
@@ -28,8 +28,8 @@ import {
 import { ManageAvailabilityDialog } from '@/components/resources/manage-availability-dialog';
 import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavailability-dialog';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp, Unsubscribe } from 'firebase/firestore';
-import { addAuditLog, labsList, resourceStatusesList } from '@/lib/mock-data'; // Keep static lists
+import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore'; // This is Firestore Timestamp
+import { addAuditLog, labsList, resourceStatusesList } from '@/lib/mock-data';
 
 
 function ResourceDetailPageSkeleton() {
@@ -117,7 +117,7 @@ const DetailItem = ({ icon: IconElement, label, value, isLink = false, className
   }
   
   let displayValue = '';
-  if (value instanceof Date) { // value is now a Date object
+  if (value instanceof Date) { 
     displayValue = formatDateSafe(value, 'N/A', 'PPP');
   } else {
     displayValue = String(value);
@@ -175,9 +175,8 @@ export default function ResourceDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
-  const [isAlertOpen, setIsAlertOpen] = useState(false); // Renamed from resourceToDelete to control AlertDialog
-  const [resourceToDeleteId, setResourceToDeleteId] = useState<string | null>(null); // Store only ID for delete confirmation
-
+  const [isAlertOpen, setIsAlertOpen] = useState(false); 
+  const [resourceToDeleteId, setResourceToDeleteId] = useState<string | null>(null);
 
   const [isAvailabilityDialogOpen, setIsAvailabilityDialogOpen] = useState(false);
   const [isUnavailabilityDialogOpen, setIsUnavailabilityDialogOpen] = useState(false);
@@ -193,15 +192,15 @@ export default function ResourceDetailPage() {
       return;
     }
     setIsLoading(true);
-    console.log(`ResourceDetailPage: Fetching resource with ID: ${resourceId}`);
+    console.log(`Fetching resource with ID: ${resourceId}`);
     try {
       const resourceDocRef = doc(db, "resources", resourceId);
       const docSnap = await getDoc(resourceDocRef);
-      console.log(`ResourceDetailPage: Document snapshot for ID ${resourceId} exists:`, docSnap.exists());
+      console.log(`Document snapshot for ID ${resourceId} exists:`, docSnap.exists());
 
       if (docSnap.exists()) {
         const data = docSnap.data();
-        console.log("ResourceDetailPage: Raw document data:", data);
+        console.log("Raw document data:", data);
         const fetchedResource: Resource = {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
@@ -338,7 +337,7 @@ export default function ResourceDetailPage() {
     if (resource && currentUser) { 
       fetchBookingsForResourceUser();
     }
-  }, [resourceId, currentUser, resource, toast]);
+  }, [resourceId, currentUser, resource, toast]); // Added resource to dependency array
 
 
   const canManageResource = useMemo(() => {
@@ -363,7 +362,7 @@ export default function ResourceDetailPage() {
       try { return parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime(); }
       catch(e) { return 0;}
     });
-  }, [resource]);
+  }, [resource]); // Updated dependency
 
   const upcomingAvailability = useMemo(() => {
     if (!resource || !Array.isArray(resource.availability)) return [];
@@ -383,12 +382,12 @@ export default function ResourceDetailPage() {
                 return dateA - dateB;
             } catch(e) { return 0;}
         });
-  }, [resource]);
+  }, [resource]); // Updated dependency
 
 
   const handleOpenEditDialog = useCallback(() => {
     if (resource) {
-      setIsFormDialogOpen(true);
+      setIsFormDialogOpen(true); // This will trigger fetching types
     }
   }, [resource]);
 
@@ -402,6 +401,8 @@ export default function ResourceDetailPage() {
     let purchaseDateForFirestore: Timestamp | null = null;
     if (data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))) {
         purchaseDateForFirestore = Timestamp.fromDate(parseISO(data.purchaseDate));
+    } else if (!data.purchaseDate) { // Handle empty string from form as null
+        purchaseDateForFirestore = null;
     }
     
     const remoteAccessDataForFirestore = data.remoteAccess
@@ -433,19 +434,20 @@ export default function ResourceDetailPage() {
       lastUpdatedAt: serverTimestamp(),
     };
             
-    // Omit undefined fields
     Object.keys(firestorePayload).forEach(key => {
-      if (firestorePayload[key] === undefined) delete firestorePayload[key];
+      if (firestorePayload[key] === undefined && key !== 'remoteAccess' && key !== 'allowQueueing') {
+          firestorePayload[key] = null;
+      }
     });
     if (firestorePayload.remoteAccess) {
         Object.keys(firestorePayload.remoteAccess).forEach(key => {
-            if (firestorePayload.remoteAccess[key] === undefined) {
-                 firestorePayload.remoteAccess[key] = null;
+            if ((firestorePayload.remoteAccess as any)[key] === undefined) {
+                 (firestorePayload.remoteAccess as any)[key] = null;
             }
         });
          const ra = firestorePayload.remoteAccess;
-         const allEffectivelyNull = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && ra.port === null && !ra.notes;
-         if(allEffectivelyNull) firestorePayload.remoteAccess = undefined;
+         const allRemoteAccessEffectivelyNull = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && ra.port === null && !ra.notes;
+         if(allRemoteAccessEffectivelyNull) firestorePayload.remoteAccess = undefined;
     }
     
     try {
@@ -508,9 +510,9 @@ export default function ResourceDetailPage() {
     try {
       const resourceDocRef = doc(db, "resources", resource.id);
       await updateDoc(resourceDocRef, { availability: updatedAvailability, lastUpdatedAt: serverTimestamp() });
-      addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Availability for resource '${resource.name}' on ${formatDateSafe(new Date(date), 'N/A', 'PPP')} updated by ${currentUser.name}.`});
-      toast({ title: 'Availability Updated', description: `Daily slots for ${resource.name} on ${formatDateSafe(new Date(date), 'N/A', 'PPP')} have been updated.` });
-      // Optimistically update local state to reflect change immediately
+      addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Availability for resource '${resource.name}' on ${formatDateSafe(parseISO(date), 'N/A', 'PPP')} updated by ${currentUser.name}.`});
+      toast({ title: 'Availability Updated', description: `Daily slots for ${resource.name} on ${formatDateSafe(parseISO(date), 'N/A', 'PPP')} have been updated.` });
+      
       setResource(prev => prev ? ({ ...prev, availability: updatedAvailability, lastUpdatedAt: new Date() }) : null);
     } catch (error: any) {
       console.error("Error updating availability:", error);
@@ -525,10 +527,12 @@ export default function ResourceDetailPage() {
     }
     try {
       const resourceDocRef = doc(db, "resources", resource.id);
-      await updateDoc(resourceDocRef, { unavailabilityPeriods: updatedPeriods, lastUpdatedAt: serverTimestamp() });
+      // Ensure IDs are strings for Firestore
+      const periodsToSave = updatedPeriods.map(p => ({...p, id: String(p.id)}));
+      await updateDoc(resourceDocRef, { unavailabilityPeriods: periodsToSave, lastUpdatedAt: serverTimestamp() });
       addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Unavailability periods for resource '${resource.name}' updated by ${currentUser.name}.`});
       toast({ title: 'Unavailability Updated', description: `Unavailability periods for ${resource.name} have been updated.` });
-      setResource(prev => prev ? ({ ...prev, unavailabilityPeriods: updatedPeriods, lastUpdatedAt: new Date() }) : null);
+      setResource(prev => prev ? ({ ...prev, unavailabilityPeriods: periodsToSave, lastUpdatedAt: new Date() }) : null);
     } catch (error: any) {
       console.error("Error updating unavailability:", error);
       toast({ title: "Update Failed", description: `Could not save unavailability periods: ${error.message}`, variant: "destructive" });
@@ -600,10 +604,12 @@ export default function ResourceDetailPage() {
                 <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                       <Button variant="destructive" size="icon" onClick={() => { setResourceToDeleteId(resource.id); setIsAlertOpen(true); }}>
-                              <Trash2 className="h-4 w-4" />
-                              <span className="sr-only">Delete Resource</span>
-                          </Button>
+                       <AlertDialogTrigger asChild>
+                           <Button variant="destructive" size="icon" onClick={() => { setResourceToDeleteId(resource.id); setIsAlertOpen(true); }}>
+                                <Trash2 className="h-4 w-4" />
+                                <span className="sr-only">Delete Resource</span>
+                            </Button>
+                       </AlertDialogTrigger>
                     </TooltipTrigger>
                     <TooltipContent><p>Delete Resource</p></TooltipContent>
                   </Tooltip>
@@ -725,8 +731,8 @@ export default function ResourceDetailPage() {
               <div className="space-y-1">
                 <DetailItem icon={Wrench} label="Manufacturer" value={resource.manufacturer} />
                 <DetailItem icon={Archive} label="Model" value={resource.model} />
-                <DetailItem icon={UserIcon} label="Serial #" value={resource.serialNumber} /> {/* Changed icon */}
-                <DetailItem icon={ShoppingCart} label="Purchase Date" value={resource.purchaseDate} />
+                <DetailItem icon={UserIconLucide} label="Serial #" value={resource.serialNumber} />
+                <DetailItem icon={CalendarIcon} label="Purchase Date" value={resource.purchaseDate} />
               </div>
 
               {resource.remoteAccess && (Object.values(resource.remoteAccess).some(val => val || typeof val === 'number') || resource.remoteAccess.port !== undefined) && (
@@ -738,7 +744,7 @@ export default function ResourceDetailPage() {
                     <DetailItem icon={Globe} label="Hostname" value={resource.remoteAccess.hostname} isLink={!!resource.remoteAccess.hostname} />
                     <DetailItem icon={ListChecks} label="Protocol" value={resource.remoteAccess.protocol} />
                     <DetailItem icon={KeyRound} label="Username" value={resource.remoteAccess.username} />
-                    <DetailItem icon={Fingerprint} label="Port" value={resource.remoteAccess.port ?? undefined} />
+                    <DetailItem icon={Fingerprint} label="Port" value={resource.remoteAccess.port?.toString()} />
                     {resource.remoteAccess.notes && <DetailItem icon={FileText} label="RA Notes" value={resource.remoteAccess.notes} />}
                   </div>
                 </>
@@ -774,7 +780,7 @@ export default function ResourceDetailPage() {
                         .slice(0, 5)
                         .map((avail, index) => (
                         <li key={`${avail.date}-${index}`} className="text-sm p-2 border-b last:border-b-0">
-                            <span className="font-medium text-foreground">{formatDateSafe(new Date(avail.date), 'Invalid Date', 'PPP')}</span>:
+                            <span className="font-medium text-foreground">{formatDateSafe(parseISO(avail.date), 'Invalid Date', 'PPP')}</span>:
                             <span className="text-muted-foreground ml-2 break-all">
                                 {(Array.isArray(avail.slots) && avail.slots.join(', ').length > 70) ? 'Multiple slots available' : (Array.isArray(avail.slots) && avail.slots.length > 0 ? avail.slots.join(', ') : 'No slots defined')}
                             </span>
@@ -823,6 +829,7 @@ export default function ResourceDetailPage() {
             open={isFormDialogOpen}
             onOpenChange={(isOpen) => {
                 setIsFormDialogOpen(isOpen);
+                // No longer setting editingResource to null here, handleOpenEditDialog does it.
             }}
             initialResource={resource} 
             onSave={handleSaveResource}

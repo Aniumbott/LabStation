@@ -3,9 +3,9 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter, Clock, Info, X, Loader2 } from 'lucide-react';
+import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter, Clock, Info, X, Loader2, User as UserIcon, Package as ResourceIcon } from 'lucide-react';
 import type { Booking, Resource, User } from '@/types';
-import { addNotification, addAuditLog, bookingStatusesForFilter } from '@/lib/mock-data';
+import { bookingStatusesForFilter, addNotification, addAuditLog } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -51,7 +51,7 @@ export default function BookingRequestsPage() {
   const { currentUser } = useAuth();
   const [allBookingsState, setAllBookingsState] = useState<Booking[]>([]);
   const [allResources, setAllResources] = useState<Resource[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>([]); // To fetch user names
+  const [allUsers, setAllUsers] = useState<User[]>([]); 
   const [isLoading, setIsLoading] = useState(true);
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
@@ -71,10 +71,9 @@ export default function BookingRequestsPage() {
     }
     setIsLoading(true);
     try {
-      // Fetch users and resources first to map names later
       const usersQuery = query(collection(db, "users"), orderBy("name", "asc"));
       const usersSnapshot = await getDocs(usersQuery);
-      const fetchedUsers = usersSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as User));
+      const fetchedUsers = usersSnapshot.docs.map(d => ({ id: d.id, ...d.data(), createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date() } as User));
       setAllUsers(fetchedUsers);
 
       const resourcesQuery = query(collection(db, "resources"), orderBy("name", "asc"));
@@ -82,8 +81,10 @@ export default function BookingRequestsPage() {
       const fetchedResources = resourcesSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Resource));
       setAllResources(fetchedResources);
       
-      // Fetch booking requests
       // Firestore Index Required: bookings (status ASC, startTime ASC) OR (status DESC, startTime ASC)
+      // For "in" queries with orderBy, Firestore often needs an index matching the orderBy,
+      // and sometimes one for each element in the "in" array combined with the orderBy.
+      // A good composite index would be (status ASC, startTime ASC).
       const bookingsRef = collection(db, "bookings");
       const q = query(bookingsRef, where("status", "in", ["Pending", "Waitlisted"]), orderBy("startTime", "asc"));
       const querySnapshot = await getDocs(q);
@@ -91,10 +92,13 @@ export default function BookingRequestsPage() {
         const data = docSnap.data();
         return {
           id: docSnap.id,
-          ...data,
+          resourceId: data.resourceId,
+          userId: data.userId,
           startTime: data.startTime instanceof Timestamp ? data.startTime.toDate() : new Date(),
           endTime: data.endTime instanceof Timestamp ? data.endTime.toDate() : new Date(),
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+          status: data.status,
+          notes: data.notes,
         } as Booking;
       });
       setAllBookingsState(fetchedBookings);
@@ -201,7 +205,7 @@ export default function BookingRequestsPage() {
         'booking_rejected',
         `/bookings?bookingId=${bookingToUpdate.id}`
       );
-      // Note: Queue processing for Firestore needs specific logic; removed mock processQueueForResource call.
+      // Queue processing is now handled by a separate function if needed.
       await fetchBookingRequestsAndRelatedData();
     } catch (error: any) {
       console.error("Error rejecting booking:", error);
@@ -233,7 +237,7 @@ export default function BookingRequestsPage() {
   const activeFilterCount = useMemo(() => [
     activeSearchTerm !== '',
     activeFilterResourceId !== 'all',
-    activeFilterStatus !== 'Pending',
+    activeFilterStatus !== 'Pending', // Default is 'Pending', so 'all' or 'Waitlisted' counts as an active filter.
   ].filter(Boolean).length, [activeSearchTerm, activeFilterResourceId, activeFilterStatus]);
 
 
@@ -337,22 +341,22 @@ export default function BookingRequestsPage() {
           }
         />
 
-        {isLoading ? (
+        {isLoading && allBookingsState.length === 0 ? (
           <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading requests...</div>
         ) : bookingsForApproval.length > 0 ? (
-          <Card>
+          <Card className="shadow-lg">
             <CardHeader>
               <CardTitle>Pending & Waitlisted Requests ({bookingsForApproval.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto rounded-lg border shadow-sm">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Resource</TableHead>
-                      <TableHead>Booked By</TableHead>
-                      <TableHead>Date & Time</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead><ResourceIcon className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Resource</TableHead>
+                      <TableHead><UserIcon className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Booked By</TableHead>
+                      <TableHead><Clock className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Date & Time</TableHead>
+                      <TableHead><Info className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Status</TableHead>
                       <TableHead>Notes</TableHead>
                       <TableHead className="text-right w-[100px]">Actions</TableHead>
                     </TableRow>
@@ -363,7 +367,7 @@ export default function BookingRequestsPage() {
                         <TableCell className="font-medium">{booking.resourceName}</TableCell>
                         <TableCell>{booking.userName}</TableCell>
                         <TableCell>
-                          <div>{formatDateSafe(booking.startTime)}</div>
+                          <div>{formatDateSafe(booking.startTime, 'N/A', 'MMM dd, yyyy')}</div>
                           <div className="text-xs text-muted-foreground">
                               {formatTimeField(booking.startTime)} - {formatTimeField(booking.endTime)}
                           </div>
@@ -379,7 +383,7 @@ export default function BookingRequestsPage() {
                                 {booking.status}
                             </Badge>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{booking.notes || 'N/A'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-xs truncate" title={booking.notes}>{booking.notes || 'N/A'}</TableCell>
                         <TableCell className="text-right space-x-1">
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -392,7 +396,7 @@ export default function BookingRequestsPage() {
                           </Tooltip>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => handleRejectBooking(booking.id)} disabled={isLoading}>
+                              <Button variant="outline" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => handleRejectBooking(booking.id)} disabled={isLoading}>
                                 <ThumbsDown className="h-4 w-4" />
                                 <span className="sr-only">Reject Booking</span>
                               </Button>
