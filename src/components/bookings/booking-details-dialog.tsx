@@ -18,7 +18,7 @@ import { Calendar, Clock, User, Info, Tag, StickyNote, Activity, CheckCircle, Al
 import { cn } from '@/lib/utils';
 import { Separator } from '../ui/separator';
 import { LogUsageFormDialog } from './log-usage-form-dialog';
-import { initialBookings, getWaitlistPosition } from '@/lib/mock-data'; 
+import { initialBookings } from '@/lib/mock-data'; 
 
 interface BookingDetailsDialogProps {
   booking: Booking | null;
@@ -81,11 +81,10 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
   const isPastBooking = currentBookingDetails.startTime && isPast(new Date(currentBookingDetails.startTime));
   const canLogUsage = isPastBooking && currentBookingDetails.status === 'Confirmed';
   
-  // Calculate waitlist position here if needed, using imported initialBookings
-  // This calculation should ideally happen where 'allBookings' or a relevant subset is available
-  const waitlistPosition = currentBookingDetails.status === 'Waitlisted' 
-    ? getWaitlistPosition(currentBookingDetails, initialBookings) // Use global initialBookings for simplicity
-    : null;
+  // Note: getWaitlistPosition relies on allBookings which is not available here directly.
+  // If waitlist position display is crucial in this dialog, allBookings needs to be passed down,
+  // or the booking object itself should be augmented with this info before being passed.
+  // For now, we'll omit position from this dialog for simplicity, as it's on the main table.
 
 
   const handleSaveUsage = (usageData: BookingUsageDetails) => {
@@ -149,7 +148,7 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
               <Info className="mr-3 h-5 w-5 text-muted-foreground" /> 
               <span className="font-medium text-muted-foreground w-28">Status:</span>
               <Badge className={cn("whitespace-nowrap text-xs px-2 py-0.5 border-transparent", getStatusBadgeClass(currentBookingDetails.status))}>
-                {currentBookingDetails.status} {waitlistPosition != null && `(#${waitlistPosition})`}
+                {currentBookingDetails.status}
               </Badge>
             </div>
             {currentBookingDetails.notes && (
@@ -207,5 +206,3 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
     </>
   );
 }
-
-    

@@ -1,6 +1,6 @@
 
 export interface ResourceType {
-  id: string;
+  id: string; // Firestore document ID
   name: string;
   description?: string;
 }
@@ -10,7 +10,7 @@ export type ResourceStatus = 'Available' | 'Booked' | 'Maintenance';
 export interface RemoteAccessDetails {
   ipAddress?: string;
   hostname?: string;
-  protocol?: 'RDP' | 'SSH' | 'VNC' | 'Other' | ''; // Added empty string for "None"
+  protocol?: 'RDP' | 'SSH' | 'VNC' | 'Other' | '';
   username?: string;
   port?: number;
   notes?: string;
@@ -22,17 +22,17 @@ export interface AvailabilitySlot {
 }
 
 export interface UnavailabilityPeriod {
-  id: string;
+  id: string; // Can be a sub-collection or just an ID within the array
   startDate: string; // YYYY-MM-DD
   endDate: string;   // YYYY-MM-DD
   reason?: string;
 }
 
 export interface Resource {
-  id: string;
+  id: string; // Firestore document ID
   name: string;
-  resourceTypeId: string;
-  resourceTypeName: string;
+  resourceTypeId: string; // ID of document in 'resourceTypes' collection
+  // resourceTypeName: string; // REMOVED - Fetch from ResourceType
   lab: 'Electronics Lab 1' | 'RF Lab' | 'Prototyping Lab' | 'General Test Area';
   status: ResourceStatus;
   description: string;
@@ -43,31 +43,31 @@ export interface Resource {
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
-  purchaseDate?: string; // ISO string
+  purchaseDate?: string; // Firestore Timestamp (store as ISO string if not directly using Timestamp type in frontend model)
   notes?: string;
   remoteAccess?: RemoteAccessDetails;
   allowQueueing?: boolean;
 }
 
 export interface BookingUsageDetails {
-  actualStartTime?: string; // ISO string
-  actualEndTime?: string;   // ISO string
+  actualStartTime?: string; // Firestore Timestamp (ISO string)
+  actualEndTime?: string;   // Firestore Timestamp (ISO string)
   outcome?: 'Success' | 'Failure' | 'Interrupted' | 'Not Applicable';
-  dataStorageLocation?: string; 
+  dataStorageLocation?: string;
   usageComments?: string;
 }
 export const BookingUsageOutcomes: Array<BookingUsageDetails['outcome'] | undefined> = ['Success', 'Failure', 'Interrupted', 'Not Applicable', undefined];
 
 
 export interface Booking {
-  id:string;
-  resourceId: string;
-  resourceName: string;
-  userId: string;
-  userName: string;
-  startTime: Date;
-  endTime: Date;
-  createdAt: Date; 
+  id: string; // Firestore document ID
+  resourceId: string; // ID of document in 'resources' collection
+  // resourceName: string; // REMOVED - Fetch from Resource
+  userId: string; // Firebase Auth UID of the user
+  // userName: string; // REMOVED - Fetch from User
+  startTime: Date; // Or string (ISO) then convert. For Firestore, use Timestamp.
+  endTime: Date;   // Or string (ISO)
+  createdAt: Date; // Or string (ISO)
   status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted';
   notes?: string;
   usageDetails?: BookingUsageDetails;
@@ -77,30 +77,29 @@ export type RoleName = 'Admin' | 'Lab Manager' | 'Technician' | 'Researcher';
 export type UserStatus = 'active' | 'pending_approval' | 'suspended';
 
 export interface User {
-  id: string; // This will be the Firebase uid
-  name: string; // This is Firebase's displayName
-  email: string; // Firebase's email
-  role: RoleName; // Stored in Firestore user profile
-  avatarUrl?: string; // Stored in Firestore user profile or Firebase Storage
-  status: UserStatus; // Stored in Firestore user profile
-  // Password is no longer stored here, Firebase Auth handles it
-  createdAt?: string; // ISO string, stored in Firestore
+  id: string; // Firebase Auth UID, also Firestore document ID
+  name: string;
+  email: string;
+  role: RoleName;
+  avatarUrl?: string;
+  status: UserStatus;
+  createdAt?: string; // Firestore Timestamp (ISO string)
 }
 
 export type MaintenanceRequestStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed';
 
 export interface MaintenanceRequest {
-  id: string;
-  resourceId: string;
-  resourceName: string;
-  reportedByUserId: string;
-  reportedByUserName: string;
+  id: string; // Firestore document ID
+  resourceId: string; // ID of document in 'resources' collection
+  // resourceName: string; // REMOVED - Fetch from Resource
+  reportedByUserId: string; // Firebase Auth UID
+  // reportedByUserName: string; // REMOVED - Fetch from User
   issueDescription: string;
   status: MaintenanceRequestStatus;
-  assignedTechnicianId?: string;
-  assignedTechnicianName?: string; 
-  dateReported: string; // ISO string
-  dateResolved?: string; // ISO string
+  assignedTechnicianId?: string; // Firebase Auth UID
+  // assignedTechnicianName?: string; // REMOVED - Fetch from User (Technician)
+  dateReported: string; // Firestore Timestamp (ISO string)
+  dateResolved?: string; // Firestore Timestamp (ISO string)
   resolutionNotes?: string;
 }
 
@@ -118,18 +117,18 @@ export type NotificationType =
   | 'signup_pending_admin';
 
 export interface Notification {
-  id: string;
-  userId: string;
+  id: string; // Firestore document ID
+  userId: string; // Firebase Auth UID of the recipient
   title: string;
   message: string;
   type: NotificationType;
   isRead: boolean;
-  createdAt: string; // ISO string
+  createdAt: string; // Firestore Timestamp (ISO string)
   linkTo?: string;
 }
 
 export interface BlackoutDate {
-  id: string;
+  id: string; // Firestore document ID (or use date as ID if unique)
   date: string; // YYYY-MM-DD format
   reason?: string;
 }
@@ -139,7 +138,7 @@ export const daysOfWeekArray: DayOfWeek[] = ['Sunday', 'Monday', 'Tuesday', 'Wed
 
 
 export interface RecurringBlackoutRule {
-  id: string;
+  id: string; // Firestore document ID
   name: string;
   daysOfWeek: DayOfWeek[];
   reason?: string;
@@ -155,12 +154,12 @@ export type AuditActionType =
   | 'RECURRING_RULE_CREATED' | 'RECURRING_RULE_UPDATED' | 'RECURRING_RULE_DELETED';
 
 export interface AuditLogEntry {
-  id: string;
-  timestamp: string; // ISO string
-  userId: string;    
-  userName: string;  
+  id: string; // Firestore document ID
+  timestamp: string; // Firestore Timestamp (ISO string)
+  userId: string;    // Firebase Auth UID of acting user
+  userName: string;  // Denormalized name of acting user for log readability
   action: AuditActionType;
   entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule';
-  entityId?: string;
-  details: string; 
+  entityId?: string; // Document ID of the affected entity
+  details: string;
 }

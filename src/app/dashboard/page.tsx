@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/table";
 import { format, isValid, isPast, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-// Removed: import { allAdminMockResources, initialBookings, getWaitlistPosition } from '@/lib/mock-data';
+import { allAdminMockResources, initialBookings } from '@/lib/mock-data';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/auth-context';
 
@@ -31,16 +31,24 @@ export default function DashboardPage() {
   const [upcomingUserBookings, setUpcomingUserBookings] = useState<Booking[]>([]);
 
   useEffect(() => {
-    // TODO: Replace with Firestore fetch for frequently used or user-specific resources
-    // For now, showing empty as allAdminMockResources is removed from mock-data
-    setFrequentlyUsedResources([]); 
+    // In a real app, this might be fetched based on user's past activity or admin-defined popular items.
+    // For now, just showing the first few resources from the mock data.
+    setFrequentlyUsedResources(allAdminMockResources.slice(0, 2)); 
   }, []);
   
   useEffect(() => {
     if (currentUser) {
-      // TODO: Replace with Firestore fetch for user's upcoming bookings
-      // For now, showing empty as initialBookings is removed from mock-data
-      setUpcomingUserBookings([]);
+      const userBookings = initialBookings
+        .filter(b => 
+          b.userId === currentUser.id && 
+          b.status !== 'Cancelled' && 
+          b.startTime && 
+          isValid(new Date(b.startTime)) && 
+          !isPast(new Date(b.startTime)) // Only upcoming
+        )
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+        .slice(0, 5); // Limit to 5 upcoming bookings for the dashboard
+      setUpcomingUserBookings(userBookings);
     } else {
       setUpcomingUserBookings([]);
     }
@@ -89,7 +97,7 @@ export default function DashboardPage() {
                     </CardTitle>
                     {getResourceStatusBadge(resource.status)}
                   </div>
-                  <CardDescription>{resource.lab} - {resource.resourceTypeName}</CardDescription>
+                  <CardDescription>{resource.lab} - {allAdminMockResources.find(r => r.id === resource.id)?.resourceTypeName || 'N/A'}</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0 flex-grow space-y-3">
                   <div className="relative w-full h-40 rounded-md overflow-hidden">
@@ -137,7 +145,6 @@ export default function DashboardPage() {
                     {upcomingUserBookings.map((booking) => {
                       const startTimeDate = booking.startTime instanceof Date ? booking.startTime : parseISO(booking.startTime as unknown as string);
                       const endTimeDate = booking.endTime instanceof Date ? booking.endTime : parseISO(booking.endTime as unknown as string);
-                      // const waitlistPosition = getWaitlistPosition(booking, initialBookings); // Removed as getWaitlistPosition is no longer available
                       return (
                         <TableRow key={booking.id}>
                           <TableCell className="font-medium">{booking.resourceName}</TableCell>

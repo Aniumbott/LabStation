@@ -1,8 +1,26 @@
 
-import type { RoleName, MaintenanceRequestStatus, Notification, NotificationType, BlackoutDate, RecurringBlackoutRule, AuditLogEntry, AuditActionType, DayOfWeek, Booking } from '@/types';
+import type {
+  RoleName,
+  MaintenanceRequestStatus,
+  Notification,
+  NotificationType,
+  AuditLogEntry,
+  AuditActionType,
+  DayOfWeek,
+  User,
+  ResourceType,
+  Booking,
+  Resource,
+  MaintenanceRequest,
+  BlackoutDate,
+  RecurringBlackoutRule,
+} from '@/types';
 import { format, addDays, set, subDays, parseISO, startOfDay, isValid as isValidDate, getDay, isBefore } from 'date-fns';
+import { db } from './firebase'; // For potential future direct Firestore interaction in helpers
+import { collection, addDoc } from 'firebase/firestore';
 
-// --- Static Lists (Can remain as they are not dynamic DB data) ---
+
+// --- Static Lists (Application Configuration Data) ---
 export const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
 export const maintenanceRequestStatuses: MaintenanceRequestStatus[] = ['Open', 'In Progress', 'Resolved', 'Closed'];
 export const labsList = ['Electronics Lab 1', 'RF Lab', 'Prototyping Lab', 'General Test Area'];
@@ -11,47 +29,46 @@ export const bookingStatusesForFilter: (Booking['status'] | 'all')[] = ['all', '
 export const bookingStatusesForForm: Booking['status'][] = ['Confirmed', 'Pending', 'Waitlisted', 'Cancelled'];
 export const daysOfWeekArray: DayOfWeek[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-// --- Dynamic Data Arrays (These will now be largely empty or removed, data comes from Firestore) ---
-
-// initialMockUsers is effectively removed. User data comes from Firebase Auth and Firestore /users collection.
-// The AuthContext and User Admin page will handle this.
-// export let initialMockUsers: User[] = []; // No longer the source of truth
-
-// allAdminMockResources will be fetched from Firestore.
-// export let allAdminMockResources: Resource[] = [];
-
-// initialMockResourceTypes will be fetched from Firestore.
-// export let initialMockResourceTypes: ResourceType[] = [];
-
-// initialBookings will be fetched from Firestore.
-// export let initialBookings: Booking[] = [];
-
-// initialMaintenanceRequests will be fetched from Firestore.
-// export let initialMaintenanceRequests: MaintenanceRequest[] = [];
-
-// initialBlackoutDates will be fetched from Firestore.
-// export let initialBlackoutDates: BlackoutDate[] = [];
-
-// initialRecurringBlackoutRules will be fetched from Firestore.
-// export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = [];
+// --- Mock Resource Types (Small, managed by admin, might be kept as mock for some time or moved to Firestore) ---
+// For now, keeping this as other forms depend on it. Will be moved to Firestore next.
+export const initialMockResourceTypes: ResourceType[] = [
+  { id: 'rt1', name: 'Oscilloscope', description: 'For visualizing voltage signals over time.' },
+  { id: 'rt2', name: 'Power Supply', description: 'Provides DC or AC power to test circuits.' },
+  { id: 'rt3', name: 'Function Generator', description: 'Generates various types of electrical waveforms.' },
+  { id: 'rt4', name: 'Spectrum Analyzer', description: 'Measures magnitude of an input signal versus frequency.' },
+  { id: 'rt5', name: 'Digital Multimeter (DMM)', description: 'Measures voltage, current, and resistance.' },
+  { id: 'rt6', name: 'Soldering Station', description: 'For assembling or repairing electronics.' },
+  { id: 'rt7', name: 'Logic Analyzer', description: 'Captures and displays signals from a digital system.' },
+  { id: 'rt8', name: 'Test Probe Set', description: 'Assorted probes for connecting test equipment.' },
+  { id: 'rt9', name: 'FPGA Development Board', description: 'Programmable logic device for custom hardware acceleration.'},
+  { id: 'rt10', name: 'Environmental Chamber', description: 'For testing devices under controlled temperature and humidity.' },
+  { id: 'rt11', name: 'Network Analyzer (VNA)', description: 'Measures network parameters of electrical networks.' },
+  { id: 'rt12', name: 'Microscope (Inspection)', description: 'For visual inspection of PCBs and components.' },
+];
 
 
-// --- Notifications & Audit Logs (These will be populated dynamically by the app against Firestore) ---
-// For now, we can keep them as in-memory arrays for the mock setup, but ideally, these also go to Firestore.
-// To simplify this transition step, let's keep these as mock arrays that get populated by the app.
-// In a full Firestore migration, these would also be Firestore collections.
+// --- Main Data Arrays - These will be REMOVED as data now lives in Firestore ---
+// The application will now fetch data from Firestore for these entities.
+// Empty arrays are left as placeholders to prevent import errors in files not yet refactored.
+export let initialMockUsers: User[] = []; // Data fetched from Firestore 'users' collection
+export let allAdminMockResources: Resource[] = []; // Data fetched from Firestore 'resources' collection
+export let initialBookings: Booking[] = []; // Data fetched from Firestore 'bookings' collection
+export let initialMaintenanceRequests: MaintenanceRequest[] = []; // Data fetched from Firestore 'maintenanceRequests' collection
+export let initialBlackoutDates: BlackoutDate[] = []; // Data fetched from Firestore 'blackoutDates' collection
+export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = []; // Data fetched from Firestore 'recurringBlackoutRules' collection
 
+
+// --- Notifications & Audit Logs (In-memory for mock setup, would also be Firestore collections) ---
 export let initialNotifications: Notification[] = [];
 
-export function addNotification(
+export async function addNotification(
   userId: string,
   title: string,
   message: string,
   type: NotificationType,
   linkTo?: string
 ) {
-  const newNotification: Notification = {
-    id: `n${initialNotifications.length + 1 + Date.now()}`,
+  const newNotification: Omit<Notification, 'id'> = { // Omit ID as Firestore will generate it
     userId,
     title,
     message,
@@ -60,15 +77,19 @@ export function addNotification(
     createdAt: new Date().toISOString(),
     linkTo,
   };
-  initialNotifications.unshift(newNotification);
-  // In a real app: await addDoc(collection(db, 'notifications'), newNotificationData);
+  // Placeholder: In a real app, this would be an Firestore addDoc call
+  // For mock:
+  const mockId = `n${initialNotifications.length + 1 + Date.now()}`;
+  initialNotifications.unshift({id: mockId, ...newNotification});
+  console.log("Mock Notification Added:", {id: mockId, ...newNotification});
+  // Example Firestore: await addDoc(collection(db, 'notifications'), newNotification);
 }
 
 export let initialAuditLogs: AuditLogEntry[] = [];
 
-export function addAuditLog(
+export async function addAuditLog(
   actingUserId: string,
-  actingUserName: string,
+  actingUserName: string, // Keep for mock, in real app fetch or pass if already have it
   action: AuditActionType,
   params: {
     entityType?: AuditLogEntry['entityType'];
@@ -76,119 +97,75 @@ export function addAuditLog(
     details: string;
   }
 ) {
-  const newLog: AuditLogEntry = {
-    id: `log-${Date.now()}`,
+  const newLog: Omit<AuditLogEntry, 'id'> = { // Omit ID
     timestamp: new Date().toISOString(),
     userId: actingUserId,
-    userName: actingUserName,
+    userName: actingUserName, // For audit logs, denormalizing acting user's name is common
     action: action,
     entityType: params.entityType,
     entityId: params.entityId,
     details: params.details,
   };
-  initialAuditLogs.unshift(newLog);
-  // In a real app: await addDoc(collection(db, 'auditLogs'), newLogData);
+  // Placeholder: In a real app, this would be an Firestore addDoc call
+  // For mock:
+  const mockId = `log-${Date.now()}`;
+  initialAuditLogs.unshift({id: mockId, ...newLog});
+  console.log("Mock Audit Log Added:", {id: mockId, ...newLog});
+  // Example Firestore: await addDoc(collection(db, 'auditLogs'), newLog);
 }
 
+// --- Helper Functions (Relying on passed 'allBookings' or need Firestore refactor) ---
 
-// --- Helper Functions (Can remain, but those modifying mock arrays might need adjustment or become Firestore specific) ---
-
-// getWaitlistPosition might need to fetch allBookings from Firestore if not already available.
-// For now, assuming allBookings is passed from a component that has fetched it.
+// getWaitlistPosition will need refactoring to work with Firestore queries
+// For now, it will likely not function correctly as initialBookings is empty.
 export function getWaitlistPosition(booking: Booking, allBookings: Booking[]): number | null {
   if (booking.status !== 'Waitlisted' || !booking.createdAt) {
     return null;
   }
+  // This logic will need to be adapted for Firestore, likely querying bookings
+  // for the same resource, status, and time, then ordering by createdAt.
   const conflictingWaitlistedBookings = allBookings.filter(b =>
     b.resourceId === booking.resourceId &&
     b.status === 'Waitlisted' &&
-    b.createdAt &&
-    (new Date(b.startTime) < new Date(booking.endTime) && new Date(b.endTime) > new Date(booking.startTime))
+    b.createdAt && // Ensure createdAt exists
+    (b.startTime < booking.endTime && b.endTime > booking.startTime)
   );
+
   const sortedWaitlist = conflictingWaitlistedBookings
-    .filter(b => b.createdAt)
-    .sort((a, b) => new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime());
+    .filter(b => b.createdAt) // Double check for safety
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
   const positionIndex = sortedWaitlist.findIndex(b => b.id === booking.id);
   return positionIndex !== -1 ? positionIndex + 1 : null;
 }
 
-// processQueueForResource will need significant refactoring to work with Firestore.
-// This function currently directly modifies initialBookings.
-// For this step, we will comment it out. We'll address queue processing with Firestore later.
+
+// processQueueForResource needs a significant refactor for Firestore.
+// It involves querying, updating multiple documents, and potentially transactions.
+// Commenting out for now as it directly manipulates mock arrays.
 /*
-export function processQueueForResource(resourceId: string): void {
-  const resource = allAdminMockResources.find(r => r.id === resourceId);
-  if (!resource || !resource.allowQueueing) {
-    return;
-  }
+export async function processQueueForResource(resourceId: string): Promise<void> {
+  // 1. Fetch the resource to check allowQueueing (from Firestore)
+  // 2. Query waitlisted bookings for this resource, ordered by createdAt (from Firestore)
+  // 3. If waitlisted bookings exist:
+  //    a. Take the first one (bookingToPromote).
+  //    b. Check if the slot for bookingToPromote is *actually* free now
+  //       (Query confirmed/pending bookings for conflict with bookingToPromote's times).
+  //    c. If free, update bookingToPromote's status to 'Pending' (in Firestore).
+  //    d. Call addNotification for user and admin (save to Firestore 'notifications').
+  //    e. Call addAuditLog (save to Firestore 'auditLogs').
 
-  const waitlistedBookingsForResource = initialBookings
-    .filter(b => b.resourceId === resourceId && b.status === 'Waitlisted' && b.createdAt)
-    .sort((a, b) => new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime());
+  console.warn("processQueueForResource needs to be refactored for Firestore.");
 
-  if (waitlistedBookingsForResource.length > 0) {
-    const bookingToPromote = waitlistedBookingsForResource[0];
-    const bookingIndexInGlobal = initialBookings.findIndex(b => b.id === bookingToPromote.id);
-
-    if (bookingIndexInGlobal !== -1) {
-      const promoteStartTime = new Date(bookingToPromote.startTime);
-      const promoteEndTime = new Date(bookingToPromote.endTime);
-
-      const conflictingActiveBooking = initialBookings.find(existingBooking => {
-        if (existingBooking.id === bookingToPromote.id) return false;
-        if (existingBooking.resourceId !== resourceId) return false;
-        if (existingBooking.status === 'Cancelled' || existingBooking.status === 'Waitlisted') return false;
-        
-        const existingStartTime = new Date(existingBooking.startTime);
-        const existingEndTime = new Date(existingBooking.endTime);
-        return (promoteStartTime < existingEndTime && promoteEndTime > existingStartTime);
-      });
-
-      if (conflictingActiveBooking) {
-        console.log(`QUEUE_PROCESS: Cannot promote booking ${bookingToPromote.id}. Slot still blocked by active booking ${conflictingActiveBooking.id}.`);
-        return; 
-      }
-
-      initialBookings[bookingIndexInGlobal].status = 'Pending';
-      
-      addAuditLog(
-        'SYSTEM_QUEUE', // Or a specific system user ID
-        'System',
-        'BOOKING_PROMOTED',
-        { entityType: 'Booking', entityId: bookingToPromote.id, details: `Booking for '${bookingToPromote.resourceName}' by ${bookingToPromote.userName} promoted from waitlist to Pending.` }
-      );
-      addNotification(
-        bookingToPromote.userId,
-        'Promoted from Waitlist!',
-        `Your waitlisted booking for ${bookingToPromote.resourceName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} has been promoted and is now pending approval. Please check your bookings.`,
-        'booking_promoted_user',
-        `/bookings?bookingId=${bookingToPromote.id}`
-      );
-
-      const adminUser = initialMockUsers.find(u => u.role === 'Admin' || u.role === 'Lab Manager');
-      if(adminUser){
-        addNotification(
-            adminUser.id,
-            'Booking Promoted from Waitlist',
-            `Waitlisted booking for ${bookingToPromote.resourceName} by ${bookingToPromote.userName} on ${format(promoteStartTime, 'MMM dd, HH:mm')} has been promoted to Pending and requires your approval.`,
-            'booking_promoted_admin',
-            '/admin/booking-requests'
-        );
-      }
-    }
-  }
+  // Original mock logic (commented out):
+  // const resource = allAdminMockResources.find(r => r.id === resourceId);
+  // if (!resource || !resource.allowQueueing) {
+  //   return;
+  // }
+  // ... (rest of the original logic that manipulates initialBookings) ...
 }
 */
 
-// The following variables related to specific mock user IDs are no longer needed
-// as users come from Firebase.
-// export const mockAdminUserId = 'u1';
-// export const mockManagerUserId = 'u2';
-// export const mockTechnicianUserId = 'u3';
-// export const mockResearcherUserId = 'u4';
-// export const mockCurrentUser: User = initialMockUsers[3]; // Default to Researcher
-
-// Note: `mockLoginUser`, `mockSignupUser`, `mockApproveSignup`, `mockRejectSignup`
-// were removed because AuthContext now handles Firebase Auth directly.
-// Their logic for adding to pendingSignups or initialMockUsers is now part of AuthContext or
-// will be handled by Firestore operations.
+// The functions mockLoginUser, mockSignupUser, mockApproveSignup, mockRejectSignup
+// were removed as AuthContext now handles Firebase Auth directly, and user profile
+// CUD operations are managed by the Users admin page against Firestore.
