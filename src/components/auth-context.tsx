@@ -14,7 +14,7 @@ import {
 } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { addNotification } from '@/lib/mock-data'; // Keep for now, might be replaced by Firestore notifications
+import { addNotification } from '@/lib/mock-data';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -35,84 +35,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       setIsLoading(true);
       if (firebaseUser) {
-        // User is signed in, now fetch their profile from Firestore
         const userDocRef = doc(db, "users", firebaseUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
+        try {
+          const userDocSnap = await getDoc(userDocRef);
 
-        if (userDocSnap.exists()) {
-          const userProfileData = userDocSnap.data() as Omit<User, 'id' | 'email' | 'name'>; // Firestore part
-          if (userProfileData.status === 'active') {
-            setCurrentUser({
-              id: firebaseUser.uid,
-              name: firebaseUser.displayName || userProfileData.name || '', // Prioritize Firebase Auth displayName
-              email: firebaseUser.email || '',
-              role: userProfileData.role,
-              status: userProfileData.status,
-              avatarUrl: firebaseUser.photoURL || userProfileData.avatarUrl,
-              createdAt: userProfileData.createdAt,
-            });
-          } else if (userProfileData.status === 'pending_approval') {
-             console.log("User account is pending approval.");
-             await firebaseSignOut(auth); // Log them out if pending
-             setCurrentUser(null);
+          if (userDocSnap.exists()) {
+            const userProfileData = userDocSnap.data() as Omit<User, 'id' | 'email' | 'name'>;
+            
+            if (userProfileData.status === 'active') {
+              setCurrentUser({
+                id: firebaseUser.uid,
+                name: firebaseUser.displayName || userProfileData.name || '',
+                email: firebaseUser.email || '',
+                role: userProfileData.role,
+                status: userProfileData.status,
+                avatarUrl: firebaseUser.photoURL || userProfileData.avatarUrl,
+                createdAt: userProfileData.createdAt, // Ensure this is handled if it's a Firestore Timestamp
+              });
+            } else {
+              // User exists in Firestore but is not 'active' (e.g., pending, suspended)
+              console.log(`User ${firebaseUser.uid} status is ${userProfileData.status}. Logging out.`);
+              await firebaseSignOut(auth); // Ensure Firebase session is cleared
+              setCurrentUser(null);
+              // Optionally, save a flag to localStorage to show a specific message on login page
+              if (typeof window !== 'undefined') {
+                if (userProfileData.status === 'pending_approval') {
+                    localStorage.setItem('login_message', 'Account pending approval.');
+                } else if (userProfileData.status === 'suspended') {
+                    localStorage.setItem('login_message', 'Account suspended.');
+                }
+              }
+            }
           } else {
-            // User status is suspended or other, log them out.
-            console.log(`User account status: ${userProfileData.status}. Logging out.`);
-            await firebaseSignOut(auth);
+            // User authenticated with Firebase, but no profile in Firestore. This is an inconsistent state.
+            console.warn(`User ${firebaseUser.uid} authenticated with Firebase, but no profile found in Firestore. Logging out.`);
+            await firebaseSignOut(auth); // Clear Firebase session
             setCurrentUser(null);
           }
-        } else {
-          // User document doesn't exist in Firestore, which is unexpected for a logged-in user.
-          // This could happen if a user was created in Firebase Auth but their Firestore doc creation failed or was deleted.
-          // Or, if it's a new signup still in the process of being fully set up.
-          console.warn("User authenticated with Firebase, but no profile found in Firestore. Logging out.");
-          await firebaseSignOut(auth);
+        } catch (error) {
+          console.error("Error fetching user profile from Firestore:", error);
+          await firebaseSignOut(auth); // Clear Firebase session on error
           setCurrentUser(null);
         }
       } else {
-        // User is signed out
+        // No Firebase user
         setCurrentUser(null);
       }
       setIsLoading(false);
     });
 
-    // Cleanup subscription on unmount
     return () => unsubscribe();
   }, []);
 
   const login = async (email: string, password?: string): Promise<{ success: boolean; message?: string }> => {
     if (!password) return { success: false, message: "Password is required." };
     setIsLoading(true);
+    // Clear any previous login messages
+    if (typeof window !== 'undefined') {
+        localStorage.removeItem('login_message');
+    }
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged will handle setting currentUser after fetching Firestore profile
-      // We can check status immediately here too if needed for quicker feedback
-      const userDocRef = doc(db, "users", userCredential.user.uid);
-      const userDocSnap = await getDoc(userDocRef);
-      if (userDocSnap.exists()) {
-        const userData = userDocSnap.data();
-        if (userData.status === 'pending_approval') {
-          await firebaseSignOut(auth); // Log out if pending
-          setIsLoading(false);
-          return { success: false, message: "Account pending approval. Please wait for an admin." };
-        }
-        if (userData.status === 'suspended') {
-          await firebaseSignOut(auth); // Log out if suspended
-          setIsLoading(false);
-          return { success: false, message: "Your account has been suspended." };
-        }
-      } else {
-          // Should not happen if signup creates the doc
-          await firebaseSignOut(auth);
-          setIsLoading(false);
-          return { success: false, message: "User profile not found." };
-      }
-      setIsLoading(false);
+      // Step 1: Authenticate with Firebase
+      await signInWithEmailAndPassword(auth, email, password);
+      // If successful, onAuthStateChanged will trigger.
+      // It will then fetch Firestore data and check status.
+      // The success of this function now means Firebase Auth was successful.
+      // The actual "app login" (setting currentUser) happens in onAuthStateChanged.
+      // If onAuthStateChanged decides the user isn't 'active', it will sign them out from Firebase too.
+      setIsLoading(false); // Potentially set by onAuthStateChanged too
       return { success: true };
     } catch (error: any) {
       setIsLoading(false);
       console.error("Firebase login error:", error);
-      return { success: false, message: error.message || 'Login failed.' };
+      let message = "Login failed. Please check your credentials.";
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        message = "Invalid email or password.";
+      } else if (error.code === 'auth/too-many-requests') {
+        message = "Access to this account has been temporarily disabled due to many failed login attempts. You can immediately restore it by resetting your password or you can try again later.";
+      }
+      return { success: false, message };
     }
   };
 
@@ -120,11 +121,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       await firebaseSignOut(auth);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('currentUser'); // Keep this for non-Firebase session persistence if needed elsewhere or as fallback
+        localStorage.removeItem('login_message');
+      }
       // onAuthStateChanged will set currentUser to null
     } catch (error) {
       console.error("Firebase logout error:", error);
+      // Still ensure isLoading is set to false if logout errors out
+      setIsLoading(false);
     }
-    // setIsLoading(false) will be handled by onAuthStateChanged
+    // setIsLoading(false) will be handled by onAuthStateChanged successfully setting currentUser to null
   };
 
   const signup = async (name: string, email: string, password?: string): Promise<{ success: boolean; message: string; userId?: string }> => {
@@ -134,27 +141,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
       
-      // Update Firebase Auth profile (displayName)
       await firebaseUpdateProfile(firebaseUser, { displayName: name });
 
-      // Create user document in Firestore
       const userDocRef = doc(db, "users", firebaseUser.uid);
       const newUserProfile: Omit<User, 'id'> = {
         name: name,
-        email: firebaseUser.email || email, // Use email from auth if available
-        role: 'Researcher', // Default role
+        email: firebaseUser.email || email,
+        role: 'Researcher',
         status: 'pending_approval',
-        avatarUrl: firebaseUser.photoURL || 'https://placehold.co/100x100.png', // Default avatar
-        createdAt: new Date().toISOString(),
+        avatarUrl: firebaseUser.photoURL || 'https://placehold.co/100x100.png',
+        createdAt: new Date().toISOString(), // Use ISO string for consistency
       };
       await setDoc(userDocRef, newUserProfile);
       
-      // Log out the user immediately after signup, as they need admin approval
-      await firebaseSignOut(auth);
-
-      // Add notification for admin (mock for now)
-      // In a real app, this might be a Cloud Function triggered on user creation
-      const adminUser = { id: 'u1' }; // Placeholder for finding an admin
+      // Notify admin (Example: target admin user with ID 'u1' for mock)
+      const adminUser = { id: 'u1', name: 'Admin User' }; // This should be fetched or predefined
       if (adminUser) {
           addNotification(
               adminUser.id, 
@@ -164,22 +165,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               '/admin/users' 
           );
       }
+      
+      // Important: Sign out user after signup so they can't access app until approved
+      await firebaseSignOut(auth); 
       setIsLoading(false);
       return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: firebaseUser.uid };
     } catch (error: any) {
       setIsLoading(false);
       console.error("Firebase signup error:", error);
-      return { success: false, message: error.message || 'Signup failed.' };
+      let message = "Signup failed. Please try again.";
+      if (error.code === 'auth/email-already-in-use') {
+        message = "This email address is already in use by another account.";
+      } else if (error.code === 'auth/weak-password') {
+        message = "Password is too weak. It should be at least 6 characters.";
+      }
+      return { success: false, message };
     }
   };
 
   const updateUserProfile = useCallback(async (updatedFields: Partial<Pick<User, 'name' | 'avatarUrl'>>): Promise<{ success: boolean; message?: string }> => {
-    if (!auth.currentUser) { // Check Firebase auth.currentUser
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) {
       return { success: false, message: "No user logged in." };
     }
+    
     setIsLoading(true);
     try {
-      const firebaseUser = auth.currentUser;
       const updatesForAuth: { displayName?: string; photoURL?: string } = {};
       if (updatedFields.name) {
         updatesForAuth.displayName = updatedFields.name;
@@ -192,7 +203,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await firebaseUpdateProfile(firebaseUser, updatesForAuth);
       }
 
-      // Update Firestore document
       const userDocRef = doc(db, "users", firebaseUser.uid);
       const updatesForFirestore: Partial<User> = {};
       if (updatedFields.name) updatesForFirestore.name = updatedFields.name;
@@ -202,14 +212,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await updateDoc(userDocRef, updatesForFirestore);
       }
       
-      // Refetch and update local currentUser state
-      // This will trigger onAuthStateChanged if displayName or photoURL changed,
-      // but for other fields like 'role' (if we allow editing it), we might need manual update.
-      // For now, onAuthStateChanged should pick up displayName change.
-      // If you also update role/status from profile, you'd need to:
-      // const updatedDoc = await getDoc(userDocRef);
-      // setCurrentUser({ ...currentUser, ...updatedDoc.data(), ...updatesForAuth });
-      // For just name and avatarUrl, onAuthStateChanged listener should handle it.
+      // Update local currentUser state to reflect changes immediately
+      setCurrentUser(prevUser => {
+        if (!prevUser) return null;
+        return {
+          ...prevUser,
+          ...updatesForAuth, // these come from Firebase Auth profile
+          ...(updatesForFirestore.name && { name: updatesForFirestore.name }), // ensure name is updated if changed
+          ...(updatesForFirestore.avatarUrl && { avatarUrl: updatesForFirestore.avatarUrl }),
+        };
+      });
+      
+      // Update localStorage
+      if (typeof window !== 'undefined' && currentUser) {
+        const updatedUserForStorage = {
+          ...currentUser,
+          ...(updatesForAuth.displayName && {name: updatesForAuth.displayName}),
+          ...(updatesForAuth.photoURL && {avatarUrl: updatesForAuth.photoURL}),
+          ...(updatesForFirestore.name && { name: updatesForFirestore.name }),
+          ...(updatesForFirestore.avatarUrl && { avatarUrl: updatesForFirestore.avatarUrl }),
+        };
+         localStorage.setItem('currentUser', JSON.stringify(updatedUserForStorage));
+      }
 
       setIsLoading(false);
       return { success: true, message: "Profile updated successfully." };
@@ -218,8 +242,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Firebase profile update error:", error);
       return { success: false, message: error.message || "Failed to update profile." };
     }
-  }, []);
-
+  }, [currentUser]); // Added currentUser to dependency array
 
   return (
     <AuthContext.Provider value={{ currentUser, isLoading, login, logout, signup, updateUserProfile }}>
