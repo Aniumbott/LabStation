@@ -32,32 +32,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Try to load user from localStorage on initial mount
-    // This simulates session persistence for the mock environment
-    // Firebase Auth handles its own session persistence via onAuthStateChanged
     const storedUserString = typeof window !== 'undefined' ? localStorage.getItem('labstation_user') : null;
     if (storedUserString) {
       try {
         const storedUser = JSON.parse(storedUserString) as User;
-        // Basic validation: ensure essential fields exist.
         if (storedUser && storedUser.id && storedUser.email && storedUser.role) {
-            // Convert ISO string back to Date object for createdAt
-            if (storedUser.createdAt && typeof storedUser.createdAt === 'string') {
-                 storedUser.createdAt = new Date(storedUser.createdAt);
-            }
+          if (storedUser.createdAt && typeof storedUser.createdAt === 'string') {
+            storedUser.createdAt = new Date(storedUser.createdAt);
+          }
           setCurrentUser(storedUser);
         } else {
-          localStorage.removeItem('labstation_user');
+          if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
         }
       } catch (error) {
         console.error("Error parsing stored user from localStorage:", error);
-        localStorage.removeItem('labstation_user');
+        if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
       }
     }
-    // Firebase's onAuthStateChanged will override this if an active Firebase session exists
-    // and then fetch the profile from Firestore.
+    // Firebase onAuthStateChanged will eventually take precedence if an active session exists.
+    // The setIsLoading(false) is handled by onAuthStateChanged.
   }, []);
-
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
@@ -94,26 +88,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 message = 'Your account has been suspended.';
               }
               if (typeof window !== 'undefined') localStorage.setItem('login_message', message);
-              await firebaseSignOut(auth); // Ensure Firebase session is cleared if Firestore profile isn't active
+              await firebaseSignOut(auth);
               setCurrentUser(null);
               if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
             }
           } else {
-            // Firestore profile doesn't exist for this Firebase Auth user
-            if (typeof window !== 'undefined') localStorage.setItem('login_message', 'User profile not found in database. Please contact support or sign up again.');
-            await firebaseSignOut(auth); // Sign out from Firebase Auth as well
+            if (typeof window !== 'undefined') localStorage.setItem('login_message', 'User profile not found. Please contact support.');
+            await firebaseSignOut(auth);
             setCurrentUser(null);
             if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
           }
         } catch (error) {
           console.error("Error fetching Firestore user profile:", error);
           if (typeof window !== 'undefined') localStorage.setItem('login_message', 'Error retrieving your profile.');
-          await firebaseSignOut(auth); // Sign out from Firebase Auth on error
+          await firebaseSignOut(auth);
           setCurrentUser(null);
           if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
         }
       } else {
-        // No Firebase Auth user
         setCurrentUser(null);
         if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
       }
@@ -122,31 +114,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-
   const login = useCallback(async (email: string, password?: string): Promise<{ success: boolean; message?: string }> => {
     if (!password) return { success: false, message: "Password is required." };
     setIsLoading(true);
     if (typeof window !== 'undefined') localStorage.removeItem('login_message');
     
-    console.log("AuthContext: Attempting login for email:", email); // Added for debugging
+    console.log("AuthContext: Attempting login for email:", email);
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged will handle setting currentUser and isLoading to false if successful and profile is valid
+      // onAuthStateChanged will handle success and setting isLoading to false
       return { success: true };
     } catch (error: any) {
-      console.error("Firebase login error:", error.code, error.message); // Log more details
-      let message = "Login failed. Please check your credentials.";
+      console.error("Firebase login error object:", error); // Log the full error object
+      let detailedMessage = "Login failed. Please check your credentials.";
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-email') {
-        message = "Invalid email or password.";
+        detailedMessage = "Invalid email or password.";
       } else if (error.code === 'auth/too-many-requests') {
-        message = "Access to this account has been temporarily disabled due to many failed login attempts. You can reset your password or try again later.";
+        detailedMessage = "Access to this account has been temporarily disabled due to many failed login attempts. You can reset your password or try again later.";
       } else if (error.code === 'auth/user-disabled') {
-         message = "This user account has been disabled in Firebase Authentication.";
+         detailedMessage = "This user account has been disabled in Firebase Authentication.";
       }
-      if (typeof window !== 'undefined') localStorage.setItem('login_message', message);
-      setIsLoading(false); // Set loading false here on explicit error
-      return { success: false, message };
+      // Store message for LoginPage to pick up if needed, but also return it directly.
+      if (typeof window !== 'undefined') localStorage.setItem('login_message', detailedMessage);
+      setIsLoading(false);
+      return { success: false, message: detailedMessage };
     }
   }, []);
 
@@ -154,15 +146,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       await firebaseSignOut(auth);
-      // onAuthStateChanged will set currentUser to null and isLoading to false.
       if (typeof window !== 'undefined') {
         localStorage.removeItem('labstation_user');
         localStorage.removeItem('login_message');
       }
+      // onAuthStateChanged will set currentUser to null and isLoading to false.
     } catch (error) {
       console.error("Firebase logout error:", error);
-      // Force state clearance on error too
-      setCurrentUser(null);
+      setCurrentUser(null); // Force clear on error
       if (typeof window !== 'undefined') {
         localStorage.removeItem('labstation_user');
         localStorage.removeItem('login_message');
@@ -178,14 +169,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
 
-      // It's good practice to update the Firebase Auth profile if possible
       await firebaseUpdateProfile(firebaseUser, { displayName: name, photoURL: 'https://placehold.co/100x100.png' });
 
-      // Create user profile in Firestore
       const userDocRef = doc(db, "users", firebaseUser.uid);
       const newUserProfileData = {
         name: name,
-        email: firebaseUser.email || email, // Prefer email from firebaseUser
+        email: firebaseUser.email || email,
         role: 'Researcher' as RoleName,
         status: 'pending_approval' as User['status'],
         avatarUrl: firebaseUser.photoURL || 'https://placehold.co/100x100.png',
@@ -193,17 +182,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
       await setDoc(userDocRef, newUserProfileData);
 
-      // For mock purposes, we add notifications. In a real app, this might be a Cloud Function.
-      addNotification(
-        "u1", // Target a known admin ID for the notification
-        'New Signup Request',
-        `User ${name} (${email}) has signed up and is awaiting approval.`,
-        'signup_pending_admin',
-        '/admin/users' // Link to the users page where requests are managed
-      );
+      const adminUsersSnapshot = await getDocs(query(collection(db, "users"), where("role", "==", "Admin")));
+      adminUsersSnapshot.forEach(adminDoc => {
+        addNotification(
+          adminDoc.id,
+          'New Signup Request',
+          `User ${name} (${email}) has signed up and is awaiting approval.`,
+          'signup_pending_admin',
+          '/admin/users'
+        );
+      });
+      
       addAuditLog(firebaseUser.uid, name, 'USER_CREATED', { entityType: 'User', entityId: firebaseUser.uid, details: `User ${name} (${email}) signed up. Status: pending_approval.`});
       
-      await firebaseSignOut(auth); // Sign out the user after signup, they need approval to log in.
+      await firebaseSignOut(auth);
       setIsLoading(false);
       return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: firebaseUser.uid };
     } catch (error: any) {
@@ -223,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateUserProfile = useCallback(async (updatedFields: Partial<Pick<User, 'name' | 'avatarUrl'>>): Promise<{ success: boolean; message?: string }> => {
     const firebaseUser = auth.currentUser;
-    if (!firebaseUser || !currentUser) { // Check both Firebase user and context user
+    if (!firebaseUser || !currentUser) {
       return { success: false, message: "No user logged in or user data unavailable." };
     }
     
@@ -237,23 +229,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updatesForAuth.photoURL = updatedFields.avatarUrl;
       }
       
-      // Update Firebase Auth profile (optional, but good for consistency)
       if (Object.keys(updatesForAuth).length > 0) {
         await firebaseUpdateProfile(firebaseUser, updatesForAuth);
       }
 
-      // Prepare updates for Firestore document
       const userDocRef = doc(db, "users", firebaseUser.uid);
       const firestoreUpdates: Partial<Pick<User, 'name' | 'avatarUrl'>> = {};
       if(updatedFields.name) firestoreUpdates.name = updatedFields.name;
-      // if(updatedFields.avatarUrl) firestoreUpdates.avatarUrl = updatedFields.avatarUrl; // Avatar URL update can be added here if UI supports it
+      if(updatedFields.avatarUrl) firestoreUpdates.avatarUrl = updatedFields.avatarUrl;
 
       if (Object.keys(firestoreUpdates).length > 0) {
         await updateDoc(userDocRef, firestoreUpdates);
         addAuditLog(currentUser.id, currentUser.name || 'User', 'USER_UPDATED', { entityType: 'User', entityId: currentUser.id, details: `Profile updated: ${Object.keys(firestoreUpdates).join(', ')} changed.`});
       }
       
-      // Refresh currentUser from Firestore to ensure context has the latest
       const updatedUserDocSnap = await getDoc(userDocRef);
       if (updatedUserDocSnap.exists()) {
         const updatedProfileData = updatedUserDocSnap.data();
@@ -279,7 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Firebase profile update error:", error);
       return { success: false, message: error.message || "Failed to update profile." };
     }
-  }, [currentUser]); // Added currentUser to dependency array
+  }, [currentUser]);
 
   return (
     <AuthContext.Provider value={{ currentUser, isLoading, login, logout, signup, updateUserProfile }}>
@@ -295,4 +284,3 @@ export function useAuth() {
   }
   return context;
 }
-
