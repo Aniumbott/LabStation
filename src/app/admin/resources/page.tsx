@@ -7,7 +7,6 @@ import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
 import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import type { Resource, ResourceStatus } from '@/types';
-// Removed allAdminMockResources from this import as it's defined locally or will be fetched from Firestore
 import { initialMockResourceTypes, labsList } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
@@ -38,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, startOfDay, isValid, parseISO, isSameDay, isWithinInterval } from 'date-fns';
+import { format, startOfDay, isValid, parseISO, isSameDay, isWithinInterval, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 // This array will be replaced by Firestore fetching in a future step.
@@ -156,7 +155,7 @@ export const allAdminMockResources: Resource[] = [
    {
     id: 'res6',
     name: 'FPGA Dev Node Alpha',
-    resourceTypeId: 'rt9', // Assuming rt9 is 'FPGA Development Board' or similar
+    resourceTypeId: 'rt9',
     resourceTypeName: 'FPGA Development Board',
     lab: 'Prototyping Lab',
     status: 'Available',
@@ -218,6 +217,7 @@ export default function AdminResourcesPage() {
 
 
   useEffect(() => {
+    // Sync dialog filters with active filters when dialog opens
     if (isFilterDialogOpen) {
       setTempSearchTerm(activeSearchTerm);
       setTempFilterTypeId(activeFilterTypeId);
@@ -228,8 +228,9 @@ export default function AdminResourcesPage() {
   }, [isFilterDialogOpen, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
 
   const filteredResources = useMemo(() => {
-    let currentResources = [...resources];
+    let currentResources = [...resources]; // Use the stateful 'resources'
     const lowerSearchTerm = activeSearchTerm.toLowerCase();
+
     if (activeSearchTerm) {
       currentResources = currentResources.filter(resource =>
         resource.name.toLowerCase().includes(lowerSearchTerm) ||
@@ -244,7 +245,7 @@ export default function AdminResourcesPage() {
     if (activeFilterLab !== 'all') {
       currentResources = currentResources.filter(resource => resource.lab === activeFilterLab);
     }
-    if (activeSelectedDate) {
+     if (activeSelectedDate) {
       const dateToFilterStr = format(startOfDay(activeSelectedDate), 'yyyy-MM-dd');
       currentResources = currentResources.filter(resource => {
         if (resource.status !== 'Available') return false;
@@ -286,8 +287,8 @@ export default function AdminResourcesPage() {
     setActiveFilterTypeId('all');
     setActiveFilterLab('all');
     setActiveSelectedDate(undefined);
-    resetDialogFilters();
-    setIsFilterDialogOpen(false);
+    resetDialogFilters(); // Also reset dialog's temp state
+    setIsFilterDialogOpen(false); // Close dialog if open
   };
 
 
@@ -296,6 +297,12 @@ export default function AdminResourcesPage() {
     setIsFormDialogOpen(true);
   };
 
+  // Note: Edit functionality happens on the Resource Detail page
+  // const handleOpenEditDialog = (resource: Resource) => {
+  //   setEditingResource(resource);
+  //   setIsFormDialogOpen(true);
+  // };
+
   const handleSaveResource = (data: ResourceFormValues) => {
     const resourceType = initialMockResourceTypes.find(rt => rt.id === data.resourceTypeId);
     if (!resourceType) {
@@ -303,43 +310,47 @@ export default function AdminResourcesPage() {
         return;
     }
 
-    if (editingResource) {
+    if (editingResource) { // This logic path might be deprecated if all edits are on detail page
       const updatedResource: Resource = {
         ...editingResource,
         ...data,
         imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
-        resourceTypeName: resourceType.name,
+        // resourceTypeName: resourceType.name, // This is removed from Resource type
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
         purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : editingResource.purchaseDate,
-        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '') ? {
+        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '' && v !== null) ? {
           ...data.remoteAccess,
-          port: data.remoteAccess.port, // Ensure port is handled as number or undefined
+           ipAddress: data.remoteAccess.ipAddress || undefined,
+           hostname: data.remoteAccess.hostname || undefined,
+           protocol: data.remoteAccess.protocol || undefined,
+           username: data.remoteAccess.username || undefined,
+           port: data.remoteAccess.port,
+           notes: data.remoteAccess.notes || undefined,
         } : undefined,
-        // Keep existing availability and unavailability unless specifically managed elsewhere
         availability: editingResource.availability || [], 
         unavailabilityPeriods: editingResource.unavailabilityPeriods || [],
       };
       
       const updatedResources = resources.map(r => r.id === editingResource.id ? updatedResource : r);
-      setResources(updatedResources);
+      setResources(updatedResources); // Update local state
       
       const globalIndex = allAdminMockResources.findIndex(r => r.id === editingResource.id);
-      if (globalIndex !== -1) allAdminMockResources[globalIndex] = updatedResource;
+      if (globalIndex !== -1) allAdminMockResources[globalIndex] = updatedResource; // Update shared mock
 
       toast({
         title: 'Resource Updated',
         description: `Resource "${data.name}" has been updated.`,
       });
-    } else {
+    } else { // Adding a new resource
       const newResource: Resource = {
         id: `res${allAdminMockResources.length + 1 + Date.now()}`,
         name: data.name,
         resourceTypeId: data.resourceTypeId,
-        resourceTypeName: resourceType.name,
+        // resourceTypeName: resourceType.name, // This is removed from Resource type
         lab: data.lab,
         status: data.status,
         description: data.description || '',
-        imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+        imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
         manufacturer: data.manufacturer || undefined,
         model: data.model || undefined,
         serialNumber: data.serialNumber || undefined,
@@ -348,15 +359,20 @@ export default function AdminResourcesPage() {
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
         availability: [], 
         unavailabilityPeriods: [],
-        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '') ? {
+        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '' && v !== null) ? {
            ...data.remoteAccess,
-           port: data.remoteAccess.port, // Ensure port is handled as number or undefined
+           ipAddress: data.remoteAccess.ipAddress || undefined,
+           hostname: data.remoteAccess.hostname || undefined,
+           protocol: data.remoteAccess.protocol || undefined,
+           username: data.remoteAccess.username || undefined,
+           port: data.remoteAccess.port,
+           notes: data.remoteAccess.notes || undefined,
         } : undefined,
-        allowQueueing: data.status === 'Available', // Example: default to true if available
+        allowQueueing: data.status === 'Available',
       };
       const updatedResources = [...resources, newResource].sort((a,b) => a.name.localeCompare(b.name));
-      setResources(updatedResources);
-      allAdminMockResources.push(newResource); 
+      setResources(updatedResources); // Update local state
+      allAdminMockResources.push(newResource); // Update shared mock
       allAdminMockResources.sort((a,b) => a.name.localeCompare(b.name));
       toast({
         title: 'Resource Created',
@@ -367,14 +383,20 @@ export default function AdminResourcesPage() {
     setEditingResource(null);
   };
 
-  const activeFilterCount = [activeSearchTerm !== '', activeFilterTypeId !== 'all', activeFilterLab !== 'all', activeSelectedDate !== undefined].filter(Boolean).length;
+  const activeFilterCount = [
+    activeSearchTerm !== '',
+    activeFilterTypeId !== 'all',
+    activeFilterLab !== 'all',
+    activeSelectedDate !== undefined
+  ].filter(Boolean).length;
+  
   const canAddResources = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Resources"
-        description="Browse, filter, and manage all lab resources. Click resource name for details & edit actions."
+        description="Browse, filter, and manage all lab resources. Click resource name for details & admin actions."
         icon={ClipboardList}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
@@ -500,7 +522,12 @@ export default function AdminResourcesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredResources.map((resource) => (
+              {filteredResources.map((resource) => {
+                // Find resource type name from initialMockResourceTypes
+                const resourceType = initialMockResourceTypes.find(rt => rt.id === resource.resourceTypeId);
+                const resourceTypeName = resourceType ? resourceType.name : 'N/A';
+
+                return (
                 <TableRow key={resource.id}>
                   <TableCell>
                     <Link href={`/resources/${resource.id}`}>
@@ -517,7 +544,7 @@ export default function AdminResourcesPage() {
                         {resource.name}
                      </Link>
                   </TableCell>
-                  <TableCell>{resource.resourceTypeName}</TableCell>
+                  <TableCell>{resourceTypeName}</TableCell>
                   <TableCell>{resource.lab}</TableCell>
                   <TableCell>{getStatusBadge(resource.status)}</TableCell>
                   <TableCell className="text-right">
@@ -535,7 +562,7 @@ export default function AdminResourcesPage() {
                     </Button>
                   </TableCell>
                 </TableRow>
-              ))}
+              )})}
             </TableBody>
           </Table>
         </div>
