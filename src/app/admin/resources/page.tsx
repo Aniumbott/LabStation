@@ -5,9 +5,10 @@ import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon } from 'lucide-react';
+import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import type { Resource, ResourceStatus } from '@/types';
-import { allAdminMockResources, initialMockResourceTypes, labsList } from '@/lib/mock-data';
+// Removed allAdminMockResources from this import as it's defined locally or will be fetched from Firestore
+import { initialMockResourceTypes, labsList } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -30,7 +31,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -39,6 +40,147 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, startOfDay, isValid, parseISO, isSameDay, isWithinInterval } from 'date-fns';
 import { cn } from '@/lib/utils';
+
+// This array will be replaced by Firestore fetching in a future step.
+// For now, it defines the mock resources managed by this admin page.
+export const allAdminMockResources: Resource[] = [
+  {
+    id: 'res1',
+    name: 'Keysight MSOX3054T Oscilloscope',
+    resourceTypeId: 'rt1',
+    resourceTypeName: 'Oscilloscope',
+    lab: 'Electronics Lab 1',
+    status: 'Available',
+    description: 'Mixed Signal Oscilloscope with 500 MHz bandwidth, 4 analog channels, and 16 digital channels. Includes built-in waveform generator and serial protocol analysis capabilities. Ideal for debugging embedded systems and mixed-signal designs.',
+    imageUrl: 'https://placehold.co/600x400.png',
+    manufacturer: 'Keysight Technologies',
+    model: 'MSOX3054T',
+    serialNumber: 'MY58012345',
+    purchaseDate: '2022-08-15T00:00:00.000Z',
+    notes: 'Standard probe set included. Handle with care.',
+    features: ['500 MHz Bandwidth', '4 Analog Channels', '16 Digital Channels', 'Waveform Generator', 'Serial Protocol Analysis'],
+    availability: [
+      { date: format(startOfDay(new Date()), 'yyyy-MM-dd'), slots: ['09:00-12:00', '13:00-17:00'] },
+      { date: format(addDays(startOfDay(new Date()), 1), 'yyyy-MM-dd'), slots: ['09:00-17:00'] },
+      { date: format(addDays(startOfDay(new Date()), 2), 'yyyy-MM-dd'), slots: ['10:00-15:00'] },
+    ],
+    unavailabilityPeriods: [
+      { id: 'unavail1-1', startDate: format(addDays(startOfDay(new Date()), 10), 'yyyy-MM-dd'), endDate: format(addDays(startOfDay(new Date()), 15), 'yyyy-MM-dd'), reason: "Annual Calibration" }
+    ],
+    remoteAccess: {
+      hostname: "scope-01.lab.internal",
+      protocol: "VNC",
+      notes: "Requires Lab VPN access."
+    },
+    allowQueueing: true,
+  },
+  {
+    id: 'res2',
+    name: 'Rigol DP832 Programmable Power Supply',
+    resourceTypeId: 'rt2',
+    resourceTypeName: 'Power Supply',
+    lab: 'Electronics Lab 1',
+    status: 'Booked',
+    description: 'Triple output programmable DC power supply with high resolution and advanced features. CH1: 0-30V/0-3A, CH2: 0-30V/0-3A, CH3: 0-5V/0-3A.',
+    imageUrl: 'https://placehold.co/600x400.png',
+    manufacturer: 'Rigol Technologies',
+    model: 'DP832',
+    serialNumber: 'DP8A20123456',
+    purchaseDate: '2021-05-20T00:00:00.000Z',
+    notes: 'Ensure load is disconnected before changing voltage settings.',
+    features: ['Triple Output', 'Programmable', 'High Resolution Display', 'Over-Voltage/Current Protection'],
+    availability: [
+       { date: format(startOfDay(new Date()), 'yyyy-MM-dd'), slots: ['09:00-11:00'] }, // Booked later today
+       { date: format(addDays(startOfDay(new Date()), 1), 'yyyy-MM-dd'), slots: ['09:00-17:00'] },
+    ],
+    allowQueueing: true,
+  },
+  {
+    id: 'res3',
+    name: 'Siglent SDG2042X Function Generator',
+    resourceTypeId: 'rt3',
+    resourceTypeName: 'Function Generator',
+    lab: 'RF Lab',
+    status: 'Available',
+    description: 'Dual-channel arbitrary waveform generator with 40 MHz bandwidth and 1.2 GSa/s sampling rate. TrueArb & EasyPulse technology.',
+    imageUrl: 'https://placehold.co/600x400.png',
+    manufacturer: 'Siglent Technologies',
+    model: 'SDG2042X',
+    serialNumber: 'SDG2XBADCAFE',
+    purchaseDate: '2023-01-10T00:00:00.000Z',
+    notes: 'BNC cables available separately.',
+    features: ['40 MHz Max Output Frequency', 'Dual Channel', '1.2 GSa/s Sample Rate', '16-bit Vertical Resolution'],
+    unavailabilityPeriods: [
+      { id: 'unavail3-1', startDate: format(addDays(startOfDay(new Date()), 5), 'yyyy-MM-dd'), endDate: format(addDays(startOfDay(new Date()), 7), 'yyyy-MM-dd'), reason: "Output Amplifier Repair" }
+    ],
+    allowQueueing: false,
+  },
+  {
+    id: 'res4',
+    name: 'Weller WE1010NA Digital Soldering Station',
+    resourceTypeId: 'rt6',
+    resourceTypeName: 'Soldering Station',
+    lab: 'Prototyping Lab',
+    status: 'Maintenance',
+    description: '70W digital soldering station with temperature control. Ideal for professional soldering tasks and electronics assembly.',
+    imageUrl: 'https://placehold.co/600x400.png',
+    manufacturer: 'Weller',
+    model: 'WE1010NA',
+    serialNumber: 'WEA1B2C3D4',
+    purchaseDate: '2020-11-01T00:00:00.000Z',
+    notes: 'Remember to tin the tip after use. Various tip sizes available.',
+    features: ['70W Power', 'Digital Temperature Control', 'ESD Safe', 'Heat-resistant Silicon Cable'],
+    allowQueueing: false,
+  },
+  {
+    id: 'res5',
+    name: 'Rohde & Schwarz FPC1500 Spectrum Analyzer',
+    resourceTypeId: 'rt4',
+    resourceTypeName: 'Spectrum Analyzer',
+    lab: 'RF Lab',
+    status: 'Available',
+    description: 'Spectrum Analyzer, 5 kHz to 1 GHz, upgradeable to 3 GHz. Features tracking generator and vector network analysis capabilities.',
+    imageUrl: 'https://placehold.co/600x400.png',
+    manufacturer: 'Rohde & Schwarz',
+    model: 'FPC1500',
+    serialNumber: 'RSFPC1500-001',
+    purchaseDate: '2023-03-01T00:00:00.000Z',
+    notes: 'Handle RF connectors with care. Use torque wrench if specified.',
+    features: ['5 kHz to 1 GHz (Upgradeable)', 'Tracking Generator', 'Vector Network Analysis Option', '10.1-inch WXGA Display'],
+    availability: [
+      { date: format(startOfDay(new Date()), 'yyyy-MM-dd'), slots: ['14:00-17:00'] },
+      { date: format(addDays(startOfDay(new Date()), 3), 'yyyy-MM-dd'), slots: ['09:00-12:00', '13:00-16:00'] },
+    ],
+    allowQueueing: true,
+  },
+   {
+    id: 'res6',
+    name: 'FPGA Dev Node Alpha',
+    resourceTypeId: 'rt9', // Assuming rt9 is 'FPGA Development Board' or similar
+    resourceTypeName: 'FPGA Development Board',
+    lab: 'Prototyping Lab',
+    status: 'Available',
+    description: 'High-performance FPGA development node with Zynq UltraScale+ MPSoC. Suitable for hardware acceleration and embedded vision projects.',
+    imageUrl: 'https://placehold.co/600x400.png',
+    manufacturer: 'Xilinx',
+    model: 'ZCU102 Evaluation Kit',
+    serialNumber: 'XADCZCU102-9876',
+    purchaseDate: '2023-06-01T00:00:00.000Z',
+    notes: 'Access via SSH. Ensure Vivado version compatibility.',
+    features: ['Zynq UltraScale+ MPSoC', 'DDR4 Memory', 'Multiple Peripherals', 'FMC Expansion'],
+    remoteAccess: {
+      hostname: "fpga-alpha.lab.internal",
+      protocol: "SSH",
+      username: "labuser",
+      notes: "Default password 'fpgaUserPass'. Please change on first use."
+    },
+    availability: [
+        { date: format(startOfDay(new Date()), 'yyyy-MM-dd'), slots: ['09:00-17:00'] },
+    ],
+    allowQueueing: true,
+  },
+];
+
 
 const getStatusBadge = (status: ResourceStatus) => {
   switch (status) {
@@ -53,9 +195,9 @@ const getStatusBadge = (status: ResourceStatus) => {
   }
 };
 
-export default function ResourcesPage() {
+export default function AdminResourcesPage() {
   const { toast } = useToast();
-  const { currentUser } = useAuth(); 
+  const { currentUser } = useAuth();
   const [resources, setResources] = useState<Resource[]>(() => JSON.parse(JSON.stringify(allAdminMockResources)));
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
@@ -81,7 +223,7 @@ export default function ResourcesPage() {
       setTempFilterTypeId(activeFilterTypeId);
       setTempFilterLab(activeFilterLab);
       setTempSelectedDate(activeSelectedDate);
-      if (activeSelectedDate) setCurrentMonthInDialog(startOfDay(activeSelectedDate)); else setCurrentMonthInDialog(startOfDay(new Date()));
+      setCurrentMonthInDialog(activeSelectedDate || startOfDay(new Date()));
     }
   }, [isFilterDialogOpen, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
 
@@ -103,19 +245,20 @@ export default function ResourcesPage() {
       currentResources = currentResources.filter(resource => resource.lab === activeFilterLab);
     }
     if (activeSelectedDate) {
-      const dateToFilter = startOfDay(activeSelectedDate);
+      const dateToFilterStr = format(startOfDay(activeSelectedDate), 'yyyy-MM-dd');
       currentResources = currentResources.filter(resource => {
         if (resource.status !== 'Available') return false;
 
+        // Check resource-specific unavailability periods
         const isUnavailableDueToPeriod = resource.unavailabilityPeriods?.some(period => {
             const periodStart = startOfDay(parseISO(period.startDate));
             const periodEnd = startOfDay(parseISO(period.endDate));
-            return isSameDay(dateToFilter, periodStart) || isSameDay(dateToFilter, periodEnd) || isWithinInterval(dateToFilter, { start: periodStart, end: periodEnd });
+            return isSameDay(startOfDay(activeSelectedDate), periodStart) || isSameDay(startOfDay(activeSelectedDate), periodEnd) || isWithinInterval(startOfDay(activeSelectedDate), { start: periodStart, end: periodEnd });
         });
         if (isUnavailableDueToPeriod) return false;
         
-        const dateStrToFilter = format(dateToFilter, 'yyyy-MM-dd');
-        const dayAvailability = resource.availability?.find(avail => avail.date === dateStrToFilter);
+        // Check daily availability slots
+        const dayAvailability = resource.availability?.find(avail => avail.date === dateToFilterStr);
         return dayAvailability && dayAvailability.slots.length > 0;
       });
     }
@@ -164,19 +307,21 @@ export default function ResourcesPage() {
       const updatedResource: Resource = {
         ...editingResource,
         ...data,
-        imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
+        imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
         resourceTypeName: resourceType.name,
         features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
         purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : editingResource.purchaseDate,
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '') ? {
           ...data.remoteAccess,
-          port: data.remoteAccess.port,
+          port: data.remoteAccess.port, // Ensure port is handled as number or undefined
         } : undefined,
-        availability: editingResource.availability || [],
+        // Keep existing availability and unavailability unless specifically managed elsewhere
+        availability: editingResource.availability || [], 
         unavailabilityPeriods: editingResource.unavailabilityPeriods || [],
       };
       
-      setResources(resources.map(r => r.id === editingResource.id ? updatedResource : r));
+      const updatedResources = resources.map(r => r.id === editingResource.id ? updatedResource : r);
+      setResources(updatedResources);
       
       const globalIndex = allAdminMockResources.findIndex(r => r.id === editingResource.id);
       if (globalIndex !== -1) allAdminMockResources[globalIndex] = updatedResource;
@@ -194,7 +339,7 @@ export default function ResourcesPage() {
         lab: data.lab,
         status: data.status,
         description: data.description || '',
-        imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
+        imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
         manufacturer: data.manufacturer || undefined,
         model: data.model || undefined,
         serialNumber: data.serialNumber || undefined,
@@ -205,10 +350,12 @@ export default function ResourcesPage() {
         unavailabilityPeriods: [],
         remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '') ? {
            ...data.remoteAccess,
-           port: data.remoteAccess.port,
+           port: data.remoteAccess.port, // Ensure port is handled as number or undefined
         } : undefined,
+        allowQueueing: data.status === 'Available', // Example: default to true if available
       };
-      setResources(prevResources => [...prevResources, newResource].sort((a,b) => a.name.localeCompare(b.name)));
+      const updatedResources = [...resources, newResource].sort((a,b) => a.name.localeCompare(b.name));
+      setResources(updatedResources);
       allAdminMockResources.push(newResource); 
       allAdminMockResources.sort((a,b) => a.name.localeCompare(b.name));
       toast({
@@ -227,7 +374,7 @@ export default function ResourcesPage() {
     <div className="space-y-8">
       <PageHeader
         title="Resources"
-        description="Browse, filter, and manage all lab resources. Click resource name for details."
+        description="Browse, filter, and manage all lab resources. Click resource name for details & edit actions."
         icon={ClipboardList}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
@@ -243,7 +390,7 @@ export default function ResourcesPage() {
                   )}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-lg">
+              <DialogContent className="w-full max-w-xs sm:max-w-sm md:max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Filter Resources</DialogTitle>
                   <DialogDescription>
@@ -254,7 +401,7 @@ export default function ResourcesPage() {
                 <ScrollArea className="max-h-[65vh] pr-2">
                 <div className="space-y-6 py-1">
                   <div>
-                    <Label htmlFor="resourceSearchDialog" className="text-sm font-medium mb-1 block">Search by Name/Keyword</Label>
+                    <Label htmlFor="resourceSearchDialog" className="text-sm font-medium mb-1 block">Search (Name/Keyword)</Label>
                     <div className="relative">
                         <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input

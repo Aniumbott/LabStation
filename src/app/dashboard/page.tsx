@@ -3,7 +3,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Construction, Clock } from 'lucide-react';
+import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Construction } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,9 +20,10 @@ import {
 } from "@/components/ui/table";
 import { format, isValid, isPast, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { allAdminMockResources, initialBookings, getWaitlistPosition } from '@/lib/mock-data';
+// Removed: import { allAdminMockResources, initialBookings, getWaitlistPosition } from '@/lib/mock-data';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/auth-context';
+
 
 export default function DashboardPage() {
   const { currentUser } = useAuth();
@@ -30,19 +31,16 @@ export default function DashboardPage() {
   const [upcomingUserBookings, setUpcomingUserBookings] = useState<Booking[]>([]);
 
   useEffect(() => {
-    // Simulate fetching frequently used resources; here, just take the first few.
-    setFrequentlyUsedResources(allAdminMockResources.slice(0, 2)); 
-    
+    // TODO: Replace with Firestore fetch for frequently used or user-specific resources
+    // For now, showing empty as allAdminMockResources is removed from mock-data
+    setFrequentlyUsedResources([]); 
+  }, []);
+  
+  useEffect(() => {
     if (currentUser) {
-      const filteredBookings = initialBookings
-        .filter(b => {
-            const startTimeDate = new Date(b.startTime); // Ensure startTime is a Date object
-            return isValid(startTimeDate) && !isPast(startTimeDate) && b.status !== 'Cancelled' && b.userId === currentUser.id;
-        })
-        .map(b => ({...b, createdAt: b.createdAt ? new Date(b.createdAt) : new Date(b.startTime) })) 
-        .sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-        .slice(0, 5);
-      setUpcomingUserBookings(filteredBookings);
+      // TODO: Replace with Firestore fetch for user's upcoming bookings
+      // For now, showing empty as initialBookings is removed from mock-data
+      setUpcomingUserBookings([]);
     } else {
       setUpcomingUserBookings([]);
     }
@@ -72,14 +70,14 @@ export default function DashboardPage() {
       <section>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-semibold">Frequently Used Resources</h2>
-          {allAdminMockResources.length > 2 && frequentlyUsedResources.length > 0 && (
+          {frequentlyUsedResources.length > 0 && ( 
             <Button asChild variant="outline" size="sm">
-              <Link href="/admin/resources">View All <ChevronRight className="ml-1.5 h-4 w-4" /></Link>
+              <Link href="/admin/resources">View All</Link>
             </Button>
           )}
         </div>
         {frequentlyUsedResources.length > 0 ? (
-          <div className="grid w-fit gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2">
+          <div className="w-fit grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2">
             {frequentlyUsedResources.map((resource) => (
               <Card key={resource.id} className="w-full md:max-w-lg flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300 p-4">
                 <CardHeader className="p-0 pb-3">
@@ -112,7 +110,7 @@ export default function DashboardPage() {
           </div>
         ) : (
           <Card className="p-6 text-center shadow-lg">
-            <p className="text-muted-foreground">No frequently used resources configured. Explore resources via <Link href="/admin/resources" className="text-primary hover:underline">Resources</Link>.</p>
+            <p className="text-muted-foreground">No frequently used resources to display. Explore resources via <Link href="/admin/resources" className="text-primary hover:underline">Resources</Link>.</p>
           </Card>
         )}
       </section>
@@ -137,9 +135,9 @@ export default function DashboardPage() {
                   </TableHeader>
                   <TableBody>
                     {upcomingUserBookings.map((booking) => {
-                      const startTimeDate = new Date(booking.startTime);
-                      const endTimeDate = new Date(booking.endTime);
-                      const waitlistPosition = getWaitlistPosition(booking, initialBookings);
+                      const startTimeDate = booking.startTime instanceof Date ? booking.startTime : parseISO(booking.startTime as unknown as string);
+                      const endTimeDate = booking.endTime instanceof Date ? booking.endTime : parseISO(booking.endTime as unknown as string);
+                      // const waitlistPosition = getWaitlistPosition(booking, initialBookings); // Removed as getWaitlistPosition is no longer available
                       return (
                         <TableRow key={booking.id}>
                           <TableCell className="font-medium">{booking.resourceName}</TableCell>
@@ -155,12 +153,12 @@ export default function DashboardPage() {
                                     booking.status === 'Waitlisted' && 'bg-purple-500 text-white hover:bg-purple-600'
                                 )}
                             >
-                                {booking.status} {booking.status === 'Waitlisted' && waitlistPosition != null && `(#${waitlistPosition})`}
+                                {booking.status}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
                             <Button variant="ghost" size="sm" asChild>
-                              <Link href={`/bookings?bookingId=${booking.id}&date=${format(startTimeDate, 'yyyy-MM-dd')}`}>View/Edit</Link>
+                              <Link href={`/bookings?bookingId=${booking.id}&date=${isValid(startTimeDate) ? format(startTimeDate, 'yyyy-MM-dd') : ''}`}>View/Edit</Link>
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -194,5 +192,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
