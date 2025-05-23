@@ -4,10 +4,10 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation'; // Added useRouter import
 import { PageHeader } from '@/components/layout/page-header';
 import {
-  ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIcon, Loader2, X
+  ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, X, CalendarPlus // Added CalendarPlus
 } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
 import { labsList } from '@/lib/mock-data';
@@ -30,7 +30,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Calendar as ShadCNCalendar } from '@/components/ui/calendar'; // Corrected import
+import { Calendar as ShadCNCalendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,16 +40,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, Timestamp } from 'date-fns';
+import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, addDays as dateFnsAddDays } from 'date-fns'; // Removed Timestamp
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, orderBy, where } from 'firebase/firestore';
+
 
 export default function AdminResourcesPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
-  const router = useRouter();
-
   const [resources, setResources] = useState<Resource[]>([]);
   const [fetchedResourceTypes, setFetchedResourceTypes] = useState<ResourceType[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -57,7 +56,6 @@ export default function AdminResourcesPage() {
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
-  // Filter Dialog State
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterTypeId, setTempFilterTypeId] = useState<string>('all');
@@ -65,12 +63,10 @@ export default function AdminResourcesPage() {
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(undefined);
   const [currentMonthInDialog, setCurrentMonthInDialog] = useState<Date>(startOfDay(new Date()));
 
-  // Active Page Filters
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterTypeId, setActiveFilterTypeId] = useState<string>('all');
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
-
 
   const fetchResourcesAndTypes = useCallback(async () => {
     setIsLoadingData(true);
@@ -83,10 +79,10 @@ export default function AdminResourcesPage() {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
-          lab: data.lab || (labsList.length > 0 ? labsList[0] : 'Unknown Lab'),
-          status: data.status || 'Available',
+          lab: data.lab as Resource['lab'] || (labsList.length > 0 ? labsList[0] : 'Unknown Lab'),
+          status: data.status as ResourceStatus || 'Available',
           description: data.description || '',
-          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+          imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
           manufacturer: data.manufacturer,
           model: data.model,
           serialNumber: data.serialNumber,
@@ -176,7 +172,7 @@ export default function AdminResourcesPage() {
             if (!period.startDate || !period.endDate) return false;
             try {
               const periodStart = startOfDay(parseISO(period.startDate));
-              const periodEnd = startOfDay(parseISO(period.endDate));
+              const periodEnd = startOfDay(parseISO(period.endDate)); // End of day for comparison
               return isValidDateFn(periodStart) && isValidDateFn(periodEnd) &&
                      isWithinInterval(dateToFilter, { start: periodStart, end: periodEnd });
             } catch (e) { console.warn("Error parsing resource unavailability period dates:", e); return false; }
@@ -238,26 +234,21 @@ export default function AdminResourcesPage() {
     setIsFormDialogOpen(true);
   };
   
-
   const handleSaveResource = async (data: ResourceFormValues, resourceIdToUpdate?: string) => {
     if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Lab Manager')) {
       toast({ title: "Permission Denied", description: "You are not authorized to perform this action.", variant: "destructive" });
       return;
     }
-
+    
     const resourceType = fetchedResourceTypes.find(rt => rt.id === data.resourceTypeId);
     if (!resourceType) {
       toast({ title: "Invalid Resource Type", description: "Selected resource type is not valid.", variant: "destructive" });
       return;
     }
     
-    let purchaseDateForFirestore: Timestamp | null = null;
-    if (data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))) {
-        purchaseDateForFirestore = Timestamp.fromDate(parseISO(data.purchaseDate));
-    }
+    const purchaseTimestamp = data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate)) ? Timestamp.fromDate(parseISO(data.purchaseDate)) : null;
 
-
-    const resourceData: Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods' | 'purchaseDate' | 'createdAt' | 'lastUpdatedAt'> & { purchaseDate?: Timestamp | null, createdAt?: Timestamp, lastUpdatedAt?: Timestamp } = {
+    const resourceDataForFirestore: Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods' | 'createdAt' | 'lastUpdatedAt' | 'purchaseDate'> & { purchaseDate?: Timestamp | null, createdAt?: Timestamp, lastUpdatedAt?: Timestamp } = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
       lab: data.lab,
@@ -267,21 +258,23 @@ export default function AdminResourcesPage() {
       manufacturer: data.manufacturer || undefined,
       model: data.model || undefined,
       serialNumber: data.serialNumber || undefined,
-      purchaseDate: purchaseDateForFirestore,
+      purchaseDate: purchaseTimestamp,
       notes: data.notes || undefined,
       features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
       remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v || typeof v === 'number') ? {
          ipAddress: data.remoteAccess.ipAddress || undefined,
          hostname: data.remoteAccess.hostname || undefined,
-         protocol: data.remoteAccess.protocol || undefined,
+         protocol: data.remoteAccess.protocol || '',
          username: data.remoteAccess.username || undefined,
          port: data.remoteAccess.port ?? undefined,
          notes: data.remoteAccess.notes || undefined,
       } : undefined,
       allowQueueing: data.allowQueueing ?? false,
     };
+    
+    const cleanDbData = Object.fromEntries(Object.entries(resourceDataForFirestore).filter(([_, v]) => v !== undefined));
 
-    const cleanDbData = Object.fromEntries(Object.entries(resourceData).filter(([_, v]) => v !== undefined && v !== ''));
+
     const auditAction = editingResource ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
     const auditDetails = `Resource '${data.name}' ${editingResource ? 'updated' : 'created'}.`;
 
@@ -295,7 +288,8 @@ export default function AdminResourcesPage() {
         const dataWithExistingSchedules = {
             ...cleanDbData,
             lastUpdatedAt: serverTimestamp(),
-            availability: existingData?.availability || [],
+            // Preserve schedules unless managed by a separate mechanism on this form
+            availability: existingData?.availability || [], 
             unavailabilityPeriods: existingData?.unavailabilityPeriods || [],
         };
         await updateDoc(resourceDocRef, dataWithExistingSchedules);
@@ -315,7 +309,7 @@ export default function AdminResourcesPage() {
       }
       setIsFormDialogOpen(false);
       setEditingResource(null);
-      await fetchResourcesAndTypes();
+      await fetchResourcesAndTypes(); // Refetch all data
     } catch (error: any) {
         console.error(`Error ${editingResource ? 'updating' : 'creating'} resource:`, error);
         toast({ title: "Database Error", description: `Failed to ${editingResource ? 'update' : 'create'} resource: ${error.message}`, variant: "destructive" });
@@ -392,7 +386,7 @@ export default function AdminResourcesPage() {
                           type="search"
                           placeholder="Name, manufacturer, model..."
                           value={tempSearchTerm}
-                          onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
+                          onChange={(e) => setTempSearchTerm(e.target.value)}
                           className="h-9 pl-8"
                           />
                       </div>
@@ -470,7 +464,7 @@ export default function AdminResourcesPage() {
       />
 
       {isLoadingData ? (
-        <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading resources...</div>
+        <div className="flex justify-center items-center py-10 text-muted-foreground"><Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" /> Loading resources...</div>
       ) : filteredResources.length > 0 ? (
         <div className="overflow-x-auto rounded-lg border shadow-sm">
           <Table>
