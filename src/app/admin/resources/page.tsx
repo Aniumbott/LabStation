@@ -4,12 +4,13 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation'; // Added useRouter
 import { useAuth } from '@/components/auth-context';
 import {
-  ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, X
+  ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarPlus, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, X, Edit, Trash2 // Added Edit, Trash2
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
-import type { Resource, ResourceStatus, ResourceType } from '@/types';
+import type { Resource, ResourceStatus, ResourceType, AvailabilitySlot } from '@/types';
 import {
   Table,
   TableBody,
@@ -26,9 +27,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
-import { Calendar as ShadCNCalendar } from '@/components/ui/calendar';
+import { Calendar as ShadCNCalendar } from '@/components/ui/calendar'; // Aliased import
 import { useToast } from '@/hooks/use-toast';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,17 +37,18 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, addDays as dateFnsAddDays } from 'date-fns';
+import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, Timestamp } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, orderBy, where } from 'firebase/firestore';
-import { labsList, resourceStatusesList } from '@/lib/mock-data'; // Keep static lists
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
+import { labsList, resourceStatusesList } from '@/lib/mock-data';
 import { Badge } from '@/components/ui/badge';
 
 
 export default function AdminResourcesPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
+  const router = useRouter(); // Initialize router
 
   const [resources, setResources] = useState<Resource[]>([]);
   const [fetchedResourceTypes, setFetchedResourceTypes] = useState<ResourceType[]>([]);
@@ -94,12 +95,12 @@ export default function AdminResourcesPage() {
             hostname: data.remoteAccess.hostname || undefined,
             protocol: data.remoteAccess.protocol || '',
             username: data.remoteAccess.username || undefined,
-            port: data.remoteAccess.port ?? undefined, // Will be null if undefined from Zod->Firestore
+            port: data.remoteAccess.port ?? undefined,
             notes: data.remoteAccess.notes || undefined,
           } : undefined,
           allowQueueing: data.allowQueueing ?? false,
-          availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: a.date })) : [],
-          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2,9)), startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [],
+          availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: typeof a.date === 'string' ? a.date : (a.date?.toDate ? format(a.date.toDate(), 'yyyy-MM-dd') : a.date) })) : [],
+          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2,9)), startDate: typeof p.startDate === 'string' ? p.startDate : (p.startDate?.toDate ? format(p.startDate.toDate(), 'yyyy-MM-dd') : p.startDate), endDate: typeof p.endDate === 'string' ? p.endDate : (p.endDate?.toDate ? format(p.endDate.toDate(), 'yyyy-MM-dd') : p.endDate), reason: p.reason })) : [],
           lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
         } as Resource;
@@ -155,7 +156,6 @@ export default function AdminResourcesPage() {
         const dateToFilter = startOfDay(activeSelectedDate);
         const dateToFilterStr = format(dateToFilter, 'yyyy-MM-dd');
         
-        // Check against resource-specific unavailability periods
         const isUnavailabilityOverlap = resource.unavailabilityPeriods?.some(period => {
             if (!period.startDate || !period.endDate) return false;
             try {
@@ -169,7 +169,6 @@ export default function AdminResourcesPage() {
         if (isUnavailabilityOverlap) {
             dateMatch = false;
         } else {
-            // Check daily availability slots
             const dayAvailability = resource.availability?.find(avail => avail.date === dateToFilterStr);
             dateMatch = !!(dayAvailability && Array.isArray(dayAvailability.slots) && dayAvailability.slots.length > 0 && resource.status === 'Available');
         }
@@ -211,6 +210,8 @@ export default function AdminResourcesPage() {
             description: "Please add resource types first before adding resources.",
             variant: "destructive",
         });
+        // Optionally redirect or guide user to resource types page
+        // router.push('/admin/resource-types'); 
         return;
     }
     setEditingResource(null);
@@ -238,17 +239,16 @@ export default function AdminResourcesPage() {
       ? {
           ipAddress: data.remoteAccess.ipAddress || null,
           hostname: data.remoteAccess.hostname || null,
-          protocol: data.remoteAccess.protocol || '', // Store empty string if "None"
+          protocol: data.remoteAccess.protocol || '', 
           username: data.remoteAccess.username || null,
-          port: data.remoteAccess.port ?? null, // Zod handles number | undefined, convert undefined to null for Firestore
+          port: data.remoteAccess.port ?? null, 
           notes: data.remoteAccess.notes || null,
         }
-      : undefined; // If remoteAccess itself is undefined, omit from Firestore or set to null
+      : undefined; 
 
     const firestorePayload: any = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
-      // resourceTypeName will be fetched on read, not stored directly
       lab: data.lab,
       status: data.status,
       description: data.description || '',
@@ -264,7 +264,6 @@ export default function AdminResourcesPage() {
       lastUpdatedAt: serverTimestamp(),
     };
     
-    // Remove undefined fields from payload, so Firestore omits them rather than erroring on undefined
     Object.keys(firestorePayload).forEach(key => {
         if (firestorePayload[key] === undefined) {
             delete firestorePayload[key];
@@ -273,17 +272,12 @@ export default function AdminResourcesPage() {
     if (firestorePayload.remoteAccess) {
         Object.keys(firestorePayload.remoteAccess).forEach(key => {
             if (firestorePayload.remoteAccess[key] === undefined) {
-                firestorePayload.remoteAccess[key] = null; // Convert inner undefined to null
+                 firestorePayload.remoteAccess[key] = null;
             }
         });
-         // If entire remoteAccess object became all nulls (except protocol which can be empty string), set to undefined
-        const ra = firestorePayload.remoteAccess;
-        if (Object.values(ra).every(v => v === null || v === '')) {
-            if (!Object.values(ra).some(v => typeof v === 'number' && v !== null)) { // ensure port:null is preserved if it was explicitly set
-                 const allEffectivelyNull = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && ra.port === null && !ra.notes;
-                 if(allEffectivelyNull) firestorePayload.remoteAccess = undefined;
-            }
-        }
+         const ra = firestorePayload.remoteAccess;
+         const allEffectivelyNull = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && ra.port === null && !ra.notes;
+         if(allEffectivelyNull) firestorePayload.remoteAccess = undefined;
     }
 
 
@@ -295,7 +289,6 @@ export default function AdminResourcesPage() {
     try {
       if (isEditing && editingResource.id) {
         const resourceDocRef = doc(db, "resources", editingResource.id);
-        // For updates, only merge if not explicitly setting availability/unavailability here
         await updateDoc(resourceDocRef, firestorePayload);
         addAuditLog(currentUser.id, currentUser.name || 'User', auditAction, { entityType: 'Resource', entityId: editingResource.id, details: auditDetails });
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
@@ -303,7 +296,6 @@ export default function AdminResourcesPage() {
         const docRef = await addDoc(collection(db, "resources"), {
             ...firestorePayload,
             createdAt: serverTimestamp(),
-            // Default availability and unavailabilityPeriods for new resources
             availability: [], 
             unavailabilityPeriods: [], 
         });
@@ -397,7 +389,7 @@ export default function AdminResourcesPage() {
                           type="search"
                           placeholder="Name, manufacturer, model..."
                           value={tempSearchTerm}
-                          onChange={(e) => setTempSearchTerm(e.target.value)}
+                          onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
                           className="h-9 pl-8"
                           />
                       </div>
@@ -488,7 +480,7 @@ export default function AdminResourcesPage() {
                 <TableHead>Type</TableHead>
                 <TableHead>Lab</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right w-[150px]">Actions</TableHead>
+                <TableHead className="text-right w-[100px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -577,3 +569,5 @@ export default function AdminResourcesPage() {
     </div>
   );
 }
+
+    
