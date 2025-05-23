@@ -14,7 +14,7 @@ import {
 } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
-import { addNotification, addAuditLog } from '@/lib/mock-data'; // Kept for other parts of the app, not user auth
+import { addNotification, addAuditLog } from '@/lib/mock-data'; // Kept for other parts of the app
 
 interface AuthContextType {
   currentUser: User | null;
@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-      console.log("AuthContext: onAuthStateChanged triggered. Firebase user:", firebaseUser?.uid);
+      console.log("AuthContext: onAuthStateChanged triggered. Firebase user UID:", firebaseUser?.uid);
       setIsLoading(true);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('login_message');
@@ -59,31 +59,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               if (typeof window !== 'undefined') {
                 localStorage.setItem('labstation_user', JSON.stringify({ ...appUser, createdAt: appUser.createdAt.toISOString() }));
               }
-              console.log("AuthContext: User set as active and current:", appUser.email);
+              console.log("AuthContext: User profile active. CurrentUser set for:", appUser.email);
             } else {
               let message = 'Your account is not active.';
               if (userProfileData.status === 'pending_approval') {
-                message = 'Account pending approval. Please wait for an admin.';
+                message = 'Your account is awaiting admin approval. Please check back later or contact an administrator.';
               } else if (userProfileData.status === 'suspended') {
-                message = 'Your account has been suspended.';
+                message = 'Your account has been suspended. Please contact an administrator.';
               }
-              console.warn("AuthContext: User profile status not active, signing out Firebase user. Status:", userProfileData.status, "Message:", message);
+              console.warn("AuthContext: User profile status not 'active'. Firestore status:", userProfileData.status, "Message:", message);
               if (typeof window !== 'undefined') localStorage.setItem('login_message', message);
-              await firebaseSignOut(auth); // Sign out from Firebase Auth if not active in our system
+              await firebaseSignOut(auth);
               setCurrentUser(null);
               if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
             }
           } else {
-            console.warn("AuthContext: Firestore user profile NOT FOUND for UID:", firebaseUser.uid, "- Signing out Firebase user.");
-            if (typeof window !== 'undefined') localStorage.setItem('login_message', 'User profile not found in database. Please complete signup or contact support.');
+            const profileNotFoundMsg = 'User profile not found in database. Please complete signup or contact support if you believe this is an error.';
+            console.warn("AuthContext: Firestore user profile NOT FOUND for UID:", firebaseUser.uid);
+            if (typeof window !== 'undefined') localStorage.setItem('login_message', profileNotFoundMsg);
             await firebaseSignOut(auth);
             setCurrentUser(null);
             if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
           }
         } catch (error) {
           console.error("AuthContext: Error fetching Firestore user profile:", error);
-          if (typeof window !== 'undefined') localStorage.setItem('login_message', 'Error retrieving your profile. Please try again.');
-          await firebaseSignOut(auth);
+          const profileErrorMsg = 'Error retrieving your profile during login. Please try again or contact support.';
+          if (typeof window !== 'undefined') localStorage.setItem('login_message', profileErrorMsg);
+          try {
+            await firebaseSignOut(auth);
+          } catch (signOutError) {
+            console.error("AuthContext: Error signing out after profile fetch error:", signOutError);
+          }
           setCurrentUser(null);
           if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
         }
@@ -100,8 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password?: string): Promise<{ success: boolean; message?: string }> => {
     if (!password) return { success: false, message: "Password is required." };
     
-    console.log(`AuthContext: Attempting Firebase login for email: ${email}`);
-    setIsLoading(true); // Set loading true before Firebase call
+    console.log(`AuthContext: Attempting login for email: [${email}]`); // Log the exact email being used
+    setIsLoading(true);
     if (typeof window !== 'undefined') localStorage.removeItem('login_message');
     
     try {
@@ -109,31 +115,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // onAuthStateChanged will handle setting currentUser and isLoading to false upon success.
       return { success: true };
     } catch (error: any) {
-      console.error("Firebase login error details:", error); // Log the full error object
-      let message = "Login failed. Please check your credentials.";
-
+      console.error("Firebase login error details:", error);
+      let message = "Login failed. Please check your credentials and try again.";
       if (error.code === 'auth/invalid-credential') {
-        message = "Login Failed: Invalid credentials. Please verify your email and password in your Firebase Authentication user list. Ensure the account exists and is enabled there.";
-        console.error(
-            "CRITICAL FIREBASE CHECK: 'auth/invalid-credential' received. This means Firebase Authentication rejected the email/password combination. " +
-            "ACTIONS FOR YOU (USER/ADMIN): " +
-            "1. VERIFY TYPED CREDENTIALS: Are they *exactly* as registered in Firebase Auth (passwords are case-sensitive)? " +
-            "2. CHECK FIREBASE AUTH CONSOLE (Project: labstation-xadyr > Authentication > Users): " +
-            "   a) Does the user (e.g., admin@labstation.com) EXIST? " +
-            "   b) Is the account ENABLED (not disabled)? " +
-            "3. CHECK .ENV.LOCAL: Ensure it points to the correct Firebase project. " +
-            "If all these are correct, and the problem persists, there might be a temporary Firebase service issue or a very subtle project config problem."
-        );
+        message = "Login Failed: Invalid email or password. Please double-check your credentials. Ensure this user exists and is enabled in your Firebase Authentication console for the 'labstation-xadyr' project. Also, verify your .env.local file points to the correct Firebase project.";
+        console.error("CRITICAL: 'auth/invalid-credential' received. This means Firebase REJECTED the email/password. Check Firebase console for user, status (enabled/disabled), and .env.local config.");
       } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-email') {
-        message = "Invalid email or password.";
+        message = "Invalid email or password provided.";
       } else if (error.code === 'auth/too-many-requests') {
         message = "Access to this account has been temporarily disabled due to many failed login attempts. You can reset your password or try again later.";
       } else if (error.code === 'auth/user-disabled') {
          message = "This user account has been disabled by an administrator in Firebase Authentication.";
+      } else if (error.code === 'auth/network-request-failed') {
+        message = "Network error during login. Please check your internet connection and Firebase project setup (especially API key and auth domain in .env.local).";
       }
       
       if (typeof window !== 'undefined') localStorage.setItem('login_message', message);
-      setIsLoading(false); // Explicitly set isLoading to false on caught error
+      setIsLoading(false); // Ensure loading is false on caught error
       return { success: false, message: message };
     }
   }, []);
@@ -143,21 +141,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       await firebaseSignOut(auth);
-      // onAuthStateChanged will set currentUser to null and clear localStorage
-    } catch (error) {
-      console.error("AuthContext: Firebase logout error:", error);
-      setCurrentUser(null); // Force clear local state
+      setCurrentUser(null); // Explicitly clear user state
       if (typeof window !== 'undefined') {
         localStorage.removeItem('labstation_user');
         localStorage.removeItem('login_message');
       }
-      setIsLoading(false); // Ensure loading is false on error
+    } catch (error) {
+      console.error("AuthContext: Firebase logout error:", error);
+    } finally {
+      setIsLoading(false); // Ensure loading is always set to false after logout attempt
     }
   }, []);
 
   const signup = useCallback(async (name: string, email: string, password?: string): Promise<{ success: boolean; message: string; userId?: string }> => {
     if (!password) return { success: false, message: "Password is required." };
     setIsLoading(true);
+    if (typeof window !== 'undefined') localStorage.removeItem('login_message');
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
@@ -177,21 +176,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       addAuditLog(firebaseUser.uid, name, 'USER_CREATED', { entityType: 'User', entityId: firebaseUser.uid, details: `User ${name} (${email}) signed up. Status: pending_approval.`});
       
+      // Notify admins
       const adminUsersQuery = query(collection(db, "users"), where("role", "in", ["Admin", "Lab Manager"]));
       const adminUsersSnapshot = await getDocs(adminUsersQuery);
       adminUsersSnapshot.forEach(adminDoc => {
-        if (adminDoc.id !== firebaseUser.uid) {
+        if (adminDoc.id !== firebaseUser.uid) { // Don't notify the user themselves if they happen to be admin
             addNotification(
               adminDoc.id,
               'New Signup Request',
               `User ${name} (${email}) has signed up and is awaiting approval.`,
               'signup_pending_admin',
-              '/admin/users'
+              '/admin/users' // Link to users page where they can filter for pending
             );
         }
       });
       
-      await firebaseSignOut(auth);
+      await firebaseSignOut(auth); // User must be approved before they can log in
       setIsLoading(false);
       return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: firebaseUser.uid };
     } catch (error: any) {
@@ -211,7 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateUserProfile = useCallback(async (updatedFields: Partial<Pick<User, 'name' | 'avatarUrl'>>): Promise<{ success: boolean; message?: string }> => {
     const firebaseUser = auth.currentUser;
-    if (!firebaseUser || !currentUser) { // Added !currentUser check
+    if (!firebaseUser || !currentUser) {
       return { success: false, message: "No user logged in or user data unavailable." };
     }
     
@@ -221,24 +221,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (updatedFields.name && updatedFields.name !== currentUser.name) {
         updatesForAuth.displayName = updatedFields.name;
       }
-      if (updatedFields.avatarUrl && updatedFields.avatarUrl !== currentUser.avatarUrl) {
-        updatesForAuth.photoURL = updatedFields.avatarUrl;
-      }
+      // Avatar URL update for Firebase Auth profile not implemented here as we only allow name change for now
+      // if (updatedFields.avatarUrl && updatedFields.avatarUrl !== currentUser.avatarUrl) {
+      //   updatesForAuth.photoURL = updatedFields.avatarUrl;
+      // }
       
       if (Object.keys(updatesForAuth).length > 0) {
         await firebaseUpdateProfile(firebaseUser, updatesForAuth);
       }
 
       const userDocRef = doc(db, "users", firebaseUser.uid);
-      const firestoreUpdates: any = {}; // Use any for dynamic keys, or be more specific
+      const firestoreUpdates: Partial<Pick<User, 'name' | 'avatarUrl'>> = {};
       if(updatedFields.name) firestoreUpdates.name = updatedFields.name;
-      if(updatedFields.avatarUrl) firestoreUpdates.avatarUrl = updatedFields.avatarUrl;
+      // if(updatedFields.avatarUrl) firestoreUpdates.avatarUrl = updatedFields.avatarUrl; // Only name is editable in profile form
 
       if (Object.keys(firestoreUpdates).length > 0) {
         await updateDoc(userDocRef, firestoreUpdates);
         addAuditLog(currentUser.id, currentUser.name || 'User', 'USER_UPDATED', { entityType: 'User', entityId: currentUser.id, details: `Profile updated: ${Object.keys(firestoreUpdates).join(', ')} changed.`});
       }
       
+      // Re-fetch the user profile to update context
       const updatedUserDocSnap = await getDoc(userDocRef);
       if (updatedUserDocSnap.exists()) {
         const updatedProfileData = updatedUserDocSnap.data();
@@ -264,7 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Firebase profile update error:", error);
       return { success: false, message: error.message || "Failed to update profile." };
     }
-  }, [currentUser]); // Added currentUser to dependency array
+  }, [currentUser]);
 
   return (
     <AuthContext.Provider value={{ currentUser, isLoading, login, logout, signup, updateUserProfile }}>
@@ -280,3 +282,5 @@ export function useAuth() {
   }
   return context;
 }
+
+    
