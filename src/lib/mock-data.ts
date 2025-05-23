@@ -15,32 +15,35 @@ import type {
   BlackoutDate,
   RecurringBlackoutRule,
 } from '@/types';
+import { Timestamp } from 'firebase/firestore'; // For consistency, though we convert to JS Date
 
-// --- Static Lists (Application Configuration Data - Kept) ---
+// --- Static Lists (Application Configuration Data) ---
 export const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
 export const maintenanceRequestStatuses: MaintenanceRequestStatus[] = ['Open', 'In Progress', 'Resolved', 'Closed'];
-export const labsList = ['Electronics Lab 1', 'RF Lab', 'Prototyping Lab', 'General Test Area'];
+export const labsList: Resource['lab'][] = ['Electronics Lab 1', 'RF Lab', 'Prototyping Lab', 'General Test Area'];
 export const resourceStatusesList: Array<Resource['status']> = ['Available', 'Booked', 'Maintenance'];
 export const bookingStatusesForFilter: (Booking['status'] | 'all')[] = ['all', 'Confirmed', 'Pending', 'Waitlisted', 'Cancelled'];
-export const bookingStatusesForForm: Booking['status'][] = ['Confirmed', 'Pending', 'Waitlisted', 'Cancelled']; // Used in BookingFormDialog
+export const bookingStatusesForForm: Booking['status'][] = ['Confirmed', 'Pending', 'Waitlisted', 'Cancelled'];
 export const daysOfWeekArray: DayOfWeek[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 
-// --- Dynamic Data Arrays - MUST BE EMPTY ---
-// These arrays should now be empty. Data is fetched from Firestore.
+// --- Dynamic Data Arrays ---
+// These arrays will be empty as data is fetched from Firestore.
+// They are kept here as a reference to the structure or if needed for specific client-side only scenarios temporarily.
 export let initialMockUsers: User[] = [];
-export let initialMockResourceTypes: ResourceType[] = []; // Resource Types admin page fetches from Firestore. Forms needing types should get them via props.
-export let allAdminMockResources: Resource[] = []; // Admin Resources & Detail pages fetch from Firestore.
-export let initialBookings: Booking[] = []; // Bookings page, Dashboard, etc., fetch from Firestore.
-export let initialMaintenanceRequests: MaintenanceRequest[] = []; // Maintenance page fetches from Firestore.
-export let initialBlackoutDates: BlackoutDate[] = []; // Blackout Dates admin page fetches from Firestore.
-export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = []; // Blackout Dates admin page fetches from Firestore.
+export let initialMockResourceTypes: ResourceType[] = [];
+export let allAdminMockResources: Resource[] = [];
+export let initialBookings: Booking[] = [];
+export let initialMaintenanceRequests: MaintenanceRequest[] = [];
+export let initialBlackoutDates: BlackoutDate[] = [];
+export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = [];
 
 
-// --- Notifications & Audit Logs (In-memory for now - will be Firestore collections later) ---
+// --- Notifications & Audit Logs (In-memory placeholders for now) ---
+// In a full production app, these would also be Firestore collections.
 export let initialNotifications: Notification[] = [];
 
-export function addNotification( // Note: async keyword removed as it's not doing async work now
+export function addNotification(
   userId: string,
   title: string,
   message: string,
@@ -48,21 +51,22 @@ export function addNotification( // Note: async keyword removed as it's not doin
   linkTo?: string
 ): void {
   const newNotification: Notification = {
-    id: `n${Date.now()}-${Math.random().toString(36).substring(2, 9)}`, // More unique ID
+    id: `n${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
     userId,
     title,
     message,
     type,
     isRead: false,
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(), // Use JS Date for consistency with frontend types
     linkTo,
   };
   initialNotifications.unshift(newNotification);
+  // In a real app, this would be: await addDoc(collection(db, 'notifications'), { ...newNotification, createdAt: serverTimestamp() });
 }
 
 export let initialAuditLogs: AuditLogEntry[] = [];
 
-export function addAuditLog( // Note: async keyword removed
+export function addAuditLog(
   actingUserId: string,
   actingUserName: string,
   action: AuditActionType,
@@ -73,8 +77,8 @@ export function addAuditLog( // Note: async keyword removed
   }
 ): void {
   const newLog: AuditLogEntry = {
-    id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`, // More unique ID
-    timestamp: new Date().toISOString(),
+    id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+    timestamp: new Date(), // Use JS Date
     userId: actingUserId,
     userName: actingUserName,
     action: action,
@@ -83,4 +87,5 @@ export function addAuditLog( // Note: async keyword removed
     details: params.details,
   };
   initialAuditLogs.unshift(newLog);
+  // In a real app, this would be: await addDoc(collection(db, 'auditLogs'), { ...newLog, timestamp: serverTimestamp() });
 }

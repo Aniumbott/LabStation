@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -22,7 +22,7 @@ import type { User, RoleName } from '@/types';
 import { userRolesList } from '@/lib/mock-data'; // Import userRolesList
 
 const userFormSchema = z.object({
-  name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
+  name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, "Name cannot exceed 100 characters."),
   email: z.string().email({ message: 'Please enter a valid email address.' }),
   role: z.enum(userRolesList as [string, ...string[]], { required_error: 'Please select a role.' }),
 });
@@ -39,30 +39,35 @@ interface UserFormDialogProps {
 export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: UserFormDialogProps) {
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
-    defaultValues: {
+    defaultValues: { // Will be overridden by useEffect
       name: '',
       email: '',
       role: 'Researcher',
     },
   });
 
+  const resetForm = useCallback(() => {
+    if (initialUser) {
+      form.reset({
+        name: initialUser.name,
+        email: initialUser.email,
+        role: initialUser.role,
+      });
+    } else {
+      form.reset({
+        name: '',
+        email: '',
+        role: 'Researcher',
+      });
+    }
+  }, [initialUser, form.reset]);
+
+
   useEffect(() => {
     if (open) {
-      if (initialUser) {
-        form.reset({
-          name: initialUser.name,
-          email: initialUser.email,
-          role: initialUser.role,
-        });
-      } else {
-        form.reset({
-          name: '',
-          email: '',
-          role: 'Researcher',
-        });
-      }
+      resetForm();
     }
-  }, [open, initialUser, form.reset]);
+  }, [open, initialUser, form.reset, resetForm]); // Added resetForm to dependency array
 
   function onSubmit(data: UserFormValues) {
     onSave(data);
@@ -74,7 +79,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
         <DialogHeader>
           <DialogTitle>{initialUser ? 'Edit User Profile' : 'Add New User Profile (Admin)'}</DialogTitle>
           <DialogDescription>
-            {initialUser ? `Modify the Firestore profile for ${initialUser.name}. Email cannot be changed.` : 'Fill in the information for the new user profile. This does not create a Firebase Auth account.'}
+            {initialUser ? `Modify the Firestore profile for ${initialUser.name}. Email cannot be changed here.` : 'Fill in the information for the new user profile. This does not create a Firebase Auth account.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -86,7 +91,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
                 <FormItem>
                   <FormLabel>Full Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Dr. Ada Lovelace" {...field} />
+                    <Input placeholder="e.g., Dr. Ada Lovelace" {...field} disabled={form.formState.isSubmitting} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -103,7 +108,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
                         type="email" 
                         placeholder="e.g., ada.lovelace@labstation.com" 
                         {...field} 
-                        disabled={!!initialUser} // Disable email editing for existing users
+                        disabled={!!initialUser || form.formState.isSubmitting} // Disable email editing for existing users or during submit
                     />
                   </FormControl>
                   {!!initialUser && <FormMessage className="text-xs text-muted-foreground">Email cannot be changed for existing user profiles.</FormMessage>}
@@ -117,7 +122,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Role</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value} disabled={form.formState.isSubmitting}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a role" />
@@ -136,13 +141,17 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
               )}
             />
             <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={form.formState.isSubmitting}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  : (initialUser ? <Save className="mr-2 h-4 w-4" /> : <UserPlus className="mr-2 h-4 w-4" />)
+                }
+                {form.formState.isSubmitting
                   ? (initialUser ? 'Saving...' : 'Creating Profile...')
-                  : (initialUser ? <><Save className="mr-2 h-4 w-4" /> Save Changes</> : <><UserPlus className="mr-2 h-4 w-4" /> Create Profile</>)
+                  : (initialUser ? 'Save Changes' : 'Create Profile')
                 }
               </Button>
             </DialogFooter>

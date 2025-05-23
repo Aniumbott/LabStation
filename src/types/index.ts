@@ -1,5 +1,5 @@
 
-import type { Timestamp } from 'firebase/firestore';
+import type { Timestamp } from 'firebase/firestore'; // Keep for reference, but frontend uses JS Date
 
 export interface ResourceType {
   id: string;
@@ -14,7 +14,7 @@ export interface RemoteAccessDetails {
   hostname?: string;
   protocol?: 'RDP' | 'SSH' | 'VNC' | 'Other' | '';
   username?: string;
-  port?: number;
+  port?: number | null; // Allow null for "not set"
   notes?: string;
 }
 
@@ -44,16 +44,17 @@ export interface Resource {
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
-  purchaseDate?: Date; // Changed to Date for frontend model, will be Firestore Timestamp
+  purchaseDate?: Date | null;
   notes?: string;
-  remoteAccess?: RemoteAccessDetails;
+  remoteAccess?: RemoteAccessDetails | null;
   allowQueueing?: boolean;
-  // lastUpdatedAt and createdAt are managed by Firestore serverTimestamp
+  lastUpdatedAt?: Date;
+  createdAt?: Date;
 }
 
 export interface BookingUsageDetails {
-  actualStartTime?: Date; // Changed to Date
-  actualEndTime?: Date;   // Changed to Date
+  actualStartTime?: Date | null;
+  actualEndTime?: Date | null;
   outcome?: 'Success' | 'Failure' | 'Interrupted' | 'Not Applicable';
   dataStorageLocation?: string;
   usageComments?: string;
@@ -65,12 +66,12 @@ export interface Booking {
   id: string;
   resourceId: string;
   userId: string;
-  startTime: Date; // JS Date object after conversion from Firestore Timestamp
-  endTime: Date;   // JS Date object after conversion from Firestore Timestamp
-  createdAt: Date; // JS Date object after conversion from Firestore Timestamp
+  startTime: Date;
+  endTime: Date;
+  createdAt: Date;
   status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted';
   notes?: string;
-  usageDetails?: BookingUsageDetails;
+  usageDetails?: BookingUsageDetails | null;
 }
 
 export type RoleName = 'Admin' | 'Lab Manager' | 'Technician' | 'Researcher';
@@ -83,7 +84,7 @@ export interface User {
   role: RoleName;
   avatarUrl?: string;
   status: UserStatus;
-  createdAt: Date; // JS Date object after conversion from Firestore Timestamp
+  createdAt: Date;
 }
 
 export type MaintenanceRequestStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed';
@@ -94,10 +95,10 @@ export interface MaintenanceRequest {
   reportedByUserId: string;
   issueDescription: string;
   status: MaintenanceRequestStatus;
-  assignedTechnicianId?: string;
-  dateReported: Date;  // JS Date object after conversion from Firestore Timestamp
-  dateResolved?: Date; // JS Date object after conversion from Firestore Timestamp
-  resolutionNotes?: string;
+  assignedTechnicianId?: string | null;
+  dateReported: Date;
+  dateResolved?: Date | null;
+  resolutionNotes?: string | null;
 }
 
 export type NotificationType =
@@ -120,7 +121,7 @@ export interface Notification {
   message: string;
   type: NotificationType;
   isRead: boolean;
-  createdAt: Date; // JS Date object after conversion from Firestore Timestamp
+  createdAt: Date;
   linkTo?: string;
 }
 
@@ -152,7 +153,7 @@ export type AuditActionType =
 
 export interface AuditLogEntry {
   id: string;
-  timestamp: Date; // JS Date object after conversion from Firestore Timestamp
+  timestamp: Date;
   userId: string;
   userName: string;
   action: AuditActionType;

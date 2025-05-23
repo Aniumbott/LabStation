@@ -4,13 +4,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { Bell, Check, Trash2, CalendarCheck2, Wrench, AlertTriangle, CircleEllipsis, CircleCheck, Info, ShieldAlert, Loader2, X } from 'lucide-react';
-import type { Notification as NotificationTypeAlias } from '@/types'; // Renamed to avoid conflict with browser Notification
+import { Bell, Check, Trash2, CalendarCheck2, Wrench, AlertTriangle, Clock, CircleEllipsis, CircleCheck, Info, ShieldAlert, Loader2, X } from 'lucide-react';
+import type { Notification as NotificationTypeAlias } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { format, parseISO, isValid as isValidDateFn, formatDistanceToNowStrict } from 'date-fns';
+import { isValid as isValidDateFn, formatDistanceToNowStrict, Timestamp } from 'date-fns';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -31,13 +31,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, query, where, orderBy, getDocs, doc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { formatDateSafe } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
 
 
 const getNotificationIcon = (type: NotificationTypeAlias['type']) => {
   switch (type) {
     case 'booking_confirmed':
+    case 'booking_promoted_user':
       return <CalendarCheck2 className="h-5 w-5 text-green-500" />;
     case 'booking_pending_approval':
     case 'booking_promoted_admin':
@@ -45,8 +47,7 @@ const getNotificationIcon = (type: NotificationTypeAlias['type']) => {
     case 'booking_rejected':
       return <CircleEllipsis className="h-5 w-5 text-red-500" />;
     case 'booking_waitlisted':
-    case 'booking_promoted_user':
-      return <Clock className="h-5 w-5 text-purple-500" />; // Example for waitlist/promotion
+      return <Clock className="h-5 w-5 text-purple-500" />;
     case 'maintenance_new':
     case 'maintenance_assigned':
       return <Wrench className="h-5 w-5 text-blue-500" />;
@@ -67,6 +68,7 @@ export default function NotificationsPage() {
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(true);
   const [isClearAllAlertOpen, setIsClearAllAlertOpen] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   const fetchNotifications = useCallback(async () => {
     if (!currentUser?.id) {
@@ -101,12 +103,15 @@ export default function NotificationsPage() {
   }, [currentUser?.id, toast]);
 
   useEffect(() => {
-    if (!authIsLoading) { // Only fetch after auth state is resolved
+    if (!authIsLoading && currentUser) { 
         fetchNotifications();
+    } else if (!authIsLoading && !currentUser) {
+        setIsLoadingNotifications(false);
+        setNotifications([]);
     }
-  }, [authIsLoading, fetchNotifications]);
+  }, [authIsLoading, currentUser, fetchNotifications]);
 
-  const handleMarkAsRead = async (id: string) => {
+  const handleMarkAsRead = useCallback(async (id: string) => {
     try {
       const notifDocRef = doc(db, "notifications", id);
       await updateDoc(notifDocRef, { isRead: true });
@@ -116,64 +121,71 @@ export default function NotificationsPage() {
     } catch (error: any) {
       toast({ title: "Error", description: `Could not mark notification as read: ${error.message}`, variant: "destructive"});
     }
-  };
+  }, [toast]);
 
-  const handleMarkAllAsRead = async () => {
+  const handleMarkAllAsRead = useCallback(async () => {
     if (!currentUser) return;
     const unreadNotifications = notifications.filter(n => !n.isRead);
     if (unreadNotifications.length === 0) {
       toast({ title: "No Unread Notifications", description: "All notifications are already marked as read." });
       return;
     }
+    
+    setIsLoadingNotifications(true); // Indicate loading
     try {
-      // In a real app, you might use a batched write or a Cloud Function for this.
-      // For client-side, we update one by one.
+      const batch = []; // Using an array for promises
       for (const notification of unreadNotifications) {
         const notifDocRef = doc(db, "notifications", notification.id);
-        await updateDoc(notifDocRef, { isRead: true });
+        batch.push(updateDoc(notifDocRef, { isRead: true }));
       }
+      await Promise.all(batch); // Execute all updates
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       toast({ title: "All Read", description: "All notifications have been marked as read." });
     } catch (error: any) {
       toast({ title: "Error", description: `Could not mark all notifications as read: ${error.message}`, variant: "destructive"});
+    } finally {
+      setIsLoadingNotifications(false); // Stop loading
     }
-  };
+  }, [currentUser, notifications, toast]);
   
-  const handleDeleteNotification = async (id: string) => {
+  const handleDeleteNotification = useCallback(async (id: string) => {
      try {
        const notifDocRef = doc(db, "notifications", id);
        await deleteDoc(notifDocRef);
        setNotifications(prev => prev.filter(n => n.id !== id));
-       toast({ title: "Notification Deleted", description: "The notification has been removed.", variant: "destructive" });
+       toast({ title: "Notification Deleted", description: "The notification has been removed." });
      } catch (error: any) {
        toast({ title: "Error", description: `Could not delete notification: ${error.message}`, variant: "destructive"});
      }
-  };
+  }, [toast]);
 
-  const handleDeleteAllNotifications = async () => {
+  const handleDeleteAllNotifications = useCallback(async () => {
     if (!currentUser || notifications.length === 0) {
       setIsClearAllAlertOpen(false);
       return;
     }
+    setIsLoadingNotifications(true); // Indicate loading
     try {
-      // In a real app, deleting all user's notifications would ideally be a backend operation.
-      // For client-side, we delete one by one.
+      const batch = []; // Using an array for promises
       for (const notification of notifications) {
         const notifDocRef = doc(db, "notifications", notification.id);
-        await deleteDoc(notifDocRef);
+        batch.push(deleteDoc(notifDocRef));
       }
+      await Promise.all(batch); // Execute all deletions
       setNotifications([]);
       toast({ title: "All Notifications Cleared", description: "All your notifications have been deleted.", variant: "destructive" });
     } catch (error: any) {
       toast({ title: "Error", description: `Could not clear all notifications: ${error.message}`, variant: "destructive"});
     } finally {
+      setIsLoadingNotifications(false); // Stop loading
       setIsClearAllAlertOpen(false);
     }
-  };
+  }, [currentUser, notifications, toast]);
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
 
-  if (authIsLoading || (currentUser && isLoadingNotifications)) {
+  if (authIsLoading || (!currentUser && !authIsLoading)) {
+    // Show loader if auth is loading OR if auth is done and there's no user (will be redirected by AppLayout)
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-200px)] text-muted-foreground">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -182,16 +194,17 @@ export default function NotificationsPage() {
     );
   }
   
+  // This case should ideally be handled by AppLayout redirecting to /login
   if (!currentUser && !authIsLoading) {
     return (
          <div className="space-y-8">
-            <PageHeader title="Notifications" description="Please log in to view your notifications." icon={Bell} />
+            <PageHeader title="Notifications" icon={Bell} description="Please log in to view your notifications." />
             <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
                 <CardContent>
                     <Info className="mx-auto h-12 w-12 mb-4 opacity-50" />
                     <p className="text-lg font-medium">Login Required</p>
                     <p className="text-sm mb-4">You need to be logged in to view your notifications.</p>
-                     <Button asChild><Link href="/login">Go to Login</Link></Button>
+                     <Button onClick={() => router.push('/login')} className="mt-4">Go to Login</Button>
                 </CardContent>
             </Card>
         </div>
@@ -209,13 +222,14 @@ export default function NotificationsPage() {
           notifications.length > 0 ? (
             <div className="flex items-center gap-2">
               {unreadCount > 0 && (
-                <Button onClick={handleMarkAllAsRead} variant="outline">
-                  <Check className="mr-2 h-4 w-4" /> Mark All as Read ({unreadCount})
+                <Button onClick={handleMarkAllAsRead} variant="outline" disabled={isLoadingNotifications}>
+                  {isLoadingNotifications && unreadCount > 0 ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                  Mark All as Read ({unreadCount})
                 </Button>
               )}
               <AlertDialog open={isClearAllAlertOpen} onOpenChange={setIsClearAllAlertOpen}>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive">
+                  <Button variant="destructive" disabled={isLoadingNotifications}>
                     <Trash2 className="mr-2 h-4 w-4" /> Clear All
                   </Button>
                 </AlertDialogTrigger>
@@ -239,7 +253,9 @@ export default function NotificationsPage() {
         }
       />
 
-      {notifications.length === 0 ? (
+      {isLoadingNotifications && notifications.length === 0 ? (
+         <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading notifications...</div>
+      ) : notifications.length === 0 ? (
         <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
           <CardContent>
             <Bell className="mx-auto h-12 w-12 mb-4 opacity-50" />

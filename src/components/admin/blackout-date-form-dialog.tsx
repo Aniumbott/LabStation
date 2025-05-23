@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -20,11 +20,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Save, X, PlusCircle, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import type { BlackoutDate } from '@/types';
-import { format, parseISO, isValid as isValidDateFn, startOfDay, Timestamp } from 'date-fns';
+import { format, parseISO, isValid as isValidDateFn, startOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 const blackoutDateFormSchema = z.object({
-  date: z.date({ // This will be a JS Date object from the Calendar
+  date: z.date({ 
     required_error: "A date is required.",
     invalid_type_error: "That's not a valid date!",
   }),
@@ -44,36 +44,43 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
   const form = useForm<BlackoutDateFormValues>({
     resolver: zodResolver(blackoutDateFormSchema),
     defaultValues: {
-      date: startOfDay(new Date()), // Default to JS Date object
+      date: startOfDay(new Date()),
       reason: '',
     },
   });
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const resetForm = useCallback(() => {
+    if (initialBlackoutDate && initialBlackoutDate.date) {
+      // initialBlackoutDate.date is 'YYYY-MM-DD' string from Firestore
+      const dateToSet = isValidDateFn(parseISO(initialBlackoutDate.date)) 
+                        ? parseISO(initialBlackoutDate.date) 
+                        : startOfDay(new Date());
+      form.reset({
+        date: dateToSet,
+        reason: initialBlackoutDate.reason || '',
+      });
+    } else {
+      form.reset({
+        date: startOfDay(new Date()),
+        reason: '',
+      });
+    }
+  }, [initialBlackoutDate, form.reset]);
+
+
   useEffect(() => {
     if (open) {
       setIsSubmitting(false);
-      if (initialBlackoutDate && initialBlackoutDate.date) {
-        // Firestore 'date' is a string "YYYY-MM-DD", convert to JS Date for form
-        const dateToSet = isValidDateFn(parseISO(initialBlackoutDate.date)) ? parseISO(initialBlackoutDate.date) : startOfDay(new Date());
-        form.reset({
-          date: dateToSet,
-          reason: initialBlackoutDate.reason || '',
-        });
-      } else {
-        form.reset({
-          date: startOfDay(new Date()),
-          reason: '',
-        });
-      }
+      resetForm();
     }
-  }, [open, initialBlackoutDate, form.reset]);
+  }, [open, initialBlackoutDate, form.reset, resetForm]);
 
   async function onSubmit(data: BlackoutDateFormValues) {
     setIsSubmitting(true);
     try {
-      await onSave(data); // data.date is already a JS Date object here
+      await onSave(data); 
     } catch (error) {
       console.error("Error in BlackoutDateFormDialog onSubmit:", error);
     } finally {
@@ -104,17 +111,17 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
                         <Button
                           variant={"outline"}
                           className={cn(
-                            "w-full pl-3 text-left font-normal",
+                            "w-full justify-start text-left font-normal h-10",
                             !field.value && "text-muted-foreground"
                           )}
                           disabled={isSubmitting}
                         >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
                           {field.value && isValidDateFn(field.value) ? (
                             format(field.value, "PPP")
                           ) : (
                             <span>Pick a date</span>
                           )}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
@@ -126,7 +133,7 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
                             if(date) field.onChange(startOfDay(date));
                             setIsCalendarOpen(false);
                         }}
-                        disabled={(date) => date < startOfDay(new Date()) && !initialBlackoutDate } // Allow past dates if editing
+                        disabled={(date) => date < startOfDay(new Date()) && !initialBlackoutDate } 
                         initialFocus
                       />
                     </PopoverContent>

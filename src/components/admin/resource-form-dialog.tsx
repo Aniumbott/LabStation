@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -23,11 +23,10 @@ import { Save, X, PlusCircle, Network, Info, Loader2 } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
 import { labsList, resourceStatusesList } from '@/lib/mock-data';
 import { parseISO, format, isValid as isValidDateFn } from 'date-fns';
-import { Timestamp } from 'firebase/firestore';
 import { Checkbox } from '../ui/checkbox';
 
 const VALID_REMOTE_PROTOCOLS = ['RDP', 'SSH', 'VNC', 'Other'] as const;
-const NONE_PROTOCOL_VALUE = "--none-protocol--";
+const NONE_PROTOCOL_VALUE = "--none-protocol--"; // For the select item value
 
 const resourceFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, { message: 'Name cannot exceed 100 characters.' }),
@@ -35,22 +34,29 @@ const resourceFormSchema = z.object({
   lab: z.enum(labsList as [string, ...string[]], { required_error: 'Please select a lab.' }),
   status: z.enum(resourceStatusesList as [ResourceStatus, ...ResourceStatus[]], { required_error: 'Please select a status.'}),
   description: z.string().max(500, { message: 'Description cannot exceed 500 characters.' }).optional().or(z.literal('')),
-  imageUrl: z.string().url({ message: 'Please enter a valid URL for the image.' }).optional().or(z.literal('')),
+  imageUrl: z.string().url({ message: 'Please enter a valid URL.' }).optional().or(z.literal('')),
   manufacturer: z.string().max(100).optional().or(z.literal('')),
   model: z.string().max(100).optional().or(z.literal('')),
   serialNumber: z.string().max(100).optional().or(z.literal('')),
-  purchaseDate: z.string().optional().refine((val) => { // Stored as string from input type="date"
-    if (!val || val === '') return true; // Optional
-    return isValidDateFn(parseISO(val)); // Validate if it's a parsable date string
-  }, { message: "Invalid date format for purchase date." }).or(z.literal('')),
+  purchaseDate: z.string().optional().refine((val) => {
+    if (!val || val === '') return true;
+    return isValidDateFn(parseISO(val));
+  }, { message: "Invalid date format. Use YYYY-MM-DD." }).or(z.literal('')),
   notes: z.string().max(500).optional().or(z.literal('')),
   features: z.string().max(200, {message: "Features list cannot exceed 200 characters."}).optional().or(z.literal('')),
   remoteAccess: z.object({
     ipAddress: z.string().max(45).optional().or(z.literal('')),
     hostname: z.string().max(255).optional().or(z.literal('')),
-    protocol: z.enum(VALID_REMOTE_PROTOCOLS).or(z.literal('')).optional(),
+    protocol: z.enum(VALID_REMOTE_PROTOCOLS).or(z.literal('')).optional(), // Empty string for 'None'
     username: z.string().max(100).optional().or(z.literal('')),
-    port: z.string().optional().transform((val) => (val === '' || val === undefined ? undefined : Number(val))).refine(val => val === undefined || (Number.isInteger(val) && val >=1 && val <=65535), {message: "Port must be a number between 1 and 65535."}).optional(),
+    port: z.string().optional() // Keep as string from input
+             .transform(val => (val === '' || val === undefined ? undefined : val)) // Pass empty string or actual string
+             .refine(val => val === undefined || /^\d+$/.test(val), { message: "Port must be a number if provided."})
+             .transform(val => val === undefined ? undefined : Number(val))
+             .refine(val => val === undefined || (Number.isInteger(val) && val >= 1 && val <= 65535), {
+                message: "Port must be an integer between 1 and 65535.",
+             })
+             .optional(),
     notes: z.string().max(500).optional().or(z.literal('')),
   }).optional(),
   allowQueueing: z.boolean().optional(),
@@ -73,70 +79,96 @@ export function ResourceFormDialog({
 
   const form = useForm<ResourceFormValues>({
     resolver: zodResolver(resourceFormSchema),
-    // Default values are set in useEffect
+    defaultValues: { // Will be overridden by useEffect
+        name: '',
+        resourceTypeId: resourceTypes.length > 0 ? resourceTypes[0].id : '',
+        lab: labsList.length > 0 ? labsList[0] : undefined,
+        status: 'Available',
+        description: '',
+        imageUrl: '',
+        manufacturer: '',
+        model: '',
+        serialNumber: '',
+        purchaseDate: '',
+        notes: '',
+        features: '',
+        remoteAccess: {
+          ipAddress: '', hostname: '', protocol: '', username: '', port: '', notes: '',
+        },
+        allowQueueing: false,
+    },
   });
+  
+  const resetForm = useCallback(() => {
+    if (initialResource) {
+      form.reset({
+        name: initialResource.name,
+        resourceTypeId: initialResource.resourceTypeId,
+        lab: initialResource.lab,
+        status: initialResource.status,
+        description: initialResource.description || '',
+        imageUrl: initialResource.imageUrl || '',
+        manufacturer: initialResource.manufacturer || '',
+        model: initialResource.model || '',
+        serialNumber: initialResource.serialNumber || '',
+        purchaseDate: initialResource.purchaseDate && isValidDateFn(initialResource.purchaseDate)
+                        ? format(initialResource.purchaseDate, 'yyyy-MM-dd')
+                        : '',
+        notes: initialResource.notes || '',
+        features: Array.isArray(initialResource.features) ? initialResource.features.join(', ') : '',
+        remoteAccess: {
+          ipAddress: initialResource.remoteAccess?.ipAddress || '',
+          hostname: initialResource.remoteAccess?.hostname || '',
+          protocol: initialResource.remoteAccess?.protocol || '',
+          username: initialResource.remoteAccess?.username || '',
+          port: initialResource.remoteAccess?.port?.toString() ?? '',
+          notes: initialResource.remoteAccess?.notes || '',
+        },
+        allowQueueing: initialResource.allowQueueing ?? false,
+      });
+    } else {
+      form.reset({
+        name: '',
+        resourceTypeId: resourceTypes.length > 0 ? resourceTypes[0].id : '',
+        lab: labsList.length > 0 ? labsList[0] : undefined,
+        status: 'Available',
+        description: '',
+        imageUrl: 'https://placehold.co/600x400.png',
+        manufacturer: '',
+        model: '',
+        serialNumber: '',
+        purchaseDate: '',
+        notes: '',
+        features: '',
+        remoteAccess: {
+          ipAddress: '', hostname: '', protocol: '', username: '', port: '', notes: '',
+        },
+        allowQueueing: false,
+      });
+    }
+  }, [initialResource, resourceTypes, form.reset]);
 
   useEffect(() => {
     if (open) {
       setIsSubmitting(false);
-      if (initialResource) {
-        form.reset({
-          name: initialResource.name,
-          resourceTypeId: initialResource.resourceTypeId,
-          lab: initialResource.lab,
-          status: initialResource.status,
-          description: initialResource.description || '',
-          imageUrl: initialResource.imageUrl || '',
-          manufacturer: initialResource.manufacturer || '',
-          model: initialResource.model || '',
-          serialNumber: initialResource.serialNumber || '',
-          purchaseDate: initialResource.purchaseDate && isValidDateFn(new Date(initialResource.purchaseDate))
-                          ? format(new Date(initialResource.purchaseDate), 'yyyy-MM-dd') // Format Date object for input
-                          : '',
-          notes: initialResource.notes || '',
-          features: Array.isArray(initialResource.features) ? initialResource.features.join(', ') : '',
-          remoteAccess: {
-            ipAddress: initialResource.remoteAccess?.ipAddress || '',
-            hostname: initialResource.remoteAccess?.hostname || '',
-            protocol: initialResource.remoteAccess?.protocol || '',
-            username: initialResource.remoteAccess?.username || '',
-            port: initialResource.remoteAccess?.port?.toString() ?? '', // Convert number to string for input
-            notes: initialResource.remoteAccess?.notes || '',
-          },
-          allowQueueing: initialResource.allowQueueing ?? false,
-        });
-      } else {
-        form.reset({
-          name: '',
-          resourceTypeId: resourceTypes.length > 0 ? resourceTypes[0].id : '',
-          lab: labsList.length > 0 ? labsList[0] : undefined,
-          status: 'Available',
-          description: '',
-          imageUrl: '',
-          manufacturer: '',
-          model: '',
-          serialNumber: '',
-          purchaseDate: '',
-          notes: '',
-          features: '',
-          remoteAccess: {
-            ipAddress: '',
-            hostname: '',
-            protocol: '',
-            username: '',
-            port: '',
-            notes: '',
-          },
-          allowQueueing: false,
-        });
-      }
+      resetForm();
     }
-  }, [open, initialResource, resourceTypes, form.reset]);
+  }, [open, initialResource, resourceTypes, form.reset, resetForm]);
 
   async function onSubmit(data: ResourceFormValues) {
     setIsSubmitting(true);
     try {
-      await onSave(data, initialResource?.id);
+        // Ensure empty optional fields that should be numbers are undefined
+        const processedData = {
+            ...data,
+            remoteAccess: data.remoteAccess ? {
+                ...data.remoteAccess,
+                port: data.remoteAccess.port // Zod transform handles string to number | undefined
+            } : undefined,
+            imageUrl: data.imageUrl || 'https://placehold.co/600x400.png' // Default image if empty
+        };
+      await onSave(processedData, initialResource?.id);
+      // onOpenChange(false); // Parent usually handles closing dialog on successful save
     } catch (error) {
       console.error("Error during resource save submission:", error);
       // Toast for error is typically handled in the parent onSave function
@@ -164,7 +196,7 @@ export function ResourceFormDialog({
                   render={({ field }) => (
                       <FormItem>
                       <FormLabel>Resource Name</FormLabel>
-                      <FormControl><Input placeholder="e.g., Keysight Oscilloscope MSOX3054T" {...field} /></FormControl>
+                      <FormControl><Input placeholder="e.g., Keysight Oscilloscope MSOX3054T" {...field} disabled={isSubmitting}/></FormControl>
                       <FormMessage />
                       </FormItem>
                   )}
@@ -176,14 +208,14 @@ export function ResourceFormDialog({
                       render={({ field }) => (
                           <FormItem>
                           <FormLabel>Resource Type</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ''} disabled={resourceTypes.length === 0}>
+                          <Select onValueChange={field.onChange} value={field.value || ''} disabled={resourceTypes.length === 0 || isSubmitting}>
                               <FormControl><SelectTrigger>
                                   <SelectValue placeholder={resourceTypes.length > 0 ? "Select a type" : "No types defined"} />
                               </SelectTrigger></FormControl>
                               <SelectContent>
                               {resourceTypes.length > 0 ? resourceTypes.map(type => (
                                   <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-                              )) : <SelectItem value="disabled_placeholder" disabled>No resource types available.</SelectItem>}
+                              )) : <SelectItem value="disabled_placeholder_no_types" disabled>No resource types available.</SelectItem>}
                               </SelectContent>
                           </Select>
                           {resourceTypes.length === 0 && <FormDescription className="text-destructive">Please define resource types first.</FormDescription>}
@@ -197,7 +229,7 @@ export function ResourceFormDialog({
                       render={({ field }) => (
                           <FormItem>
                           <FormLabel>Lab</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ''}>
+                          <Select onValueChange={field.onChange} value={field.value || ''} disabled={isSubmitting}>
                               <FormControl><SelectTrigger><SelectValue placeholder="Select a lab" /></SelectTrigger></FormControl>
                               <SelectContent>
                               {labsList.map(labName => (
@@ -217,7 +249,7 @@ export function ResourceFormDialog({
                   render={({ field }) => (
                       <FormItem>
                       <FormLabel>Description (Optional)</FormLabel>
-                      <FormControl><Textarea placeholder="Detailed description of the resource..." {...field} value={field.value ?? ''} rows={3} /></FormControl>
+                      <FormControl><Textarea placeholder="Detailed description of the resource..." {...field} value={field.value ?? ''} rows={3} disabled={isSubmitting}/></FormControl>
                       <FormMessage />
                       </FormItem>
                   )}
@@ -229,7 +261,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Image URL (Optional)</FormLabel>
-                            <FormControl><Input type="url" placeholder="https://placehold.co/600x400.png" {...field} value={field.value ?? ''} /></FormControl>
+                            <FormControl><Input type="url" placeholder="https://placehold.co/600x400.png" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -240,7 +272,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Purchase Date (Optional)</FormLabel>
-                            <FormControl><Input type="date" {...field} value={field.value ?? ''} /></FormControl>
+                            <FormControl><Input type="date" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -253,7 +285,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Manufacturer (Optional)</FormLabel>
-                            <FormControl><Input placeholder="e.g., Keysight" {...field} value={field.value ?? ''} /></FormControl>
+                            <FormControl><Input placeholder="e.g., Keysight" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -264,7 +296,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Model (Optional)</FormLabel>
-                            <FormControl><Input placeholder="e.g., MSOX3054T" {...field} value={field.value ?? ''} /></FormControl>
+                            <FormControl><Input placeholder="e.g., MSOX3054T" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -275,7 +307,7 @@ export function ResourceFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Serial Number (Optional)</FormLabel>
-                            <FormControl><Input placeholder="e.g., MY58012345" {...field} value={field.value ?? ''} /></FormControl>
+                            <FormControl><Input placeholder="e.g., MY58012345" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
                             <FormMessage />
                             </FormItem>
                         )}
@@ -288,7 +320,7 @@ export function ResourceFormDialog({
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || 'Available'}>
+                        <Select onValueChange={field.onChange} value={field.value || 'Available'} disabled={isSubmitting}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
                             <SelectContent>
                             {resourceStatusesList.map(statusVal => (
@@ -307,7 +339,7 @@ export function ResourceFormDialog({
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Key Features (Optional)</FormLabel>
-                        <FormControl><Textarea placeholder="e.g., 500 MHz Bandwidth, 4 Analog Channels, 16 Digital Channels" {...field} value={field.value ?? ''} rows={2}/></FormControl>
+                        <FormControl><Textarea placeholder="e.g., 500 MHz Bandwidth, 4 Analog Channels, 16 Digital Channels" {...field} value={field.value ?? ''} rows={2} disabled={isSubmitting}/></FormControl>
                         <FormDescription>Enter comma-separated values.</FormDescription>
                         <FormMessage />
                         </FormItem>
@@ -319,7 +351,7 @@ export function ResourceFormDialog({
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>General Notes (Optional)</FormLabel>
-                        <FormControl><Textarea placeholder="Any additional notes or special instructions..." {...field} value={field.value ?? ''} rows={2}/></FormControl>
+                        <FormControl><Textarea placeholder="Any additional notes or special instructions..." {...field} value={field.value ?? ''} rows={2} disabled={isSubmitting}/></FormControl>
                         <FormMessage />
                         </FormItem>
                     )}
@@ -333,6 +365,7 @@ export function ResourceFormDialog({
                             <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
+                            disabled={isSubmitting}
                             />
                         </FormControl>
                         <div className="space-y-1 leading-none">
@@ -358,7 +391,7 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>IP Address (Optional)</FormLabel>
-                                    <FormControl><Input placeholder="e.g., 192.168.1.100" {...field} value={field.value ?? ''} /></FormControl>
+                                    <FormControl><Input placeholder="e.g., 192.168.1.100" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
                                     <FormMessage />
                                     </FormItem>
                                 )}
@@ -369,7 +402,7 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Hostname (Optional)</FormLabel>
-                                    <FormControl><Input placeholder="e.g., scope-01.lab.internal" {...field} value={field.value ?? ''} /></FormControl>
+                                    <FormControl><Input placeholder="e.g., scope-01.lab.internal" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
                                     <FormMessage />
                                     </FormItem>
                                 )}
@@ -385,6 +418,7 @@ export function ResourceFormDialog({
                                     <Select
                                       onValueChange={(v) => field.onChange(v === NONE_PROTOCOL_VALUE ? '' : v)}
                                       value={field.value === '' || field.value === undefined || field.value === null ? NONE_PROTOCOL_VALUE : field.value}
+                                      disabled={isSubmitting}
                                     >
                                         <FormControl><SelectTrigger><SelectValue placeholder="Select protocol" /></SelectTrigger></FormControl>
                                         <SelectContent>
@@ -405,11 +439,12 @@ export function ResourceFormDialog({
                                     <FormItem>
                                     <FormLabel>Port (Optional)</FormLabel>
                                     <FormControl><Input
-                                        type="text" // Use text to allow empty, Zod coerces
+                                        type="text" // Keep as text to allow empty string
                                         placeholder="e.g., 22, 3389"
                                         {...field}
-                                        value={field.value ?? ''} // Ensure controlled component, handle undefined as empty string for input
-                                        onChange={e => field.onChange(e.target.value)} // Pass string value directly
+                                        value={field.value?.toString() ?? ''} // Ensure controlled component, handle undefined/number
+                                        onChange={e => field.onChange(e.target.value)} // Pass string value for Zod to coerce
+                                        disabled={isSubmitting}
                                      /></FormControl>
                                     <FormMessage />
                                     </FormItem>
@@ -421,7 +456,7 @@ export function ResourceFormDialog({
                                 render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Username (Optional)</FormLabel>
-                                    <FormControl><Input placeholder="e.g., labuser" {...field}  value={field.value ?? ''}/></FormControl>
+                                    <FormControl><Input placeholder="e.g., labuser" {...field}  value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
                                     <FormMessage />
                                     </FormItem>
                                 )}
@@ -433,7 +468,7 @@ export function ResourceFormDialog({
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Connection Notes (Optional)</FormLabel>
-                                <FormControl><Textarea placeholder="e.g., VPN required, specific client versions, credential location..." {...field} value={field.value ?? ''} rows={2} /></FormControl>
+                                <FormControl><Textarea placeholder="e.g., VPN required, specific client versions, credential location..." {...field} value={field.value ?? ''} rows={2} disabled={isSubmitting}/></FormControl>
                                 <FormMessage />
                                 </FormItem>
                             )}

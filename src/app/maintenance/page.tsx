@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { format, parseISO, isValid as isValidDate } from 'date-fns';
+import { format, parseISO, isValid as isValidDateFn, Timestamp } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,7 +42,7 @@ import { Separator } from '@/components/ui/separator';
 import { MaintenanceRequestFormDialog, MaintenanceRequestFormValues } from '@/components/maintenance/maintenance-request-form-dialog';
 import { cn, formatDateSafe } from '@/lib/utils';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, Timestamp, getDoc, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, getDoc, orderBy } from 'firebase/firestore';
 
 
 const getMaintenanceStatusBadge = (status: MaintenanceRequestStatus) => {
@@ -71,14 +71,12 @@ export default function MaintenanceRequestsPage() {
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<MaintenanceRequest | null>(null);
 
-  // Filter Dialog State
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterStatus, setTempFilterStatus] = useState<MaintenanceRequestStatus | 'all'>('all');
   const [tempFilterResourceId, setTempFilterResourceId] = useState<string>('all');
   const [tempFilterTechnicianId, setTempFilterTechnicianId] = useState<string>('all');
 
-  // Active Page Filters
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterStatus, setActiveFilterStatus] = useState<MaintenanceRequestStatus | 'all'>('all');
   const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
@@ -88,57 +86,30 @@ export default function MaintenanceRequestsPage() {
   const fetchMaintenanceData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Firestore Index required: maintenanceRequests collection: dateReported (DESC)
+      const usersSnapshot = await getDocs(query(collection(db, "users"), orderBy("name", "asc")));
+      const fetchedUsers = usersSnapshot.docs.map(d => ({ id: d.id, ...d.data(), createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date() } as User));
+      setAllTechnicians(fetchedUsers.filter(u => u.role === 'Technician').sort((a,b) => (a.name || '').localeCompare(b.name || '')));
+      
+      const resourcesSnapshot = await getDocs(query(collection(db, "resources"), orderBy("name", "asc")));
+      const fetchedResources = resourcesSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Resource));
+      setAllResources(fetchedResources);
+
       const requestsQuery = query(collection(db, "maintenanceRequests"), orderBy("dateReported", "desc"));
       const requestsSnapshot = await getDocs(requestsQuery);
-      const fetchedRequestsPromises = requestsSnapshot.docs.map(async (docSnap) => {
+      const fetchedRequests: MaintenanceRequest[] = requestsSnapshot.docs.map((docSnap) => {
         const data = docSnap.data();
-        let resourceName = 'Unknown Resource';
-        let reportedByUserName = 'Unknown User';
-        let assignedTechnicianName: string | undefined = undefined;
-
-        if (data.resourceId) {
-          const resourceDoc = await getDoc(doc(db, 'resources', data.resourceId));
-          if (resourceDoc.exists()) resourceName = resourceDoc.data()?.name || resourceName;
-        }
-        if (data.reportedByUserId) {
-          const userDoc = await getDoc(doc(db, 'users', data.reportedByUserId));
-          if (userDoc.exists()) reportedByUserName = userDoc.data()?.name || reportedByUserName;
-        }
-        if (data.assignedTechnicianId) {
-          const techDoc = await getDoc(doc(db, 'users', data.assignedTechnicianId));
-          if (techDoc.exists()) assignedTechnicianName = techDoc.data()?.name;
-        }
-
         return {
           id: docSnap.id,
           ...data,
           dateReported: data.dateReported instanceof Timestamp ? data.dateReported.toDate() : new Date(),
           dateResolved: data.dateResolved instanceof Timestamp ? data.dateResolved.toDate() : undefined,
-          // Add resourceName, reportedByUserName, assignedTechnicianName for display (denormalized client-side)
-          resourceName,
-          reportedByUserName,
-          assignedTechnicianName,
-        } as MaintenanceRequest & { resourceName: string, reportedByUserName: string, assignedTechnicianName?: string }; // Augment type
+        } as MaintenanceRequest;
       });
-      const resolvedRequests = (await Promise.all(fetchedRequestsPromises)) as MaintenanceRequest[];
-      setRequests(resolvedRequests);
-
-      // Fetch All Resources
-      // Firestore Index required: resources collection: name (ASC)
-      const resourcesQuery = query(collection(db, "resources"), orderBy("name", "asc"));
-      const resourcesSnapshot = await getDocs(resourcesQuery);
-      setAllResources(resourcesSnapshot.docs.map(d => ({id: d.id, ...d.data()} as Resource)));
-
-      // Fetch All Technicians
-      // Firestore Index required: users collection: role (ASC), name (ASC)
-      const techniciansQuery = query(collection(db, "users"), where("role", "==", "Technician"), orderBy("name", "asc"));
-      const techniciansSnapshot = await getDocs(techniciansQuery);
-      setAllTechnicians(techniciansSnapshot.docs.map(d => ({id: d.id, ...d.data()} as User)));
+      setRequests(fetchedRequests);
 
     } catch (error: any) {
       console.error("Error fetching maintenance data:", error);
-      toast({ title: "Error", description: `Failed to load maintenance data. ${error.message}`, variant: "destructive" });
+      toast({ title: "Database Error", description: `Failed to load maintenance data. ${error.message}`, variant: "destructive" });
       setRequests([]);
       setAllResources([]);
       setAllTechnicians([]);
@@ -161,10 +132,23 @@ export default function MaintenanceRequestsPage() {
 
 
   const filteredRequests = useMemo(() => {
-    return requests.filter(req => {
+    return requests.map(req => {
+      const resource = allResources.find(r => r.id === req.resourceId);
+      const reporter = allUsers.find(u => u.id === req.reportedByUserId); // Assuming allUsers state contains all users
+      const technician = allTechnicians.find(t => t.id === req.assignedTechnicianId);
+      return {
+        ...req,
+        resourceName: resource?.name || 'Unknown Resource',
+        reportedByUserName: reporter?.name || 'Unknown User',
+        assignedTechnicianName: technician?.name,
+      };
+    }).filter(req => {
       const lowerSearchTerm = activeSearchTerm.toLowerCase();
-      // @ts-ignore (client-side augmented properties)
-      const searchMatch = !activeSearchTerm || (req.resourceName && req.resourceName.toLowerCase().includes(lowerSearchTerm)) || (req.reportedByUserName && req.reportedByUserName.toLowerCase().includes(lowerSearchTerm)) || (req.issueDescription && req.issueDescription.toLowerCase().includes(lowerSearchTerm)) || (req.assignedTechnicianName && req.assignedTechnicianName.toLowerCase().includes(lowerSearchTerm));
+      const searchMatch = !activeSearchTerm || 
+                           (req.resourceName && req.resourceName.toLowerCase().includes(lowerSearchTerm)) || 
+                           (req.reportedByUserName && req.reportedByUserName.toLowerCase().includes(lowerSearchTerm)) || 
+                           (req.issueDescription && req.issueDescription.toLowerCase().includes(lowerSearchTerm)) || 
+                           (req.assignedTechnicianName && req.assignedTechnicianName.toLowerCase().includes(lowerSearchTerm));
       const statusMatch = activeFilterStatus === 'all' || req.status === activeFilterStatus;
       const resourceMatch = activeFilterResourceId === 'all' || req.resourceId === activeFilterResourceId;
       let technicianMatch = true;
@@ -177,47 +161,55 @@ export default function MaintenanceRequestsPage() {
       }
       return searchMatch && statusMatch && resourceMatch && technicianMatch;
     });
-  }, [requests, activeSearchTerm, activeFilterStatus, activeFilterResourceId, activeFilterTechnicianId]);
+  }, [requests, allResources, allTechnicians, activeSearchTerm, activeFilterStatus, activeFilterResourceId, activeFilterTechnicianId]);
 
-  const handleApplyDialogFilters = () => {
+  const allUsers = useMemo(() => { // Used for mapping reporter names
+    // In a real app, this might be fetched separately or managed in a global state/context if needed by many components
+    // For now, if technicians are already fetched, we can use them, otherwise, it's a limitation of current data fetching.
+    // This is a simplified approach. Ideally, fetch all users once or have a better user lookup.
+    return allTechnicians; // Placeholder, this should ideally be all users if we need to map any reporter.
+  }, [allTechnicians]);
+
+
+  const handleApplyDialogFilters = useCallback(() => {
     setActiveSearchTerm(tempSearchTerm);
     setActiveFilterStatus(tempFilterStatus);
     setActiveFilterResourceId(tempFilterResourceId);
     setActiveFilterTechnicianId(tempFilterTechnicianId);
     setIsFilterDialogOpen(false);
-  };
+  }, [tempSearchTerm, tempFilterStatus, tempFilterResourceId, tempFilterTechnicianId]);
 
-  const resetDialogFilters = () => {
+  const resetDialogFilters = useCallback(() => {
     setTempSearchTerm('');
     setTempFilterStatus('all');
     setTempFilterResourceId('all');
     setTempFilterTechnicianId('all');
-  };
+  }, []);
 
-  const resetAllActivePageFilters = () => {
+  const resetAllActivePageFilters = useCallback(() => {
     setActiveSearchTerm('');
     setActiveFilterStatus('all');
     setActiveFilterResourceId('all');
     setActiveFilterTechnicianId('all');
     resetDialogFilters();
     setIsFilterDialogOpen(false);
-  };
+  }, [resetDialogFilters]);
 
-  const handleOpenNewDialog = () => {
+  const handleOpenNewDialog = useCallback(() => {
     if (!currentUser) {
       toast({ title: "Login Required", description: "You must be logged in to log a maintenance request.", variant: "destructive" });
       return;
     }
     setEditingRequest(null);
     setIsFormDialogOpen(true);
-  };
+  }, [currentUser, toast]);
 
-  const handleOpenEditDialog = (request: MaintenanceRequest) => {
+  const handleOpenEditDialog = useCallback((request: MaintenanceRequest) => {
     setEditingRequest(request);
     setIsFormDialogOpen(true);
-  };
+  }, []);
 
-  const handleSaveRequest = async (data: MaintenanceRequestFormValues) => {
+  const handleSaveRequest = useCallback(async (data: MaintenanceRequestFormValues) => {
     if (!currentUser) {
       toast({ title: "Error", description: "You must be logged in.", variant: "destructive"});
       return;
@@ -228,55 +220,54 @@ export default function MaintenanceRequestsPage() {
       toast({ title: "Error", description: "Selected resource not found.", variant: "destructive" });
       return;
     }
+    
+    let dateResolvedForFirestore: Timestamp | null = null;
+    if (data.status === 'Resolved' || data.status === 'Closed') {
+        if (data.dateResolved && isValidDateFn(new Date(data.dateResolved))) {
+             dateResolvedForFirestore = Timestamp.fromDate(new Date(data.dateResolved));
+        } else if (!editingRequest?.dateResolved) { // If not editing or if editing and no prior dateResolved
+            dateResolvedForFirestore = serverTimestamp() as Timestamp;
+        } else if (editingRequest?.dateResolved) { // If editing and had a dateResolved, keep it
+            dateResolvedForFirestore = Timestamp.fromDate(editingRequest.dateResolved);
+        }
+    }
+
 
     const requestDataToSave: any = {
       resourceId: data.resourceId,
       issueDescription: data.issueDescription,
       status: data.status,
-      assignedTechnicianId: data.assignedTechnicianId || null,
-      resolutionNotes: data.resolutionNotes || null,
+      assignedTechnicianId: data.assignedTechnicianId || null, // Save null if empty
+      resolutionNotes: data.resolutionNotes || null, // Save null if empty
+      dateResolved: dateResolvedForFirestore,
     };
 
     setIsLoading(true);
-    if (editingRequest) {
-      try {
-        if (data.status === 'Resolved' || data.status === 'Closed') {
-          if (!editingRequest.dateResolved) {
-            requestDataToSave.dateResolved = serverTimestamp();
-          }
-        } else {
-          requestDataToSave.dateResolved = null;
-        }
+    try {
+      if (editingRequest) {
         const requestDocRef = doc(db, "maintenanceRequests", editingRequest.id);
         await updateDoc(requestDocRef, requestDataToSave);
 
-        // @ts-ignore
-        addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingRequest.id, details: `Maintenance request for '${editingRequest.resourceName}' updated. Status: ${data.status}.`});
-        // @ts-ignore
-        toast({ title: 'Request Updated', description: `Maintenance request for "${editingRequest.resourceName}" has been updated.` });
+        const currentResourceName = allResources.find(r => r.id === editingRequest.resourceId)?.name || 'the resource';
+        addAuditLog(currentUser.id, currentUser.name || 'User', 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingRequest.id, details: `Maintenance request for '${currentResourceName}' updated. Status: ${data.status}.`});
+        toast({ title: 'Request Updated', description: `Maintenance request for "${currentResourceName}" has been updated.` });
 
         if ((data.status === 'Resolved' && editingRequest.status !== 'Resolved') && editingRequest.reportedByUserId) {
-          addNotification( editingRequest.reportedByUserId, 'Maintenance Resolved', `The issue reported for ${resource.name} has been resolved.`, 'maintenance_resolved', '/maintenance');
+          addNotification( editingRequest.reportedByUserId, 'Maintenance Resolved', `The issue reported for ${currentResourceName} has been resolved.`, 'maintenance_resolved', '/maintenance');
         } else if (data.assignedTechnicianId && data.assignedTechnicianId !== editingRequest.assignedTechnicianId) {
            if(data.assignedTechnicianId) {
-            addNotification( data.assignedTechnicianId, 'Maintenance Task Assigned', `You have been assigned a maintenance task for ${resource.name}: ${data.issueDescription.substring(0,50)}...`, 'maintenance_assigned', '/maintenance');
+            addNotification( data.assignedTechnicianId, 'Maintenance Task Assigned', `You have been assigned a maintenance task for ${currentResourceName}: ${data.issueDescription.substring(0,50)}...`, 'maintenance_assigned', '/maintenance');
           }
         }
-      } catch (error) {
-        console.error("Error updating maintenance request:", error);
-        toast({ title: "Update Failed", description: "Could not update maintenance request.", variant: "destructive" });
-      }
-    } else {
-      try {
+      } else {
         const newRequestPayload = {
           ...requestDataToSave,
           reportedByUserId: currentUser.id,
           dateReported: serverTimestamp(),
-          dateResolved: (data.status === 'Resolved' || data.status === 'Closed') ? serverTimestamp() : null,
         };
         const docRef = await addDoc(collection(db, "maintenanceRequests"), newRequestPayload);
 
-        addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New maintenance request for '${resource.name}' logged.`});
+        addAuditLog(currentUser.id, currentUser.name || 'User', 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New maintenance request for '${resource.name}' logged.`});
         toast({ title: 'Request Logged', description: `New maintenance request for "${resource.name}" has been logged.` });
 
         const usersToNotifyQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager', 'Technician']));
@@ -289,25 +280,40 @@ export default function MaintenanceRequestsPage() {
                  addNotification( userDoc.id, 'New Unassigned Maintenance Request', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`, 'maintenance_new', '/maintenance');
             });
         }
-      } catch (error) {
-         console.error("Error logging maintenance request:", error);
-        toast({ title: "Logging Failed", description: "Could not log maintenance request.", variant: "destructive" });
       }
+      setIsFormDialogOpen(false);
+      setEditingRequest(null);
+      await fetchMaintenanceData();
+    } catch (error: any) {
+       console.error(`Error ${editingRequest ? "updating" : "logging"} maintenance request:`, error);
+      toast({ title: `${editingRequest ? "Update" : "Logging"} Failed`, description: `Could not ${editingRequest ? "update" : "log"} maintenance request: ${error.message}`, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
     }
-    setIsFormDialogOpen(false);
-    setEditingRequest(null);
-    await fetchMaintenanceData();
-  };
+  }, [currentUser, editingRequest, allResources, fetchMaintenanceData, toast]);
 
-  const activeFilterCount = [
+  const activeFilterCount = useMemo(() => [
     activeSearchTerm !== '',
     activeFilterStatus !== 'all',
     activeFilterResourceId !== 'all',
     activeFilterTechnicianId !== 'all',
-  ].filter(Boolean).length;
+  ].filter(Boolean).length, [activeSearchTerm, activeFilterStatus, activeFilterResourceId, activeFilterTechnicianId]);
 
   const canEditMaintenanceRequest = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager' || currentUser.role === 'Technician');
 
+  if (!currentUser) {
+    return (
+      <div className="space-y-8">
+        <PageHeader title="Maintenance Requests" icon={Wrench} description="Access Denied." />
+        <Card className="text-center py-10 text-muted-foreground">
+          <CardContent>
+            <p>Please log in to view or manage maintenance requests.</p>
+             <Button onClick={() => router.push('/login')} className="mt-4">Go to Login</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <TooltipProvider>
@@ -330,7 +336,7 @@ export default function MaintenanceRequestsPage() {
                     )}
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="w-full max-w-lg">
                   <DialogHeader>
                     <DialogTitle>Filter Maintenance Requests</DialogTitle>
                     <DialogDescription>
@@ -338,10 +344,10 @@ export default function MaintenanceRequestsPage() {
                     </DialogDescription>
                   </DialogHeader>
                   <Separator className="my-4" />
-                  <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                  <div className="space-y-4">
                     <div>
-                      <Label htmlFor="maintenanceSearchDialog" className="text-sm font-medium mb-1 block">Search (Resource/Reporter/Issue/Tech)</Label>
-                      <div className="relative">
+                      <Label htmlFor="maintenanceSearchDialog">Search (Resource/Reporter/Issue/Tech)</Label>
+                      <div className="relative mt-1">
                         <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           id="maintenanceSearchDialog"
@@ -355,9 +361,9 @@ export default function MaintenanceRequestsPage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                        <div>
-                        <Label htmlFor="maintenanceStatusDialog" className="text-sm font-medium mb-1 block">Status</Label>
+                        <Label htmlFor="maintenanceStatusDialog">Status</Label>
                         <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as MaintenanceRequestStatus | 'all')}>
-                            <SelectTrigger id="maintenanceStatusDialog" className="h-9"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
+                            <SelectTrigger id="maintenanceStatusDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Statuses</SelectItem>
                                 {maintenanceRequestStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
@@ -365,9 +371,9 @@ export default function MaintenanceRequestsPage() {
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="maintenanceResourceDialog" className="text-sm font-medium mb-1 block">Resource</Label>
+                        <Label htmlFor="maintenanceResourceDialog">Resource</Label>
                         <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId}>
-                            <SelectTrigger id="maintenanceResourceDialog" className="h-9"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
+                            <SelectTrigger id="maintenanceResourceDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Resources</SelectItem>
                                 {allResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
@@ -376,18 +382,18 @@ export default function MaintenanceRequestsPage() {
                       </div>
                     </div>
                     <div>
-                      <Label htmlFor="maintenanceTechnicianDialog" className="text-sm font-medium mb-1 block">Assigned Technician</Label>
+                      <Label htmlFor="maintenanceTechnicianDialog">Assigned Technician</Label>
                       <Select value={tempFilterTechnicianId} onValueChange={setTempFilterTechnicianId}>
-                          <SelectTrigger id="maintenanceTechnicianDialog" className="h-9"><SelectValue placeholder="Filter by Technician" /></SelectTrigger>
+                          <SelectTrigger id="maintenanceTechnicianDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Technician" /></SelectTrigger>
                           <SelectContent>
-                              <SelectItem value="all">All Technicians</SelectItem>
+                              <SelectItem value="all">All/Any</SelectItem>
                               <SelectItem value="unassigned">Unassigned</SelectItem>
                               {allTechnicians.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                           </SelectContent>
                       </Select>
                     </div>
                   </div>
-                  <DialogFooter className="pt-6 border-t">
+                  <DialogFooter className="pt-6 border-t mt-4">
                     <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
                       <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                     </Button>
@@ -425,24 +431,21 @@ export default function MaintenanceRequestsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredRequests.map((request) => (
+                    {filteredRequests.map((request: MaintenanceRequest & { resourceName: string, reportedByUserName: string, assignedTechnicianName?: string }) => (
                       <TableRow key={request.id}>
-                        {/* @ts-ignore */}
                         <TableCell className="font-medium">{request.resourceName}</TableCell>
                         <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{request.issueDescription}</TableCell>
-                        {/* @ts-ignore */}
                         <TableCell>{request.reportedByUserName}</TableCell>
                         <TableCell>
                           {formatDateSafe(request.dateReported)}
                         </TableCell>
                         <TableCell>{getMaintenanceStatusBadge(request.status)}</TableCell>
-                        {/* @ts-ignore */}
                         <TableCell>{request.assignedTechnicianName || <span className="text-xs italic text-muted-foreground">Unassigned</span>}</TableCell>
                         {canEditMaintenanceRequest && (
                           <TableCell className="text-right space-x-1">
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDialog(request)}>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDialog(request)} disabled={isLoading}>
                                   <Edit className="h-4 w-4" />
                                   <span className="sr-only">Edit Request</span>
                                 </Button>
@@ -459,7 +462,7 @@ export default function MaintenanceRequestsPage() {
             </CardContent>
           </Card>
         ) : (
-          <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
+          <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
             <CardContent>
               <Wrench className="mx-auto h-12 w-12 mb-4 opacity-50" />
               <p className="text-lg font-medium">
@@ -485,7 +488,7 @@ export default function MaintenanceRequestsPage() {
           </Card>
         )}
       </div>
-      {isFormDialogOpen && (
+      {isFormDialogOpen && currentUser && (
         <MaintenanceRequestFormDialog
             open={isFormDialogOpen}
             onOpenChange={(isOpen) => {
@@ -496,7 +499,7 @@ export default function MaintenanceRequestsPage() {
             onSave={handleSaveRequest}
             technicians={allTechnicians}
             resources={allResources}
-            currentUserRole={currentUser?.role}
+            currentUserRole={currentUser.role}
         />
       )}
     </TooltipProvider>

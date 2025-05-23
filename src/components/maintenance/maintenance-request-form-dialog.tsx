@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,7 +22,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
 import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource, RoleName } from '@/types';
 import { maintenanceRequestStatuses } from '@/lib/mock-data';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, serverTimestamp } from 'firebase/firestore';
+import { format, parseISO, isValid as isValidDateFn } from 'date-fns';
 
 const UNASSIGNED_TECHNICIAN_VALUE = "--unassigned--";
 
@@ -29,8 +31,11 @@ const maintenanceRequestFormSchema = z.object({
   resourceId: z.string().min(1, { message: 'Please select a resource.' }),
   issueDescription: z.string().min(10, { message: 'Issue description must be at least 10 characters.' }).max(1000, { message: 'Description cannot exceed 1000 characters.' }),
   status: z.enum(maintenanceRequestStatuses as [MaintenanceRequestStatus, ...MaintenanceRequestStatus[]], { required_error: 'Please select a status.'}),
-  assignedTechnicianId: z.string().optional().or(z.literal('')), // Store as string from select, convert to undefined if '' on save
+  assignedTechnicianId: z.string().optional().or(z.literal('')), 
   resolutionNotes: z.string().max(1000).optional().or(z.literal('')),
+  dateResolved: z.string().optional().refine(val => !val || isValidDateFn(parseISO(val)), { // For datetime-local input
+    message: "Invalid resolved date/time format. Use YYYY-MM-DDTHH:mm",
+  }).or(z.literal('')),
 }).refine(data => {
   if ((data.status === 'Resolved' || data.status === 'Closed') && (!data.resolutionNotes || data.resolutionNotes.trim() === '')) {
     return false;
@@ -47,12 +52,18 @@ interface MaintenanceRequestFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialRequest: MaintenanceRequest | null;
-  onSave: (data: MaintenanceRequestFormValues, requestId?: string) => Promise<void>;
+  onSave: (data: MaintenanceRequestFormValues) => Promise<void>; // Changed to remove requestId
   technicians: User[];
   resources: Resource[];
   currentUserRole?: RoleName;
 }
 
+const formatForDateTimeLocal = (date?: Date | null): string => {
+  if (!date || !isValidDateFn(date)) return '';
+  try {
+    return format(date, "yyyy-MM-dd'T'HH:mm");
+  } catch (e) { return ''; }
+};
 
 export function MaintenanceRequestFormDialog({
     open, onOpenChange, initialRequest, onSave, technicians, resources, currentUserRole
@@ -60,33 +71,46 @@ export function MaintenanceRequestFormDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const form = useForm<MaintenanceRequestFormValues>({
     resolver: zodResolver(maintenanceRequestFormSchema),
-    // Default values set in useEffect
+    defaultValues: { // Default values will be set by useEffect
+        resourceId: '',
+        issueDescription: '',
+        status: 'Open',
+        assignedTechnicianId: '',
+        resolutionNotes: '',
+        dateResolved: '',
+    },
   });
 
   const watchStatus = form.watch('status');
 
+  const resetForm = useCallback(() => {
+    if (initialRequest) {
+      form.reset({
+        resourceId: initialRequest.resourceId,
+        issueDescription: initialRequest.issueDescription,
+        status: initialRequest.status,
+        assignedTechnicianId: initialRequest.assignedTechnicianId || '',
+        resolutionNotes: initialRequest.resolutionNotes || '',
+        dateResolved: formatForDateTimeLocal(initialRequest.dateResolved),
+      });
+    } else {
+      form.reset({
+        resourceId: resources.length > 0 ? resources[0].id : '',
+        issueDescription: '',
+        status: 'Open',
+        assignedTechnicianId: '',
+        resolutionNotes: '',
+        dateResolved: '',
+      });
+    }
+  }, [initialRequest, resources, form.reset]);
+
   useEffect(() => {
     if (open) {
       setIsSubmitting(false);
-      if (initialRequest) {
-        form.reset({
-          resourceId: initialRequest.resourceId,
-          issueDescription: initialRequest.issueDescription,
-          status: initialRequest.status,
-          assignedTechnicianId: initialRequest.assignedTechnicianId || '', // Default to empty string for select if undefined
-          resolutionNotes: initialRequest.resolutionNotes || '',
-        });
-      } else {
-        form.reset({
-          resourceId: resources.length > 0 ? resources[0].id : '',
-          issueDescription: '',
-          status: 'Open',
-          assignedTechnicianId: '', // Default to empty string for select
-          resolutionNotes: '',
-        });
-      }
+      resetForm();
     }
-  }, [open, initialRequest, resources, form.reset]);
+  }, [open, initialRequest, resources, form.reset, resetForm]);
 
   async function onSubmit(data: MaintenanceRequestFormValues) {
     setIsSubmitting(true);
@@ -97,7 +121,7 @@ export function MaintenanceRequestFormDialog({
                             : data.assignedTechnicianId,
     };
     try {
-      await onSave(dataToSave, initialRequest?.id);
+      await onSave(dataToSave);
     } catch (error) {
         console.error("Error in MaintenanceRequestFormDialog onSubmit:", error);
     } finally {
@@ -106,7 +130,7 @@ export function MaintenanceRequestFormDialog({
   }
 
   const canEditSensitiveFields = useMemo(() => {
-    if (!currentUserRole) return false;
+    if (!currentUserRole) return false; // Should not happen if dialog is opened correctly
     return currentUserRole === 'Admin' || currentUserRole === 'Lab Manager' || currentUserRole === 'Technician';
   }, [currentUserRole]);
 
@@ -153,7 +177,8 @@ export function MaintenanceRequestFormDialog({
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Issue Description</FormLabel>
-                        <FormControl><Textarea placeholder="Detailed description of the problem..." {...field} value={field.value || ''} rows={5} disabled={isSubmitting} /></FormControl>
+                        <FormControl><Textarea placeholder="Detailed description of the problem..." {...field} value={field.value || ''} rows={5} disabled={isSubmitting || (!!initialRequest && !canEditSensitiveFields && initialRequest.status !== 'Open')} /></FormControl>
+                        {(!!initialRequest && !canEditSensitiveFields && initialRequest.status !== 'Open') && <FormDescription>Description can only be edited by authorized personnel or if status is 'Open'.</FormDescription>}
                         <FormMessage />
                         </FormItem>
                     )}
@@ -165,7 +190,7 @@ export function MaintenanceRequestFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Status</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || 'Open'} disabled={(!canEditSensitiveFields && !!initialRequest) || isSubmitting}>
+                            <Select onValueChange={field.onChange} value={field.value || 'Open'} disabled={!canEditSensitiveFields || isSubmitting}>
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
                                 <SelectContent>
                                 {maintenanceRequestStatuses.map(statusVal => (
@@ -173,7 +198,7 @@ export function MaintenanceRequestFormDialog({
                                 ))}
                                 </SelectContent>
                             </Select>
-                            {(!canEditSensitiveFields && !!initialRequest) && <FormDescription>Status can only be changed by authorized personnel.</FormDescription>}
+                            {!canEditSensitiveFields && <FormDescription>Status can only be changed by authorized personnel.</FormDescription>}
                             <FormMessage />
                             </FormItem>
                         )}
@@ -186,8 +211,8 @@ export function MaintenanceRequestFormDialog({
                             <FormLabel>Assign Technician (Optional)</FormLabel>
                             <Select
                                 onValueChange={(value) => field.onChange(value)}
-                                value={field.value || UNASSIGNED_TECHNICIAN_VALUE} // Ensure select shows placeholder if value is empty string
-                                disabled={(!canEditSensitiveFields && !!initialRequest) || isSubmitting}
+                                value={field.value || UNASSIGNED_TECHNICIAN_VALUE}
+                                disabled={!canEditSensitiveFields || isSubmitting}
                             >
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select a technician" /></SelectTrigger></FormControl>
                                 <SelectContent>
@@ -197,35 +222,49 @@ export function MaintenanceRequestFormDialog({
                                 ))}
                                 </SelectContent>
                             </Select>
-                            {(!canEditSensitiveFields && !!initialRequest) && <FormDescription>Technician assignment can only be changed by authorized personnel.</FormDescription>}
+                            {!canEditSensitiveFields && <FormDescription>Technician assignment can only be changed by authorized personnel.</FormDescription>}
                             <FormMessage />
                             </FormItem>
                         )}
                     />
                 </div>
                 {(watchStatus === 'Resolved' || watchStatus === 'Closed') && (
+                    <>
                      <FormField
                         control={form.control}
                         name="resolutionNotes"
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Resolution Notes {watchStatus === 'Resolved' || watchStatus === 'Closed' ? <span className="text-destructive">*</span> : ''}</FormLabel>
-                            <FormControl><Textarea placeholder="Describe the resolution steps taken..." {...field} value={field.value || ''} rows={4} disabled={(!canEditSensitiveFields && !!initialRequest) || isSubmitting} /></FormControl>
+                            <FormControl><Textarea placeholder="Describe the resolution steps taken..." {...field} value={field.value || ''} rows={4} disabled={!canEditSensitiveFields || isSubmitting} /></FormControl>
                              <FormDescription>Required if status is Resolved or Closed.
-                             {(!canEditSensitiveFields && !!initialRequest) && " Only authorized personnel can add resolution notes."}
+                             {!canEditSensitiveFields && " Only authorized personnel can add resolution notes."}
                              </FormDescription>
                             <FormMessage />
                             </FormItem>
                         )}
                     />
+                    <FormField
+                        control={form.control}
+                        name="dateResolved"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Date Resolved (Optional)</FormLabel>
+                            <FormControl><Input type="datetime-local" {...field} value={field.value || ''} disabled={!canEditSensitiveFields || isSubmitting} /></FormControl>
+                            <FormDescription>Defaults to now if status is set to Resolved/Closed and no date is provided.</FormDescription>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    </>
                 )}
             </div>
             </ScrollArea>
-            <DialogFooter className="pt-6 border-t">
+            <DialogFooter className="pt-6 border-t mt-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting || (!canEditSensitiveFields && !!initialRequest && initialRequest.status !== 'Open')}>
+              <Button type="submit" disabled={isSubmitting || (!!initialRequest && !canEditSensitiveFields && initialRequest.status !== 'Open' && initialRequest.issueDescription === form.getValues('issueDescription') )}>
                 {isSubmitting
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   : (initialRequest ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)

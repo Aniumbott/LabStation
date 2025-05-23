@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -48,10 +48,8 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (open) {
-      setIsSubmitting(false);
-      if (initialRule) {
+  const resetForm = useCallback(() => {
+    if (initialRule) {
         form.reset({
           name: initialRule.name,
           daysOfWeek: initialRule.daysOfWeek || [],
@@ -64,8 +62,14 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
           reason: '',
         });
       }
+  }, [initialRule, form.reset]);
+
+  useEffect(() => {
+    if (open) {
+      setIsSubmitting(false);
+      resetForm();
     }
-  }, [open, initialRule, form.reset]);
+  }, [open, initialRule, form.reset, resetForm]); // Added resetForm to dependency array
 
   async function onSubmit(data: RecurringBlackoutRuleFormValues) {
     setIsSubmitting(true);
@@ -169,7 +173,7 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
               )}
             />
             <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>

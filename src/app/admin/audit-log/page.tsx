@@ -3,9 +3,8 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { History, Filter as FilterIcon, Search as SearchIcon, X, Loader2 } from 'lucide-react';
+import { History, Filter as FilterIcon, Search as SearchIcon, X, Loader2, FilterX } from 'lucide-react';
 import type { AuditLogEntry, AuditActionType } from '@/types';
-import { addAuditLog } from '@/lib/mock-data'; // Kept for now, audit logs are in-memory
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -30,11 +29,11 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatDateSafe } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
 
-// Define available audit action types for filtering
 const auditActionTypesForFilter: AuditActionType[] = [
   'USER_CREATED', 'USER_UPDATED', 'USER_DELETED', 'USER_APPROVED', 'USER_REJECTED',
   'RESOURCE_CREATED', 'RESOURCE_UPDATED', 'RESOURCE_DELETED',
@@ -52,7 +51,7 @@ export default function AuditLogPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-  const [tempSearchTerm, setTempSearchTerm] = useState(''); // For user name or details
+  const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempActionType, setTempActionType] = useState<AuditActionType | 'all'>('all');
 
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
@@ -60,9 +59,6 @@ export default function AuditLogPage() {
 
   const fetchAuditLogs = useCallback(async () => {
     setIsLoading(true);
-    // In a real app, you might not fetch ALL audit logs to the client if it's a huge collection.
-    // You'd use pagination and server-side filtering.
-    // For now, we fetch all and filter client-side as per our existing pattern.
     try {
       // Firestore Index Required: auditLogs collection: timestamp (DESC)
       const logsQuery = query(collection(db, "auditLogs"), orderBy("timestamp", "desc"));
@@ -78,7 +74,7 @@ export default function AuditLogPage() {
       setAuditLogs(fetchedLogs);
     } catch (error: any) {
       console.error("Error fetching audit logs:", error);
-      setAuditLogs([]); // Clear logs on error
+      setAuditLogs([]);
     }
     setIsLoading(false);
   }, []);
@@ -87,7 +83,7 @@ export default function AuditLogPage() {
     if (currentUser?.role === 'Admin') {
       fetchAuditLogs();
     } else {
-      setAuditLogs([]); // Non-admins should not see logs
+      setAuditLogs([]);
       setIsLoading(false);
     }
   }, [currentUser, fetchAuditLogs]);
@@ -116,26 +112,26 @@ export default function AuditLogPage() {
     });
   }, [auditLogs, activeSearchTerm, activeActionType, currentUser]);
 
-  const handleApplyFilters = () => {
+  const handleApplyFilters = useCallback(() => {
     setActiveSearchTerm(tempSearchTerm);
     setActiveActionType(tempActionType);
     setIsFilterDialogOpen(false);
-  };
+  }, [tempSearchTerm, tempActionType]);
 
-  const resetDialogFilters = () => {
+  const resetDialogFilters = useCallback(() => {
     setTempSearchTerm('');
     setTempActionType('all');
-  };
+  }, []);
   
-  const resetAllPageFilters = () => {
+  const resetAllPageFilters = useCallback(() => {
     setActiveSearchTerm('');
     setActiveActionType('all');
-    resetDialogFilters(); // Also reset temp state in dialog
-    setIsFilterDialogOpen(false); // And close dialog if open
-  };
+    resetDialogFilters(); 
+    setIsFilterDialogOpen(false); 
+  }, [resetDialogFilters]);
 
 
-  const activeFilterCount = [activeSearchTerm !== '', activeActionType !== 'all'].filter(Boolean).length;
+  const activeFilterCount = useMemo(() => [activeSearchTerm !== '', activeActionType !== 'all'].filter(Boolean).length, [activeSearchTerm, activeActionType]);
 
   if (currentUser?.role !== 'Admin') {
     return (
@@ -169,7 +165,7 @@ export default function AuditLogPage() {
                 )}
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="w-full max-w-md">
               <DialogHeader>
                 <DialogTitle>Filter Audit Logs</DialogTitle>
                 <DialogDescription>
@@ -179,11 +175,11 @@ export default function AuditLogPage() {
               <Separator className="my-4" />
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="auditSearch">Search (User, Action, Details)</Label>
+                  <Label htmlFor="auditSearchDialog">Search (User, Action, Details)</Label>
                   <div className="relative mt-1">
                     <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      id="auditSearch"
+                      id="auditSearchDialog"
                       type="search"
                       placeholder="Keyword..."
                       value={tempSearchTerm}
@@ -193,9 +189,9 @@ export default function AuditLogPage() {
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="auditActionType">Action Type</Label>
+                  <Label htmlFor="auditActionTypeDialog">Action Type</Label>
                   <Select value={tempActionType} onValueChange={(v) => setTempActionType(v as AuditActionType | 'all')}>
-                    <SelectTrigger id="auditActionType" className="h-9 mt-1">
+                    <SelectTrigger id="auditActionTypeDialog" className="h-9 mt-1">
                       <SelectValue placeholder="Filter by Action Type" />
                     </SelectTrigger>
                     <SelectContent>
