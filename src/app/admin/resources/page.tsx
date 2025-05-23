@@ -5,8 +5,8 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2, FilterX, CheckCircle, AlertTriangle, Construction } from 'lucide-react';
-import type { Resource, ResourceType } from '@/types';
+import { ClipboardList, PlusCircle, Filter as FilterIcon, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2, FilterX } from 'lucide-react';
+import type { Resource, ResourceType, ResourceStatus } from '@/types';
 import { initialMockResourceTypes, labsList } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
@@ -28,6 +28,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,7 +41,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, startOfDay, isValid, parseISO, isWithinInterval, addDays as dateFnsAddDays } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, where } from 'firebase/firestore';
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, where, orderBy } from 'firebase/firestore';
+import { useRouter } from 'next/navigation'; // Added useRouter import
 
 export default function AdminResourcesPage() {
   const { toast } = useToast();
@@ -68,7 +70,7 @@ export default function AdminResourcesPage() {
   const fetchData = useCallback(async () => {
     setIsLoadingData(true);
     try {
-      const resourcesSnapshot = await getDocs(collection(db, "resources"));
+      const resourcesSnapshot = await getDocs(query(collection(db, "resources"), orderBy("name", "asc")));
       const fetchedResourcesPromises = resourcesSnapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
         
@@ -76,14 +78,14 @@ export default function AdminResourcesPage() {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
-          lab: data.lab || labsList[0],
+          lab: data.lab || labsList[0], // Assuming labsList has at least one entry
           status: data.status || 'Available',
           description: data.description || '',
-          imageUrl: data.imageUrl || 'https://placehold.co/100x100.png',
+          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
           manufacturer: data.manufacturer,
           model: data.model,
           serialNumber: data.serialNumber,
-          purchaseDate: data.purchaseDate ? (data.purchaseDate.toDate ? data.purchaseDate.toDate().toISOString() : data.purchaseDate) : undefined,
+          purchaseDate: data.purchaseDate ? (typeof data.purchaseDate === 'string' ? data.purchaseDate : (data.purchaseDate as Timestamp).toDate().toISOString()) : undefined,
           notes: data.notes,
           features: Array.isArray(data.features) ? data.features : [],
           remoteAccess: data.remoteAccess,
@@ -93,14 +95,14 @@ export default function AdminResourcesPage() {
         } as Resource;
       });
       const fetchedResources = await Promise.all(fetchedResourcesPromises);
-      setResources(fetchedResources.sort((a,b) => a.name.localeCompare(b.name)));
+      setResources(fetchedResources);
 
-      const typesSnapshot = await getDocs(collection(db, "resourceTypes"));
+      const typesSnapshot = await getDocs(query(collection(db, "resourceTypes"), orderBy("name", "asc")));
       const rTypes: ResourceType[] = typesSnapshot.docs.map(docSnap => ({
         id: docSnap.id,
         ...docSnap.data(),
       } as ResourceType));
-      setFetchedResourceTypes(rTypes.sort((a, b) => a.name.localeCompare(b.name)));
+      setFetchedResourceTypes(rTypes);
 
     } catch (error) {
       console.error("Error fetching resources or types: ", error);
@@ -150,15 +152,18 @@ export default function AdminResourcesPage() {
         if (resource.status !== 'Available') return false;
 
         const isSpecificallyUnavailable = resource.unavailabilityPeriods?.some(period => {
-          const periodStart = parseISO(period.startDate);
-          const periodEnd = parseISO(period.endDate);
-          return isValid(periodStart) && isValid(periodEnd) && 
-                 isWithinInterval(dateToFilter, { start: startOfDay(periodStart), end: startOfDay(periodEnd) });
+          if (!period.startDate || !period.endDate) return false;
+          try {
+            const periodStart = parseISO(period.startDate);
+            const periodEnd = parseISO(period.endDate); // End of the day for end date
+            return isValid(periodStart) && isValid(periodEnd) && 
+                   isWithinInterval(dateToFilter, { start: startOfDay(periodStart), end: startOfDay(periodEnd) });
+          } catch (e) { return false; }
         });
         if (isSpecificallyUnavailable) return false;
         
         const dayAvailability = resource.availability?.find(avail => avail.date === dateToFilterStr);
-        return dayAvailability && dayAvailability.slots.length > 0;
+        return dayAvailability && Array.isArray(dayAvailability.slots) && dayAvailability.slots.length > 0;
       });
     }
     return currentResources;
@@ -172,7 +177,7 @@ export default function AdminResourcesPage() {
     setIsFilterDialogOpen(false);
   };
 
-  const resetDialogFilters = () => {
+  const resetDialogFiltersOnly = () => {
     setTempSearchTerm('');
     setTempFilterTypeId('all');
     setTempFilterLab('all');
@@ -185,7 +190,7 @@ export default function AdminResourcesPage() {
     setActiveFilterTypeId('all');
     setActiveFilterLab('all');
     setActiveSelectedDate(undefined);
-    resetDialogFilters();
+    resetDialogFiltersOnly();
     setIsFilterDialogOpen(false);
   };
 
@@ -195,7 +200,6 @@ export default function AdminResourcesPage() {
             title: "No Resource Types Defined",
             description: "Please add resource types first before adding resources.",
             variant: "destructive",
-            action: <Button onClick={() => router.push('/admin/resource-types')} variant="outline" size="sm">Go to Resource Types</Button>
         });
         return;
     }
@@ -211,8 +215,8 @@ export default function AdminResourcesPage() {
   };
 
   const handleSaveResource = async (data: ResourceFormValues) => {
-    if (!currentUser) {
-      toast({ title: "Authentication Error", description: "You must be logged in.", variant: "destructive" });
+    if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Lab Manager')) {
+      toast({ title: "Permission Denied", description: "You are not authorized to perform this action.", variant: "destructive" });
       return;
     }
 
@@ -222,7 +226,7 @@ export default function AdminResourcesPage() {
         return;
     }
 
-    const resourceDataToSave: Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods'> & { purchaseDate?: string | null, availability?: any[], unavailabilityPeriods?: any[]} = {
+    const resourceDataToSave: Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods'> & { purchaseDate?: Timestamp | null, availability?: any[], unavailabilityPeriods?: any[]} = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
       lab: data.lab,
@@ -232,7 +236,7 @@ export default function AdminResourcesPage() {
       manufacturer: data.manufacturer || undefined,
       model: data.model || undefined,
       serialNumber: data.serialNumber || undefined,
-      purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? data.purchaseDate : null,
+      purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? Timestamp.fromDate(parseISO(data.purchaseDate)) : null,
       notes: data.notes || undefined,
       features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
       remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '' && v !== null) ? {
@@ -243,20 +247,25 @@ export default function AdminResourcesPage() {
          port: data.remoteAccess.port ?? undefined, 
          notes: data.remoteAccess.notes || undefined,
       } : undefined,
-      allowQueueing: data.status === 'Available', // Should be data.allowQueueing if that field is in the form
+      allowQueueing: data.allowQueueing ?? false,
     };
+    
+    const cleanDbData = Object.fromEntries(Object.entries(resourceDataToSave).filter(([_, v]) => v !== undefined));
+
 
     setIsLoadingData(true);
+    const auditAction = editingResource ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
+    const auditDetails = `Resource '${data.name}' ${editingResource ? 'updated' : 'created'}.`;
+
     if (editingResource) {
       try {
         const resourceDocRef = doc(db, "resources", editingResource.id);
         const dataWithExistingSchedules = {
-            ...resourceDataToSave,
+            ...cleanDbData,
             availability: editingResource.availability || [],
             unavailabilityPeriods: editingResource.unavailabilityPeriods || [],
         };
         await updateDoc(resourceDocRef, dataWithExistingSchedules);
-        // addAuditLog(currentUser.id, currentUser.name || 'Admin', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: editingResource.id, details: `Resource '${data.name}' updated.`});
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
       } catch (error) {
         console.error("Error updating resource:", error);
@@ -265,18 +274,20 @@ export default function AdminResourcesPage() {
     } else {
       try {
         const dataForNewResource = {
-            ...resourceDataToSave,
-            availability: [], // New resources start with empty schedules
+            ...cleanDbData,
+            availability: [], 
             unavailabilityPeriods: [],
         };
         const docRef = await addDoc(collection(db, "resources"), dataForNewResource);
-        // addAuditLog(currentUser.id, currentUser.name || 'Admin', 'RESOURCE_CREATED', { entityType: 'Resource', entityId: docRef.id, details: `Resource '${data.name}' created.`});
+        // No audit log for new resource ID as it's generated by Firestore
         toast({ title: 'Resource Created', description: `Resource "${data.name}" has been created.` });
       } catch (error) {
         console.error("Error creating resource:", error);
         toast({ title: "Error", description: "Failed to create resource. Check console.", variant: "destructive" });
       }
     }
+    // Firestore Audit Log
+    // addAuditLog(currentUser.id, currentUser.name || 'Admin/Manager', auditAction, { entityType: 'Resource', entityId: editingResource?.id || 'NEW_RESOURCE', details: auditDetails });
     setIsFormDialogOpen(false);
     setEditingResource(null);
     await fetchData(); 
@@ -390,7 +401,7 @@ export default function AdminResourcesPage() {
                 </div>
                 </ScrollArea>
                 <DialogFooter className="pt-6 border-t">
-                   <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
+                   <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
@@ -508,4 +519,3 @@ export default function AdminResourcesPage() {
     </div>
   );
 }
-
