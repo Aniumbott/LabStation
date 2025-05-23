@@ -22,8 +22,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+} from '@/components/ui/dialog'; // Removed DialogTrigger as it's not directly used here
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -34,6 +33,7 @@ import { formatDateSafe } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
 
+// Define audit action types used for filtering.
 const auditActionTypesForFilter: AuditActionType[] = [
   'USER_CREATED', 'USER_UPDATED', 'USER_DELETED', 'USER_APPROVED', 'USER_REJECTED',
   'RESOURCE_CREATED', 'RESOURCE_UPDATED', 'RESOURCE_DELETED',
@@ -68,12 +68,13 @@ export default function AuditLogPage() {
         return {
           id: docSnap.id,
           ...data,
-          timestamp: data.timestamp instanceof Timestamp ? data.timestamp.toDate() : new Date(),
+          timestamp: data.timestamp instanceof Timestamp ? data.timestamp.toDate() : new Date(), // Convert Firestore Timestamp to JS Date
         } as AuditLogEntry;
       });
       setAuditLogs(fetchedLogs);
     } catch (error: any) {
       console.error("Error fetching audit logs:", error);
+      // Consider adding a toast notification here for the user
       setAuditLogs([]);
     }
     setIsLoading(false);
@@ -83,11 +84,12 @@ export default function AuditLogPage() {
     if (currentUser?.role === 'Admin') {
       fetchAuditLogs();
     } else {
-      setAuditLogs([]);
+      setAuditLogs([]); // Clear logs if user is not admin
       setIsLoading(false);
     }
   }, [currentUser, fetchAuditLogs]);
 
+  // Sync temporary filter state with active filters when dialog opens
   useEffect(() => {
     if (isFilterDialogOpen) {
       setTempSearchTerm(activeSearchTerm);
@@ -96,7 +98,7 @@ export default function AuditLogPage() {
   }, [isFilterDialogOpen, activeSearchTerm, activeActionType]);
 
   const filteredLogs = useMemo(() => {
-    if (currentUser?.role !== 'Admin') return [];
+    if (currentUser?.role !== 'Admin') return []; // Ensure only admins see filtered logs
     return auditLogs.filter(log => {
       const lowerSearchTerm = activeSearchTerm.toLowerCase();
       const searchMatch = !activeSearchTerm ||
@@ -112,13 +114,13 @@ export default function AuditLogPage() {
     });
   }, [auditLogs, activeSearchTerm, activeActionType, currentUser]);
 
-  const handleApplyFilters = useCallback(() => {
+  const handleApplyDialogFilters = useCallback(() => {
     setActiveSearchTerm(tempSearchTerm);
     setActiveActionType(tempActionType);
     setIsFilterDialogOpen(false);
   }, [tempSearchTerm, tempActionType]);
 
-  const resetDialogFilters = useCallback(() => {
+  const resetDialogFiltersOnly = useCallback(() => {
     setTempSearchTerm('');
     setTempActionType('all');
   }, []);
@@ -126,9 +128,9 @@ export default function AuditLogPage() {
   const resetAllPageFilters = useCallback(() => {
     setActiveSearchTerm('');
     setActiveActionType('all');
-    resetDialogFilters(); 
+    resetDialogFiltersOnly(); 
     setIsFilterDialogOpen(false); 
-  }, [resetDialogFilters]);
+  }, [resetDialogFiltersOnly]);
 
 
   const activeFilterCount = useMemo(() => [activeSearchTerm !== '', activeActionType !== 'all'].filter(Boolean).length, [activeSearchTerm, activeActionType]);
@@ -204,13 +206,13 @@ export default function AuditLogPage() {
                 </div>
               </div>
               <DialogFooter className="pt-6 border-t mt-4">
-                <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
+                <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                   <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                 </Button>
                 <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>
                   <X className="mr-2 h-4 w-4" />Cancel
                 </Button>
-                <Button onClick={handleApplyFilters}>Apply Filters</Button>
+                <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -229,7 +231,7 @@ export default function AuditLogPage() {
                 <TableHead>Action</TableHead>
                 <TableHead>Entity Type</TableHead>
                 <TableHead>Entity ID</TableHead>
-                <TableHead>Details</TableHead>
+                <TableHead className="max-w-md">Details</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -240,7 +242,7 @@ export default function AuditLogPage() {
                   <TableCell><Badge variant="outline">{log.action.replace(/_/g, ' ')}</Badge></TableCell>
                   <TableCell>{log.entityType || 'N/A'}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{log.entityId || 'N/A'}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-md truncate">{log.details}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground max-w-md truncate" title={log.details}>{log.details}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

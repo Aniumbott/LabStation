@@ -17,9 +17,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { UserPlus, Save, X } from 'lucide-react';
+import { UserPlus, Save, X, Loader2 } from 'lucide-react';
 import type { User, RoleName } from '@/types';
-import { userRolesList } from '@/lib/mock-data'; // Import userRolesList
+import { userRolesList } from '@/lib/mock-data';
 
 const userFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, "Name cannot exceed 100 characters."),
@@ -33,13 +33,13 @@ interface UserFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialUser: User | null;
-  onSave: (data: UserFormValues) => void;
+  onSave: (data: UserFormValues) => Promise<void>; // Make onSave async
 }
 
 export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: UserFormDialogProps) {
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
-    defaultValues: { // Will be overridden by useEffect
+    defaultValues: {
       name: '',
       email: '',
       role: 'Researcher',
@@ -67,10 +67,10 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
     if (open) {
       resetForm();
     }
-  }, [open, initialUser, form.reset, resetForm]); // Added resetForm to dependency array
+  }, [open, initialUser, form.reset, resetForm]);
 
-  function onSubmit(data: UserFormValues) {
-    onSave(data);
+  async function onSubmit(data: UserFormValues) {
+    await onSave(data); // Await the onSave promise
   }
 
   return (
@@ -108,10 +108,10 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
                         type="email" 
                         placeholder="e.g., ada.lovelace@labstation.com" 
                         {...field} 
-                        disabled={!!initialUser || form.formState.isSubmitting} // Disable email editing for existing users or during submit
+                        disabled={!!initialUser || form.formState.isSubmitting} 
                     />
                   </FormControl>
-                  {!!initialUser && <FormMessage className="text-xs text-muted-foreground">Email cannot be changed for existing user profiles.</FormMessage>}
+                  {!!initialUser && <FormMessage className="text-xs text-muted-foreground !mt-0.5">Email cannot be changed for existing user profiles.</FormMessage>}
                   {!initialUser && <FormMessage />}
                 </FormItem>
               )}

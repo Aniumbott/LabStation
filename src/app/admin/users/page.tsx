@@ -52,7 +52,7 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
 import { userRolesList, addNotification, addAuditLog } from '@/lib/mock-data';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, Timestamp, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, Timestamp, query, orderBy, where } from 'firebase/firestore';
 
 const userStatusesListForFilter: (UserStatus | 'all')[] = ['all', 'active', 'pending_approval', 'suspended'];
 
@@ -75,9 +75,9 @@ const getRoleBadgeVariant = (role: RoleName): "default" | "secondary" | "destruc
 
 const getStatusBadgeVariant = (status: UserStatus): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
-      case 'active': return 'default';
-      case 'pending_approval': return 'secondary';
-      case 'suspended': return 'destructive';
+      case 'active': return 'default'; // Greenish
+      case 'pending_approval': return 'secondary'; // Yellowish/Amber
+      case 'suspended': return 'destructive'; // Reddish
       default: return 'outline';
     }
 };
@@ -106,8 +106,10 @@ export default function UsersPage() {
   const fetchUsers = useCallback(async () => {
     setIsLoadingUsers(true);
     try {
-      const usersQuery = query(collection(db, "users"), orderBy("name", "asc"));
+      const usersCollectionRef = collection(db, "users");
+      const usersQuery = query(usersCollectionRef, orderBy("name", "asc")); // Basic ordering
       const querySnapshot = await getDocs(usersQuery);
+      
       let fetchedUsers: User[] = querySnapshot.docs.map((docSnap) => {
         const data = docSnap.data();
         return {
@@ -120,6 +122,7 @@ export default function UsersPage() {
             createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
         } as User;
       });
+      // Client-side sort to put 'pending_approval' first, then by name
       fetchedUsers.sort((a,b) => {
         if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
         if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
@@ -135,8 +138,13 @@ export default function UsersPage() {
   }, [toast]);
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    if (loggedInUser?.role === 'Admin') {
+      fetchUsers();
+    } else {
+      setUsers([]);
+      setIsLoadingUsers(false);
+    }
+  }, [loggedInUser, fetchUsers]);
 
   useEffect(() => {
     if (isFilterDialogOpen) {
@@ -164,7 +172,7 @@ export default function UsersPage() {
     setIsFilterDialogOpen(false);
   }, [tempSearchTerm, tempFilterRole, tempFilterStatus]);
 
-  const resetDialogFilters = useCallback(() => {
+  const resetDialogFiltersOnly = useCallback(() => {
     setTempSearchTerm('');
     setTempFilterRole('all');
     setTempFilterStatus('all');
@@ -174,9 +182,9 @@ export default function UsersPage() {
     setActiveSearchTerm('');
     setActiveFilterRole('all');
     setActiveFilterStatus('all');
-    resetDialogFilters();
+    resetDialogFiltersOnly();
     setIsFilterDialogOpen(false);
-  }, [resetDialogFilters]);
+  }, [resetDialogFiltersOnly]);
 
   const handleOpenNewUserDialog = useCallback(() => {
     setEditingUser(null);
@@ -194,28 +202,26 @@ export default function UsersPage() {
       return;
     }
     
-    setIsLoadingUsers(true); // Show general loading state for the page
+    setIsLoadingUsers(true);
     try {
-      if (editingUser) {
+      if (editingUser) { // Editing existing user profile
         const userDocRef = doc(db, "users", editingUser.id);
         await updateDoc(userDocRef, {
           name: data.name,
           role: data.role,
+          // Email and status are not edited here directly; status handled by approve/suspend actions
         });
         addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_UPDATED', { entityType: 'User', entityId: editingUser.id, details: `User ${data.name} (ID: ${editingUser.id}) details updated. Role set to ${data.role}.` });
         toast({ title: 'User Updated', description: `User ${data.name} has been updated.` });
-      } else { 
-        // Admin creating a new user profile. NOTE: This does NOT create a Firebase Auth user.
-        // A unique ID must be generated for the Firestore document.
-        // For a production system, admin user creation would typically be handled via Firebase Admin SDK or a Cloud Function.
+      } else { // Admin creating a new user profile (Firestore only, not Auth)
         const newUserId = `admin_created_${Date.now()}_${Math.random().toString(36).substring(2,9)}`;
         const userDocRef = doc(db, "users", newUserId);
         await setDoc(userDocRef, {
           name: data.name,
-          email: data.email,
+          email: data.email, // Email provided in form for admin add
           role: data.role,
           avatarUrl: 'https://placehold.co/100x100.png',
-          status: 'active' as User['status'], 
+          status: 'active' as User['status'], // Admin created users are active by default
           createdAt: serverTimestamp(),
         });
         addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User profile for ${data.name} (${data.email}) created by admin with role ${data.role}. This user cannot log in without a corresponding Auth account.` });
@@ -227,6 +233,7 @@ export default function UsersPage() {
     } catch (error: any) {
       console.error(`Error ${editingUser ? 'updating' : 'creating'} user profile:`, error);
       toast({ title: "Operation Failed", description: `Could not ${editingUser ? 'update' : 'create'} user profile: ${error.message}`, variant: "destructive" });
+    } finally {
       setIsLoadingUsers(false); 
     }
   }, [loggedInUser, editingUser, fetchUsers, toast]);
@@ -241,18 +248,21 @@ export default function UsersPage() {
         toast({ title: "Error", description: "User to delete not found.", variant: "destructive" });
         return;
     }
+
     setIsLoadingUsers(true);
     try {
       const userDocRef = doc(db, "users", userId);
-      await deleteDoc(userDocRef);
-      addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_DELETED', { entityType: 'User', entityId: userId, details: `User profile for ${userToDeleteDetails.name} (ID: ${userId}) deleted. Associated Firebase Auth user may still exist.` });
-      toast({ title: "User Profile Deleted", description: `User "${userToDeleteDetails.name}" Firestore profile has been removed. Note: Their Firebase Auth account may still exist if one was associated.`, variant: "destructive" });
+      await deleteDoc(userDocRef); // Deletes Firestore profile
+      addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_DELETED', { entityType: 'User', entityId: userId, details: `User profile for ${userToDeleteDetails.name} (ID: ${userId}) deleted. Associated Firebase Auth user may still exist if one was created via signup.` });
+      toast({ title: "User Profile Deleted", description: `User "${userToDeleteDetails.name}" Firestore profile has been removed. Note: Their Firebase Auth account may still exist.`, variant: "destructive" });
+      setUserToDelete(null);
+      await fetchUsers();
     } catch (error: any) {
       console.error("Error deleting user profile:", error);
       toast({ title: "Delete Failed", description: `Could not delete user profile: ${error.message}`, variant: "destructive" });
+    } finally {
+      setIsLoadingUsers(false);
     }
-    setUserToDelete(null);
-    await fetchUsers();
   }, [loggedInUser, users, fetchUsers, toast]);
 
   const handleApproveUser = useCallback(async (userId: string) => {
@@ -265,12 +275,13 @@ export default function UsersPage() {
         toast({ title: "Error", description: "User to approve not found.", variant: "destructive" });
         return;
     }
+
     setIsLoadingUsers(true);
     try {
         const userDocRef = doc(db, "users", userId);
         await updateDoc(userDocRef, { status: 'active' });
         
-        addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_APPROVED', { entityType: 'User', entityId: userId, details: `User ${userToApproveDetails.name} (ID: ${userId}) approved.`});
+        addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_APPROVED', { entityType: 'User', entityId: userId, details: `User ${userToApproveDetails.name} (ID: ${userId}) approved by ${loggedInUser.name}.`});
         toast({ title: 'User Approved', description: `User ${userToApproveDetails.name} has been approved and is now active.` });
         
         addNotification(
@@ -280,10 +291,11 @@ export default function UsersPage() {
             'signup_approved',
             '/login'
         );
-        await fetchUsers();
+        await fetchUsers(); // Refresh list
     } catch (error: any) {
         console.error("Error approving user:", error);
         toast({ title: 'Approval Failed', description: `Could not approve user ${userToApproveDetails.name}: ${error.message}`, variant: 'destructive' });
+    } finally {
         setIsLoadingUsers(false);
     }
   }, [loggedInUser, users, fetchUsers, toast]);
@@ -294,25 +306,27 @@ export default function UsersPage() {
         setUserToReject(null);
         return;
     }
-    const userDetails = users.find(u => u.id === userToReject.id);
+    const userDetails = users.find(u => u.id === userToReject.id); // Find from current state for name
     if (!userDetails) {
-        toast({ title: "Error", description: "User to reject not found.", variant: "destructive" });
+        toast({ title: "Error", description: "User to reject not found in current list.", variant: "destructive" });
         setUserToReject(null);
         return;
     }
+
     setIsLoadingUsers(true);
     try {
       const userDocRef = doc(db, "users", userToReject.id);
-      await deleteDoc(userDocRef); 
+      await deleteDoc(userDocRef); // Deletes Firestore profile for the pending user
 
-      addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_REJECTED', { entityType: 'User', entityId: userToReject.id, details: `Signup request for ${userDetails.name} (ID: ${userToReject.id}) rejected and profile removed. Associated Firebase Auth user may still exist.` });
-      toast({ title: 'Signup Request Rejected', description: `Signup request for ${userDetails.name} has been rejected and removed. Note: Their Firebase Auth account may still exist if one was created.`, variant: 'destructive' });
+      addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_REJECTED', { entityType: 'User', entityId: userToReject.id, details: `Signup request for ${userDetails.name} (ID: ${userToReject.id}) rejected by ${loggedInUser.name} and profile removed. Associated Firebase Auth user may still exist.` });
+      toast({ title: 'Signup Request Rejected', description: `Signup request for ${userDetails.name} has been rejected and profile removed. Note: Their Firebase Auth account may still exist.`, variant: 'destructive' });
+      setUserToReject(null);
+      await fetchUsers(); // Refresh list
     } catch (error: any) {
       console.error("Error rejecting user:", error);
       toast({ title: 'Rejection Failed', description: `Could not reject user ${userDetails.name}: ${error.message}`, variant: 'destructive' });
     } finally {
-        setUserToReject(null);
-        await fetchUsers();
+      setIsLoadingUsers(false);
     }
   }, [userToReject, loggedInUser, users, fetchUsers, toast]);
 
@@ -355,7 +369,7 @@ export default function UsersPage() {
                   )}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="w-full max-w-md">
+              <DialogContent className="w-full max-w-xs sm:max-w-sm md:max-w-md">
                 <DialogHeader>
                   <DialogTitle>Filter Users</DialogTitle>
                   <DialogDescription>
@@ -363,7 +377,7 @@ export default function UsersPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <Separator className="my-4" />
-                <div className="space-y-4">
+                <div className="flex flex-col gap-4"> {/* Explicit vertical stacking */}
                   <div>
                     <Label htmlFor="userSearchDialog">Search (Name/Email)</Label>
                     <div className="relative mt-1">
@@ -407,7 +421,7 @@ export default function UsersPage() {
                   </div>
                 </div>
                 <DialogFooter className="pt-6 border-t mt-4">
-                  <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
+                  <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
@@ -478,24 +492,21 @@ export default function UsersPage() {
                             </TooltipTrigger>
                             <TooltipContent><p>Approve User</p></TooltipContent>
                           </Tooltip>
-                          <AlertDialog>
+                          <AlertDialog open={userToReject?.id === user.id} onOpenChange={(isOpen) => !isOpen && setUserToReject(null)}>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToReject(user)} disabled={isLoadingUsers}>
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToReject(user)} disabled={isLoadingUsers}>
                                     <ThumbsDown className="h-4 w-4" />
                                     <span className="sr-only">Reject User</span>
-                                  </Button>
-                                </AlertDialogTrigger>
+                                </Button>
                               </TooltipTrigger>
-                              <TooltipContent><p>Reject User</p></TooltipContent>
+                              <TooltipContent><p>Reject User Signup</p></TooltipContent>
                             </Tooltip>
-                            {userToReject && userToReject.id === user.id && (
-                              <AlertDialogContent>
+                            <AlertDialogContent>
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Are you sure you want to reject this signup?</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    This will remove the signup request for <span className="font-semibold">{userToReject.name}</span>. This action cannot be undone from the UI (Auth user might persist if they completed Firebase Auth part).
+                                    This will remove the signup request for <span className="font-semibold">{userToReject?.name}</span>. This action cannot be undone from the UI (Auth user might persist if they completed Firebase Auth part).
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -504,8 +515,7 @@ export default function UsersPage() {
                                     Reject Signup
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
-                              </AlertDialogContent>
-                            )}
+                            </AlertDialogContent>
                           </AlertDialog>
                         </>
                       )}
@@ -520,36 +530,32 @@ export default function UsersPage() {
                             </TooltipTrigger>
                             <TooltipContent><p>Edit User</p></TooltipContent>
                           </Tooltip>
-                          <AlertDialog>
+                          <AlertDialog open={userToDelete?.id === user.id} onOpenChange={(isOpen) => !isOpen && setUserToDelete(null)}>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <AlertDialogTrigger asChild>
                                   <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToDelete(user)} disabled={isLoadingUsers}>
                                       <Trash2 className="h-4 w-4" />
                                       <span className="sr-only">Delete User Profile</span>
                                   </Button>
-                                </AlertDialogTrigger>
                               </TooltipTrigger>
                               <TooltipContent><p>Delete User Profile</p></TooltipContent>
                             </Tooltip>
-                            {userToDelete && userToDelete.id === user.id && (
-                                <AlertDialogContent>
+                            <AlertDialogContent>
                                 <AlertDialogHeader>
                                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                     <AlertDialogDescription>
                                     This action cannot be undone. This will remove the user
-                                    <span className="font-semibold"> {userToDelete.name}</span>'s profile from Firestore.
+                                    <span className="font-semibold"> {userToDelete?.name}</span>'s profile from Firestore.
                                     The Firebase Auth account may need to be deleted separately.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                     <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction variant="destructive" onClick={() => handleDeleteUser(userToDelete.id)}>
+                                    <AlertDialogAction variant="destructive" onClick={() => userToDelete && handleDeleteUser(userToDelete.id)}>
                                     Delete User Profile
                                     </AlertDialogAction>
                                 </AlertDialogFooter>
-                                </AlertDialogContent>
-                            )}
+                            </AlertDialogContent>
                           </AlertDialog>
                         </>
                       )}
@@ -574,7 +580,7 @@ export default function UsersPage() {
             <p className="text-sm mb-4">
                 {activeFilterCount > 0
                     ? "Try adjusting your filter or search criteria."
-                    : (canAddUsers ? "There are currently no user profiles in the system. Add one to get started!" : "There are currently no users matching this criteria.")
+                    : (canAddUsers ? "There are currently no user profiles in the system. Add one to get started or new users can sign up." : "There are currently no users matching this criteria.")
                 }
             </p>
             {activeFilterCount > 0 ? (

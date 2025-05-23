@@ -28,7 +28,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { cn } from '@/lib/utils';
-import { differenceInDays, parseISO, startOfHour, format as formatDate, subDays, isValid as isValidDate } from 'date-fns';
+import { differenceInDays, parseISO, startOfHour, format as formatDateFn, subDays, isValid as isValidDate, Timestamp } from 'date-fns'; // Renamed format to formatDateFn
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 
@@ -80,25 +80,45 @@ export default function ReportsPage() {
     setIsLoading(true);
     try {
       const resourcesSnapshot = await getDocs(collection(db, "resources"));
-      setAllResources(resourcesSnapshot.docs.map(d => ({id: d.id, ...d.data()} as Resource)));
+      setAllResources(resourcesSnapshot.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id, ...data,
+          purchaseDate: data.purchaseDate instanceof Timestamp ? data.purchaseDate.toDate() : undefined,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
+          lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
+        } as Resource;
+      }));
 
       const bookingsSnapshot = await getDocs(collection(db, "bookings"));
-      setAllBookings(bookingsSnapshot.docs.map(d => ({
-          id: d.id, ...d.data(), 
-          startTime: d.data().startTime.toDate(), 
-          endTime: d.data().endTime.toDate(),
-          createdAt: d.data().createdAt.toDate()
-      } as Booking)));
+      setAllBookings(bookingsSnapshot.docs.map(d => {
+          const data = d.data();
+          return {
+            id: d.id, ...data, 
+            startTime: data.startTime instanceof Timestamp ? data.startTime.toDate() : new Date(), 
+            endTime: data.endTime instanceof Timestamp ? data.endTime.toDate() : new Date(),
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+            usageDetails: data.usageDetails ? {
+                ...data.usageDetails,
+                actualStartTime: data.usageDetails.actualStartTime instanceof Timestamp ? data.usageDetails.actualStartTime.toDate() : undefined,
+                actualEndTime: data.usageDetails.actualEndTime instanceof Timestamp ? data.usageDetails.actualEndTime.toDate() : undefined,
+            } : undefined,
+          } as Booking;
+      }));
 
       const maintenanceSnapshot = await getDocs(collection(db, "maintenanceRequests"));
-      setAllMaintenanceRequests(maintenanceSnapshot.docs.map(d => ({
-          id: d.id, ...d.data(), 
-          dateReported: d.data().dateReported.toDate().toISOString(),
-          dateResolved: d.data().dateResolved ? d.data().dateResolved.toDate().toISOString() : undefined
-      } as MaintenanceRequest)));
+      setAllMaintenanceRequests(maintenanceSnapshot.docs.map(d => {
+          const data = d.data();
+          return {
+            id: d.id, ...data, 
+            dateReported: data.dateReported instanceof Timestamp ? data.dateReported.toDate() : new Date(),
+            dateResolved: data.dateResolved instanceof Timestamp ? data.dateResolved.toDate() : undefined
+          } as MaintenanceRequest;
+      }));
 
     } catch (error) {
       console.error("Error fetching data for reports:", error);
+      // Add toast notification for error
     }
     setIsLoading(false);
   }, []);
@@ -167,10 +187,10 @@ export default function ReportsPage() {
     allResources.forEach(resource => {
       const bookedDays = new Set<string>();
       allBookings.forEach(booking => {
-        const bookingDate = booking.startTime; // Already a Date object
+        const bookingDate = booking.startTime; 
         if (booking.resourceId === resource.id && booking.status === 'Confirmed') {
           if (isValidDate(bookingDate) && bookingDate >= thirtyDaysAgo && bookingDate <= today) {
-            bookedDays.add(formatDate(bookingDate, 'yyyy-MM-dd'));
+            bookedDays.add(formatDateFn(bookingDate, 'yyyy-MM-dd'));
           }
         }
       });
@@ -199,9 +219,9 @@ export default function ReportsPage() {
     const hourCounts: { [hour: string]: number } = {};
     allBookings.forEach(booking => {
       if (booking.status === 'Confirmed') {
-        const bookingDate = booking.startTime; // Already a Date object
+        const bookingDate = booking.startTime; 
         if (isValidDate(bookingDate)) {
-            const hour = formatDate(startOfHour(bookingDate), 'HH:00');
+            const hour = formatDateFn(startOfHour(bookingDate), 'HH:00');
             hourCounts[hour] = (hourCounts[hour] || 0) + 1;
         }
       }
@@ -350,9 +370,9 @@ export default function ReportsPage() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Percent className="h-5 w-5 text-primary" />
-              Resource Utilization
+              Resource Utilization (Last 30 Days)
             </CardTitle>
-            <CardDescription>Booked days in the last 30 days (conceptual).</CardDescription>
+            <CardDescription>Percentage of days a resource had confirmed bookings in the last 30 days.</CardDescription>
           </CardHeader>
           <CardContent>
             {resourceUtilization.length > 0 ? (
@@ -379,7 +399,7 @@ export default function ReportsPage() {
               <Clock className="h-5 w-5 text-primary" />
               Peak Booking Hours
             </CardTitle>
-            <CardDescription>Number of confirmed bookings per hour of the day.</CardDescription>
+            <CardDescription>Number of confirmed bookings per hour of the day (all time).</CardDescription>
           </CardHeader>
           <CardContent>
             {peakBookingHours.length > 0 ? (

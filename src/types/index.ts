@@ -1,5 +1,5 @@
 
-import type { Timestamp } from 'firebase/firestore'; // Keep for reference, but frontend uses JS Date
+import type { Timestamp } from 'firebase/firestore';
 
 export interface ResourceType {
   id: string;
@@ -8,13 +8,15 @@ export interface ResourceType {
 }
 
 export type ResourceStatus = 'Available' | 'Booked' | 'Maintenance';
+export const resourceStatusesList: ResourceStatus[] = ['Available', 'Booked', 'Maintenance'];
+
 
 export interface RemoteAccessDetails {
   ipAddress?: string;
   hostname?: string;
   protocol?: 'RDP' | 'SSH' | 'VNC' | 'Other' | '';
   username?: string;
-  port?: number | null; // Allow null for "not set"
+  port?: number; // Will be undefined or number from Zod, then null or number for Firestore
   notes?: string;
 }
 
@@ -44,17 +46,17 @@ export interface Resource {
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
-  purchaseDate?: Date | null;
+  purchaseDate?: Date | null; // Changed to Date for frontend state
   notes?: string;
   remoteAccess?: RemoteAccessDetails | null;
   allowQueueing?: boolean;
-  lastUpdatedAt?: Date;
-  createdAt?: Date;
+  lastUpdatedAt?: Date; // Changed to Date
+  createdAt?: Date;     // Changed to Date
 }
 
 export interface BookingUsageDetails {
-  actualStartTime?: Date | null;
-  actualEndTime?: Date | null;
+  actualStartTime?: Date | null;  // Changed to Date
+  actualEndTime?: Date | null;    // Changed to Date
   outcome?: 'Success' | 'Failure' | 'Interrupted' | 'Not Applicable';
   dataStorageLocation?: string;
   usageComments?: string;
@@ -66,15 +68,16 @@ export interface Booking {
   id: string;
   resourceId: string;
   userId: string;
-  startTime: Date;
-  endTime: Date;
-  createdAt: Date;
+  startTime: Date;    // Changed to Date
+  endTime: Date;      // Changed to Date
+  createdAt: Date;    // Changed to Date
   status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted';
   notes?: string;
   usageDetails?: BookingUsageDetails | null;
 }
 
 export type RoleName = 'Admin' | 'Lab Manager' | 'Technician' | 'Researcher';
+export const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
 export type UserStatus = 'active' | 'pending_approval' | 'suspended';
 
 export interface User {
@@ -84,10 +87,12 @@ export interface User {
   role: RoleName;
   avatarUrl?: string;
   status: UserStatus;
-  createdAt: Date;
+  createdAt: Date; // Changed to Date
 }
 
 export type MaintenanceRequestStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed';
+export const maintenanceRequestStatuses: MaintenanceRequestStatus[] = ['Open', 'In Progress', 'Resolved', 'Closed'];
+
 
 export interface MaintenanceRequest {
   id: string;
@@ -96,8 +101,8 @@ export interface MaintenanceRequest {
   issueDescription: string;
   status: MaintenanceRequestStatus;
   assignedTechnicianId?: string | null;
-  dateReported: Date;
-  dateResolved?: Date | null;
+  dateReported: Date;     // Changed to Date
+  dateResolved?: Date | null; // Changed to Date
   resolutionNotes?: string | null;
 }
 
@@ -121,13 +126,13 @@ export interface Notification {
   message: string;
   type: NotificationType;
   isRead: boolean;
-  createdAt: Date;
+  createdAt: Date; // Changed to Date
   linkTo?: string;
 }
 
 export interface BlackoutDate {
   id: string;
-  date: string; // YYYY-MM-DD format
+  date: string; // YYYY-MM-DD format remains string as it's a specific date, not a timestamp
   reason?: string;
 }
 
@@ -153,7 +158,7 @@ export type AuditActionType =
 
 export interface AuditLogEntry {
   id: string;
-  timestamp: Date;
+  timestamp: Date; // Changed to Date
   userId: string;
   userName: string;
   action: AuditActionType;

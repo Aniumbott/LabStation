@@ -6,7 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth-context';
 import {
-  ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, CalendarPlus, Loader2, X
+  ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, X
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
@@ -40,8 +40,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, addDays as dateFnsAddDays } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, orderBy, where, Unsubscribe } from 'firebase/firestore';
-import { labsList } from '@/lib/mock-data';
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, orderBy, where } from 'firebase/firestore';
+import { labsList, resourceStatusesList } from '@/lib/mock-data'; // Keep static lists
+import { Badge } from '@/components/ui/badge';
+
 
 export default function AdminResourcesPage() {
   const { toast } = useToast();
@@ -71,7 +73,7 @@ export default function AdminResourcesPage() {
     try {
       const resourcesQuery = query(collection(db, "resources"), orderBy("name", "asc"));
       const resourcesSnapshot = await getDocs(resourcesQuery);
-      const fetchedResourcesPromises = resourcesSnapshot.docs.map(async (docSnap) => {
+      const fetchedResources = resourcesSnapshot.docs.map((docSnap) => {
         const data = docSnap.data();
         return {
           id: docSnap.id,
@@ -80,7 +82,7 @@ export default function AdminResourcesPage() {
           lab: data.lab || (labsList.length > 0 ? labsList[0] : 'Electronics Lab 1'),
           status: data.status || 'Available',
           description: data.description || '',
-          imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
+          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
           manufacturer: data.manufacturer,
           model: data.model,
           serialNumber: data.serialNumber,
@@ -92,7 +94,7 @@ export default function AdminResourcesPage() {
             hostname: data.remoteAccess.hostname || undefined,
             protocol: data.remoteAccess.protocol || '',
             username: data.remoteAccess.username || undefined,
-            port: data.remoteAccess.port, // Can be number or null
+            port: data.remoteAccess.port ?? undefined, // Will be null if undefined from Zod->Firestore
             notes: data.remoteAccess.notes || undefined,
           } : undefined,
           allowQueueing: data.allowQueueing ?? false,
@@ -102,7 +104,6 @@ export default function AdminResourcesPage() {
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
         } as Resource;
       });
-      const fetchedResources = await Promise.all(fetchedResourcesPromises);
       setResources(fetchedResources);
 
       const typesQuery = query(collection(db, "resourceTypes"), orderBy("name", "asc"));
@@ -154,6 +155,7 @@ export default function AdminResourcesPage() {
         const dateToFilter = startOfDay(activeSelectedDate);
         const dateToFilterStr = format(dateToFilter, 'yyyy-MM-dd');
         
+        // Check against resource-specific unavailability periods
         const isUnavailabilityOverlap = resource.unavailabilityPeriods?.some(period => {
             if (!period.startDate || !period.endDate) return false;
             try {
@@ -167,6 +169,7 @@ export default function AdminResourcesPage() {
         if (isUnavailabilityOverlap) {
             dateMatch = false;
         } else {
+            // Check daily availability slots
             const dayAvailability = resource.availability?.find(avail => avail.date === dateToFilterStr);
             dateMatch = !!(dayAvailability && Array.isArray(dayAvailability.slots) && dayAvailability.slots.length > 0 && resource.status === 'Available');
         }
@@ -235,20 +238,21 @@ export default function AdminResourcesPage() {
       ? {
           ipAddress: data.remoteAccess.ipAddress || null,
           hostname: data.remoteAccess.hostname || null,
-          protocol: data.remoteAccess.protocol || '',
+          protocol: data.remoteAccess.protocol || '', // Store empty string if "None"
           username: data.remoteAccess.username || null,
-          port: data.remoteAccess.port ?? null, // Convert undefined from Zod to null for Firestore
+          port: data.remoteAccess.port ?? null, // Zod handles number | undefined, convert undefined to null for Firestore
           notes: data.remoteAccess.notes || null,
         }
-      : null;
+      : undefined; // If remoteAccess itself is undefined, omit from Firestore or set to null
 
     const firestorePayload: any = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
+      // resourceTypeName will be fetched on read, not stored directly
       lab: data.lab,
       status: data.status,
       description: data.description || '',
-      imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
+      imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
       manufacturer: data.manufacturer || null,
       model: data.model || null,
       serialNumber: data.serialNumber || null,
@@ -257,8 +261,32 @@ export default function AdminResourcesPage() {
       features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
       remoteAccess: remoteAccessDataForFirestore,
       allowQueueing: data.allowQueueing ?? false,
+      lastUpdatedAt: serverTimestamp(),
     };
     
+    // Remove undefined fields from payload, so Firestore omits them rather than erroring on undefined
+    Object.keys(firestorePayload).forEach(key => {
+        if (firestorePayload[key] === undefined) {
+            delete firestorePayload[key];
+        }
+    });
+    if (firestorePayload.remoteAccess) {
+        Object.keys(firestorePayload.remoteAccess).forEach(key => {
+            if (firestorePayload.remoteAccess[key] === undefined) {
+                firestorePayload.remoteAccess[key] = null; // Convert inner undefined to null
+            }
+        });
+         // If entire remoteAccess object became all nulls (except protocol which can be empty string), set to undefined
+        const ra = firestorePayload.remoteAccess;
+        if (Object.values(ra).every(v => v === null || v === '')) {
+            if (!Object.values(ra).some(v => typeof v === 'number' && v !== null)) { // ensure port:null is preserved if it was explicitly set
+                 const allEffectivelyNull = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && ra.port === null && !ra.notes;
+                 if(allEffectivelyNull) firestorePayload.remoteAccess = undefined;
+            }
+        }
+    }
+
+
     const isEditing = !!editingResource;
     const auditAction = isEditing ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
     const auditDetails = `Resource '${data.name}' ${isEditing ? 'updated' : 'created'}.`;
@@ -267,26 +295,15 @@ export default function AdminResourcesPage() {
     try {
       if (isEditing && editingResource.id) {
         const resourceDocRef = doc(db, "resources", editingResource.id);
-        const existingDocSnap = await getDoc(resourceDocRef);
-        if (!existingDocSnap.exists()) {
-            toast({title: "Error", description: "Resource to update not found.", variant: "destructive"});
-            setIsLoadingData(false);
-            return;
-        }
-        const existingData = existingDocSnap.data();
-        await updateDoc(resourceDocRef, {
-            ...firestorePayload,
-            lastUpdatedAt: serverTimestamp(),
-            availability: existingData?.availability || [], 
-            unavailabilityPeriods: existingData?.unavailabilityPeriods || [],
-        });
+        // For updates, only merge if not explicitly setting availability/unavailability here
+        await updateDoc(resourceDocRef, firestorePayload);
         addAuditLog(currentUser.id, currentUser.name || 'User', auditAction, { entityType: 'Resource', entityId: editingResource.id, details: auditDetails });
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
       } else {
         const docRef = await addDoc(collection(db, "resources"), {
             ...firestorePayload,
             createdAt: serverTimestamp(),
-            lastUpdatedAt: serverTimestamp(),
+            // Default availability and unavailabilityPeriods for new resources
             availability: [], 
             unavailabilityPeriods: [], 
         });
@@ -327,6 +344,20 @@ export default function AdminResourcesPage() {
 
   const canAddResources = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
 
+  if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Lab Manager')) {
+    return (
+      <div className="space-y-8">
+        <PageHeader title="Resources" icon={ClipboardList} description="Access Denied." />
+        <Card className="text-center py-10 text-muted-foreground">
+          <CardContent>
+            <p>You do not have permission to view or manage resources.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -366,7 +397,7 @@ export default function AdminResourcesPage() {
                           type="search"
                           placeholder="Name, manufacturer, model..."
                           value={tempSearchTerm}
-                          onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
+                          onChange={(e) => setTempSearchTerm(e.target.value)}
                           className="h-9 pl-8"
                           />
                       </div>
@@ -375,8 +406,8 @@ export default function AdminResourcesPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="resourceTypeFilterDialog">Type</Label>
-                        <Select value={tempFilterTypeId} onValueChange={setTempFilterTypeId}>
-                          <SelectTrigger id="resourceTypeFilterDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Type" /></SelectTrigger>
+                        <Select value={tempFilterTypeId} onValueChange={setTempFilterTypeId} disabled={fetchedResourceTypes.length === 0}>
+                          <SelectTrigger id="resourceTypeFilterDialog" className="h-9 mt-1"><SelectValue placeholder={fetchedResourceTypes.length > 0 ? "Filter by Type" : "No types available"} /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">All Types</SelectItem>
                             {fetchedResourceTypes.map(type => (
@@ -400,7 +431,7 @@ export default function AdminResourcesPage() {
                     </div>
                     <Separator />
                     <div>
-                        <Label className="mb-2 block">Available On</Label>
+                        <Label className="mb-2 block">Available On (Optional)</Label>
                         <div className="flex justify-center items-center rounded-md border p-2">
                           <ShadCNCalendar
                               mode="single"
@@ -546,5 +577,3 @@ export default function AdminResourcesPage() {
     </div>
   );
 }
-
-    

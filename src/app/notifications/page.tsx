@@ -1,16 +1,16 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
 import { Bell, Check, Trash2, CalendarCheck2, Wrench, AlertTriangle, Clock, CircleEllipsis, CircleCheck, Info, ShieldAlert, Loader2, X } from 'lucide-react';
-import type { Notification as NotificationTypeAlias } from '@/types';
+import type { Notification as NotificationType } from '@/types'; // Renamed to avoid conflict
 import { useAuth } from '@/components/auth-context';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { isValid as isValidDateFn, formatDistanceToNowStrict, Timestamp } from 'date-fns';
+import { isValid as isValidDateFn, formatDistanceToNowStrict } from 'date-fns';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -31,12 +31,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, query, where, orderBy, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, doc, updateDoc, deleteDoc, writeBatch, Timestamp } from 'firebase/firestore';
 import { formatDateSafe } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
 
-const getNotificationIcon = (type: NotificationTypeAlias['type']) => {
+const getNotificationIcon = (type: NotificationType['type']) => {
   switch (type) {
     case 'booking_confirmed':
     case 'booking_promoted_user':
@@ -64,7 +64,7 @@ const getNotificationIcon = (type: NotificationTypeAlias['type']) => {
 
 export default function NotificationsPage() {
   const { currentUser, isLoading: authIsLoading } = useAuth();
-  const [notifications, setNotifications] = useState<NotificationTypeAlias[]>([]);
+  const [notifications, setNotifications] = useState<NotificationType[]>([]);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(true);
   const [isClearAllAlertOpen, setIsClearAllAlertOpen] = useState(false);
   const { toast } = useToast();
@@ -78,20 +78,19 @@ export default function NotificationsPage() {
     }
     setIsLoadingNotifications(true);
     try {
-      // Firestore Index required: notifications collection: userId (ASC), createdAt (DESC)
       const notificationsQuery = query(
         collection(db, "notifications"),
         where("userId", "==", currentUser.id),
         orderBy("createdAt", "desc")
       );
       const querySnapshot = await getDocs(notificationsQuery);
-      const fetchedNotifications: NotificationTypeAlias[] = querySnapshot.docs.map(docSnap => {
+      const fetchedNotifications: NotificationType[] = querySnapshot.docs.map(docSnap => {
         const data = docSnap.data();
         return {
           id: docSnap.id,
           ...data,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
-        } as NotificationTypeAlias;
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(), // Convert Firestore Timestamp
+        } as NotificationType;
       });
       setNotifications(fetchedNotifications);
     } catch (error: any) {
@@ -131,20 +130,20 @@ export default function NotificationsPage() {
       return;
     }
     
-    setIsLoadingNotifications(true); // Indicate loading
+    setIsLoadingNotifications(true);
     try {
-      const batch = []; // Using an array for promises
-      for (const notification of unreadNotifications) {
+      const batch = writeBatch(db);
+      unreadNotifications.forEach(notification => {
         const notifDocRef = doc(db, "notifications", notification.id);
-        batch.push(updateDoc(notifDocRef, { isRead: true }));
-      }
-      await Promise.all(batch); // Execute all updates
+        batch.update(notifDocRef, { isRead: true });
+      });
+      await batch.commit();
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       toast({ title: "All Read", description: "All notifications have been marked as read." });
     } catch (error: any) {
       toast({ title: "Error", description: `Could not mark all notifications as read: ${error.message}`, variant: "destructive"});
     } finally {
-      setIsLoadingNotifications(false); // Stop loading
+      setIsLoadingNotifications(false);
     }
   }, [currentUser, notifications, toast]);
   
@@ -164,28 +163,27 @@ export default function NotificationsPage() {
       setIsClearAllAlertOpen(false);
       return;
     }
-    setIsLoadingNotifications(true); // Indicate loading
+    setIsLoadingNotifications(true);
     try {
-      const batch = []; // Using an array for promises
-      for (const notification of notifications) {
+      const batch = writeBatch(db);
+      notifications.forEach(notification => {
         const notifDocRef = doc(db, "notifications", notification.id);
-        batch.push(deleteDoc(notifDocRef));
-      }
-      await Promise.all(batch); // Execute all deletions
+        batch.delete(notifDocRef);
+      });
+      await batch.commit();
       setNotifications([]);
       toast({ title: "All Notifications Cleared", description: "All your notifications have been deleted.", variant: "destructive" });
     } catch (error: any) {
       toast({ title: "Error", description: `Could not clear all notifications: ${error.message}`, variant: "destructive"});
     } finally {
-      setIsLoadingNotifications(false); // Stop loading
+      setIsLoadingNotifications(false);
       setIsClearAllAlertOpen(false);
     }
   }, [currentUser, notifications, toast]);
 
   const unreadCount = useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
 
-  if (authIsLoading || (!currentUser && !authIsLoading)) {
-    // Show loader if auth is loading OR if auth is done and there's no user (will be redirected by AppLayout)
+  if (authIsLoading) {
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-200px)] text-muted-foreground">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -194,7 +192,6 @@ export default function NotificationsPage() {
     );
   }
   
-  // This case should ideally be handled by AppLayout redirecting to /login
   if (!currentUser && !authIsLoading) {
     return (
          <div className="space-y-8">
@@ -229,7 +226,7 @@ export default function NotificationsPage() {
               )}
               <AlertDialog open={isClearAllAlertOpen} onOpenChange={setIsClearAllAlertOpen}>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" disabled={isLoadingNotifications}>
+                  <Button variant="destructive" disabled={isLoadingNotifications || notifications.length === 0}>
                     <Trash2 className="mr-2 h-4 w-4" /> Clear All
                   </Button>
                 </AlertDialogTrigger>
@@ -253,7 +250,7 @@ export default function NotificationsPage() {
         }
       />
 
-      {isLoadingNotifications && notifications.length === 0 ? (
+      {isLoadingNotifications && notifications.length === 0 ? ( 
          <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading notifications...</div>
       ) : notifications.length === 0 ? (
         <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">

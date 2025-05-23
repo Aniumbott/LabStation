@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,42 +42,39 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
+  const initializeFormForDate = useCallback((dateToInit: Date) => {
+    const dateStr = format(dateToInit, 'yyyy-MM-dd');
+    const currentAvailability = resource.availability?.find(avail => avail.date === dateStr);
+    if (currentAvailability) {
+        setAvailabilitySlots(currentAvailability.slots.join(', '));
+        setIsUnavailable(currentAvailability.slots.length === 0);
+    } else {
+        setAvailabilitySlots(''); // Default to available with no slots defined
+        setIsUnavailable(false);
+    }
+  }, [resource.availability]);
+
+
   useEffect(() => {
     if (open) {
         setIsSubmitting(false);
-        const initialDate = selectedDate || startOfDay(new Date()); // Use current selectedDate or default
-        setSelectedDate(initialDate);
-        
-        const dateStr = format(initialDate, 'yyyy-MM-dd');
-        const currentAvailability = resource.availability?.find(avail => avail.date === dateStr);
-        if (currentAvailability) {
-            setAvailabilitySlots(currentAvailability.slots.join(', '));
-            setIsUnavailable(currentAvailability.slots.length === 0);
-        } else {
-            setAvailabilitySlots('');
-            setIsUnavailable(false);
-        }
+        const initialDate = selectedDate || startOfDay(new Date());
+        setSelectedDate(initialDate); // Ensure selectedDate is set on open
+        initializeFormForDate(initialDate);
     }
-  }, [open, resource.availability, selectedDate]); // Added selectedDate dependency
+  }, [open, resource.availability, selectedDate, initializeFormForDate]);
 
   useEffect(() => {
     if (selectedDate && open) { // Only update form if dialog is open
-      const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      const currentAvailability = resource.availability?.find(avail => avail.date === dateStr);
-      if (currentAvailability) {
-        setAvailabilitySlots(currentAvailability.slots.join(', '));
-        setIsUnavailable(currentAvailability.slots.length === 0);
-      } else {
-        setAvailabilitySlots('');
-        setIsUnavailable(false);
-      }
+      initializeFormForDate(selectedDate);
     }
-  }, [selectedDate, resource.availability, open]);
+  }, [selectedDate, initializeFormForDate, open]);
 
 
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
       setSelectedDate(startOfDay(date));
+      // Form fields will be updated by the useEffect watching selectedDate
     }
   };
 
@@ -97,8 +94,8 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
         .split(',')
         .map(s => s.trim())
         .filter(s => {
-          const slotRegex = /^\d{2}:\d{2}-\d{2}:\d{2}$/;
           if (s === '') return false;
+          const slotRegex = /^\d{2}:\d{2}-\d{2}:\d{2}$/;
           if (!slotRegex.test(s)) {
             toast({ title: "Invalid Slot Format", description: `Slot "${s}" is not in HH:mm-HH:mm format. It will be ignored.`, variant: "destructive", duration: 5000 });
             return false;
@@ -123,13 +120,16 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
 
       if (finalSlots.length === 0 && availabilitySlots.trim() !== '' && !isUnavailable) {
         toast({ title: "No Valid Slots", description: "No valid time slots were entered. Please check format (HH:mm-HH:mm) and times. Saving as unavailable for this date.", variant: "default", duration: 7000 });
+         // This case effectively means the resource becomes unavailable for the day if input was attempted but invalid
+        finalSlots = []; // Ensure it's saved as unavailable
       }
     }
     try {
         await onSave(dateStr, finalSlots);
-        // Parent handles closing dialog on success
+        // onOpenChange(false); // Parent should handle closing on successful save if desired
     } catch (error) {
         console.error("Error in ManageAvailabilityDialog handleSaveClick:", error);
+        // Toast for save failure should be handled in the parent's onSave implementation
     } finally {
         setIsSubmitting(false);
     }
@@ -150,7 +150,7 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Manage Availability for "{resource.name}"</DialogTitle>
+          <DialogTitle>Manage Daily Availability for "{resource.name}"</DialogTitle>
           <DialogDescription>
             Select a date and define available time slots or mark the day as unavailable.
           </DialogDescription>
@@ -218,9 +218,9 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
           </div>
         </ScrollArea>
         <Separator />
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            <X className="mr-2 h-4 w-4" />Cancel
+        <DialogFooter className="pt-6 border-t mt-4">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+            <X className="mr-2 h-4 w-4" /> Cancel
           </Button>
           <Button onClick={handleSaveClick} disabled={!selectedDate || isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}

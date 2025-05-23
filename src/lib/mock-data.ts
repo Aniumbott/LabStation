@@ -15,32 +15,31 @@ import type {
   BlackoutDate,
   RecurringBlackoutRule,
 } from '@/types';
-import { Timestamp } from 'firebase/firestore'; // For consistency, though we convert to JS Date
+import { serverTimestamp, Timestamp } from 'firebase/firestore'; // Only for type consistency if needed
 
 // --- Static Lists (Application Configuration Data) ---
 export const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
 export const maintenanceRequestStatuses: MaintenanceRequestStatus[] = ['Open', 'In Progress', 'Resolved', 'Closed'];
 export const labsList: Resource['lab'][] = ['Electronics Lab 1', 'RF Lab', 'Prototyping Lab', 'General Test Area'];
-export const resourceStatusesList: Array<Resource['status']> = ['Available', 'Booked', 'Maintenance'];
+export const resourceStatusesList: ResourceStatus[] = ['Available', 'Booked', 'Maintenance'];
 export const bookingStatusesForFilter: (Booking['status'] | 'all')[] = ['all', 'Confirmed', 'Pending', 'Waitlisted', 'Cancelled'];
 export const bookingStatusesForForm: Booking['status'][] = ['Confirmed', 'Pending', 'Waitlisted', 'Cancelled'];
 export const daysOfWeekArray: DayOfWeek[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 
-// --- Dynamic Data Arrays ---
-// These arrays will be empty as data is fetched from Firestore.
-// They are kept here as a reference to the structure or if needed for specific client-side only scenarios temporarily.
-export let initialMockUsers: User[] = [];
-export let initialMockResourceTypes: ResourceType[] = [];
-export let allAdminMockResources: Resource[] = [];
-export let initialBookings: Booking[] = [];
-export let initialMaintenanceRequests: MaintenanceRequest[] = [];
-export let initialBlackoutDates: BlackoutDate[] = [];
-export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = [];
+// --- Dynamic Data Arrays - Should be empty as data comes from Firestore ---
+export let initialMockUsers: User[] = []; // Data fetched from Firestore users collection
+export let initialMockResourceTypes: ResourceType[] = []; // Data fetched from Firestore resourceTypes collection
+export let allAdminMockResources: Resource[] = []; // Data fetched from Firestore resources collection
+export let initialBookings: Booking[] = []; // Data fetched from Firestore bookings collection
+export let initialMaintenanceRequests: MaintenanceRequest[] = []; // Data fetched from Firestore maintenanceRequests collection
+export let initialBlackoutDates: BlackoutDate[] = []; // Data fetched from Firestore blackoutDates collection
+export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = []; // Data fetched from Firestore recurringBlackoutRules collection
 
 
-// --- Notifications & Audit Logs (In-memory placeholders for now) ---
+// --- In-memory placeholders for Notifications & Audit Logs ---
 // In a full production app, these would also be Firestore collections.
+// For this prototype, they are in-memory and reset on refresh.
 export let initialNotifications: Notification[] = [];
 
 export function addNotification(
@@ -57,11 +56,16 @@ export function addNotification(
     message,
     type,
     isRead: false,
-    createdAt: new Date(), // Use JS Date for consistency with frontend types
+    createdAt: new Date(), // JS Date for frontend consistency
     linkTo,
   };
   initialNotifications.unshift(newNotification);
-  // In a real app, this would be: await addDoc(collection(db, 'notifications'), { ...newNotification, createdAt: serverTimestamp() });
+  // To make this write to Firestore:
+  // import { db } from '@/lib/firebase';
+  // import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+  // try {
+  //   await addDoc(collection(db, 'notifications'), { ...newNotification, createdAt: serverTimestamp() });
+  // } catch (e) { console.error("Error adding notification to Firestore: ", e); }
 }
 
 export let initialAuditLogs: AuditLogEntry[] = [];
@@ -78,7 +82,7 @@ export function addAuditLog(
 ): void {
   const newLog: AuditLogEntry = {
     id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-    timestamp: new Date(), // Use JS Date
+    timestamp: new Date(), // JS Date for frontend consistency
     userId: actingUserId,
     userName: actingUserName,
     action: action,
@@ -87,5 +91,10 @@ export function addAuditLog(
     details: params.details,
   };
   initialAuditLogs.unshift(newLog);
-  // In a real app, this would be: await addDoc(collection(db, 'auditLogs'), { ...newLog, timestamp: serverTimestamp() });
+  // To make this write to Firestore:
+  // import { db } from '@/lib/firebase';
+  // import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+  // try {
+  //   await addDoc(collection(db, 'auditLogs'), { ...newLog, timestamp: serverTimestamp() });
+  // } catch (e) { console.error("Error adding audit log to Firestore: ", e); }
 }
