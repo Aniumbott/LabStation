@@ -4,10 +4,13 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/layout/page-header';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, Search as SearchIcon, Calendar as CalendarIcon, Loader2, FilterX, X, CalendarPlus } from 'lucide-react';
+import {
+  ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIcon, Loader2, X
+} from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { labsList, initialMockResourceTypes as staticResourceTypesForFilter, addAuditLog } from '@/lib/mock-data';
+import { labsList } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -27,10 +30,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Calendar } from '@/components/ui/calendar';
+import { Calendar as ShadCNCalendar } from '@/components/ui/calendar'; // Corrected import
 import { useToast } from '@/hooks/use-toast';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -40,8 +43,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, Timestamp } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
-import { useRouter } from 'next/navigation';
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
 
 export default function AdminResourcesPage() {
   const { toast } = useToast();
@@ -49,12 +51,13 @@ export default function AdminResourcesPage() {
   const router = useRouter();
 
   const [resources, setResources] = useState<Resource[]>([]);
-  const [fetchedResourceTypes, setFetchedResourceTypes] = useState<ResourceType[]>([]); // For the form dialog
+  const [fetchedResourceTypes, setFetchedResourceTypes] = useState<ResourceType[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
+  // Filter Dialog State
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterTypeId, setTempFilterTypeId] = useState<string>('all');
@@ -62,23 +65,25 @@ export default function AdminResourcesPage() {
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(undefined);
   const [currentMonthInDialog, setCurrentMonthInDialog] = useState<Date>(startOfDay(new Date()));
 
+  // Active Page Filters
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterTypeId, setActiveFilterTypeId] = useState<string>('all');
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
+
 
   const fetchResourcesAndTypes = useCallback(async () => {
     setIsLoadingData(true);
     try {
       const resourcesQuery = query(collection(db, "resources"), orderBy("name", "asc"));
       const resourcesSnapshot = await getDocs(resourcesQuery);
-      const fetchedResources: Resource[] = resourcesSnapshot.docs.map((docSnap) => {
+      const fetchedResourcesPromises = resourcesSnapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
         return {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
-          lab: data.lab || labsList[0],
+          lab: data.lab || (labsList.length > 0 ? labsList[0] : 'Unknown Lab'),
           status: data.status || 'Available',
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
@@ -88,12 +93,31 @@ export default function AdminResourcesPage() {
           purchaseDate: data.purchaseDate instanceof Timestamp ? data.purchaseDate.toDate() : undefined,
           notes: data.notes,
           features: Array.isArray(data.features) ? data.features : [],
-          remoteAccess: data.remoteAccess,
+          remoteAccess: data.remoteAccess ? {
+            ipAddress: data.remoteAccess.ipAddress,
+            hostname: data.remoteAccess.hostname,
+            protocol: data.remoteAccess.protocol,
+            username: data.remoteAccess.username,
+            port: data.remoteAccess.port,
+            notes: data.remoteAccess.notes,
+          } : undefined,
           allowQueueing: data.allowQueueing ?? false,
-          availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: a.date })) : [],
-          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)), startDate: typeof p.startDate === 'string' ? p.startDate : (p.startDate?.toDate ? format(p.startDate.toDate(), 'yyyy-MM-dd') : p.startDate), endDate: typeof p.endDate === 'string' ? p.endDate : (p.endDate?.toDate ? format(p.endDate.toDate(), 'yyyy-MM-dd') : p.endDate), reason: p.reason })) : [],
+          availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({
+            ...a,
+            date: typeof a.date === 'string' ? a.date : (a.date instanceof Timestamp ? format(a.date.toDate(), 'yyyy-MM-dd') : undefined)
+          })).filter(a => a.date) : [],
+          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({
+            ...p,
+            id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)),
+            startDate: typeof p.startDate === 'string' ? p.startDate : (p.startDate instanceof Timestamp ? format(p.startDate.toDate(), 'yyyy-MM-dd') : undefined),
+            endDate: typeof p.endDate === 'string' ? p.endDate : (p.endDate instanceof Timestamp ? format(p.endDate.toDate(), 'yyyy-MM-dd') : undefined),
+            reason: p.reason
+          })).filter(p => p.startDate && p.endDate) : [],
+          lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
         } as Resource;
       });
+      const fetchedResources = await Promise.all(fetchedResourcesPromises);
       setResources(fetchedResources);
 
       const typesQuery = query(collection(db, "resourceTypes"), orderBy("name", "asc"));
@@ -112,6 +136,7 @@ export default function AdminResourcesPage() {
     }
     setIsLoadingData(false);
   }, [toast]);
+
 
   useEffect(() => {
     fetchResourcesAndTypes();
@@ -147,17 +172,17 @@ export default function AdminResourcesPage() {
           const dateToFilter = startOfDay(activeSelectedDate);
           const dateToFilterStr = format(dateToFilter, 'yyyy-MM-dd');
           
-          const isSpecificallyUnavailable = resource.unavailabilityPeriods?.some(period => {
+          const isSpecificallyUnavailableResource = resource.unavailabilityPeriods?.some(period => {
             if (!period.startDate || !period.endDate) return false;
             try {
               const periodStart = startOfDay(parseISO(period.startDate));
-              const periodEnd = startOfDay(parseISO(period.endDate)); // Inclusive end date
+              const periodEnd = startOfDay(parseISO(period.endDate));
               return isValidDateFn(periodStart) && isValidDateFn(periodEnd) &&
                      isWithinInterval(dateToFilter, { start: periodStart, end: periodEnd });
-            } catch (e) { console.warn("Error parsing unavailability period dates:", e); return false; }
+            } catch (e) { console.warn("Error parsing resource unavailability period dates:", e); return false; }
           });
 
-          if (isSpecificallyUnavailable) {
+          if (isSpecificallyUnavailableResource) {
             dateMatch = false;
           } else {
             const dayAvailability = resource.availability?.find(avail => avail.date === dateToFilterStr);
@@ -168,6 +193,7 @@ export default function AdminResourcesPage() {
       return searchMatch && typeMatch && labMatch && dateMatch;
     });
   }, [resources, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
+
 
   const handleApplyDialogFilters = () => {
     setActiveSearchTerm(tempSearchTerm);
@@ -207,6 +233,12 @@ export default function AdminResourcesPage() {
     setIsFormDialogOpen(true);
   };
 
+  const handleOpenEditDialog = (resource: Resource) => {
+    setEditingResource(resource);
+    setIsFormDialogOpen(true);
+  };
+  
+
   const handleSaveResource = async (data: ResourceFormValues, resourceIdToUpdate?: string) => {
     if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Lab Manager')) {
       toast({ title: "Permission Denied", description: "You are not authorized to perform this action.", variant: "destructive" });
@@ -215,16 +247,17 @@ export default function AdminResourcesPage() {
 
     const resourceType = fetchedResourceTypes.find(rt => rt.id === data.resourceTypeId);
     if (!resourceType) {
-        toast({ title: "Error", description: "Selected resource type not found.", variant: "destructive"});
-        return;
+      toast({ title: "Invalid Resource Type", description: "Selected resource type is not valid.", variant: "destructive" });
+      return;
     }
-
+    
     let purchaseDateForFirestore: Timestamp | null = null;
-    if (data.purchaseDate && data.purchaseDate !== '' && isValidDateFn(parseISO(data.purchaseDate))) {
-      purchaseDateForFirestore = Timestamp.fromDate(parseISO(data.purchaseDate));
+    if (data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))) {
+        purchaseDateForFirestore = Timestamp.fromDate(parseISO(data.purchaseDate));
     }
 
-    const resourceData: Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods' | 'purchaseDate'> & { purchaseDate?: Timestamp | null, createdAt?: Timestamp, lastUpdatedAt?: Timestamp } = {
+
+    const resourceData: Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods' | 'purchaseDate' | 'createdAt' | 'lastUpdatedAt'> & { purchaseDate?: Timestamp | null, createdAt?: Timestamp, lastUpdatedAt?: Timestamp } = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
       lab: data.lab,
@@ -237,25 +270,25 @@ export default function AdminResourcesPage() {
       purchaseDate: purchaseDateForFirestore,
       notes: data.notes || undefined,
       features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-      remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '' && v !== null) ? {
+      remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v || typeof v === 'number') ? {
          ipAddress: data.remoteAccess.ipAddress || undefined,
          hostname: data.remoteAccess.hostname || undefined,
          protocol: data.remoteAccess.protocol || undefined,
          username: data.remoteAccess.username || undefined,
-         port: data.remoteAccess.port ?? undefined, // Zod coerces string to number or undefined
+         port: data.remoteAccess.port ?? undefined,
          notes: data.remoteAccess.notes || undefined,
       } : undefined,
       allowQueueing: data.allowQueueing ?? false,
     };
 
-    const cleanDbData = Object.fromEntries(Object.entries(resourceData).filter(([_, v]) => v !== undefined));
-    const auditAction = resourceIdToUpdate ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
-    const auditDetails = `Resource '${data.name}' ${resourceIdToUpdate ? 'updated' : 'created'}.`;
+    const cleanDbData = Object.fromEntries(Object.entries(resourceData).filter(([_, v]) => v !== undefined && v !== ''));
+    const auditAction = editingResource ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
+    const auditDetails = `Resource '${data.name}' ${editingResource ? 'updated' : 'created'}.`;
 
     setIsLoadingData(true);
     try {
-      if (resourceIdToUpdate) {
-        const resourceDocRef = doc(db, "resources", resourceIdToUpdate);
+      if (editingResource) {
+        const resourceDocRef = doc(db, "resources", editingResource.id);
         const existingDocSnap = await getDoc(resourceDocRef);
         const existingData = existingDocSnap.data();
 
@@ -266,35 +299,57 @@ export default function AdminResourcesPage() {
             unavailabilityPeriods: existingData?.unavailabilityPeriods || [],
         };
         await updateDoc(resourceDocRef, dataWithExistingSchedules);
+        addAuditLog(currentUser.id, currentUser.name || 'User', auditAction, { entityType: 'Resource', entityId: editingResource.id, details: auditDetails });
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
       } else {
         const dataForNewResource = {
             ...cleanDbData,
             createdAt: serverTimestamp(),
             lastUpdatedAt: serverTimestamp(),
-            availability: [],
-            unavailabilityPeriods: [],
+            availability: [], 
+            unavailabilityPeriods: [], 
         };
         const docRef = await addDoc(collection(db, "resources"), dataForNewResource);
-        addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'Resource', entityId: docRef.id, details: auditDetails });
+        addAuditLog(currentUser.id, currentUser.name || 'User', auditAction, { entityType: 'Resource', entityId: docRef.id, details: auditDetails });
         toast({ title: 'Resource Created', description: `Resource "${data.name}" has been created.` });
       }
       setIsFormDialogOpen(false);
       setEditingResource(null);
-      await fetchResourcesAndTypes(); // Refreshes and sets isLoadingData to false
+      await fetchResourcesAndTypes();
     } catch (error: any) {
-        console.error(`Error ${resourceIdToUpdate ? 'updating' : 'creating'} resource:`, error);
-        toast({ title: "Database Error", description: `Failed to ${resourceIdToUpdate ? 'update' : 'create'} resource: ${error.message}`, variant: "destructive" });
-        setIsLoadingData(false);
+        console.error(`Error ${editingResource ? 'updating' : 'creating'} resource:`, error);
+        toast({ title: "Database Error", description: `Failed to ${editingResource ? 'update' : 'create'} resource: ${error.message}`, variant: "destructive" });
+    } finally {
+      setIsLoadingData(false);
     }
   };
 
-  const activeFilterCount = [
+   const handleDeleteResource = async (resourceToDelete: Resource) => {
+    if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Lab Manager')) {
+      toast({ title: "Permission Denied", description: "You are not authorized to delete resources.", variant: "destructive" });
+      return;
+    }
+    setIsLoadingData(true);
+    try {
+      await deleteDoc(doc(db, "resources", resourceToDelete.id));
+      addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_DELETED', { entityType: 'Resource', entityId: resourceToDelete.id, details: `Resource '${resourceToDelete.name}' deleted.`});
+      toast({ title: "Resource Deleted", description: `Resource "${resourceToDelete.name}" has been removed.`, variant: "destructive" });
+      await fetchResourcesAndTypes(); // Refresh the list
+    } catch (error: any) {
+      console.error("Error deleting resource:", error);
+      toast({ title: "Delete Failed", description: `Could not delete resource: ${error.message}`, variant: "destructive" });
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+
+  const activeFilterCount = useMemo(() => [
     activeSearchTerm !== '',
     activeFilterTypeId !== 'all',
     activeFilterLab !== 'all',
     activeSelectedDate !== undefined
-  ].filter(Boolean).length;
+  ].filter(Boolean).length, [activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
 
   const canAddResources = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
 
@@ -327,74 +382,74 @@ export default function AdminResourcesPage() {
                 </DialogHeader>
                 <Separator className="my-4" />
                 <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
-                <div className="space-y-6 py-1 px-1">
-                  <div>
-                    <Label htmlFor="resourceSearchDialog">Search (Name/Keyword)</Label>
-                    <div className="relative mt-1">
-                        <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                        id="resourceSearchDialog"
-                        type="search"
-                        placeholder="Name, manufacturer, model..."
-                        value={tempSearchTerm}
-                        onChange={(e) => setTempSearchTerm(e.target.value)}
-                        className="h-9 pl-8"
-                        />
-                    </div>
-                  </div>
-                  <Separator />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-6 py-1 px-1">
                     <div>
-                      <Label htmlFor="resourceTypeFilterDialog">Type</Label>
-                      <Select value={tempFilterTypeId} onValueChange={setTempFilterTypeId}>
-                        <SelectTrigger id="resourceTypeFilterDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Type" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Types</SelectItem>
-                          {fetchedResourceTypes.map(type => (
-                            <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="resourceLabFilterDialog">Lab</Label>
-                      <Select value={tempFilterLab} onValueChange={setTempFilterLab}>
-                        <SelectTrigger id="resourceLabFilterDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Lab" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Labs</SelectItem>
-                          {labsList.map(lab => (
-                            <SelectItem key={lab} value={lab}>{lab}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <Separator />
-                  <div>
-                      <Label className="mb-2 block">Available On</Label>
-                      <div className="flex justify-center items-center rounded-md border p-2">
-                        <Calendar
-                            mode="single"
-                            selected={tempSelectedDate}
-                            onSelect={setTempSelectedDate}
-                            month={currentMonthInDialog}
-                            onMonthChange={setCurrentMonthInDialog}
-                            disabled={(date) => date < startOfDay(new Date()) }
-                            footer={ tempSelectedDate &&
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setTempSelectedDate(undefined)}
-                                    className="w-full mt-2 text-xs"
-                                >
-                                    <FilterX className="mr-2 h-4 w-4" /> Clear Date Selection
-                                </Button>
-                            }
-                            classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
-                        />
+                      <Label htmlFor="resourceSearchDialog">Search (Name/Keyword)</Label>
+                      <div className="relative mt-1">
+                          <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                          id="resourceSearchDialog"
+                          type="search"
+                          placeholder="Name, manufacturer, model..."
+                          value={tempSearchTerm}
+                          onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
+                          className="h-9 pl-8"
+                          />
                       </div>
+                    </div>
+                    <Separator />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="resourceTypeFilterDialog">Type</Label>
+                        <Select value={tempFilterTypeId} onValueChange={setTempFilterTypeId}>
+                          <SelectTrigger id="resourceTypeFilterDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Type" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Types</SelectItem>
+                            {fetchedResourceTypes.map(type => (
+                              <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="resourceLabFilterDialog">Lab</Label>
+                        <Select value={tempFilterLab} onValueChange={setTempFilterLab}>
+                          <SelectTrigger id="resourceLabFilterDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Lab" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Labs</SelectItem>
+                            {labsList.map(lab => (
+                              <SelectItem key={lab} value={lab}>{lab}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <Separator />
+                    <div>
+                        <Label className="mb-2 block">Available On</Label>
+                        <div className="flex justify-center items-center rounded-md border p-2">
+                          <ShadCNCalendar
+                              mode="single"
+                              selected={tempSelectedDate}
+                              onSelect={setTempSelectedDate}
+                              month={currentMonthInDialog}
+                              onMonthChange={setCurrentMonthInDialog}
+                              disabled={(date) => date < startOfDay(new Date()) }
+                              footer={ tempSelectedDate &&
+                                  <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => { setTempSelectedDate(undefined); setCurrentMonthInDialog(startOfDay(new Date()));} }
+                                      className="w-full mt-2 text-xs"
+                                  >
+                                      <FilterX className="mr-2 h-4 w-4" /> Reset Date Filter
+                                  </Button>
+                              }
+                              classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
+                          />
+                        </div>
+                    </div>
                   </div>
-                </div>
                 </ScrollArea>
                 <DialogFooter className="pt-6 border-t mt-4">
                    <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
@@ -474,7 +529,7 @@ export default function AdminResourcesPage() {
           </Table>
         </div>
       ) : (
-         <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
+         <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
           <CardContent>
             <ClipboardList className="mx-auto h-12 w-12 mb-4 opacity-50" />
             <p className="text-lg font-medium">

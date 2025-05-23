@@ -5,15 +5,15 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, CalendarDays, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
-import type { Resource, ResourceType, Booking, UnavailabilityPeriod } from '@/types';
-import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay, isBefore, compareAsc, isWithinInterval, isSameDay, Timestamp } from 'date-fns';
+import type { Resource, ResourceType, Booking, UnavailabilityPeriod, RoleName } from '@/types';
+import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay, isBefore, compareAsc, isWithinInterval, isSameDay } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, type ResourceFormValues } from '@/components/admin/resource-form-dialog';
@@ -28,8 +28,8 @@ import {
 import { ManageAvailabilityDialog } from '@/components/resources/manage-availability-dialog';
 import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavailability-dialog';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { labsList, resourceStatusesList, addAuditLog } from '@/lib/mock-data';
+import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { initialMockResourceTypes } from '@/lib/mock-data';
 
 
 function ResourceDetailPageSkeleton() {
@@ -111,6 +111,8 @@ const DetailItem = ({ icon: IconElement, label, value, isLink = false, className
     return null; // Don't render if value is effectively empty
   }
   const displayValue = String(value).trim();
+  if (displayValue === '') return <div className={cn("flex items-start text-sm py-1.5", className)}><IconElement className="h-4 w-4 mr-3 mt-0.5 text-muted-foreground flex-shrink-0" /> <span className="font-medium text-muted-foreground w-32">{label}:</span><span className="text-foreground flex-1 italic">N/A</span></div>;
+
 
   return (
     <div className={cn("flex items-start text-sm py-1.5", className)}>
@@ -163,13 +165,14 @@ export default function ResourceDetailPage() {
   const [resourceTypeName, setResourceTypeName] = useState<string>('Loading...');
   const [isLoading, setIsLoading] = useState(true);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
-  const [editingResource, setEditingResource] = useState<Resource | null>(null);
+  // editingResource state was removed, use 'resource' directly for initialData
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [resourceToDelete, setResourceToDelete] = useState<Resource | null>(null);
   const [isAvailabilityDialogOpen, setIsAvailabilityDialogOpen] = useState(false);
   const [isUnavailabilityDialogOpen, setIsUnavailabilityDialogOpen] = useState(false);
   const [resourceUserBookings, setResourceUserBookings] = useState<Booking[]>([]);
   const [fetchedResourceTypesForDialog, setFetchedResourceTypesForDialog] = useState<ResourceType[]>([]);
+
 
   const resourceId = typeof params.resourceId === 'string' ? params.resourceId : null;
 
@@ -193,7 +196,7 @@ export default function ResourceDetailPage() {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
-          lab: data.lab || labsList[0],
+          lab: data.lab || 'Unknown Lab',
           status: data.status || 'Available',
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
@@ -205,8 +208,9 @@ export default function ResourceDetailPage() {
           remoteAccess: data.remoteAccess,
           allowQueueing: data.allowQueueing ?? false,
           availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: a.date })) : [],
-          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)), startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [],
+          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2,9)), startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [],
           features: Array.isArray(data.features) ? data.features : [],
+          // lastUpdatedAt and createdAt are not directly used in UI but part of type
         };
         setResource(fetchedResource);
 
@@ -254,7 +258,8 @@ export default function ResourceDetailPage() {
       const fetchTypes = async () => {
         try {
           const typesCollectionRef = collection(db, "resourceTypes");
-          const typesQuery = query(typesCollectionRef, orderBy("name", "asc")); // Firestore Index required: resourceTypes collection: name (ASC)
+          // Firestore Index required: resourceTypes collection: name (ASC)
+          const typesQuery = query(typesCollectionRef, orderBy("name", "asc"));
           const typesSnapshot = await getDocs(typesQuery);
           const types = typesSnapshot.docs.map(docSnap => ({
             id: docSnap.id,
@@ -311,10 +316,11 @@ export default function ResourceDetailPage() {
       }
     };
 
-    if (resource && currentUser) { // Ensure resource and currentUser are loaded
+    if (resource && currentUser) {
       fetchBookingsForResourceUser();
     }
   }, [resourceId, currentUser, resource, toast]);
+
 
   const canManageResource = useMemo(() => {
     if (!currentUser) return false;
@@ -348,7 +354,7 @@ export default function ResourceDetailPage() {
           booking.startTime && isValidDateFn(booking.startTime) && isBefore(booking.startTime, new Date()) &&
           booking.status !== 'Cancelled'
       )
-      .sort((a, b) => compareAsc(b.startTime, a.startTime)); // Sort by Date object, most recent first
+      .sort((a, b) => compareAsc(b.startTime, a.startTime));
   }, [resource, currentUser, resourceUserBookings]);
 
   const sortedUnavailabilityPeriods = useMemo(() => {
@@ -359,29 +365,21 @@ export default function ResourceDetailPage() {
     });
   }, [resource]);
 
+
   const handleOpenEditDialog = () => {
     if (resource) {
-      setEditingResource(resource);
+      // setEditingResource(resource); // No longer needed, resource is passed as initialResource
       setIsFormDialogOpen(true);
     }
   };
 
-  const handleSaveResource = async (data: ResourceFormValues, resourceIdToUpdate?: string) => {
-    if (!currentUser || !canManageResource) {
+  const handleSaveResource = async (data: ResourceFormValues) => {
+    if (!currentUser || !canManageResource || !resource) {
         toast({ title: "Permission Denied", description: "You are not authorized to update this resource.", variant: "destructive" });
         return;
     }
-    if (!resourceIdToUpdate || !resource) { // Should always be editingResource.id here
-      toast({ title: "Error", description: "Resource context is missing for update.", variant: "destructive" });
-      return;
-    }
-
-    let purchaseDateForFirestore: Timestamp | null = null;
-    if (data.purchaseDate && data.purchaseDate !== '' && isValidDateFn(parseISO(data.purchaseDate))) {
-        purchaseDateForFirestore = Timestamp.fromDate(parseISO(data.purchaseDate));
-    }
-
-    const resourceDataToUpdate: Partial<Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods' | 'purchaseDate'> & { purchaseDate?: Timestamp | null, lastUpdatedAt?: Timestamp }> = {
+    
+    const resourceDataToUpdate: Partial<Omit<Resource, 'id' | 'availability' | 'unavailabilityPeriods'> & { lastUpdatedAt?: Timestamp, purchaseDate?: Timestamp | null }> = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
       lab: data.lab,
@@ -391,10 +389,10 @@ export default function ResourceDetailPage() {
       manufacturer: data.manufacturer || undefined,
       model: data.model || undefined,
       serialNumber: data.serialNumber || undefined,
-      purchaseDate: purchaseDateForFirestore,
+      purchaseDate: data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate)) ? Timestamp.fromDate(parseISO(data.purchaseDate)) : null,
       notes: data.notes || undefined,
       features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-      remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(val => val) ? {
+      remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(val => val || typeof val === 'number') ? {
          ipAddress: data.remoteAccess.ipAddress || undefined,
          hostname: data.remoteAccess.hostname || undefined,
          protocol: data.remoteAccess.protocol || undefined,
@@ -407,9 +405,10 @@ export default function ResourceDetailPage() {
     };
 
     const cleanDbData = Object.fromEntries(Object.entries(resourceDataToUpdate).filter(([_, v]) => v !== undefined));
-
+    
     try {
-        const resourceDocRef = doc(db, "resources", resourceIdToUpdate);
+        const resourceDocRef = doc(db, "resources", resource.id);
+        // Preserve existing availability and unavailability periods when updating other details
         const dataWithPreservedSchedules = {
             ...cleanDbData,
             availability: resource.availability || [],
@@ -417,18 +416,17 @@ export default function ResourceDetailPage() {
         };
 
         await updateDoc(resourceDocRef, dataWithPreservedSchedules);
-        addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resourceIdToUpdate, details: `Resource '${data.name}' updated.`});
+        addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Resource '${data.name}' updated.`});
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
-        await fetchResourceData(); // Refetch to update local state and UI
+        await fetchResourceData(); 
     } catch (error: any) {
         console.error("Error updating resource:", error);
         toast({ title: "Update Failed", description: `Could not update resource: ${error.message}`, variant: "destructive" });
     }
     setIsFormDialogOpen(false);
-    setEditingResource(null);
   };
 
-  const handleConfirmDelete = async () => {
+   const handleConfirmDelete = async () => {
     if (!resourceToDelete || !currentUser || !canManageResource) {
         toast({ title: "Permission Denied", description: "You are not authorized to delete this resource.", variant: "destructive" });
         setIsAlertOpen(false);
@@ -438,7 +436,7 @@ export default function ResourceDetailPage() {
     try {
         const resourceDocRef = doc(db, "resources", resourceToDelete.id);
         await deleteDoc(resourceDocRef);
-        addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_DELETED', { entityType: 'Resource', entityId: resourceToDelete.id, details: `Resource '${resourceToDelete.name}' deleted.`});
+        addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_DELETED', { entityType: 'Resource', entityId: resourceToDelete.id, details: `Resource '${resourceToDelete.name}' deleted.`});
         toast({ title: "Resource Deleted", description: `Resource "${resourceToDelete.name}" has been removed.`, variant: "destructive" });
         router.push('/admin/resources');
     } catch (error: any) {
@@ -457,24 +455,20 @@ export default function ResourceDetailPage() {
     const dateIndex = currentAvailability.findIndex(avail => avail.date === date);
 
     if (dateIndex !== -1) {
-      if (newSlots.length > 0) {
-        currentAvailability[dateIndex].slots = newSlots;
-      } else {
-        currentAvailability.splice(dateIndex, 1); // Remove entry if slots are empty
-      }
+      currentAvailability[dateIndex].slots = newSlots; // Update or set to empty
     } else if (newSlots.length > 0) { // Only add if new slots are provided
       currentAvailability.push({ date, slots: newSlots });
     }
     
     const updatedAvailability = currentAvailability
-      .filter(avail => avail.slots.length > 0) // Ensure only entries with slots are kept
+      .filter(avail => avail.slots.length > 0 || currentAvailability.find(a => a.date === avail.date && a.slots.length === 0) === avail) // Keep entries with slots, or if explicitly marked unavailable (empty slots)
       .sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
       
     try {
       const resourceDocRef = doc(db, "resources", resource.id);
       await updateDoc(resourceDocRef, { availability: updatedAvailability, lastUpdatedAt: serverTimestamp() });
-      addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Availability for resource '${resource.name}' on ${formatDateSafe(date, '', 'PPP')} updated.`});
-      toast({ title: 'Availability Updated', description: `Daily slots for ${resource.name} on ${formatDateSafe(date, '', 'PPP')} have been updated.` });
+      addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Availability for resource '${resource.name}' on ${formatDateSafe(date, 'N/A', 'PPP')} updated.`});
+      toast({ title: 'Availability Updated', description: `Daily slots for ${resource.name} on ${formatDateSafe(date, 'N/A', 'PPP')} have been updated.` });
       setResource(prev => prev ? ({ ...prev, availability: updatedAvailability }) : null);
     } catch (error: any) {
       console.error("Error updating availability:", error);
@@ -487,7 +481,7 @@ export default function ResourceDetailPage() {
     try {
       const resourceDocRef = doc(db, "resources", resource.id);
       await updateDoc(resourceDocRef, { unavailabilityPeriods: updatedPeriods, lastUpdatedAt: serverTimestamp() });
-      addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Unavailability periods for resource '${resource.name}' updated.`});
+      addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Unavailability periods for resource '${resource.name}' updated.`});
       toast({ title: 'Unavailability Updated', description: `Unavailability periods for ${resource.name} have been updated.` });
       setResource(prev => prev ? ({ ...prev, unavailabilityPeriods: updatedPeriods }) : null);
     } catch (error: any) {
@@ -689,7 +683,7 @@ export default function ResourceDetailPage() {
                 <DetailItem icon={ShoppingCart} label="Purchase Date" value={resource.purchaseDate ? formatDateSafe(resource.purchaseDate, undefined, 'PPP') : undefined} />
               </div>
 
-              {resource.remoteAccess && (Object.values(resource.remoteAccess).some(val => val) || resource.remoteAccess.port) && (
+              {resource.remoteAccess && (Object.values(resource.remoteAccess).some(val => val || typeof val === 'number') || resource.remoteAccess.port) && (
                 <>
                   <Separator className="my-4" />
                   <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><Network className="text-primary h-5 w-5"/> Remote Access</h3>
@@ -783,9 +777,9 @@ export default function ResourceDetailPage() {
             open={isFormDialogOpen}
             onOpenChange={(isOpen) => {
                 setIsFormDialogOpen(isOpen);
-                if (!isOpen) setEditingResource(null);
+                // if (!isOpen) setEditingResource(null); // No longer using editingResource state
             }}
-            initialResource={editingResource || resource} // Pass current resource or editingResource if set
+            initialResource={resource}
             onSave={handleSaveResource}
             resourceTypes={fetchedResourceTypesForDialog}
         />
