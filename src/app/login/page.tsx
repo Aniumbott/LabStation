@@ -25,8 +25,9 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, currentUser, isLoading: authLoading } = useAuth();
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { login, currentUser, isLoading: authIsLoading } = useAuth();
+  const [pageErrorMessage, setPageErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Form-specific submitting state
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -37,37 +38,57 @@ export default function LoginPage() {
   });
 
   useEffect(() => {
-    if (!authLoading && currentUser) {
+    // Redirect if user is already logged in and auth check is complete
+    if (!authIsLoading && currentUser) {
       router.push('/dashboard');
     }
-  }, [currentUser, authLoading, router]);
+  }, [currentUser, authIsLoading, router]);
+
+  useEffect(() => {
+    // Display messages set by AuthContext (e.g., pending approval)
+    if (typeof window !== 'undefined') {
+      const storedMessage = localStorage.getItem('login_message');
+      if (storedMessage) {
+        setPageErrorMessage(storedMessage);
+        // Optional: Clear the message after displaying it, or let AuthContext handle it.
+        // localStorage.removeItem('login_message'); 
+      }
+    }
+  }, [authIsLoading]); // Re-check if authIsLoading changes, as message might be set then.
+
 
   const onSubmit = async (data: LoginFormValues) => {
-    setErrorMessage(null);
-    form.control.disabled = true; // Visually disable form while submitting
-    try {
-      const result = await login(data.email, data.password);
-      if (result.success) {
-        router.push('/dashboard');
-      } else {
-        setErrorMessage(result.message || 'Login failed. Please check your credentials.');
-      }
-    } catch (error) {
-      console.error("Login submission error:", error);
-      setErrorMessage("An unexpected error occurred. Please try again.");
-    } finally {
-      form.control.disabled = false;
+    setPageErrorMessage(null); // Clear previous page-level errors
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('login_message'); // Clear any auth context messages before new attempt
     }
+    setIsSubmitting(true);
+    
+    const result = await login(data.email, data.password);
+    
+    if (!result.success) {
+      // Login function itself failed (e.g., Firebase auth error)
+      // OR onAuthStateChanged determined user is not 'active' and set login_message
+      const finalMessage = result.message || (typeof window !== 'undefined' ? localStorage.getItem('login_message') : null) || "Login failed. An unknown error occurred.";
+      setPageErrorMessage(finalMessage);
+    }
+    // If result.success is true, the useEffect above will handle redirection
+    // once currentUser is set by onAuthStateChanged and authIsLoading becomes false.
+    setIsSubmitting(false);
   };
   
-  if (authLoading) {
+  // Show loader if AuthContext is still loading and there's no current user yet.
+  // This prevents flashing the login form if a session is being restored.
+  if (authIsLoading && !currentUser) { 
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
-  // If user is already logged in but effect hasn't redirected yet, don't show form
+  
+  // If currentUser becomes available (and not authLoading), useEffect will redirect.
+  // This case is to prevent rendering the form if already logged in but redirect hasn't happened.
   if (currentUser) {
      return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -75,6 +96,7 @@ export default function LoginPage() {
       </div>
     );
   }
+
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-secondary p-4">
@@ -89,11 +111,11 @@ export default function LoginPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              {errorMessage && (
+              {pageErrorMessage && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Login Error</AlertTitle>
-                  <AlertDescription>{errorMessage}</AlertDescription>
+                  <AlertDescription>{pageErrorMessage}</AlertDescription>
                 </Alert>
               )}
               <FormField
@@ -103,7 +125,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Email Address</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="you@example.com" {...field} disabled={form.formState.isSubmitting} />
+                      <Input type="email" placeholder="you@example.com" {...field} disabled={isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -116,14 +138,14 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} disabled={form.formState.isSubmitting} />
+                      <Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing In...</> : 'Sign In'}
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing In...</> : 'Sign In'}
               </Button>
             </form>
           </Form>
@@ -143,3 +165,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+    
