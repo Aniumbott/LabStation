@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useState, useEffect, Suspense, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, X, Search as SearchIcon, FilterX, Eye, Loader2, ListFilter, Info, Clock, CalendarIcon as CalendarIconLucide } from 'lucide-react'; // Renamed CalendarIcon to CalendarIconLucide
+import { CalendarDays, PlusCircle, Edit3, X, Search as SearchIcon, FilterX, Eye, Loader2, ListFilter, Info, Clock, Calendar as CalendarIconLucide, User as UserIcon, Package as ResourceIcon, CheckCircle2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -21,9 +21,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { Booking, Resource, RoleName } from '@/types';
+import type { Booking, Resource, RoleName, BookingUsageDetails } from '@/types';
 import { daysOfWeekArray } from '@/types';
-import { format, parseISO, isValid as isValidDate, startOfDay, isSameDay, set, isBefore, getDay, startOfToday, compareAsc } from 'date-fns';
+import { format, parseISO, isValid as isValidDate, startOfDay, isSameDay, set, isBefore, getDay, startOfToday, compareAsc, addDays } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn, formatDateSafe } from '@/lib/utils';
@@ -31,14 +31,14 @@ import { BookingDetailsDialog } from '@/components/bookings/booking-details-dial
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { allAdminMockResources, initialBookings, addNotification, initialBlackoutDates, initialRecurringBlackoutRules, bookingStatusesForFilter, bookingStatusesForForm, addAuditLog } from '@/lib/mock-data'; // Removed getWaitlistPosition, processQueueForResource
-import { useForm, FormProvider, Controller } from 'react-hook-form';
+import { addNotification, bookingStatusesForFilter, bookingStatusesForForm, addAuditLog } from '@/lib/mock-data';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useAuth } from '@/components/auth-context';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, Timestamp, getDoc, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, Timestamp, getDoc, orderBy, limit } from 'firebase/firestore';
 
 
 function BookingsPageLoader() {
@@ -50,18 +50,24 @@ function BookingsPageLoader() {
   );
 }
 
-function BookingsPageContent() {
+interface BookingsPageContentProps {
+  searchParams?: { [key: string]: string | string[] | undefined }; // Make searchParams optional for direct rendering
+}
+
+
+function BookingsPageContent({ searchParams: searchParamsProp }: BookingsPageContentProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams(); // Get searchParams from hook
   const { toast } = useToast();
   const { currentUser } = useAuth();
 
   const [isClient, setIsClient] = useState(false);
+  
   const [allUserBookings, setAllUserBookings] = useState<Booking[]>([]);
   const [allAvailableResources, setAllAvailableResources] = useState<Resource[]>([]);
-  const [fetchedBlackoutDates, setFetchedBlackoutDates] = useState<typeof initialBlackoutDates>([]);
-  const [fetchedRecurringRules, setFetchedRecurringRules] = useState<typeof initialRecurringBlackoutRules>([]);
+  const [fetchedBlackoutDates, setFetchedBlackoutDates] = useState<any[]>([]);
+  const [fetchedRecurringRules, setFetchedRecurringRules] = useState<any[]>([]);
 
   const [isLoadingBookings, setIsLoadingBookings] = useState(true);
   const [isLoadingResources, setIsLoadingResources] = useState(true);
@@ -74,18 +80,19 @@ function BookingsPageContent() {
   
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
 
-  // Active page filters
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<Booking['status'] | 'all'>('all');
   
-  // Temporary filters for the filter dialog
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterResourceId, setTempFilterResourceId] = useState<string>('all');
   const [tempFilterStatus, setTempFilterStatus] = useState<Booking['status'] | 'all'>('all');
   const [tempSelectedDateInDialog, setTempSelectedDateInDialog] = useState<Date | undefined>(undefined);
   const [currentCalendarMonthInDialog, setCurrentCalendarMonthInDialog] = useState<Date>(startOfDay(new Date()));
+
+  const dialogJustClosedRef = useRef(false);
+
 
   useEffect(() => {
     setIsClient(true);
@@ -99,11 +106,10 @@ function BookingsPageContent() {
     }
     setIsLoadingBookings(true);
     try {
-      // Firestore Index Required: bookings collection: userId (ASC), startTime (ASC)
       const bookingsQuery = query(
         collection(db, 'bookings'),
         where('userId', '==', currentUser.id),
-        orderBy('startTime', 'asc') // Re-added orderBy
+        orderBy('startTime', 'asc') // Firestore Index Required: bookings (userId ASC, startTime ASC)
       );
       const bookingsSnapshot = await getDocs(bookingsQuery);
       const fetchedBookingsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
@@ -116,19 +122,19 @@ function BookingsPageContent() {
         return {
           id: docSnap.id,
           ...data,
-          startTime: data.startTime ? (data.startTime.toDate ? data.startTime.toDate() : parseISO(data.startTime as string)) : new Date(),
-          endTime: data.endTime ? (data.endTime.toDate ? data.endTime.toDate() : parseISO(data.endTime as string)) : new Date(),
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now()),
-          // resourceName: resourceNameStr, // No longer needed here, fetched on demand
+          startTime: data.startTime?.toDate ? data.startTime.toDate() : (data.startTime ? parseISO(data.startTime as string) : new Date()),
+          endTime: data.endTime?.toDate ? data.endTime.toDate() : (data.endTime ? parseISO(data.endTime as string) : new Date()),
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? parseISO(data.createdAt as string) : new Date()),
+          resourceName: resourceNameStr, 
         } as Booking;
       });
       let bookings = await Promise.all(fetchedBookingsPromises);
-      // Client-side sort if orderBy was removed or as a fallback:
+      // Client-side sort as a fallback if orderBy is removed or for specific needs
       // bookings.sort((a, b) => compareAsc(a.startTime, b.startTime));
       setAllUserBookings(bookings);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching user bookings:", error);
-      toast({ title: "Error", description: "Failed to load your bookings. Firestore query might require an index.", variant: "destructive" });
+      toast({ title: "Error Loading Bookings", description: error.message || "Failed to load your bookings. A Firestore index might be required.", variant: "destructive" });
     }
     setIsLoadingBookings(false);
   }, [currentUser?.id, toast]);
@@ -145,19 +151,19 @@ function BookingsPageContent() {
       setAllAvailableResources(resources);
     } catch (error) {
       console.error("Error fetching resources:", error);
-      toast({ title: "Error", description: "Failed to load resources for booking form.", variant: "destructive" });
+      toast({ title: "Error Loading Resources", description: "Failed to load resources for booking form.", variant: "destructive" });
     }
     setIsLoadingResources(false);
 
     try {
       const blackoutSnapshot = await getDocs(collection(db, "blackoutDates"));
-      setFetchedBlackoutDates(blackoutSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as typeof initialBlackoutDates[0])));
+      setFetchedBlackoutDates(blackoutSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)));
 
       const recurringSnapshot = await getDocs(collection(db, "recurringBlackoutRules"));
-      setFetchedRecurringRules(recurringSnapshot.docs.map(r => ({ id: r.id, ...r.data() } as typeof initialRecurringBlackoutRules[0])));
+      setFetchedRecurringRules(recurringSnapshot.docs.map(r => ({ id: r.id, ...r.data() } as any)));
     } catch (error) {
       console.error("Error fetching blackout/recurring rules:", error);
-      toast({ title: "Error", description: "Failed to load lab closure rules.", variant: "destructive" });
+      toast({ title: "Error Loading Closure Rules", description: "Failed to load lab closure rules.", variant: "destructive" });
     }
     setIsLoadingAvailabilityRules(false);
   }, [toast]);
@@ -177,7 +183,12 @@ function BookingsPageContent() {
     }
   }, [currentUser, isClient, fetchAllBookingsForUser]);
 
-  const handleOpenForm = useCallback((bookingToEdit?: Booking, resourceIdForNew?: string | null, dateForNew?: Date | null) => {
+
+  const handleOpenForm = useCallback((
+    bookingToEdit?: Booking,
+    resourceIdForNew?: string | null,
+    dateForNew?: Date | null
+  ) => {
     if (!currentUser) {
       toast({ title: "Login Required", description: "You need to be logged in to create or edit bookings.", variant: "destructive" });
       return;
@@ -191,7 +202,7 @@ function BookingsPageContent() {
     } else if (bookingToEdit?.startTime && isValidDate(new Date(bookingToEdit.startTime))) {
       baseDateForNewBooking = startOfDay(new Date(bookingToEdit.startTime));
     } else {
-      baseDateForNewBooking = startOfDay(new Date());
+      baseDateForNewBooking = startOfToday();
     }
 
     if (!bookingToEdit?.id && isBefore(baseDateForNewBooking, startOfToday())) {
@@ -206,27 +217,35 @@ function BookingsPageContent() {
       bookingData = {
         ...bookingToEdit,
         userId: bookingToEdit.userId || currentUser.id,
-        // resourceName will be fetched if not present
+        userName: bookingToEdit.userName || currentUser.name,
+        resourceName: allAvailableResources.find(r => r.id === bookingToEdit.resourceId)?.name || 'Unknown Resource',
       };
     } else {
       const initialResourceId = resourceIdForNew || (allAvailableResources.length > 0 ? allAvailableResources[0].id : '');
       bookingData = {
-        startTime: defaultStartTime, // This is a Date object
-        endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000), // Also a Date object
+        startTime: defaultStartTime,
+        endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000),
         createdAt: new Date(),
         userId: currentUser.id,
+        userName: currentUser.name,
         resourceId: initialResourceId,
-        status: 'Pending', notes: '',
+        resourceName: allAvailableResources.find(r => r.id === initialResourceId)?.name || 'Unknown Resource',
+        status: 'Pending', 
+        notes: '',
       };
     }
     setCurrentBooking(bookingData);
     setIsFormOpen(true);
-  }, [currentUser, toast, allAvailableResources, activeSelectedDate]);
+  }, [currentUser, allAvailableResources, activeSelectedDate, setCurrentBooking, setIsFormOpen, toast]);
 
 
-  // Effect to handle opening the form based on URL parameters
   useEffect(() => {
-    if (!isClient || !currentUser || !searchParams || isLoadingBookings || isLoadingResources || isLoadingAvailabilityRules) {
+    if (dialogJustClosedRef.current) {
+      dialogJustClosedRef.current = false; // Reset flag and skip this effect run
+      return;
+    }
+
+    if (!isClient || !currentUser || isLoadingBookings || isLoadingResources || isLoadingAvailabilityRules) {
       return;
     }
   
@@ -242,47 +261,41 @@ function BookingsPageContent() {
       }
     }
   
-    // Sync activeSelectedDate from URL if different (this might trigger activeSelectedDate dependency in handleOpenForm)
     if (dateFromUrl && (!activeSelectedDate || !isSameDay(activeSelectedDate, dateFromUrl))) {
       setActiveSelectedDate(dateFromUrl);
-      setCurrentCalendarMonthInDialog(dateFromUrl); // Sync filter dialog calendar too
     }
   
+    if (isFormOpen) {
+      if (bookingIdParam && currentBooking?.id !== bookingIdParam) {
+        const bookingToEdit = allUserBookings.find(b => b.id === bookingIdParam && b.userId === currentUser.id);
+        if (bookingToEdit) {
+          handleOpenForm(bookingToEdit);
+        }
+      }
+      return; 
+    }
+
     if (bookingIdParam) {
-      // Only open if form is not already open for THIS booking
-      if (isFormOpen && currentBooking?.id === bookingIdParam) return;
-      
       const bookingToEdit = allUserBookings.find(b => b.id === bookingIdParam && b.userId === currentUser.id);
       if (bookingToEdit) {
         handleOpenForm(bookingToEdit);
       }
     } else if (resourceIdParam) {
-      // Only open for a new resource if:
-      // 1. Form is not open OR
-      // 2. Form is open for a new booking, but for a DIFFERENT resource OR
-      // 3. Form is open for a new booking (same resource), but for a DIFFERENT date from URL
-      const shouldOpenForNew = 
-        !isFormOpen ||
-        (isFormOpen && !currentBooking?.id && currentBooking?.resourceId !== resourceIdParam) ||
-        (isFormOpen && !currentBooking?.id && currentBooking?.resourceId === resourceIdParam && dateFromUrl && currentBooking.startTime && !isSameDay(new Date(currentBooking.startTime), dateFromUrl));
-
-      if (shouldOpenForNew) {
-        const dateToUseForNewBooking = dateFromUrl || activeSelectedDate || startOfToday();
-        handleOpenForm(undefined, resourceIdParam, dateToUseForNewBooking);
-      }
+      const dateToUseForNewBooking = dateFromUrl || activeSelectedDate || startOfToday();
+      handleOpenForm(undefined, resourceIdParam, dateToUseForNewBooking);
     }
   }, [
     searchParams, 
-    allUserBookings, 
+    isClient,
     currentUser, 
-    isClient, 
+    allUserBookings, 
     handleOpenForm, 
     isLoadingBookings, 
     isLoadingResources, 
     isLoadingAvailabilityRules, 
-    activeSelectedDate, // activeSelectedDate is a dependency for dateToUse
-    isFormOpen,       // Added to ensure effect re-evaluates if form state changes
-    currentBooking    // Added to ensure effect re-evaluates if form context changes
+    activeSelectedDate,
+    isFormOpen,
+    currentBooking
   ]);
 
 
@@ -292,8 +305,8 @@ function BookingsPageContent() {
 
     if (activeSearchTerm) {
       const lowerSearchTerm = activeSearchTerm.toLowerCase();
-      // Requires fetching resourceName if we search by it. For now, only notes.
       filteredBookings = filteredBookings.filter(b =>
+        (b.resourceName && b.resourceName.toLowerCase().includes(lowerSearchTerm)) ||
         (b.notes && b.notes.toLowerCase().includes(lowerSearchTerm))
       );
     }
@@ -312,8 +325,8 @@ function BookingsPageContent() {
        return filteredBookings.filter(b =>
         b.startTime &&
         !isBefore(startOfDay(new Date(b.startTime)), startOfToday()) &&
-        (b.status !== 'Cancelled' || b.status === 'Waitlisted') 
-      );
+        (b.status !== 'Cancelled') 
+      ).sort((a,b) => compareAsc(a.startTime, b.startTime));
     }
   }, [allUserBookings, activeSelectedDate, activeSearchTerm, activeFilterResourceId, activeFilterStatus, currentUser, isLoadingBookings]);
 
@@ -322,11 +335,9 @@ function BookingsPageContent() {
     setActiveSearchTerm(tempSearchTerm);
     setActiveFilterResourceId(tempFilterResourceId);
     setActiveFilterStatus(tempFilterStatus);
-    // setActiveSelectedDate is handled by main calendar, but we sync tempSelectedDateInDialog
     if (tempSelectedDateInDialog && (!activeSelectedDate || !isSameDay(activeSelectedDate, tempSelectedDateInDialog))) {
       setActiveSelectedDate(tempSelectedDateInDialog);
     } else if (!tempSelectedDateInDialog && activeSelectedDate) {
-      // If dialog clears date, clear active date
       setActiveSelectedDate(undefined);
     }
     setIsFilterDialogOpen(false);
@@ -363,7 +374,6 @@ function BookingsPageContent() {
   ].filter(Boolean).length, [activeSearchTerm, activeFilterResourceId, activeFilterStatus, activeSelectedDate]);
 
   const dialogHeaderDateString = useMemo(() => {
-    // This is for the BookingForm dialog, not the filter dialog
     if (isFormOpen && currentBooking?.startTime && isValidDate(new Date(currentBooking.startTime))) {
       return format(new Date(currentBooking.startTime), "PPP");
     }
@@ -374,20 +384,26 @@ function BookingsPageContent() {
   }, [isFormOpen, currentBooking?.startTime, activeSelectedDate, currentBooking?.id]);
 
   const handleDialogClose = (isOpen: boolean) => {
-    setIsFormOpen(isOpen);
+    // This function is primarily called by the Dialog's onOpenChange
     if (!isOpen) {
-      setCurrentBooking(null); // Clear current booking context
+      dialogJustClosedRef.current = true; // Set flag BEFORE state updates and router push
+      setIsFormOpen(false);
+      setCurrentBooking(null);
       
-      // Aggressively clear URL parameters that might trigger re-opening
       const currentParams = new URLSearchParams(searchParams?.toString() || '');
       let paramsModified = false;
       if (currentParams.has('bookingId')) { currentParams.delete('bookingId'); paramsModified = true; }
       if (currentParams.has('resourceId')) { currentParams.delete('resourceId'); paramsModified = true; }
-      if (currentParams.has('date')) { currentParams.delete('date'); paramsModified = true; } // Also clear date
+      if (currentParams.has('date')) { currentParams.delete('date'); paramsModified = true; }
       
       if (paramsModified) {
         router.push(`${pathname}?${currentParams.toString()}`, { scroll: false });
       }
+    } else {
+      // If dialog is opening (e.g. user clicks "New Booking" button directly)
+      // ensure the ref is false so the useEffect doesn't get blocked.
+      dialogJustClosedRef.current = false; 
+      setIsFormOpen(true);
     }
   };
   
@@ -414,18 +430,18 @@ function BookingsPageContent() {
     const resource = allAvailableResources.find(r => r.id === formData.resourceId);
     if (!resource) { toast({ title: "Error", description: "Selected resource not found or not available.", variant: "destructive" }); return; }
 
-    const finalStartTime = set(new Date(formData.bookingDate), { // Ensure formData.bookingDate is a Date
+    const finalStartTime = set(new Date(formData.bookingDate), {
       hours: parseInt(formData.startTime.split(':')[0]),
       minutes: parseInt(formData.startTime.split(':')[1]),
       seconds: 0, milliseconds: 0
     });
-    const finalEndTime = set(new Date(formData.bookingDate), { // Ensure formData.bookingDate is a Date
+    const finalEndTime = set(new Date(formData.bookingDate), {
       hours: parseInt(formData.endTime.split(':')[0]),
       minutes: parseInt(formData.endTime.split(':')[1]),
       seconds: 0, milliseconds: 0
     });
 
-    if (isBefore(startOfDay(finalStartTime), startOfToday()) && !currentBooking?.id) {
+    if (isBefore(startOfDay(finalStartTime), startOfToday()) && !formData.id) {
       toast({ title: "Invalid Date", description: "Cannot create new bookings for past dates.", variant: "destructive" }); return;
     }
     if (finalEndTime <= finalStartTime) { toast({ title: "Invalid Time", description: "End time must be after start time.", variant: "destructive" }); return; }
@@ -457,8 +473,9 @@ function BookingsPageContent() {
 
     if (resource.unavailabilityPeriods && resource.unavailabilityPeriods.length > 0) {
       for (const period of resource.unavailabilityPeriods) {
+        if (!period.startDate || !period.endDate) continue;
         const unavailabilityStart = startOfDay(parseISO(period.startDate));
-        const unavailabilityEnd = addDays(startOfDay(parseISO(period.endDate)), 1); 
+        const unavailabilityEnd = addDays(startOfDay(parseISO(period.endDate)),1); 
 
         if (
           (finalStartTime >= unavailabilityStart && finalStartTime < unavailabilityEnd) ||
@@ -476,7 +493,7 @@ function BookingsPageContent() {
       }
     }
     
-    if (resource.status !== 'Available') {
+    if (resource.status !== 'Available' && !formData.id) { 
       toast({ title: "Resource Not Available", description: `${resource.name} is currently ${resource.status.toLowerCase()} and cannot be booked.`, variant: "destructive", duration: 7000 });
       return;
     }
@@ -524,32 +541,32 @@ function BookingsPageContent() {
         const data = d.data();
         return {
         id: d.id, ...data,
-        startTime: data.startTime ? (data.startTime.toDate ? data.startTime.toDate() : parseISO(data.startTime as string)) : new Date(),
-        endTime: data.endTime ? (data.endTime.toDate ? data.endTime.toDate() : parseISO(data.endTime as string)) : new Date(),
-        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now()),
+        startTime: data.startTime?.toDate ? data.startTime.toDate() : (data.startTime ? parseISO(data.startTime as string) : new Date()),
+        endTime: data.endTime?.toDate ? data.endTime.toDate() : (data.endTime ? parseISO(data.endTime as string) : new Date()),
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? parseISO(data.createdAt as string) : new Date()),
         } as Booking;
     });
 
 
     const conflictingBooking = existingBookingsForResource.find(existingBooking => {
-      if (currentBooking && currentBooking.id && existingBooking.id === currentBooking.id) return false; 
+      if (formData.id && existingBooking.id === formData.id) return false; 
       return (finalStartTime < existingBooking.endTime && finalEndTime > existingBooking.startTime);
     });
 
-    const isNewBooking = !currentBooking?.id;
-    let finalStatus: Booking['status'] = isNewBooking ? 'Pending' : (formData.status || currentBooking?.status || 'Pending');
+    const isNewBooking = !formData.id;
+    let finalStatus: Booking['status'] = isNewBooking ? 'Pending' : (formData.status || 'Pending');
 
     if (conflictingBooking && finalStatus !== 'Waitlisted') {
       if (resource.allowQueueing) {
         finalStatus = 'Waitlisted';
         toast({ title: "Added to Waitlist", description: `This time slot is currently booked. Your request for ${resource.name} has been added to the waitlist.` });
-        addAuditLog(currentUser.id, currentUser.name || 'User', 'BOOKING_WAITLISTED', { entityType: 'Booking', entityId: (currentBooking?.id || `temp_waitlist_${Date.now()}`), details: `Booking for '${resource.name}' placed on waitlist by user ${currentUser.name}.` });
+        addAuditLog(currentUser.id, currentUser.name || 'User', 'BOOKING_WAITLISTED', { entityType: 'Booking', entityId: (formData.id || `temp_waitlist_${Date.now()}`), details: `Booking for '${resource.name}' placed on waitlist by user ${currentUser.name}.` });
         addNotification(
           currentUser.id,
           'Added to Waitlist',
           `Your booking request for ${resource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`,
           'booking_waitlisted',
-          `/bookings?bookingId=${currentBooking?.id || `temp_waitlist_${Date.now()}`}`
+          `/bookings?bookingId=${formData.id || `temp_waitlist_${Date.now()}`}`
         );
       } else {
         let conflictingUserName = 'another user';
@@ -564,29 +581,32 @@ function BookingsPageContent() {
       }
     }
 
-    const bookingDataToSave = {
+    const bookingDataToSave: any = {
       resourceId: formData.resourceId!,
       userId: currentUser.id,
-      startTime: finalStartTime, 
-      endTime: finalEndTime,     
+      startTime: Timestamp.fromDate(finalStartTime), 
+      endTime: Timestamp.fromDate(finalEndTime),     
       status: finalStatus,
       notes: formData.notes || '',
-      // Ensure createdAt is a Firestore Timestamp for new bookings, or use existing for updates
-      createdAt: (isNewBooking || !formData.createdAt) ? serverTimestamp() : Timestamp.fromDate(new Date(formData.createdAt)),
     };
-    
-    const cleanBookingDataToSave = Object.fromEntries(Object.entries(bookingDataToSave).filter(([_,v]) => v !== undefined));
-
+    if(isNewBooking){
+        bookingDataToSave.createdAt = serverTimestamp();
+    } else if (formData.createdAt){ // If editing, and createdAt was loaded from form
+        bookingDataToSave.createdAt = Timestamp.fromDate(new Date(formData.createdAt));
+    }
+    // For existing bookings, we generally don't update createdAt unless it was missing.
+    // If formData.createdAt is undefined here (shouldn't happen if form init is correct), 
+    // and it's an edit, Firestore keeps existing createdAt.
 
     setIsLoadingBookings(true);
     try {
-      if (!isNewBooking && currentBooking?.id) {
-        const bookingDocRef = doc(db, "bookings", currentBooking.id);
-        await updateDoc(bookingDocRef, cleanBookingDataToSave);
+      if (!isNewBooking && formData.id) {
+        const bookingDocRef = doc(db, "bookings", formData.id);
+        await updateDoc(bookingDocRef, bookingDataToSave); // Pass only fields to update
         toast({ title: "Success", description: "Booking updated successfully." });
-        addAuditLog(currentUser.id, currentUser.name || 'User', 'BOOKING_UPDATED', { entityType: 'Booking', entityId: currentBooking.id, details: `Booking for '${resource.name}' updated by user ${currentUser.name}.` });
+        addAuditLog(currentUser.id, currentUser.name || 'User', 'BOOKING_UPDATED', { entityType: 'Booking', entityId: formData.id, details: `Booking for '${resource.name}' updated by user ${currentUser.name}.` });
       } else {
-        const docRef = await addDoc(collection(db, "bookings"), cleanBookingDataToSave);
+        const docRef = await addDoc(collection(db, "bookings"), bookingDataToSave);
         const actionType = finalStatus === 'Pending' ? 'BOOKING_CREATED' : 'BOOKING_WAITLISTED';
         addAuditLog(currentUser.id, currentUser.name || 'User', actionType, { entityType: 'Booking', entityId: docRef.id, details: `Booking for '${resource.name}' created with status ${finalStatus} by user ${currentUser.name}.` });
         
@@ -597,9 +617,9 @@ function BookingsPageContent() {
             addNotification(
               adminDoc.id,
               'New Booking Request',
-              `Booking for ${resource.name} by ${currentUser.name || 'Unknown User'} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`,
+              `Booking for ${resource.name} by ${currentUser?.name || 'Unknown User'} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`,
               'booking_pending_approval',
-              `/admin/booking-requests` // Link to booking requests
+              `/admin/booking-requests`
             );
           });
         }
@@ -610,7 +630,7 @@ function BookingsPageContent() {
       toast({ title: "Save Failed", description: "Could not save your booking. Please try again.", variant: "destructive" });
     } finally {
       setIsLoadingBookings(false);
-      handleDialogClose(false); // Close dialog after save
+      handleDialogClose(false);
     }
   }
 
@@ -630,42 +650,59 @@ function BookingsPageContent() {
 
       toast({ title: "Info", description: "Booking cancelled." });
       
-      // Fetch resource name for audit log (might require an additional fetch if not readily available)
-      let resourceNameForLog = bookingToCancel.resourceName || 'Unknown Resource';
-      if (!bookingToCancel.resourceName && bookingToCancel.resourceId) {
-          const resDoc = await getDoc(doc(db, "resources", bookingToCancel.resourceId));
-          if (resDoc.exists()) resourceNameForLog = resDoc.data().name;
-      }
+      let resourceNameForLog = 'Unknown Resource';
+      const resourceDoc = await getDoc(doc(db, 'resources', bookingToCancel.resourceId));
+      if (resourceDoc.exists()) resourceNameForLog = resourceDoc.data()?.name || 'Unknown Resource';
+      
       addAuditLog(currentUser.id, currentUser.name || 'User', 'BOOKING_CANCELLED', { entityType: 'Booking', entityId: bookingId, details: `Booking for '${resourceNameForLog}' cancelled by user ${currentUser.name}.` });
       
-      // Basic Queue Processing on Cancellation - if we remove mock-data processQueueForResource
       const resource = allAvailableResources.find(r => r.id === bookingToCancel.resourceId);
       if (bookingToCancel.status === 'Confirmed' && resource && resource.allowQueueing) {
-          // Find the earliest waitlisted booking for this resource
-          const waitlistedBookingsSnapshot = await getDocs(query(
+          const q = query(
               collection(db, "bookings"),
               where("resourceId", "==", bookingToCancel.resourceId),
               where("status", "==", "Waitlisted"),
-              orderBy("createdAt", "asc"), // Assuming createdAt is a Timestamp
+              orderBy("createdAt", "asc"),
               limit(1)
-          ));
+          );
+          const waitlistedBookingsSnapshot = await getDocs(q);
 
           if (!waitlistedBookingsSnapshot.empty) {
               const promotedBookingDoc = waitlistedBookingsSnapshot.docs[0];
-              await updateDoc(promotedBookingDoc.ref, { status: "Pending" });
+              const promotedBookingData = promotedBookingDoc.data();
+
+              const allOtherBookingsSnapshot = await getDocs(query(
+                collection(db, "bookings"),
+                where("resourceId", "==", bookingToCancel.resourceId),
+                where("status", "in", ["Confirmed", "Pending"]),
+                where(doc(db, "bookings", promotedBookingDoc.id).path, "!=", promotedBookingDoc.ref)
+              ));
               
-              let promotedUserName = 'A user';
-              let promotedResourceName = resource.name; // Use already fetched resource name
-              const promotedUserData = await getDoc(doc(db, "users", promotedBookingDoc.data().userId));
-              if(promotedUserData.exists()) promotedUserName = promotedUserData.data().name;
-
-
-              addNotification(promotedBookingDoc.data().userId, "Booking Promoted", `Your waitlisted booking for ${promotedResourceName} is now pending approval.`, "booking_promoted_user", `/bookings?bookingId=${promotedBookingDoc.id}`);
-              const adminsSnapshot = await getDocs(query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager'])));
-              adminsSnapshot.forEach(admin => {
-                  addNotification(admin.id, "Waitlist Booking Promoted", `Waitlisted booking for ${promotedResourceName} by ${promotedUserName} has been promoted to Pending.`, "booking_promoted_admin", "/admin/booking-requests");
+              const stillConflicting = allOtherBookingsSnapshot.docs.some(bDoc => {
+                const bData = bDoc.data();
+                const existingStartTime = bData.startTime.toDate ? bData.startTime.toDate() : parseISO(bData.startTime as string);
+                const existingEndTime = bData.endTime.toDate ? bData.endTime.toDate() : parseISO(bData.endTime as string);
+                const promotedStartTime = promotedBookingData.startTime.toDate ? promotedBookingData.startTime.toDate() : parseISO(promotedBookingData.startTime as string);
+                const promotedEndTime = promotedBookingData.endTime.toDate ? promotedBookingData.endTime.toDate() : parseISO(promotedBookingData.endTime as string);
+                return (promotedStartTime < existingEndTime && promotedEndTime > existingStartTime);
               });
-              addAuditLog("SYSTEM", "System", "BOOKING_PROMOTED", { entityType: "Booking", entityId: promotedBookingDoc.id, details: `Booking for ${promotedResourceName} by ${promotedUserName} promoted from waitlist to Pending.`});
+
+              if (!stillConflicting) {
+                await updateDoc(promotedBookingDoc.ref, { status: "Pending" });
+                
+                let promotedUserName = 'A user';
+                const promotedUserData = await getDoc(doc(db, "users", promotedBookingData.userId));
+                if(promotedUserData.exists()) promotedUserName = promotedUserData.data()?.name || 'A user';
+
+                addNotification(promotedBookingData.userId, "Booking Promoted", `Your waitlisted booking for ${resource.name} is now pending approval.`, "booking_promoted_user", `/bookings?bookingId=${promotedBookingDoc.id}`);
+                const adminsSnapshot = await getDocs(query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager'])));
+                adminsSnapshot.forEach(admin => {
+                    addNotification(admin.id, "Waitlist Booking Promoted", `Waitlisted booking for ${resource.name} by ${promotedUserName} has been promoted to Pending.`, "booking_promoted_admin", "/admin/booking-requests");
+                });
+                addAuditLog("SYSTEM", "System Queue Manager", "BOOKING_PROMOTED", { entityType: "Booking", entityId: promotedBookingDoc.id, details: `Booking for ${resource.name} by ${promotedUserName} promoted from waitlist to Pending.`});
+              } else {
+                console.log("Waitlisted item could not be promoted due to persistent conflict.");
+              }
           }
       }
 
@@ -679,43 +716,36 @@ function BookingsPageContent() {
   };
 
   const handleOpenDetailsDialog = async (booking: Booking) => {
-     let bookingWithDetails = { ...booking };
-     if (!booking.resourceName && booking.resourceId) {
-        const resDoc = await getDoc(doc(db, "resources", booking.resourceId));
-        if(resDoc.exists()) bookingWithDetails.resourceName = resDoc.data().name;
-     }
-     if (!booking.userName && booking.userId) {
-        const userDoc = await getDoc(doc(db, "users", booking.userId));
-        if(userDoc.exists()) bookingWithDetails.userName = userDoc.data().name;
-     }
-    setSelectedBookingForDetails(bookingWithDetails);
+    // resourceName and userName are now expected to be part of the booking object from fetchAllBookingsForUser
+    setSelectedBookingForDetails(booking);
     setIsDetailsDialogOpen(true);
   };
 
   const handleBookingUpdateInDetails = (updatedBooking: Booking) => {
     if (!currentUser) return;
-    // Update the main list
     setAllUserBookings(prev => prev.map(b => b.id === updatedBooking.id ? { ...b, ...updatedBooking } : b));
-    // Update the selected one if it's the same
     if (selectedBookingForDetails && selectedBookingForDetails.id === updatedBooking.id) {
       setSelectedBookingForDetails(prev => prev ? {...prev, ...updatedBooking} : null);
     }
   };
 
-  const getBookingStatusBadge = (status: Booking['status']) => {
+  const getBookingStatusBadge = (status: Booking['status'], booking?: Booking) => {
+    let waitlistPositionText = '';
+    // Waitlist position calculation is complex with Firestore and removed for now
+    // if (status === 'Waitlisted' && booking) {
+    //   const position = getWaitlistPosition(booking, allUserBookings); // Requires allUserBookings here
+    //   if (position) waitlistPositionText = ` (#${position})`;
+    // }
+
     switch (status) {
       case 'Confirmed':
-        return <Badge className={cn("bg-green-500 text-white hover:bg-green-600 border-transparent")}>{status}</Badge>;
+        return <Badge className={cn("bg-green-500 text-white hover:bg-green-600 border-transparent")}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Pending':
-        return <Badge className={cn("bg-yellow-500 text-yellow-950 hover:bg-yellow-600 border-transparent")}>{status}</Badge>;
+        return <Badge className={cn("bg-yellow-500 text-yellow-950 hover:bg-yellow-600 border-transparent")}><Clock className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Cancelled':
-        return <Badge className={cn("bg-gray-400 text-white hover:bg-gray-500 border-transparent")}>{status}</Badge>;
+        return <Badge className={cn("bg-gray-400 text-white hover:bg-gray-500 border-transparent")}><X className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       case 'Waitlisted':
-         // For waitlist position, ensure initialBookings is available or pass it down
-         // const position = getWaitlistPosition(booking, initialBookings); // Needs initialBookings or similar
-         // return <Badge className={cn("bg-purple-500 text-white hover:bg-purple-600 border-transparent")}>{status}{position ? ` (#${position})` : ''}</Badge>;
-         return <Badge className={cn("bg-purple-500 text-white hover:bg-purple-600 border-transparent")}>{status}</Badge>;
-
+         return <Badge className={cn("bg-purple-500 text-white hover:bg-purple-600 border-transparent")}><UserIcon className="mr-1 h-3.5 w-3.5" />{status}{waitlistPositionText}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -723,13 +753,13 @@ function BookingsPageContent() {
 
 
   if (!isClient) {
-    return <BookingsPageLoader />; // Or a more specific skeleton for this page
+    return <BookingsPageLoader />;
   }
 
   if (!currentUser && isClient) {
     return (
       <div className="space-y-8">
-        <PageHeader title="Bookings" description="Please log in to manage your bookings." icon={CalendarDays} />
+        <PageHeader title="My Bookings" description="Please log in to manage your bookings." icon={CalendarDays} />
         <Card className="text-center py-10 text-muted-foreground">
           <CardContent>
             <Info className="mx-auto h-12 w-12 mb-4 opacity-50" />
@@ -741,11 +771,14 @@ function BookingsPageContent() {
       </div>
     );
   }
+  
+  const isLoadingAnyData = isLoadingBookings || isLoadingResources || isLoadingAvailabilityRules;
+
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Bookings"
+        title="My Bookings"
         description="View, search, filter, and manage your lab resource bookings."
         icon={CalendarDays}
         actions={
@@ -763,7 +796,7 @@ function BookingsPageContent() {
                     )}
                   </Button>
                 </DialogTrigger>
-                 <DialogContent className="w-full max-w-md sm:max-w-lg">
+                 <DialogContent className="w-full max-w-lg"> {/* Increased max-width */}
                   <DialogHeader>
                     <DialogTitle>Filter Your Bookings</DialogTitle>
                     <DialogDescription>
@@ -772,15 +805,15 @@ function BookingsPageContent() {
                   </DialogHeader>
                   <Separator className="my-4" />
                   <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
-                    <div className="space-y-6 py-1">
+                    <div className="space-y-6 py-1 px-1"> {/* Added px-1 */}
                       <div>
-                        <FormLabel htmlFor="bookingSearchDialog">Search (Notes)</FormLabel>
+                        <FormLabel htmlFor="bookingSearchDialog">Search (Resource/Notes)</FormLabel>
                         <div className="relative mt-1">
                           <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                           <Input
                             id="bookingSearchDialog"
                             type="search"
-                            placeholder="Keyword in notes..."
+                            placeholder="Keyword..."
                             className="h-9 pl-8"
                             value={tempSearchTerm}
                             onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
@@ -857,29 +890,28 @@ function BookingsPageContent() {
                 </CardDescription>
               </div>
               {activeSelectedDate && 
-                <Button variant="link" size="sm" onClick={() => setActiveSelectedDate(undefined)} className="text-xs px-2 h-auto mt-2 sm:mt-0 self-start sm:self-center">View All Upcoming</Button>
+                <Button variant="link" size="sm" onClick={() => {setActiveSelectedDate(undefined); router.push(pathname);}} className="text-xs px-2 h-auto mt-2 sm:mt-0 self-start sm:self-center">View All Upcoming</Button>
               }
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            {isLoadingBookings || isLoadingResources || isLoadingAvailabilityRules ? (
+            {isLoadingAnyData ? (
               <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading bookings...</div>
             ) : bookingsToDisplay.length > 0 ? (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Resource</TableHead>
-                      <TableHead>Date & Time</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead><ResourceIcon className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Resource</TableHead>
+                      <TableHead><CalendarIconLucide className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Date & Time</TableHead>
+                      <TableHead><Info className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {bookingsToDisplay.map((booking) => {
-                      // Find resource name for display - ideally this comes pre-joined or fetched efficiently
-                      const resource = allAvailableResources.find(r => r.id === booking.resourceId);
-                      const resourceNameDisplay = resource ? resource.name : 'N/A';
+                      // resourceName is now part of the booking object from fetchAllBookingsForUser
+                      const resourceNameDisplay = booking.resourceName || 'N/A';
 
                       return (
                         <TableRow key={booking.id} className={cn(booking.status === 'Cancelled' && 'opacity-60')}>
@@ -897,12 +929,9 @@ function BookingsPageContent() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            {getBookingStatusBadge(booking.status)}
+                            {getBookingStatusBadge(booking.status, booking)}
                           </TableCell>
                           <TableCell className="text-right space-x-1">
-                            {/* <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenDetailsDialog(booking)}>
-                              <Eye className="h-4 w-4" /> <span className="sr-only">View Details</span>
-                            </Button> */}
                             {booking.status !== 'Cancelled' &&
                               (booking.status === 'Pending' || booking.status === 'Waitlisted' || booking.status === 'Confirmed') && (
                                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenForm(booking)}>
@@ -968,7 +997,7 @@ function BookingsPageContent() {
       <Dialog
         open={isFormOpen}
         onOpenChange={handleDialogClose}
-        key={currentBooking?.id || `new:${currentBooking?.resourceId || 'na'}:${(currentBooking?.startTime ? new Date(currentBooking.startTime) : activeSelectedDate || new Date()).toISOString()}`}
+        key={currentBooking?.id || `new:${currentBooking?.resourceId || 'na'}:${(currentBooking?.startTime ? new Date(currentBooking.startTime).toISOString() : (activeSelectedDate || new Date()).toISOString())}`}
         >
         <DialogContent className="sm:max-w-[525px]">
           <DialogHeader>
@@ -978,25 +1007,27 @@ function BookingsPageContent() {
               {dialogHeaderDateString && ` For date: ${dialogHeaderDateString}`}
             </DialogDescription>
           </DialogHeader>
-          {isFormOpen && currentUser && (isLoadingResources || isLoadingAvailabilityRules ? (
+          {(isLoadingResources || isLoadingAvailabilityRules) && isFormOpen ? (
             <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading form data...</div>
-          ) : allAvailableResources.length > 0 ? (
+          ) : allAvailableResources.length > 0 && currentUser ? (
             <BookingForm
-              initialData={currentBooking}
+              initialData={currentBooking} 
               onSave={handleSaveBooking}
-              onCancel={() => handleDialogClose(false)}
+              onCancel={() => handleDialogClose(false)} // Simplified onCancel
               currentUserFullName={currentUser.name}
               currentUserRole={currentUser.role}
               allAvailableResources={allAvailableResources}
               selectedDateProp={activeSelectedDate}
             />
           ) : (
-            <div className="text-center py-6 text-muted-foreground">
-              <Info className="mx-auto h-8 w-8 mb-2" />
-              <p>No resources are currently available for booking.</p>
-              <p className="text-xs">Please check back later or contact an administrator.</p>
-            </div>
-          ))
+             isFormOpen && (
+                <div className="text-center py-6 text-muted-foreground">
+                  <Info className="mx-auto h-8 w-8 mb-2" />
+                  <p>No resources are currently available for booking, or user data is missing.</p>
+                  <p className="text-xs">Please check back later or contact an administrator.</p>
+                </div>
+             )
+          )
           }
         </DialogContent>
       </Dialog>
@@ -1014,13 +1045,17 @@ function BookingsPageContent() {
 }
 
 const bookingFormSchema = z.object({
+  id: z.string().optional(),
   resourceId: z.string().min(1, "Please select a resource."),
   bookingDate: z.date({ required_error: "Please select a date." }),
   startTime: z.string().min(1, "Please select a start time."),
   endTime: z.string().min(1, "Please select an end time."),
   status: z.enum(bookingStatusesForForm as [string, ...string[]]).optional(),
   notes: z.string().max(500, "Notes cannot exceed 500 characters.").optional().or(z.literal('')),
-  createdAt: z.date().optional(), // Added createdAt for consistency if passed
+  createdAt: z.date().optional(),
+  userId: z.string().optional(), 
+  userName: z.string().optional(),
+  resourceName: z.string().optional(),
 }).refine(data => {
   if (!data.bookingDate || !data.startTime || !data.endTime) return true; 
   const startDateTime = set(data.bookingDate, {
@@ -1041,13 +1076,13 @@ export type BookingFormValues = z.infer<typeof bookingFormSchema>;
 
 
 interface BookingFormProps {
-  initialData?: Partial<Booking> & { resourceId?: string } | null;
+  initialData?: Partial<Booking> & { resourceId?: string };
   onSave: (data: BookingFormValues) => void;
   onCancel: () => void;
   currentUserFullName: string;
   currentUserRole: RoleName;
   allAvailableResources: Resource[];
-  selectedDateProp?: Date; // Date from main calendar
+  selectedDateProp?: Date;
 }
 
 const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
@@ -1059,22 +1094,21 @@ const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
 
 
 function BookingForm({ initialData, onSave, onCancel, currentUserFullName, currentUserRole, allAvailableResources, selectedDateProp }: BookingFormProps) {
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-
+  
   const getInitialBookingDate = useCallback(() => {
     if (initialData?.startTime && isValidDate(new Date(initialData.startTime))) {
       return startOfDay(new Date(initialData.startTime));
     }
-    if (selectedDateProp && isValidDate(selectedDateProp)) {
+    if (selectedDateProp && isValidDate(selectedDateProp) && !initialData?.id) {
       return startOfDay(selectedDateProp);
     }
     return startOfToday();
-  }, [initialData?.startTime, selectedDateProp]);
-
+  }, [initialData?.startTime, selectedDateProp, initialData?.id]);
 
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
+      id: initialData?.id,
       resourceId: initialData?.resourceId || (allAvailableResources.length > 0 ? allAvailableResources[0].id : ''),
       bookingDate: getInitialBookingDate(),
       startTime: initialData?.startTime ? format(new Date(initialData.startTime), 'HH:mm') : '09:00',
@@ -1082,11 +1116,37 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
       status: initialData?.id ? (initialData.status || 'Pending') : 'Pending',
       notes: initialData?.notes || '',
       createdAt: initialData?.createdAt ? new Date(initialData.createdAt) : new Date(),
+      userId: initialData?.userId,
+      userName: initialData?.userName,
+      resourceName: initialData?.resourceName,
     },
   });
-
+  
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const watchBookingDate = form.watch('bookingDate');
   const watchStartTime = form.watch('startTime');
+
+  useEffect(() => {
+    const newBookingDate = getInitialBookingDate();
+    const currentInitialDataId = initialData?.id;
+    const currentInitialResourceId = initialData?.resourceId;
+    const currentInitialStartTime = initialData?.startTime;
+    
+    form.reset({
+      id: initialData?.id,
+      resourceId: initialData?.resourceId || (allAvailableResources.length > 0 ? allAvailableResources[0].id : ''),
+      bookingDate: newBookingDate,
+      startTime: initialData?.startTime ? format(new Date(initialData.startTime), 'HH:mm') : '09:00',
+      endTime: initialData?.endTime ? format(new Date(initialData.endTime), 'HH:mm') : (initialData?.startTime ? format(new Date(new Date(initialData.startTime).getTime() + 2*60*60*1000), 'HH:mm') : '11:00'),
+      status: initialData?.id ? (initialData.status || 'Pending') : 'Pending',
+      notes: initialData?.notes || '',
+      createdAt: initialData?.createdAt ? new Date(initialData.createdAt) : new Date(),
+      userId: initialData?.userId,
+      userName: initialData?.userName,
+      resourceName: initialData?.resourceName,
+    });
+  }, [initialData, selectedDateProp, form.reset, allAvailableResources, getInitialBookingDate]);
+
 
   useEffect(() => {
     const currentStartTimeStr = form.getValues('startTime');
@@ -1234,7 +1294,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
                 )}
               />
             </div>
-            {initialData?.id && (
+            {initialData?.id && ( // Only show status for existing bookings
               <FormField
                 control={form.control}
                 name="status"
@@ -1289,3 +1349,6 @@ export default function BookingsPage() {
     </Suspense>
   );
 }
+
+
+    
