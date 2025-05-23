@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { Resource, Booking } from '@/types';
+import type { Resource, Booking, ResourceStatus } from '@/types';
 import { Separator } from '@/components/ui/separator';
 import {
   Table,
@@ -18,12 +18,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format, isValid, parseISO, compareAsc } from 'date-fns';
-import { cn, formatDateSafe } from '@/lib/utils';
+import { format, isValid, isPast, parseISO, compareAsc } from 'date-fns';
+import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/auth-context';
 import { db } from '@/lib/firebase';
-import { collection, query, where, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore';
 
 export default function DashboardPage() {
   const { currentUser } = useAuth();
@@ -35,8 +35,6 @@ export default function DashboardPage() {
   const fetchDashboardData = useCallback(async () => {
     setIsLoadingResources(true);
     try {
-      // Firestore query for frequently used resources (example: limit to 3)
-      // In a real app, "frequently used" might be based on actual usage stats
       const resourcesQuery = query(collection(db, 'resources'), limit(3));
       const resourcesSnapshot = await getDocs(resourcesQuery);
       const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
@@ -50,25 +48,22 @@ export default function DashboardPage() {
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
           features: Array.isArray(data.features) ? data.features : [],
-          // Other fields like availability, purchaseDate etc. can be added if needed on dashboard cards
         } as Resource;
       });
       setFrequentlyUsedResources(fetchedResources);
     } catch (error) {
       console.error("Error fetching frequently used resources:", error);
-      // Optionally set an error state or show a toast
     }
     setIsLoadingResources(false);
 
     if (currentUser) {
       setIsLoadingBookings(true);
       try {
-        // Firestore query for upcoming user bookings
-        // REQUIRES Firestore Index: users (ASC), startTime (ASC)
+        // Firestore Index Required: bookings collection: userId (ASC), startTime (ASC)
         const bookingsQuery = query(
           collection(db, 'bookings'),
           where('userId', '==', currentUser.id),
-          where('startTime', '>=', new Date().toISOString()),
+          where('startTime', '>=', new Date().toISOString()), 
           orderBy('startTime', 'asc'),
           limit(5)
         );
@@ -86,18 +81,16 @@ export default function DashboardPage() {
           return {
             id: docSnap.id,
             ...bookingData,
-            startTime: bookingData.startTime ? parseISO(bookingData.startTime) : new Date(),
-            endTime: bookingData.endTime ? parseISO(bookingData.endTime) : new Date(),
+            startTime: bookingData.startTime ? (bookingData.startTime.toDate ? bookingData.startTime.toDate() : parseISO(bookingData.startTime as string)) : new Date(),
+            endTime: bookingData.endTime ? (bookingData.endTime.toDate ? bookingData.endTime.toDate() : parseISO(bookingData.endTime as string)) : new Date(),
             createdAt: bookingData.createdAt?.toDate ? bookingData.createdAt.toDate() : new Date(bookingData.createdAt || Date.now()),
-            resourceName: resourceNameStr, // Added after fetching resource
+            resourceName: resourceNameStr,
           } as Booking;
         });
         let resolvedBookings = await Promise.all(fetchedBookingsPromises);
-        // Sorting by startTime is now handled by Firestore's orderBy
         setUpcomingUserBookings(resolvedBookings);
       } catch (error) {
         console.error("Error fetching upcoming bookings:", error);
-        // Optionally set an error state or show a toast
       }
       setIsLoadingBookings(false);
     } else {
@@ -109,20 +102,6 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
-
-
-  const getResourceStatusBadge = (status: Resource['status']) => {
-    switch (status) {
-      case 'Available':
-        return <Badge className={cn("bg-green-500 hover:bg-green-600 text-white border-transparent")}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-      case 'Booked':
-        return <Badge className={cn("bg-yellow-500 hover:bg-yellow-600 text-yellow-950 border-transparent")}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-      case 'Maintenance':
-        return <Badge className={cn("bg-orange-500 hover:bg-orange-600 text-white border-transparent")}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-      default:
-        return <Badge variant="outline"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-    }
-  };
   
   const getBookingStatusBadge = (status: Booking['status']) => {
     switch (status) {
@@ -133,7 +112,7 @@ export default function DashboardPage() {
       case 'Cancelled':
         return <Badge className={cn("bg-gray-400 text-white hover:bg-gray-500 border-transparent")}>{status}</Badge>;
       case 'Waitlisted':
-        return <Badge className={cn("bg-purple-500 text-white hover:bg-purple-600 border-transparent")}>{status}</Badge>; // Removed waitlist position display
+         return <Badge className={cn("bg-purple-500 text-white hover:bg-purple-600 border-transparent")}>{status}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -191,8 +170,10 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : (
-          <Card className="p-6 text-center shadow-md border-0">
-            <p className="text-muted-foreground">No frequently used resources to display. Explore resources via <Link href="/admin/resources" className="text-primary hover:underline">Resources</Link>.</p>
+          <Card className="p-6 text-center shadow-md border-0 bg-card">
+            <CardContent>
+              <p className="text-muted-foreground">No frequently used resources to display. Explore resources via <Link href="/admin/resources" className="text-primary hover:underline">Resources</Link>.</p>
+            </CardContent>
           </Card>
         )}
       </section>
@@ -251,15 +232,17 @@ export default function DashboardPage() {
             )}
           </Card>
         ) : (
-          <Card className="p-6 text-center shadow-md border-0">
-            <p className="text-muted-foreground">
-              {currentUser ? "You have no upcoming bookings." : "Please log in to see your bookings."}
-            </p>
-            {currentUser && (
-              <Button asChild className="mt-4">
-                <Link href="/admin/resources">Find Resources to Book</Link>
-              </Button>
-            )}
+          <Card className="p-6 text-center shadow-md border-0 bg-card">
+            <CardContent>
+              <p className="text-muted-foreground">
+                {currentUser ? "You have no upcoming bookings." : "Please log in to see your bookings."}
+              </p>
+              {currentUser && (
+                <Button asChild className="mt-4">
+                  <Link href="/admin/resources">Find Resources to Book</Link>
+                </Button>
+              )}
+            </CardContent>
           </Card>
         )}
       </section>

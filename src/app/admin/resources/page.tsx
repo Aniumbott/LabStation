@@ -5,9 +5,9 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2, FilterX, CheckCircle, AlertTriangle, Construction } from 'lucide-react'; // Added CheckCircle
+import { ClipboardList, PlusCircle, Filter as FilterIcon, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2, FilterX } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data'; // Resource types from mock for form
+import { labsList } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -37,23 +37,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, startOfDay, isValid, parseISO, isSameDay, isWithinInterval, addDays as dateFnsAddDays } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { format, startOfDay, isValid, parseISO, isWithinInterval, addDays as dateFnsAddDays } from 'date-fns';
+import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, where } from 'firebase/firestore';
 
-const getStatusBadge = (status: ResourceStatus) => {
-  switch (status) {
-    case 'Available':
-      return <Badge className={cn("bg-green-500 hover:bg-green-600 text-white border-transparent")}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-    case 'Booked':
-      return <Badge className={cn("bg-yellow-500 hover:bg-yellow-600 text-yellow-950 border-transparent")}><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-    case 'Maintenance':
-      return <Badge className={cn("bg-orange-500 hover:bg-orange-600 text-white border-transparent")}><Construction className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-    default:
-      return <Badge variant="outline"><AlertTriangle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-  }
-};
 
 export default function AdminResourcesPage() {
   const { toast } = useToast();
@@ -80,10 +68,10 @@ export default function AdminResourcesPage() {
   const fetchData = useCallback(async () => {
     setIsLoadingData(true);
     try {
-      // Fetch Resources
       const resourcesSnapshot = await getDocs(collection(db, "resources"));
-      const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
+      const fetchedResourcesPromises = resourcesSnapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
+        
         return {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
@@ -104,9 +92,9 @@ export default function AdminResourcesPage() {
           unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map(p => ({...p, startDate: typeof p.startDate === 'string' ? p.startDate : format(p.startDate.toDate(), 'yyyy-MM-dd'), endDate: typeof p.endDate === 'string' ? p.endDate : format(p.endDate.toDate(), 'yyyy-MM-dd')})) : [],
         } as Resource;
       });
+      const fetchedResources = await Promise.all(fetchedResourcesPromises);
       setResources(fetchedResources.sort((a,b) => a.name.localeCompare(b.name)));
 
-      // Fetch Resource Types
       const typesSnapshot = await getDocs(collection(db, "resourceTypes"));
       const fetchedTypes: ResourceType[] = typesSnapshot.docs.map(docSnap => ({
         id: docSnap.id,
@@ -161,7 +149,6 @@ export default function AdminResourcesPage() {
       currentResources = currentResources.filter(resource => {
         if (resource.status !== 'Available') return false;
 
-        // Check against specific unavailability periods
         const isSpecificallyUnavailable = resource.unavailabilityPeriods?.some(period => {
           const periodStart = parseISO(period.startDate);
           const periodEnd = parseISO(period.endDate);
@@ -170,7 +157,6 @@ export default function AdminResourcesPage() {
         });
         if (isSpecificallyUnavailable) return false;
         
-        // Check if there are defined daily slots for this date
         const dayAvailability = resource.availability?.find(avail => avail.date === dateToFilterStr);
         return dayAvailability && dayAvailability.slots.length > 0;
       });
@@ -199,8 +185,8 @@ export default function AdminResourcesPage() {
     setActiveFilterTypeId('all');
     setActiveFilterLab('all');
     setActiveSelectedDate(undefined);
-    resetDialogFilters(); // Reset temporary dialog state as well
-    setIsFilterDialogOpen(false); // Close dialog if open
+    resetDialogFilters(); 
+    setIsFilterDialogOpen(false); 
   };
 
   const handleOpenNewDialog = () => {
@@ -238,11 +224,10 @@ export default function AdminResourcesPage() {
          hostname: data.remoteAccess.hostname || undefined,
          protocol: data.remoteAccess.protocol || undefined,
          username: data.remoteAccess.username || undefined,
-         port: data.remoteAccess.port ?? undefined, // Already number or undefined from form
+         port: data.remoteAccess.port ?? undefined, 
          notes: data.remoteAccess.notes || undefined,
       } : null,
-      allowQueueing: data.status === 'Available', // Example logic, adjust as needed
-      // availability and unavailabilityPeriods are managed separately via Resource Detail page dialogs
+      allowQueueing: data.status === 'Available', 
       availability: editingResource?.availability || [],
       unavailabilityPeriods: editingResource?.unavailabilityPeriods || [],
     };
@@ -252,7 +237,7 @@ export default function AdminResourcesPage() {
       try {
         const resourceDocRef = doc(db, "resources", editingResource.id);
         await updateDoc(resourceDocRef, resourceDataToSave);
-        // Add audit log
+        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: editingResource.id, details: `Resource '${data.name}' updated.`});
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
       } catch (error) {
         console.error("Error updating resource:", error);
@@ -261,7 +246,7 @@ export default function AdminResourcesPage() {
     } else {
       try {
         const docRef = await addDoc(collection(db, "resources"), resourceDataToSave);
-        // Add audit log
+        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'RESOURCE_CREATED', { entityType: 'Resource', entityId: docRef.id, details: `Resource '${data.name}' created.`});
         toast({ title: 'Resource Created', description: `Resource "${data.name}" has been created.` });
       } catch (error) {
         console.error("Error creating resource:", error);
@@ -270,7 +255,7 @@ export default function AdminResourcesPage() {
     }
     setIsFormDialogOpen(false);
     setEditingResource(null);
-    await fetchData(); // Refetch all data
+    await fetchData(); 
   };
 
   const activeFilterCount = [
@@ -437,7 +422,7 @@ export default function AdminResourcesPage() {
                   </TableCell>
                   <TableCell>{resourceTypeNameDisplay}</TableCell>
                   <TableCell>{resource.lab}</TableCell>
-                  <TableCell>{getStatusBadge(resource.status)}</TableCell>
+                  <TableCell>{getResourceStatusBadge(resource.status)}</TableCell>
                   <TableCell className="text-right">
                     <Button
                       asChild
@@ -484,17 +469,18 @@ export default function AdminResourcesPage() {
           </CardContent>
         </Card>
       )}
-      <ResourceFormDialog
-        open={isFormDialogOpen}
-        onOpenChange={(isOpen) => {
-            setIsFormDialogOpen(isOpen);
-            if (!isOpen) setEditingResource(null);
-        }}
-        initialResource={editingResource}
-        onSave={handleSaveResource}
-        resourceTypes={fetchedResourceTypes} 
-      />
+      {isFormDialogOpen && ( // Conditionally render dialog to ensure fetchedResourceTypes is ready
+        <ResourceFormDialog
+            open={isFormDialogOpen}
+            onOpenChange={(isOpen) => {
+                setIsFormDialogOpen(isOpen);
+                if (!isOpen) setEditingResource(null);
+            }}
+            initialResource={editingResource}
+            onSave={handleSaveResource}
+            resourceTypes={fetchedResourceTypes} 
+        />
+      )}
     </div>
   );
 }
-

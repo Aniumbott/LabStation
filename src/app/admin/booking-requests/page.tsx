@@ -69,6 +69,7 @@ export default function BookingRequestsPage() {
     setIsLoading(true);
     try {
       const bookingsRef = collection(db, "bookings");
+      // Firestore Index Required: bookings collection: status (ASC/DESC), startTime (ASC)
       const q = query(bookingsRef, where("status", "in", ["Pending", "Waitlisted"]), orderBy("startTime", "asc"));
       const querySnapshot = await getDocs(q);
       const fetchedBookingsPromises: Promise<Booking>[] = querySnapshot.docs.map(async (docSnap) => {
@@ -87,9 +88,9 @@ export default function BookingRequestsPage() {
         return {
           id: docSnap.id,
           ...data,
-          startTime: data.startTime.toDate(),
-          endTime: data.endTime.toDate(),
-          createdAt: data.createdAt.toDate(),
+          startTime: data.startTime.toDate ? data.startTime.toDate() : parseISO(data.startTime as string),
+          endTime: data.endTime.toDate ? data.endTime.toDate() : parseISO(data.endTime as string),
+          createdAt: data.createdAt.toDate ? data.createdAt.toDate() : parseISO(data.createdAt as string),
           resourceName,
           userName,
         } as Booking;
@@ -137,10 +138,12 @@ export default function BookingRequestsPage() {
     
     if (activeFilterStatus !== 'all') {
         filtered = filtered.filter(b => b.status === activeFilterStatus);
+    } else { // If 'all', show both 'Pending' and 'Waitlisted'
+        filtered = filtered.filter(b => b.status === 'Pending' || b.status === 'Waitlisted');
     }
-    // If 'all', no status filter is applied beyond the initial query for Pending/Waitlisted
 
-    return filtered; // Already sorted by Firestore query
+
+    return filtered;
   }, [allBookingsState, activeSearchTerm, activeFilterResourceId, activeFilterStatus]);
 
   const handleApproveBooking = async (bookingId: string) => {
@@ -161,7 +164,7 @@ export default function BookingRequestsPage() {
           'booking_confirmed',
           `/bookings?bookingId=${approvedBooking.id}`
         );
-        fetchBookingRequests(); // Re-fetch bookings
+        fetchBookingRequests(); 
       }
     } catch (error) {
       console.error("Error approving booking:", error);
@@ -188,9 +191,7 @@ export default function BookingRequestsPage() {
           'booking_rejected',
           `/bookings?bookingId=${rejectedBooking.id}`
         );
-        // Queue processing logic (processQueueForResource) is removed here.
-        // It needs to be re-implemented as a Firebase Cloud Function for robustness.
-        fetchBookingRequests(); // Re-fetch bookings
+        fetchBookingRequests(); 
       }
     } catch (error) {
       console.error("Error rejecting booking:", error);
@@ -208,13 +209,13 @@ export default function BookingRequestsPage() {
   const resetDialogFilters = () => {
     setTempSearchTerm('');
     setTempFilterResourceId('all');
-    setTempFilterStatus('Pending'); 
+    setTempFilterStatus('all'); // Changed from 'Pending' to 'all' to match the filter option for all types
   };
 
   const resetAllActiveFilters = () => {
     setActiveSearchTerm('');
     setActiveFilterResourceId('all');
-    setActiveFilterStatus('Pending'); 
+    setActiveFilterStatus('all'); // Default to show all (Pending & Waitlisted)
     resetDialogFilters(); 
     setIsFilterDialogOpen(false); 
   };
@@ -222,18 +223,21 @@ export default function BookingRequestsPage() {
   const activeFilterCount = [
     activeSearchTerm !== '',
     activeFilterResourceId !== 'all',
-    activeFilterStatus !== 'Pending',
+    activeFilterStatus !== 'all', // Default is 'all', so any other selection is an active filter
   ].filter(Boolean).length;
 
-  const formatDateField = (dateInput: Date): string => {
-    return isValidDate(dateInput) ? format(dateInput, 'MMM dd, yyyy') : 'Invalid Date';
+  const formatDateField = (dateInput: Date | string): string => {
+    const date = typeof dateInput === 'string' ? parseISO(dateInput) : dateInput;
+    return isValidDate(date) ? format(date, 'MMM dd, yyyy') : 'Invalid Date';
   };
 
-  const formatTimeField = (dateInput: Date): string => {
-    return isValidDate(dateInput) ? format(dateInput, 'p') : '';
+  const formatTimeField = (dateInput: Date | string): string => {
+    const date = typeof dateInput === 'string' ? parseISO(dateInput) : dateInput;
+    return isValidDate(date) ? format(date, 'p') : '';
   };
 
-  const bookingStatusesForFilterDialog: Array<Booking['status'] | 'all'> = ['all', 'Pending', 'Waitlisted'];
+  // Updated to match the options in the select dropdown
+  const bookingStatusesForFilterDialog: Array<'all' | 'Pending' | 'Waitlisted'> = ['all', 'Pending', 'Waitlisted'];
 
 
   return (
