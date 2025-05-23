@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense, useMemo, useCallback } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, X, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Calendar as CalendarIcon, Info, Clock } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, X, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Info, Clock, ListFilter } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -24,7 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Booking, Resource, DayOfWeek, RoleName, BlackoutDate, RecurringBlackoutRule } from '@/types';
 import { daysOfWeekArray } from '@/types';
-import { format, parseISO, isValid as isValidDate, startOfDay, isSameDay, set, addDays, isBefore, getDay } from 'date-fns';
+import { format, parseISO, isValid as isValidDate, startOfDay, isSameDay, set, addDays, isBefore, getDay, startOfToday } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -58,23 +58,22 @@ function BookingsPageContent() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
 
-  // Main Page State
   const [isClient, setIsClient] = useState(false);
   const [allUserBookings, setAllUserBookings] = useState<Booking[]>([]);
   const [allAvailableResources, setAllAvailableResources] = useState<Resource[]>([]);
   const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
   const [recurringRules, setRecurringRules] = useState<RecurringBlackoutRule[]>([]);
+
   const [isLoadingBookings, setIsLoadingBookings] = useState(true);
   const [isLoadingResources, setIsLoadingResources] = useState(true);
+  const [isLoadingAvailabilityRules, setIsLoadingAvailabilityRules] = useState(true);
   
-  // Dialog States
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentBooking, setCurrentBooking] = useState<Partial<Booking> & { resourceId?: string } | null>(null);
   const [selectedBookingForDetails, setSelectedBookingForDetails] = useState<Booking | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
 
-  // Active Filters for the Page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterResourceId, setActiveFilterResourceId] = useState<string>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<Booking['status'] | 'all'>('all');
@@ -87,84 +86,89 @@ function BookingsPageContent() {
     return undefined;
   });
 
-  // Temporary Filters for Dialog
   const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
   const [tempFilterResourceId, setTempFilterResourceId] = useState<string>(activeFilterResourceId);
   const [tempFilterStatus, setTempFilterStatus] = useState<Booking['status'] | 'all'>(activeFilterStatus);
   const [tempSelectedDateInDialog, setTempSelectedDateInDialog] = useState<Date | undefined>(activeSelectedDate);
   const [currentCalendarMonthInDialog, setCurrentCalendarMonthInDialog] = useState<Date>(activeSelectedDate || startOfDay(new Date()));
 
+  const fetchAllBookingsForUser = useCallback(async () => {
+    if (!currentUser) {
+      setAllUserBookings([]);
+      setIsLoadingBookings(false);
+      return;
+    }
+    setIsLoadingBookings(true);
+    try {
+      // REQUIRES FIRESTORE INDEX: userId ASC, startTime ASC
+      const bookingsQuery = query(
+        collection(db, 'bookings'),
+        where('userId', '==', currentUser.id),
+        orderBy('startTime', 'asc')
+      );
+      const bookingsSnapshot = await getDocs(bookingsQuery);
+      const fetchedBookingsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
+        const data = docSnap.data();
+        let resourceNameStr = 'Unknown Resource';
+        if (data.resourceId) {
+          const resourceDoc = await getDoc(doc(db, 'resources', data.resourceId));
+          if (resourceDoc.exists()) resourceNameStr = resourceDoc.data()?.name || resourceNameStr;
+        }
+        return {
+          id: docSnap.id,
+          ...data,
+          startTime: data.startTime ? parseISO(data.startTime) : new Date(), // Assuming startTime is ISO string
+          endTime: data.endTime ? parseISO(data.endTime) : new Date(),     // Assuming endTime is ISO string
+          createdAt: data.createdAt ? parseISO(data.createdAt) : new Date(), // Assuming createdAt is ISO string
+          resourceName: resourceNameStr, // Add fetched resource name
+        } as Booking;
+      });
+      const bookings = await Promise.all(fetchedBookingsPromises);
+      setAllUserBookings(bookings);
+    } catch (error) {
+      console.error("Error fetching user bookings:", error);
+      toast({ title: "Error", description: "Failed to load your bookings.", variant: "destructive" });
+    }
+    setIsLoadingBookings(false);
+  }, [currentUser, toast]);
+
+  const fetchResourcesAndAvailabilityRules = useCallback(async () => {
+    setIsLoadingResources(true);
+    setIsLoadingAvailabilityRules(true);
+    try {
+      const resourcesQuery = query(collection(db, 'resources')); // Fetch all for form, filter client-side if needed for "Available"
+      const resourcesSnapshot = await getDocs(resourcesQuery);
+      const resources = resourcesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Resource));
+      setAllAvailableResources(resources.sort((a,b) => a.name.localeCompare(b.name)));
+    } catch (error) {
+      console.error("Error fetching resources:", error);
+      toast({ title: "Error", description: "Failed to load resources for booking form.", variant: "destructive" });
+    }
+    setIsLoadingResources(false);
+
+    try {
+      const blackoutSnapshot = await getDocs(collection(db, "blackoutDates"));
+      setBlackoutDates(blackoutSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate)));
+      
+      const recurringSnapshot = await getDocs(collection(db, "recurringBlackoutRules"));
+      setRecurringRules(recurringSnapshot.docs.map(r => ({ id: r.id, ...r.data() } as RecurringBlackoutRule)));
+    } catch (error) {
+      console.error("Error fetching blackout/recurring rules:", error);
+      toast({ title: "Error", description: "Failed to load lab closure rules.", variant: "destructive" });
+    }
+    setIsLoadingAvailabilityRules(false);
+  }, [toast]);
+
   useEffect(() => {
     setIsClient(true);
   }, []);
-
+  
   useEffect(() => {
-    async function fetchInitialData() {
-      if (!currentUser) {
-        setAllUserBookings([]);
-        setIsLoadingBookings(false);
-        setIsLoadingResources(false); // Also set resource loading to false
-        return;
-      }
-
-      setIsLoadingBookings(true);
-      setIsLoadingResources(true);
-      try {
-        // Fetch user's bookings
-        const bookingsQuery = query(collection(db, 'bookings'), where('userId', '==', currentUser.id), orderBy('startTime', 'asc'));
-        const bookingsSnapshot = await getDocs(bookingsQuery);
-        const fetchedBookingsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
-          const data = docSnap.data();
-          let resourceName = 'Unknown Resource';
-          if (data.resourceId) {
-            const resourceDoc = await getDoc(doc(db, 'resources', data.resourceId));
-            if (resourceDoc.exists()) resourceName = resourceDoc.data()?.name || resourceName;
-          }
-          return {
-            id: docSnap.id,
-            ...data,
-            startTime: data.startTime.toDate(),
-            endTime: data.endTime.toDate(),
-            createdAt: data.createdAt.toDate(),
-            resourceName,
-          } as Booking;
-        });
-        const bookings = await Promise.all(fetchedBookingsPromises);
-        setAllUserBookings(bookings);
-      } catch (error) {
-        console.error("Error fetching user bookings:", error);
-        toast({ title: "Error", description: "Failed to load your bookings.", variant: "destructive" });
-      }
-      setIsLoadingBookings(false);
-
-      // Fetch all available resources for the form dropdown
-      try {
-        const resourcesQuery = query(collection(db, 'resources'), where('status', '==', 'Available'));
-        const resourcesSnapshot = await getDocs(resourcesQuery);
-        const resources = resourcesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Resource));
-        setAllAvailableResources(resources.sort((a,b) => a.name.localeCompare(b.name)));
-      } catch (error) {
-        console.error("Error fetching resources:", error);
-        toast({ title: "Error", description: "Failed to load resources for booking form.", variant: "destructive" });
-      }
-      setIsLoadingResources(false);
-
-      // Fetch blackout dates and recurring rules for conflict checks
-      try {
-        const blackoutSnapshot = await getDocs(collection(db, "blackoutDates"));
-        setBlackoutDates(blackoutSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate)));
-        const recurringSnapshot = await getDocs(collection(db, "recurringBlackoutRules"));
-        setRecurringRules(recurringSnapshot.docs.map(r => ({ id: r.id, ...r.data() } as RecurringBlackoutRule)));
-      } catch (error) {
-        console.error("Error fetching blackout/recurring rules:", error);
-        toast({ title: "Error", description: "Failed to load lab closure rules.", variant: "destructive" });
-      }
-
+    if (isClient) {
+      fetchAllBookingsForUser();
+      fetchResourcesAndAvailabilityRules();
     }
-    if (isClient) { // Only fetch if on client and user is determined
-        fetchInitialData();
-    }
-  }, [currentUser, toast, isClient]);
+  }, [currentUser, isClient, fetchAllBookingsForUser, fetchResourcesAndAvailabilityRules]);
 
   const handleOpenForm = useCallback((bookingToEdit?: Booking, resourceIdForNew?: string | null, dateForNew?: Date | null) => {
     if (!currentUser) {
@@ -182,8 +186,8 @@ function BookingsPageContent() {
         baseDateForNewBooking = startOfDay(new Date());
     }
     
-    if (!bookingToEdit?.id && isBefore(baseDateForNewBooking, startOfDay(new Date()))) {
-        baseDateForNewBooking = startOfDay(new Date());
+    if (!bookingToEdit?.id && isBefore(baseDateForNewBooking, startOfToday())) {
+        baseDateForNewBooking = startOfToday();
     }
 
     const defaultStartTime = set(new Date(baseDateForNewBooking), { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 });
@@ -192,14 +196,14 @@ function BookingsPageContent() {
 
     if (bookingToEdit) {
         bookingData = {
-          ...bookingToEdit, // bookingToEdit.startTime, .endTime, .createdAt are already Date objects
-          userId: bookingToEdit.userId || currentUser.id, // Ensure userId is set
+          ...bookingToEdit,
+          userId: bookingToEdit.userId || currentUser.id,
         };
     } else {
         const initialResourceId = resourceIdForNew || (allAvailableResources.length > 0 ? allAvailableResources[0].id : '');
         bookingData = {
             startTime: defaultStartTime,
-            endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000), // Default 2hr booking
+            endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000),
             createdAt: new Date(),
             userId: currentUser.id,
             resourceId: initialResourceId,
@@ -211,7 +215,7 @@ function BookingsPageContent() {
   }, [activeSelectedDate, currentUser, toast, allAvailableResources]);
   
   useEffect(() => {
-    if (!isClient || !currentUser || !searchParams) return;
+    if (!isClient || !currentUser || !searchParams || isLoadingBookings || isLoadingResources) return;
 
     const resourceIdParam = searchParams.get('resourceId');
     const dateParam = searchParams.get('date');
@@ -249,8 +253,7 @@ function BookingsPageContent() {
       handleOpenForm(undefined, resourceIdParam, activeSelectedDate || new Date());
     }
 
-  }, [searchParams, allUserBookings, isClient, currentUser, activeSelectedDate, handleOpenForm, isFormOpen, currentBooking]);
-
+  }, [searchParams, allUserBookings, isClient, currentUser, activeSelectedDate, handleOpenForm, isFormOpen, currentBooking, isLoadingBookings, isLoadingResources]);
 
   useEffect(() => {
     if (isFilterDialogOpen) {
@@ -263,7 +266,7 @@ function BookingsPageContent() {
   }, [isFilterDialogOpen, activeSearchTerm, activeFilterResourceId, activeFilterStatus, activeSelectedDate]);
 
   const bookingsToDisplay = useMemo(() => {
-    if (!currentUser || isLoadingBookings) return []; // Return empty if loading or no user
+    if (!currentUser || isLoadingBookings) return [];
     let filtered = [...allUserBookings];
 
     if (activeSearchTerm) {
@@ -285,7 +288,8 @@ function BookingsPageContent() {
     if (activeSelectedDate) {
       filtered = filtered.filter(b => isValidDate(new Date(b.startTime)) && isSameDay(new Date(b.startTime), activeSelectedDate));
     } else {
-      filtered = filtered.filter(b => b.startTime && !isBefore(new Date(b.startTime), startOfDay(new Date())) && b.status !== 'Cancelled');
+      // Default view: show upcoming bookings, not past or cancelled ones
+      filtered = filtered.filter(b => b.startTime && !isBefore(startOfDay(new Date(b.startTime)), startOfToday()) && b.status !== 'Cancelled');
     }
 
     return filtered; // Already sorted by Firestore query (orderBy startTime)
@@ -395,11 +399,11 @@ function BookingsPageContent() {
       toast({ title: "Error", description: "Please fill all required fields.", variant: "destructive" });
       return;
     }
-    const resource = allAvailableResources.find(r => r.id === formData.resourceId); // Use fetched resources
+    const resource = allAvailableResources.find(r => r.id === formData.resourceId);
     if (!resource) { toast({ title: "Error", description: "Selected resource not found or not available.", variant: "destructive" }); return; }
 
 
-    if (isBefore(startOfDay(finalStartTime), startOfDay(new Date())) && !currentBooking?.id) {
+    if (isBefore(startOfDay(finalStartTime), startOfToday()) && !currentBooking?.id) {
        toast({ title: "Invalid Date", description: "Cannot create new bookings for past dates.", variant: "destructive" }); return;
     }
 
@@ -407,11 +411,11 @@ function BookingsPageContent() {
     
     const bookingDayIndex = getDay(finalStartTime);
     const bookingDayName = daysOfWeekArray[bookingDayIndex];
-    const recurringBlackout = recurringRules.find(rule => rule.daysOfWeek.includes(bookingDayName));
-    if (recurringBlackout) {
+    const recurringLabBlackout = recurringRules.find(rule => rule.daysOfWeek.includes(bookingDayName));
+    if (recurringLabBlackout) {
       toast({
         title: "Lab Closed",
-        description: `The lab is regularly closed on ${bookingDayName}s due to: ${recurringBlackout.name}${recurringBlackout.reason ? ` (${recurringBlackout.reason})` : ''}. Please select a different date.`,
+        description: `The lab is regularly closed on ${bookingDayName}s due to: ${recurringLabBlackout.name}${recurringLabBlackout.reason ? ` (${recurringLabBlackout.reason})` : ''}. Please select a different date.`,
         variant: "destructive",
         duration: 10000
       });
@@ -419,11 +423,11 @@ function BookingsPageContent() {
     }
 
     const proposedDateOnlyStr = format(finalStartTime, 'yyyy-MM-dd');
-    const isBlackout = blackoutDates.find(bd => bd.date === proposedDateOnlyStr);
-    if (isBlackout) {
+    const isSpecificBlackout = blackoutDates.find(bd => bd.date === proposedDateOnlyStr);
+    if (isSpecificBlackout) {
       toast({
         title: "Lab Closed",
-        description: `The lab is closed on ${format(finalStartTime, 'PPP')}${isBlackout.reason ? ` due to: ${isBlackout.reason}` : '.'}. Please select a different date.`,
+        description: `The lab is closed on ${format(finalStartTime, 'PPP')}${isSpecificBlackout.reason ? ` due to: ${isSpecificBlackout.reason}` : '.'}. Please select a different date.`,
         variant: "destructive",
         duration: 7000
       });
@@ -494,18 +498,18 @@ function BookingsPageContent() {
     const existingBookingsQuery = query(
         collection(db, 'bookings'),
         where('resourceId', '==', formData.resourceId!),
-        where('status', 'in', ['Confirmed', 'Pending']) // Consider only active or pending bookings for conflicts
+        where('status', 'in', ['Confirmed', 'Pending']) 
     );
     const existingBookingsSnapshot = await getDocs(existingBookingsQuery);
     const existingBookingsForResource: Booking[] = existingBookingsSnapshot.docs.map(d => ({
         id: d.id, ...d.data(), 
-        startTime: d.data().startTime.toDate(),
-        endTime: d.data().endTime.toDate(),
-        createdAt: d.data().createdAt.toDate()
+        startTime: parseISO(d.data().startTime),
+        endTime: parseISO(d.data().endTime),
+        createdAt: parseISO(d.data().createdAt)
     } as Booking));
 
     const conflictingBooking = existingBookingsForResource.find(existingBooking => {
-        if (currentBooking && currentBooking.id && existingBooking.id === currentBooking.id) return false; // Don't conflict with itself when editing
+        if (currentBooking && currentBooking.id && existingBooking.id === currentBooking.id) return false; 
         return (finalStartTime < existingBooking.endTime && finalEndTime > existingBooking.startTime);
     });
 
@@ -522,7 +526,7 @@ function BookingsPageContent() {
                 'Added to Waitlist',
                 `Your booking request for ${resource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`,
                 'booking_waitlisted',
-                `/bookings?bookingId=${currentBooking?.id || `temp_waitlist_${Date.now()}`}` // Placeholder ID for new waitlisted items
+                `/bookings?bookingId=${currentBooking?.id || `temp_waitlist_${Date.now()}`}`
             );
         } else {
             const conflictingUserDoc = await getDoc(doc(db, 'users', conflictingBooking.userId));
@@ -532,58 +536,43 @@ function BookingsPageContent() {
         }
     }
     
-    const bookingData: Omit<Booking, 'id' | 'resourceName'> = {
+    const bookingDataToSave = {
         resourceId: formData.resourceId!,
         userId: currentUser.id,
-        startTime: finalStartTime,
-        endTime: finalEndTime,
-        createdAt: formData.createdAt || new Date(), 
+        startTime: finalStartTime.toISOString(),
+        endTime: finalEndTime.toISOString(),
+        createdAt: (formData.createdAt || new Date()).toISOString(), 
         status: finalStatus,
-        notes: formData.notes,
+        notes: formData.notes || '',
     };
 
     setIsLoadingBookings(true);
     try {
       if (!isNewBooking && currentBooking?.id) {
         const bookingDocRef = doc(db, "bookings", currentBooking.id);
-        await updateDoc(bookingDocRef, bookingData);
+        await updateDoc(bookingDocRef, bookingDataToSave);
         toast({ title: "Success", description: "Booking updated successfully."});
         addAuditLog(currentUser.id, currentUser.name, 'BOOKING_UPDATED', { entityType: 'Booking', entityId: currentBooking.id, details: `Booking for '${resource.name}' updated by user.`});
       } else {
-        const docRef = await addDoc(collection(db, "bookings"), {
-          ...bookingData,
+        const payloadForNewBooking = {
+          ...bookingDataToSave,
           createdAt: serverTimestamp() // Use server timestamp for new bookings
-        });
+        };
+        const docRef = await addDoc(collection(db, "bookings"), payloadForNewBooking);
+        addAuditLog(currentUser.id, currentUser.name, finalStatus === 'Pending' ? 'BOOKING_CREATED' : 'BOOKING_WAITLISTED', { entityType: 'Booking', entityId: docRef.id, details: `Booking for '${resource.name}' created with status ${finalStatus} by user.`});
+        
         if (finalStatus === 'Pending') {
           toast({ title: "Success", description: "Booking created and submitted for approval."});
-          addAuditLog(currentUser.id, currentUser.name, 'BOOKING_CREATED', { entityType: 'Booking', entityId: docRef.id, details: `Booking for '${resource.name}' created with status Pending by user.`});
-          // For Firestore, admin notifications would be triggered by a Cloud Function or observed query.
-          // For mock, we'll add notification here. User 'u1' is a placeholder Admin.
           addNotification(
-              'u1',
+              'ADMIN_USER_ID_PLACEHOLDER', // Replace with actual admin user ID logic
               'New Booking Request',
               `Booking for ${resource.name} by ${currentUser.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`,
               'booking_pending_approval',
               `/admin/booking-requests`
           );
-        } else if (finalStatus === 'Waitlisted' && isNewBooking) {
-          addAuditLog(currentUser.id, currentUser.name, 'BOOKING_WAITLISTED', { entityType: 'Booking', entityId: docRef.id, details: `New booking for '${resource.name}' placed on waitlist by user.`});
         }
       }
-      // Re-fetch user bookings
-      const bookingsQuery = query(collection(db, 'bookings'), where('userId', '==', currentUser.id), orderBy('startTime', 'asc'));
-      const bookingsSnapshot = await getDocs(bookingsQuery);
-      const fetchedBookingsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
-        const data = docSnap.data();
-        let resName = 'Unknown Resource';
-        if (data.resourceId) {
-          const resDoc = await getDoc(doc(db, 'resources', data.resourceId));
-          if (resDoc.exists()) resName = resDoc.data()?.name || resName;
-        }
-        return { id: docSnap.id, ...data, startTime: data.startTime.toDate(), endTime: data.endTime.toDate(), createdAt: data.createdAt.toDate(), resourceName: resName } as Booking;
-      });
-      const updatedBookings = await Promise.all(fetchedBookingsPromises);
-      setAllUserBookings(updatedBookings);
+      await fetchAllBookingsForUser();
     } catch (error) {
       console.error("Error saving booking:", error);
       toast({ title: "Save Failed", description: "Could not save your booking. Please try again.", variant: "destructive"});
@@ -608,23 +597,10 @@ function BookingsPageContent() {
         toast({ title: "Info", description: "Booking cancelled."});
         addAuditLog(currentUser.id, currentUser.name, 'BOOKING_CANCELLED', { entityType: 'Booking', entityId: bookingId, details: `Booking for '${bookingToCancel.resourceName}' cancelled by user.`});
         
-        // Re-fetch user bookings
-        const bookingsQuery = query(collection(db, 'bookings'), where('userId', '==', currentUser.id), orderBy('startTime', 'asc'));
-        const bookingsSnapshot = await getDocs(bookingsQuery);
-        const fetchedBookingsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
-          const data = docSnap.data();
-          let resName = 'Unknown Resource';
-          if (data.resourceId) {
-            const resDoc = await getDoc(doc(db, 'resources', data.resourceId));
-            if (resDoc.exists()) resName = resDoc.data()?.name || resName;
-          }
-          return { id: docSnap.id, ...data, startTime: data.startTime.toDate(), endTime: data.endTime.toDate(), createdAt: data.createdAt.toDate(), resourceName: resName } as Booking;
-        });
-        const updatedBookings = await Promise.all(fetchedBookingsPromises);
-        setAllUserBookings(updatedBookings);
+        await fetchAllBookingsForUser(); // Re-fetch user bookings to reflect cancellation
 
-        // Queue processing logic removed as it's complex for Firestore client-side
-        // This would typically be a Cloud Function triggered by the booking cancellation.
+        // Queue processing logic with Firestore would be complex and typically done via Cloud Functions.
+        // For now, it's removed from client-side.
     } catch (error) {
         console.error("Error cancelling booking:", error);
         toast({ title: "Cancellation Failed", description: "Could not cancel booking.", variant: "destructive"});
@@ -648,9 +624,9 @@ function BookingsPageContent() {
 
   const dialogFooterText = useMemo(() => {
     if (activeSelectedDate) return `Showing bookings for ${format(activeSelectedDate, 'PPP')}.`;
-    if (activeSearchTerm || activeFilterResourceId !== 'all' || activeFilterStatus !== 'all') return 'Showing filtered list of your bookings.';
+    if (activeFilterCount > 0) return 'Showing filtered list of your bookings.';
     return 'Showing all your upcoming bookings.';
-  }, [activeSelectedDate, activeSearchTerm, activeFilterResourceId, activeFilterStatus]);
+  }, [activeSelectedDate, activeFilterCount]);
 
   return (
     <div className="space-y-8">
@@ -664,7 +640,7 @@ function BookingsPageContent() {
                 <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
                   <DialogTrigger asChild>
                       <Button variant="outline">
-                        <FilterIcon className="mr-2 h-4 w-4" /> Filters
+                        <ListFilter className="mr-2 h-4 w-4" /> Filters
                         {activeFilterCount > 0 && (
                             <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
                             {activeFilterCount}
@@ -731,7 +707,7 @@ function BookingsPageContent() {
                                 month={currentCalendarMonthInDialog} onMonthChange={setCurrentCalendarMonthInDialog}
                                 modifiers={{ booked: bookedDatesForCalendar }}
                                 modifiersClassNames={{ booked: 'day-booked-dot' }}
-                                disabled={(date) => isBefore(date, startOfDay(new Date())) && !currentBooking?.id}
+                                disabled={(date) => isBefore(date, startOfToday()) && !currentBooking?.id}
                                 footer={
                                     <div className="flex flex-col gap-2 items-center pt-2">
                                     {tempSelectedDateInDialog && <Button variant="ghost" size="sm" onClick={() => setTempSelectedDateInDialog(undefined)} className="w-full text-xs"><FilterX className="mr-2 h-4 w-4" />Clear Date Selection</Button>}
@@ -763,7 +739,7 @@ function BookingsPageContent() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div>
                     <CardTitle>
-                    {activeSelectedDate ? `Your Bookings for ${format(activeSelectedDate, 'PPP')}` : 'All Your Bookings'}
+                    {activeSelectedDate ? `Your Bookings for ${format(activeSelectedDate, 'PPP')}` : 'All Your Upcoming Bookings'}
                     </CardTitle>
                     <CardDescription>
                         Displaying {bookingsToDisplay.length} booking(s). {dialogFooterText}
@@ -772,7 +748,7 @@ function BookingsPageContent() {
             </div>
         </CardHeader>
         <CardContent className="p-0">
-            { isLoadingBookings || isLoadingResources ? (
+            { isLoadingBookings || isLoadingResources || isLoadingAvailabilityRules ? (
                 <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading bookings...</div>
             ) : bookingsToDisplay.length > 0 ? (
             <div className="overflow-x-auto">
@@ -793,7 +769,7 @@ function BookingsPageContent() {
                         className="font-medium cursor-pointer hover:underline hover:text-primary"
                         onClick={() => handleOpenDetailsDialog(booking)}
                     >
-                        {booking.resourceName}
+                        {booking.resourceName || 'N/A'}
                     </TableCell>
                     <TableCell>
                         <div>{isValidDate(new Date(booking.startTime)) ? format(new Date(booking.startTime), 'MMM dd, yyyy') : 'Invalid Date'}</div>
@@ -818,12 +794,12 @@ function BookingsPageContent() {
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenDetailsDialog(booking)}>
                             <Eye className="h-4 w-4" /> <span className="sr-only">View Details</span>
                         </Button>
-                        {booking.status !== 'Cancelled' && ( // Users can edit Pending/Confirmed/Waitlisted
+                        {booking.status !== 'Cancelled' && 
                          (booking.status === 'Pending' || booking.status === 'Waitlisted' || booking.status === 'Confirmed') && (
                           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenForm(booking, undefined, new Date(booking.startTime))}>
                             <Edit3 className="h-4 w-4" /> <span className="sr-only">Edit Booking</span>
                           </Button>
-                        ))}
+                        )}
                         {booking.status !== 'Cancelled' && (
                             <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8" onClick={() => handleCancelBookingLocal(booking.id)}>
                             <X className="h-4 w-4" /> <span className="sr-only">Cancel Booking</span>
@@ -894,12 +870,6 @@ function BookingsPageContent() {
                     currentParams.delete('resourceId');
                      paramsModified = true;
                 }
-                 // Do not clear date from URL if it was the active filter on page
-                // if (currentParams.has('date') && !activeSelectedDate) { 
-                //     currentParams.delete('date');
-                //      paramsModified = true;
-                // }
-
                 if (paramsModified) {
                     router.push(`${pathname}?${currentParams.toString()}`, { scroll: false });
                 }
@@ -913,7 +883,9 @@ function BookingsPageContent() {
               {dialogHeaderDateString && ` For date: ${dialogHeaderDateString}`}
             </DialogDescription>
           </DialogHeader>
-          {isFormOpen && currentUser && allAvailableResources.length > 0 &&
+          {isFormOpen && currentUser && (isLoadingResources || isLoadingAvailabilityRules ? (
+                <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading form data...</div>
+            ) : allAvailableResources.length > 0 ? (
             <BookingForm
                 key={currentBooking?.id || `new:${currentBooking?.resourceId || 'na'}:${currentBooking?.startTime?.toISOString() || activeSelectedDate?.toISOString() || 'nodate'}`}
                 initialData={currentBooking}
@@ -924,17 +896,14 @@ function BookingsPageContent() {
                 selectedDateProp={activeSelectedDate || (currentBooking?.startTime ? startOfDay(new Date(currentBooking.startTime)) : startOfDay(new Date()))}
                 allAvailableResources={allAvailableResources}
             />
-          }
-           {isFormOpen && currentUser && allAvailableResources.length === 0 && !isLoadingResources && (
+          ) : (
                 <div className="text-center py-6 text-muted-foreground">
                     <Info className="mx-auto h-8 w-8 mb-2" />
                     <p>No resources are currently available for booking.</p>
                     <p className="text-xs">Please check back later or contact an administrator.</p>
                 </div>
-            )}
-             {isFormOpen && currentUser && isLoadingResources && (
-                <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading resources for form...</div>
-            )}
+            ))
+          }
         </DialogContent>
       </Dialog>
 
@@ -990,7 +959,7 @@ interface BookingFormProps {
 const timeSlots = Array.from({ length: (17 - 9) * 2 + 1 }, (_, i) => {
     const hour = 9 + Math.floor(i / 2);
     const minute = i % 2 === 0 ? '00' : '30';
-    if (hour === 17 && minute === '30') return null;
+    if (hour === 17 && minute === '30') return null; // Don't include 17:30 as a start time if lab closes at 17:00
     return `${String(hour).padStart(2, '0')}:${minute}`;
 }).filter(Boolean) as string[];
   
@@ -1024,23 +993,23 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
 
         if (!isNaN(currentStartTimeHours) && !isNaN(currentStartTimeMinutes)) {
             const newStartTime = set(new Date(currentBookingDate), { hours: currentStartTimeHours, minutes: currentStartTimeMinutes });
-            let newEndTime = new Date(newStartTime.getTime() + 2 * 60 * 60 * 1000); 
+            let newEndTime = new Date(newStartTime.getTime() + 2 * 60 * 60 * 1000); // Default 2hr booking
             
             const maxEndTimeForDay = set(new Date(currentBookingDate), { hours: 17, minutes: 0 }); 
             if (newEndTime > maxEndTimeForDay) {
                 newEndTime = maxEndTimeForDay;
             }
             
-            if (newEndTime <= newStartTime && currentStartTimeStr !== timeSlots[timeSlots.length -1]) {
+            if (newEndTime <= newStartTime && currentStartTimeStr !== timeSlots[timeSlots.length -1]) { // if start time is not the last possible slot
                  const newStartTimePlus30Min = new Date(newStartTime.getTime() + 30 * 60 * 1000);
                  if(newStartTimePlus30Min <= maxEndTimeForDay) newEndTime = newStartTimePlus30Min;
                  else newEndTime = maxEndTimeForDay;
             }
             
             const formattedNewEndTime = format(newEndTime, 'HH:mm');
-            if(form.getValues('endTime') !== formattedNewEndTime && newStartTime < newEndTime){
+            if(form.getValues('endTime') !== formattedNewEndTime && newStartTime < newEndTime){ // Only update if different and valid
                 form.setValue('endTime', formattedNewEndTime, { shouldValidate: true });
-            } else if (newStartTime >= newEndTime && newEndTime === maxEndTimeForDay) { // if start makes end >= max, set end to start
+            } else if (newStartTime >= newEndTime && newEndTime.getHours() === 17 && newEndTime.getMinutes() === 0) { // if start time is 17:00, end time should also be 17:00 (or invalid, caught by refine)
                 form.setValue('endTime', format(newStartTime, 'HH:mm'), { shouldValidate: true });
             }
         }
@@ -1056,9 +1025,9 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
 
   return (
     <Form {...form}>
-    <form onSubmit={form.handleSubmit(handleRHFSubmit)} className="space-y-4 py-4">
+    <form onSubmit={form.handleSubmit(handleRHFSubmit)} className="space-y-0"> {/* Reduced space-y */}
       <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
-        <div className="space-y-4 py-1">
+        <div className="space-y-4 py-4 px-1"> {/* Added slight horizontal padding */}
           <FormField
             control={form.control}
             name="bookingDate"
@@ -1075,7 +1044,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
                           !field.value && "text-muted-foreground"
                         )}
                       >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        <CalendarDays className="mr-2 h-4 w-4" />
                         {field.value && isValidDate(field.value) ? format(field.value, "PPP") : <span>Pick a date</span>}
                       </Button>
                     </FormControl>
@@ -1088,7 +1057,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
                         if (date) field.onChange(startOfDay(date));
                         setIsCalendarOpen(false);
                       }}
-                      disabled={(date) => isBefore(date, startOfDay(new Date())) && !initialData?.id }
+                      disabled={(date) => isBefore(date, startOfToday()) && !initialData?.id }
                       initialFocus
                     />
                   </PopoverContent>
@@ -1108,7 +1077,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
                     <SelectTrigger><SelectValue placeholder="Select a resource" /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {allAvailableResources.map(resource => ( // Use allAvailableResources prop
+                    {allAvailableResources.map(resource => ( 
                       <SelectItem key={resource.id} value={resource.id} disabled={resource.status !== 'Available' && resource.id !== initialData?.resourceId}>
                         {resource.name} ({resource.status === 'Available' ? 'Available' : resource.status})
                       </SelectItem>

@@ -34,10 +34,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function fetchDashboardData() {
-      // Fetch Frequently Used Resources (placeholder: first 2 resources)
       setIsLoadingResources(true);
       try {
-        const resourcesQuery = query(collection(db, 'resources'), limit(2));
+        // Firestore query for frequently used resources (e.g., first 2 resources)
+        const resourcesQuery = query(collection(db, 'resources'), limit(3));
         const resourcesSnapshot = await getDocs(resourcesQuery);
         const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
           const data = docSnap.data();
@@ -49,50 +49,53 @@ export default function DashboardPage() {
             status: data.status || 'Available',
             description: data.description || '',
             imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
-            // other fields as needed for display
-          } as Resource; // Cast, ensure all required fields are present or defaulted
+            features: data.features || [],
+          } as Resource;
         });
         setFrequentlyUsedResources(fetchedResources);
       } catch (error) {
         console.error("Error fetching frequently used resources:", error);
+        // Optionally set an error state to display to the user
       }
       setIsLoadingResources(false);
 
-      // Fetch Upcoming User Bookings
       if (currentUser) {
         setIsLoadingBookings(true);
         try {
+          // Firestore query for upcoming user bookings
+          // REQUIRES FIRESTORE INDEX: userId ASC, startTime ASC
           const bookingsQuery = query(
             collection(db, 'bookings'),
             where('userId', '==', currentUser.id),
-            where('startTime', '>=', new Date()), // Only upcoming
+            where('startTime', '>=', new Date().toISOString()), // Compare with ISO string
             orderBy('startTime', 'asc'),
             limit(5)
           );
           const bookingsSnapshot = await getDocs(bookingsQuery);
           const fetchedBookingsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
             const bookingData = docSnap.data();
-            let resourceName = 'Unknown Resource';
+            let resourceNameStr = 'Unknown Resource';
             if (bookingData.resourceId) {
               const resourceDocRef = doc(db, 'resources', bookingData.resourceId);
               const resourceDocSnap = await getDoc(resourceDocRef);
               if (resourceDocSnap.exists()) {
-                resourceName = resourceDocSnap.data()?.name || 'Unknown Resource';
+                resourceNameStr = resourceDocSnap.data()?.name || 'Unknown Resource';
               }
             }
             return {
               id: docSnap.id,
               ...bookingData,
-              startTime: bookingData.startTime.toDate(),
-              endTime: bookingData.endTime.toDate(),
-              createdAt: bookingData.createdAt.toDate(),
-              resourceName, // Add fetched resource name
+              startTime: bookingData.startTime ? parseISO(bookingData.startTime) : new Date(),
+              endTime: bookingData.endTime ? parseISO(bookingData.endTime) : new Date(),
+              createdAt: bookingData.createdAt ? parseISO(bookingData.createdAt) : new Date(),
+              resourceName: resourceNameStr,
             } as Booking;
           });
-          const fetchedBookings = await Promise.all(fetchedBookingsPromises);
-          setUpcomingUserBookings(fetchedBookings);
+          const resolvedBookings = await Promise.all(fetchedBookingsPromises);
+          setUpcomingUserBookings(resolvedBookings);
         } catch (error) {
           console.error("Error fetching upcoming bookings:", error);
+          // Optionally set an error state
         }
         setIsLoadingBookings(false);
       } else {
@@ -197,7 +200,7 @@ export default function DashboardPage() {
                     {upcomingUserBookings.map((booking) => {
                       return (
                         <TableRow key={booking.id}>
-                          <TableCell className="font-medium">{booking.resourceName}</TableCell>
+                          <TableCell className="font-medium">{booking.resourceName || 'N/A'}</TableCell>
                           <TableCell>
                             <div>{isValid(booking.startTime) ? format(booking.startTime, 'MMM dd, yyyy') : 'Invalid Date'}</div>
                             <div className="text-xs text-muted-foreground">
