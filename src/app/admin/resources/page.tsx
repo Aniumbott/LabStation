@@ -1,12 +1,13 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
 import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle, AlertTriangle, Construction, CalendarPlus, Search as SearchIcon, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
-import type { Resource, ResourceStatus } from '@/types';
+import type { Resource, ResourceStatus, ResourceType } from '@/types';
+// Removed allAdminMockResources from here, labsList also comes from mock-data
 import { initialMockResourceTypes, labsList } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
@@ -37,149 +38,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, startOfDay, isValid, parseISO, isSameDay, isWithinInterval, addDays } from 'date-fns';
+import { format, startOfDay, isValid, parseISO, isSameDay, isWithinInterval, addDays as dateFnsAddDays } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, where } from 'firebase/firestore';
 
-// This array will be replaced by Firestore fetching in a future step.
-// For now, it defines the mock resources managed by this admin page.
-export const allAdminMockResources: Resource[] = [
-  {
-    id: 'res1',
-    name: 'Keysight MSOX3054T Oscilloscope',
-    resourceTypeId: 'rt1',
-    resourceTypeName: 'Oscilloscope',
-    lab: 'Electronics Lab 1',
-    status: 'Available',
-    description: 'Mixed Signal Oscilloscope with 500 MHz bandwidth, 4 analog channels, and 16 digital channels. Includes built-in waveform generator and serial protocol analysis capabilities. Ideal for debugging embedded systems and mixed-signal designs.',
-    imageUrl: 'https://placehold.co/600x400.png',
-    manufacturer: 'Keysight Technologies',
-    model: 'MSOX3054T',
-    serialNumber: 'MY58012345',
-    purchaseDate: '2022-08-15T00:00:00.000Z',
-    notes: 'Standard probe set included. Handle with care.',
-    features: ['500 MHz Bandwidth', '4 Analog Channels', '16 Digital Channels', 'Waveform Generator', 'Serial Protocol Analysis'],
-    availability: [
-      { date: format(startOfDay(new Date()), 'yyyy-MM-dd'), slots: ['09:00-12:00', '13:00-17:00'] },
-      { date: format(addDays(startOfDay(new Date()), 1), 'yyyy-MM-dd'), slots: ['09:00-17:00'] },
-      { date: format(addDays(startOfDay(new Date()), 2), 'yyyy-MM-dd'), slots: ['10:00-15:00'] },
-    ],
-    unavailabilityPeriods: [
-      { id: 'unavail1-1', startDate: format(addDays(startOfDay(new Date()), 10), 'yyyy-MM-dd'), endDate: format(addDays(startOfDay(new Date()), 15), 'yyyy-MM-dd'), reason: "Annual Calibration" }
-    ],
-    remoteAccess: {
-      hostname: "scope-01.lab.internal",
-      protocol: "VNC",
-      notes: "Requires Lab VPN access."
-    },
-    allowQueueing: true,
-  },
-  {
-    id: 'res2',
-    name: 'Rigol DP832 Programmable Power Supply',
-    resourceTypeId: 'rt2',
-    resourceTypeName: 'Power Supply',
-    lab: 'Electronics Lab 1',
-    status: 'Booked',
-    description: 'Triple output programmable DC power supply with high resolution and advanced features. CH1: 0-30V/0-3A, CH2: 0-30V/0-3A, CH3: 0-5V/0-3A.',
-    imageUrl: 'https://placehold.co/600x400.png',
-    manufacturer: 'Rigol Technologies',
-    model: 'DP832',
-    serialNumber: 'DP8A20123456',
-    purchaseDate: '2021-05-20T00:00:00.000Z',
-    notes: 'Ensure load is disconnected before changing voltage settings.',
-    features: ['Triple Output', 'Programmable', 'High Resolution Display', 'Over-Voltage/Current Protection'],
-    availability: [
-       { date: format(startOfDay(new Date()), 'yyyy-MM-dd'), slots: ['09:00-11:00'] }, // Booked later today
-       { date: format(addDays(startOfDay(new Date()), 1), 'yyyy-MM-dd'), slots: ['09:00-17:00'] },
-    ],
-    allowQueueing: true,
-  },
-  {
-    id: 'res3',
-    name: 'Siglent SDG2042X Function Generator',
-    resourceTypeId: 'rt3',
-    resourceTypeName: 'Function Generator',
-    lab: 'RF Lab',
-    status: 'Available',
-    description: 'Dual-channel arbitrary waveform generator with 40 MHz bandwidth and 1.2 GSa/s sampling rate. TrueArb & EasyPulse technology.',
-    imageUrl: 'https://placehold.co/600x400.png',
-    manufacturer: 'Siglent Technologies',
-    model: 'SDG2042X',
-    serialNumber: 'SDG2XBADCAFE',
-    purchaseDate: '2023-01-10T00:00:00.000Z',
-    notes: 'BNC cables available separately.',
-    features: ['40 MHz Max Output Frequency', 'Dual Channel', '1.2 GSa/s Sample Rate', '16-bit Vertical Resolution'],
-    unavailabilityPeriods: [
-      { id: 'unavail3-1', startDate: format(addDays(startOfDay(new Date()), 5), 'yyyy-MM-dd'), endDate: format(addDays(startOfDay(new Date()), 7), 'yyyy-MM-dd'), reason: "Output Amplifier Repair" }
-    ],
-    allowQueueing: false,
-  },
-  {
-    id: 'res4',
-    name: 'Weller WE1010NA Digital Soldering Station',
-    resourceTypeId: 'rt6',
-    resourceTypeName: 'Soldering Station',
-    lab: 'Prototyping Lab',
-    status: 'Maintenance',
-    description: '70W digital soldering station with temperature control. Ideal for professional soldering tasks and electronics assembly.',
-    imageUrl: 'https://placehold.co/600x400.png',
-    manufacturer: 'Weller',
-    model: 'WE1010NA',
-    serialNumber: 'WEA1B2C3D4',
-    purchaseDate: '2020-11-01T00:00:00.000Z',
-    notes: 'Remember to tin the tip after use. Various tip sizes available.',
-    features: ['70W Power', 'Digital Temperature Control', 'ESD Safe', 'Heat-resistant Silicon Cable'],
-    allowQueueing: false,
-  },
-  {
-    id: 'res5',
-    name: 'Rohde & Schwarz FPC1500 Spectrum Analyzer',
-    resourceTypeId: 'rt4',
-    resourceTypeName: 'Spectrum Analyzer',
-    lab: 'RF Lab',
-    status: 'Available',
-    description: 'Spectrum Analyzer, 5 kHz to 1 GHz, upgradeable to 3 GHz. Features tracking generator and vector network analysis capabilities.',
-    imageUrl: 'https://placehold.co/600x400.png',
-    manufacturer: 'Rohde & Schwarz',
-    model: 'FPC1500',
-    serialNumber: 'RSFPC1500-001',
-    purchaseDate: '2023-03-01T00:00:00.000Z',
-    notes: 'Handle RF connectors with care. Use torque wrench if specified.',
-    features: ['5 kHz to 1 GHz (Upgradeable)', 'Tracking Generator', 'Vector Network Analysis Option', '10.1-inch WXGA Display'],
-    availability: [
-      { date: format(startOfDay(new Date()), 'yyyy-MM-dd'), slots: ['14:00-17:00'] },
-      { date: format(addDays(startOfDay(new Date()), 3), 'yyyy-MM-dd'), slots: ['09:00-12:00', '13:00-16:00'] },
-    ],
-    allowQueueing: true,
-  },
-   {
-    id: 'res6',
-    name: 'FPGA Dev Node Alpha',
-    resourceTypeId: 'rt9',
-    resourceTypeName: 'FPGA Development Board',
-    lab: 'Prototyping Lab',
-    status: 'Available',
-    description: 'High-performance FPGA development node with Zynq UltraScale+ MPSoC. Suitable for hardware acceleration and embedded vision projects.',
-    imageUrl: 'https://placehold.co/600x400.png',
-    manufacturer: 'Xilinx',
-    model: 'ZCU102 Evaluation Kit',
-    serialNumber: 'XADCZCU102-9876',
-    purchaseDate: '2023-06-01T00:00:00.000Z',
-    notes: 'Access via SSH. Ensure Vivado version compatibility.',
-    features: ['Zynq UltraScale+ MPSoC', 'DDR4 Memory', 'Multiple Peripherals', 'FMC Expansion'],
-    remoteAccess: {
-      hostname: "fpga-alpha.lab.internal",
-      protocol: "SSH",
-      username: "labuser",
-      notes: "Default password 'fpgaUserPass'. Please change on first use."
-    },
-    availability: [
-        { date: format(startOfDay(new Date()), 'yyyy-MM-dd'), slots: ['09:00-17:00'] },
-    ],
-    allowQueueing: true,
-  },
-];
-
+// This page now defines its own resource list fetched from Firestore
+// No longer exporting allAdminMockResources for detail page to use,
+// detail page will fetch its own resource.
 
 const getStatusBadge = (status: ResourceStatus) => {
   switch (status) {
@@ -197,27 +63,66 @@ const getStatusBadge = (status: ResourceStatus) => {
 export default function AdminResourcesPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
-  const [resources, setResources] = useState<Resource[]>(() => JSON.parse(JSON.stringify(allAdminMockResources)));
+  const [resources, setResources] = useState<Resource[]>([]); // Initialize with empty array
+  const [isLoadingResources, setIsLoadingResources] = useState(true);
+  const [resourceTypes, setResourceTypes] = useState<ResourceType[]>([]);
+
+
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
-  // Active filters for the page
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
+  const [tempSearchTerm, setTempSearchTerm] = useState('');
+  const [tempFilterTypeId, setTempFilterTypeId] = useState<string>('all');
+  const [tempFilterLab, setTempFilterLab] = useState<string>('all');
+  const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(undefined);
+  const [currentMonthInDialog, setCurrentMonthInDialog] = useState<Date>(startOfDay(new Date()));
+
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterTypeId, setActiveFilterTypeId] = useState<string>('all');
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
 
-  // Filter Dialog State
-  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-  const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
-  const [tempFilterTypeId, setTempFilterTypeId] = useState<string>(activeFilterTypeId);
-  const [tempFilterLab, setTempFilterLab] = useState<string>(activeFilterLab);
-  const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(activeSelectedDate);
-  const [currentMonthInDialog, setCurrentMonthInDialog] = useState<Date>(startOfDay(new Date()));
+  const fetchResourcesAndTypes = useCallback(async () => {
+    setIsLoadingResources(true);
+    try {
+      // Fetch Resources
+      const resourcesCollectionRef = collection(db, "resources");
+      const resourcesSnapshot = await getDocs(resourcesCollectionRef);
+      const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          // Ensure date fields are handled correctly (e.g., purchaseDate if stored as Timestamp)
+          purchaseDate: data.purchaseDate ? (data.purchaseDate.toDate ? data.purchaseDate.toDate().toISOString() : data.purchaseDate) : undefined,
+          // availability and unavailabilityPeriods should be fine if stored as arrays of objects
+        } as Resource;
+      });
+      setResources(fetchedResources.sort((a,b) => a.name.localeCompare(b.name)));
+
+      // Fetch Resource Types
+      const typesCollectionRef = collection(db, "resourceTypes");
+      const typesSnapshot = await getDocs(typesCollectionRef);
+      const fetchedTypes: ResourceType[] = typesSnapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      } as ResourceType));
+      setResourceTypes(fetchedTypes.sort((a, b) => a.name.localeCompare(b.name)));
+
+    } catch (error) {
+      console.error("Error fetching resources or types: ", error);
+      toast({ title: "Error", description: "Failed to fetch data from database.", variant: "destructive" });
+    }
+    setIsLoadingResources(false);
+  }, [toast]);
+
+  useEffect(() => {
+    fetchResourcesAndTypes();
+  }, [fetchResourcesAndTypes]);
 
 
   useEffect(() => {
-    // Sync dialog filters with active filters when dialog opens
     if (isFilterDialogOpen) {
       setTempSearchTerm(activeSearchTerm);
       setTempFilterTypeId(activeFilterTypeId);
@@ -228,7 +133,7 @@ export default function AdminResourcesPage() {
   }, [isFilterDialogOpen, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
 
   const filteredResources = useMemo(() => {
-    let currentResources = [...resources]; // Use the stateful 'resources'
+    let currentResources = [...resources];
     const lowerSearchTerm = activeSearchTerm.toLowerCase();
 
     if (activeSearchTerm) {
@@ -250,7 +155,6 @@ export default function AdminResourcesPage() {
       currentResources = currentResources.filter(resource => {
         if (resource.status !== 'Available') return false;
 
-        // Check resource-specific unavailability periods
         const isUnavailableDueToPeriod = resource.unavailabilityPeriods?.some(period => {
             const periodStart = startOfDay(parseISO(period.startDate));
             const periodEnd = startOfDay(parseISO(period.endDate));
@@ -258,12 +162,11 @@ export default function AdminResourcesPage() {
         });
         if (isUnavailableDueToPeriod) return false;
         
-        // Check daily availability slots
         const dayAvailability = resource.availability?.find(avail => avail.date === dateToFilterStr);
         return dayAvailability && dayAvailability.slots.length > 0;
       });
     }
-    return currentResources.sort((a,b) => a.name.localeCompare(b.name));
+    return currentResources; // Already sorted by name on fetch
   }, [resources, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
 
   const handleApplyDialogFilters = () => {
@@ -287,100 +190,81 @@ export default function AdminResourcesPage() {
     setActiveFilterTypeId('all');
     setActiveFilterLab('all');
     setActiveSelectedDate(undefined);
-    resetDialogFilters(); // Also reset dialog's temp state
-    setIsFilterDialogOpen(false); // Close dialog if open
+    resetDialogFilters();
+    setIsFilterDialogOpen(false);
   };
-
 
   const handleOpenNewDialog = () => {
     setEditingResource(null);
     setIsFormDialogOpen(true);
   };
 
-  // Note: Edit functionality happens on the Resource Detail page
-  // const handleOpenEditDialog = (resource: Resource) => {
-  //   setEditingResource(resource);
-  //   setIsFormDialogOpen(true);
-  // };
+  const handleSaveResource = async (data: ResourceFormValues) => {
+    if (!currentUser) {
+      toast({ title: "Authentication Error", description: "You must be logged in.", variant: "destructive" });
+      return;
+    }
 
-  const handleSaveResource = (data: ResourceFormValues) => {
-    const resourceType = initialMockResourceTypes.find(rt => rt.id === data.resourceTypeId);
+    const resourceType = resourceTypes.find(rt => rt.id === data.resourceTypeId);
     if (!resourceType) {
         toast({ title: "Error", description: "Selected resource type not found.", variant: "destructive"});
         return;
     }
 
-    if (editingResource) { // This logic path might be deprecated if all edits are on detail page
-      const updatedResource: Resource = {
-        ...editingResource,
-        ...data,
-        imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
-        // resourceTypeName: resourceType.name, // This is removed from Resource type
-        features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-        purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : editingResource.purchaseDate,
-        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '' && v !== null) ? {
-          ...data.remoteAccess,
-           ipAddress: data.remoteAccess.ipAddress || undefined,
-           hostname: data.remoteAccess.hostname || undefined,
-           protocol: data.remoteAccess.protocol || undefined,
-           username: data.remoteAccess.username || undefined,
-           port: data.remoteAccess.port,
-           notes: data.remoteAccess.notes || undefined,
-        } : undefined,
-        availability: editingResource.availability || [], 
-        unavailabilityPeriods: editingResource.unavailabilityPeriods || [],
-      };
-      
-      const updatedResources = resources.map(r => r.id === editingResource.id ? updatedResource : r);
-      setResources(updatedResources); // Update local state
-      
-      const globalIndex = allAdminMockResources.findIndex(r => r.id === editingResource.id);
-      if (globalIndex !== -1) allAdminMockResources[globalIndex] = updatedResource; // Update shared mock
+    const resourceDataToSave = {
+      name: data.name,
+      resourceTypeId: data.resourceTypeId,
+      lab: data.lab,
+      status: data.status,
+      description: data.description || '',
+      imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
+      manufacturer: data.manufacturer || null,
+      model: data.model || null,
+      serialNumber: data.serialNumber || null,
+      purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : null,
+      notes: data.notes || null,
+      features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
+      remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '' && v !== null) ? {
+         ipAddress: data.remoteAccess.ipAddress || undefined,
+         hostname: data.remoteAccess.hostname || undefined,
+         protocol: data.remoteAccess.protocol || undefined,
+         username: data.remoteAccess.username || undefined,
+         port: data.remoteAccess.port ?? undefined, // Already number or undefined from form
+         notes: data.remoteAccess.notes || undefined,
+      } : null,
+      allowQueueing: data.status === 'Available', // Example logic
+      availability: editingResource?.availability || [], // Preserve existing or default to empty
+      unavailabilityPeriods: editingResource?.unavailabilityPeriods || [], // Preserve existing or default to empty
+    };
 
-      toast({
-        title: 'Resource Updated',
-        description: `Resource "${data.name}" has been updated.`,
-      });
-    } else { // Adding a new resource
-      const newResource: Resource = {
-        id: `res${allAdminMockResources.length + 1 + Date.now()}`,
-        name: data.name,
-        resourceTypeId: data.resourceTypeId,
-        // resourceTypeName: resourceType.name, // This is removed from Resource type
-        lab: data.lab,
-        status: data.status,
-        description: data.description || '',
-        imageUrl: data.imageUrl || 'https://placehold.co/300x200.png',
-        manufacturer: data.manufacturer || undefined,
-        model: data.model || undefined,
-        serialNumber: data.serialNumber || undefined,
-        purchaseDate: data.purchaseDate && isValid(parseISO(data.purchaseDate)) ? parseISO(data.purchaseDate).toISOString() : undefined,
-        notes: data.notes || undefined,
-        features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-        availability: [], 
-        unavailabilityPeriods: [],
-        remoteAccess: data.remoteAccess && Object.values(data.remoteAccess).some(v => v !== undefined && v !== '' && v !== null) ? {
-           ...data.remoteAccess,
-           ipAddress: data.remoteAccess.ipAddress || undefined,
-           hostname: data.remoteAccess.hostname || undefined,
-           protocol: data.remoteAccess.protocol || undefined,
-           username: data.remoteAccess.username || undefined,
-           port: data.remoteAccess.port,
-           notes: data.remoteAccess.notes || undefined,
-        } : undefined,
-        allowQueueing: data.status === 'Available',
-      };
-      const updatedResources = [...resources, newResource].sort((a,b) => a.name.localeCompare(b.name));
-      setResources(updatedResources); // Update local state
-      allAdminMockResources.push(newResource); // Update shared mock
-      allAdminMockResources.sort((a,b) => a.name.localeCompare(b.name));
-      toast({
-        title: 'Resource Created',
-        description: `Resource "${data.name}" has been created.`,
-      });
+
+    setIsLoadingResources(true);
+    if (editingResource) {
+      try {
+        const resourceDocRef = doc(db, "resources", editingResource.id);
+        await updateDoc(resourceDocRef, resourceDataToSave);
+        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: editingResource.id, details: `Resource '${data.name}' updated.`});
+        toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
+      } catch (error) {
+        console.error("Error updating resource:", error);
+        toast({ title: "Error", description: "Failed to update resource.", variant: "destructive" });
+      }
+    } else {
+      try {
+        const docRef = await addDoc(collection(db, "resources"), {
+          ...resourceDataToSave,
+          // id is not needed here as Firestore auto-generates it
+        });
+        addAuditLog(currentUser.id, currentUser.name || 'Admin', 'RESOURCE_CREATED', { entityType: 'Resource', entityId: docRef.id, details: `Resource '${data.name}' created.`});
+        toast({ title: 'Resource Created', description: `Resource "${data.name}" has been created.` });
+      } catch (error) {
+        console.error("Error creating resource:", error);
+        toast({ title: "Error", description: "Failed to create resource.", variant: "destructive" });
+      }
     }
     setIsFormDialogOpen(false);
     setEditingResource(null);
+    await fetchResourcesAndTypes(); // Re-fetch all data
   };
 
   const activeFilterCount = [
@@ -420,7 +304,7 @@ export default function AdminResourcesPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <Separator className="my-4" />
-                <ScrollArea className="max-h-[65vh] pr-2">
+                <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
                 <div className="space-y-6 py-1">
                   <div>
                     <Label htmlFor="resourceSearchDialog" className="text-sm font-medium mb-1 block">Search (Name/Keyword)</Label>
@@ -444,7 +328,7 @@ export default function AdminResourcesPage() {
                         <SelectTrigger id="resourceTypeFilterDialog" className="h-9"><SelectValue placeholder="Filter by Type" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">All Types</SelectItem>
-                          {initialMockResourceTypes.map(type => (
+                          {resourceTypes.map(type => ( // Use fetched resourceTypes
                             <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
                           ))}
                         </SelectContent>
@@ -508,7 +392,9 @@ export default function AdminResourcesPage() {
         }
       />
 
-      {filteredResources.length > 0 ? (
+      {isLoadingResources ? (
+        <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading resources...</div>
+      ) : filteredResources.length > 0 ? (
         <div className="overflow-x-auto rounded-lg border shadow-sm">
           <Table>
             <TableHeader>
@@ -523,9 +409,8 @@ export default function AdminResourcesPage() {
             </TableHeader>
             <TableBody>
               {filteredResources.map((resource) => {
-                // Find resource type name from initialMockResourceTypes
-                const resourceType = initialMockResourceTypes.find(rt => rt.id === resource.resourceTypeId);
-                const resourceTypeName = resourceType ? resourceType.name : 'N/A';
+                const resourceType = resourceTypes.find(rt => rt.id === resource.resourceTypeId);
+                const resourceTypeNameDisplay = resourceType ? resourceType.name : 'N/A';
 
                 return (
                 <TableRow key={resource.id}>
@@ -544,7 +429,7 @@ export default function AdminResourcesPage() {
                         {resource.name}
                      </Link>
                   </TableCell>
-                  <TableCell>{resourceTypeName}</TableCell>
+                  <TableCell>{resourceTypeNameDisplay}</TableCell>
                   <TableCell>{resource.lab}</TableCell>
                   <TableCell>{getStatusBadge(resource.status)}</TableCell>
                   <TableCell className="text-right">
@@ -601,6 +486,8 @@ export default function AdminResourcesPage() {
         }}
         initialResource={editingResource}
         onSave={handleSaveResource}
+        // Pass fetched resourceTypes to the form dialog
+        resourceTypes={resourceTypes} 
       />
     </div>
   );

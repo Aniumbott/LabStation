@@ -27,19 +27,18 @@ export const bookingStatusesForForm: Booking['status'][] = ['Confirmed', 'Pendin
 export const daysOfWeekArray: DayOfWeek[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 
-// --- Main Data Arrays - EMPTIED ---
-// These arrays are now empty. Data should be fetched from Firestore.
-// Pages relying on these will need to be refactored to use Firestore.
+// --- Dynamic Data Arrays - EMPTIED ---
+// These arrays should now be empty. Data is fetched from Firestore.
 export let initialMockUsers: User[] = [];
+export let initialMockResourceTypes: ResourceType[] = [];
 export let allAdminMockResources: Resource[] = [];
 export let initialBookings: Booking[] = [];
 export let initialMaintenanceRequests: MaintenanceRequest[] = [];
 export let initialBlackoutDates: BlackoutDate[] = [];
 export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = [];
-export let initialMockResourceTypes: ResourceType[] = [];
 
 
-// --- Notifications & Audit Logs (In-memory for mock setup, would also be Firestore collections) ---
+// --- Notifications & Audit Logs (In-memory for now) ---
 export let initialNotifications: Notification[] = [];
 
 export async function addNotification(
@@ -60,8 +59,6 @@ export async function addNotification(
     linkTo,
   };
   initialNotifications.unshift(newNotification);
-  // console.log("Mock Notification Added:", newNotification);
-  // Example Firestore: await addDoc(collection(db, 'notifications'), Omit<Notification, 'id'>...);
 }
 
 export let initialAuditLogs: AuditLogEntry[] = [];
@@ -87,11 +84,4 @@ export async function addAuditLog(
     details: params.details,
   };
   initialAuditLogs.unshift(newLog);
-  // console.log("Mock Audit Log Added:", newLog);
-  // Example Firestore: await addDoc(collection(db, 'auditLogs'), Omit<AuditLogEntry, 'id'>...);
 }
-
-// Placeholder functions that were previously manipulating mock data are now removed.
-// They will be re-implemented with Firestore logic within their respective pages/components.
-// Example: getWaitlistPosition, processQueueForResource, mockLoginUser, mockSignupUser etc.
-// are now handled by AuthContext using Firebase Auth and specific Firestore queries on pages.
