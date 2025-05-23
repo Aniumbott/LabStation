@@ -25,7 +25,7 @@ import { labsList, resourceStatusesList } from '@/lib/mock-data';
 import { parseISO, format, isValid as isValidDateFn } from 'date-fns';
 import { Checkbox } from '../ui/checkbox';
 import { Timestamp } from 'firebase/firestore';
-import { Separator } from '@/components/ui/separator'; // Added this import
+import { Separator } from '@/components/ui/separator';
 
 const VALID_REMOTE_PROTOCOLS = ['RDP', 'SSH', 'VNC', 'Other'] as const;
 const NONE_PROTOCOL_VALUE = "--none-protocol--";
@@ -36,14 +36,16 @@ const resourceFormSchema = z.object({
   lab: z.enum(labsList as [string, ...string[]], { required_error: 'Please select a lab.' }),
   status: z.enum(resourceStatusesList as [ResourceStatus, ...ResourceStatus[]], { required_error: 'Please select a status.'}),
   description: z.string().max(500, { message: 'Description cannot exceed 500 characters.' }).optional().or(z.literal('')),
-  imageUrl: z.string().url({ message: 'Please enter a valid URL.' }).optional().or(z.literal('')),
+  imageUrl: z.string().url({ message: 'Please enter a valid URL for the image.' }).optional().or(z.literal('')),
   manufacturer: z.string().max(100).optional().or(z.literal('')),
   model: z.string().max(100).optional().or(z.literal('')),
   serialNumber: z.string().max(100).optional().or(z.literal('')),
-  purchaseDate: z.string().optional().refine((val) => {
-    if (!val || val === '') return true; // Allow empty string for optional date
-    return isValidDateFn(parseISO(val));
-  }, { message: "Invalid date format. Use YYYY-MM-DD." }).or(z.literal('')),
+  purchaseDate: z.preprocess(
+    (arg) => (arg === "" ? undefined : arg), // Convert empty string to undefined for optional check
+    z.string().refine((val) => !val || isValidDateFn(parseISO(val)), {
+      message: "Invalid date format. Use YYYY-MM-DD or leave empty.",
+    }).optional()
+  ),
   notes: z.string().max(500).optional().or(z.literal('')),
   features: z.string().max(200, {message: "Features list cannot exceed 200 characters."}).optional().or(z.literal('')),
   remoteAccess: z.object({
@@ -51,14 +53,13 @@ const resourceFormSchema = z.object({
     hostname: z.string().max(255).optional().or(z.literal('')),
     protocol: z.enum(VALID_REMOTE_PROTOCOLS).or(z.literal('')).optional(),
     username: z.string().max(100).optional().or(z.literal('')),
-    port: z.string().optional() // Keep as string from input
-             .transform(val => (val === '' || val === undefined ? undefined : val))
-             .refine(val => val === undefined || /^\d+$/.test(val), { message: "Port must be a number if provided."})
-             .transform(val => val === undefined ? undefined : Number(val))
-             .refine(val => val === undefined || (Number.isInteger(val) && val >= 1 && val <= 65535), {
-                message: "Port must be an integer between 1 and 65535.",
-             })
-             .optional(),
+    port: z.preprocess(
+      (val) => { // Handle empty string or non-string input before coercion
+        if (typeof val === 'string' && val.trim() === '') return undefined;
+        return val;
+      },
+      z.coerce.number().int().min(1).max(65535).optional().nullable() // Coerce, validate, allow null or make it optional
+    ),
     notes: z.string().max(500).optional().or(z.literal('')),
   }).optional(),
   allowQueueing: z.boolean().optional(),
@@ -135,7 +136,7 @@ export function ResourceFormDialog({
         lab: labsList.length > 0 ? labsList[0] : undefined,
         status: 'Available',
         description: '',
-        imageUrl: 'https://placehold.co/600x400.png',
+        imageUrl: '', // Default to empty, placeholder logic handled on save
         manufacturer: '',
         model: '',
         serialNumber: '',
@@ -155,25 +156,25 @@ export function ResourceFormDialog({
       setIsSubmitting(false);
       resetForm();
     }
-  }, [open, initialResource, resourceTypes, form.reset, resetForm]);
+  }, [open, initialResource, resourceTypes, form.reset]); // form.reset added as dependency
 
   async function onSubmit(data: ResourceFormValues) {
     setIsSubmitting(true);
     try {
         const processedData: ResourceFormValues = {
             ...data,
-            purchaseDate: data.purchaseDate === '' ? undefined : data.purchaseDate,
-            imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+            // purchaseDate is already string or undefined
+            imageUrl: data.imageUrl || '', // Let parent handle placeholder if needed
             remoteAccess: data.remoteAccess ? {
                 ...data.remoteAccess,
-                // Zod transform already handles port string to number or undefined
+                // port is number | null | undefined from Zod
             } : undefined,
         };
         
         // Ensure remoteAccess object is undefined if all its fields are effectively empty
         if (processedData.remoteAccess) {
             const ra = processedData.remoteAccess;
-            const allEmpty = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && ra.port === undefined && !ra.notes;
+            const allEmpty = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && (ra.port === undefined || ra.port === null) && !ra.notes;
             if (allEmpty) {
                 processedData.remoteAccess = undefined;
             }
@@ -182,6 +183,7 @@ export function ResourceFormDialog({
       await onSave(processedData, initialResource?.id);
     } catch (error) {
       console.error("Error during resource save submission:", error);
+      // Toast handled by parent
     } finally {
       setIsSubmitting(false);
     }
@@ -449,11 +451,11 @@ export function ResourceFormDialog({
                                     <FormItem>
                                     <FormLabel>Port</FormLabel>
                                     <FormControl><Input
-                                        type="text" 
+                                        type="text" // Keep as text to allow empty, Zod handles coercion
                                         placeholder="e.g., 22, 3389"
                                         {...field}
-                                        value={field.value?.toString() ?? ''} 
-                                        onChange={e => field.onChange(e.target.value === '' ? undefined : e.target.value)}
+                                        value={field.value?.toString() ?? ''} // Display as string, handle undefined/null
+                                        onChange={e => field.onChange(e.target.value)} // Pass string directly
                                         disabled={isSubmitting}
                                      /></FormControl>
                                     <FormMessage />
@@ -508,3 +510,5 @@ export function ResourceFormDialog({
     </Dialog>
   );
 }
+
+    

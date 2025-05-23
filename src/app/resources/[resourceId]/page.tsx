@@ -5,7 +5,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, AlertCircle, CheckCircle, Construction } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
 import type { Resource, ResourceType, Booking, UnavailabilityPeriod, RoleName } from '@/types';
-import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay, isBefore, compareAsc, isWithinInterval, isSameDay } from 'date-fns'; // Removed Timestamp
+import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay, isBefore, compareAsc, isWithinInterval, isSameDay, addDays } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, type ResourceFormValues } from '@/components/admin/resource-form-dialog';
@@ -28,8 +28,8 @@ import {
 import { ManageAvailabilityDialog } from '@/components/resources/manage-availability-dialog';
 import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavailability-dialog';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
-import { initialMockResourceTypes, labsList, resourceStatusesList } from '@/lib/mock-data'; // Resource Types are still mock for dialog
+import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp, Unsubscribe } from 'firebase/firestore';
+import { addAuditLog, labsList, resourceStatusesList } from '@/lib/mock-data';
 
 function ResourceDetailPageSkeleton() {
   return (
@@ -105,7 +105,7 @@ function ResourceDetailPageSkeleton() {
 }
 
 const DetailItem = ({ icon: IconElement, label, value, isLink = false, className }: { icon: React.ElementType, label: string, value?: string | number | Date | null | undefined, isLink?: boolean, className?: string }) => {
-  if (value === undefined || value === null || String(value).trim() === '') {
+  if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
     return (
          <div className={cn("flex items-start text-sm py-1.5", className)}>
             <IconElement className="h-4 w-4 mr-3 mt-0.5 text-muted-foreground flex-shrink-0" />
@@ -164,6 +164,7 @@ function NotFoundMessage({ resourceIdParam }: { resourceIdParam: string | null }
 }
 
 export default function ResourceDetailPage() {
+  // All hooks at the top
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -174,15 +175,13 @@ export default function ResourceDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
-  const [editingResource, setEditingResource] = useState<Resource | null>(null); // Renamed to avoid conflict
-  const [fetchedResourceTypesForDialog, setFetchedResourceTypesForDialog] = useState<ResourceType[]>([]);
-
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [resourceToDelete, setResourceToDelete] = useState<Resource | null>(null);
 
   const [isAvailabilityDialogOpen, setIsAvailabilityDialogOpen] = useState(false);
   const [isUnavailabilityDialogOpen, setIsUnavailabilityDialogOpen] = useState(false);
   const [resourceUserBookings, setResourceUserBookings] = useState<Booking[]>([]);
+  const [fetchedResourceTypesForDialog, setFetchedResourceTypesForDialog] = useState<ResourceType[]>([]);
   
   const resourceId = typeof params.resourceId === 'string' ? params.resourceId : null;
 
@@ -220,7 +219,7 @@ export default function ResourceDetailPage() {
             hostname: data.remoteAccess.hostname || undefined,
             protocol: data.remoteAccess.protocol || '',
             username: data.remoteAccess.username || undefined,
-            port: typeof data.remoteAccess.port === 'number' ? data.remoteAccess.port : undefined,
+            port: data.remoteAccess.port, // Can be number or null
             notes: data.remoteAccess.notes || undefined,
           } : undefined,
           allowQueueing: data.allowQueueing ?? false,
@@ -270,14 +269,13 @@ export default function ResourceDetailPage() {
 
   useEffect(() => {
     fetchResourceData();
-  }, [fetchResourceData]);
+  }, [fetchResourceData]); // fetchResourceData is memoized with useCallback
 
   useEffect(() => {
-    if (isFormDialogOpen) {
+    if (isFormDialogOpen) { 
       const fetchTypes = async () => {
         try {
           const typesCollectionRef = collection(db, "resourceTypes");
-          // Firestore Index Required: resourceTypes collection: name (ASC) (if you want to order by name)
           const typesQueryInstance = query(typesCollectionRef, orderBy("name", "asc"));
           const typesSnapshot = await getDocs(typesQueryInstance);
           const types = typesSnapshot.docs.map(docSnap => ({
@@ -288,7 +286,7 @@ export default function ResourceDetailPage() {
         } catch (error: any) {
           console.error("Error fetching resource types for dialog:", error);
           toast({ title: "Error Loading Data", description: `Could not load resource types for the edit form: ${error.message}`, variant: "destructive" });
-          setFetchedResourceTypesForDialog([]); // Set to empty array on error
+          setFetchedResourceTypesForDialog([]);
         }
       };
       fetchTypes();
@@ -336,10 +334,10 @@ export default function ResourceDetailPage() {
       }
     };
 
-    if (resource && currentUser) {
+    if (resource && currentUser) { 
       fetchBookingsForResourceUser();
     }
-  }, [resourceId, currentUser, resource, toast]);
+  }, [resourceId, currentUser, resource, toast]); // resource added to dependency
 
 
   const canManageResource = useMemo(() => {
@@ -355,7 +353,7 @@ export default function ResourceDetailPage() {
           booking.startTime && isValidDateFn(booking.startTime) && isBefore(booking.startTime, new Date()) &&
           booking.status !== 'Cancelled'
       )
-      .sort((a, b) => compareAsc(b.startTime, a.startTime)); // compareAsc(b, a) for descending
+      .sort((a, b) => compareAsc(b.startTime, a.startTime));
   }, [resource, currentUser, resourceUserBookings]);
 
   const sortedUnavailabilityPeriods = useMemo(() => {
@@ -373,7 +371,7 @@ export default function ResourceDetailPage() {
         .filter(avail => {
             if (!avail || !avail.date) return false;
             try {
-                const availDate = parseISO(avail.date); // Ensure avail.date is a string
+                const availDate = parseISO(avail.date);
                 return isValidDateFn(availDate) && !isBefore(availDate, today) && Array.isArray(avail.slots) && avail.slots.length > 0;
             } catch (e) { return false; }
         })
@@ -389,25 +387,34 @@ export default function ResourceDetailPage() {
 
   const handleOpenEditDialog = useCallback(() => {
     if (resource) {
-      setEditingResource(resource); // Use the state variable `resource`
+      // setEditingResource(resource); // editingResource state is not used here, ResourceFormDialog gets `initialResource={resource}`
       setIsFormDialogOpen(true);
     }
   }, [resource]);
 
   const handleSaveResource = useCallback(async (data: ResourceFormValues) => {
-    if (!currentUser || !canManageResource || !editingResource?.id) { // Check editingResource.id
+    if (!currentUser || !canManageResource || !resource?.id) { 
         toast({ title: "Permission Denied", description: "Not authorized or resource not found for update.", variant: "destructive" });
         setIsFormDialogOpen(false);
-        setEditingResource(null);
         return;
     }
     
-    let purchaseDateForFirestore: Timestamp | null = null;
-    if (data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))) {
-        purchaseDateForFirestore = Timestamp.fromDate(parseISO(data.purchaseDate));
-    }
+    const purchaseDateForFirestore: Timestamp | null = data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))
+                                        ? Timestamp.fromDate(parseISO(data.purchaseDate))
+                                        : null;
+    
+    const remoteAccessDataForFirestore = data.remoteAccess
+      ? {
+          ipAddress: data.remoteAccess.ipAddress || null,
+          hostname: data.remoteAccess.hostname || null,
+          protocol: data.remoteAccess.protocol || '',
+          username: data.remoteAccess.username || null,
+          port: data.remoteAccess.port ?? null, // Convert undefined from Zod to null
+          notes: data.remoteAccess.notes || null,
+        }
+      : null;
 
-    const resourceDataToUpdate: any = {
+    const firestorePayload: any = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
       lab: data.lab,
@@ -420,50 +427,23 @@ export default function ResourceDetailPage() {
       purchaseDate: purchaseDateForFirestore,
       notes: data.notes || null,
       features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-      remoteAccess: data.remoteAccess && (Object.values(data.remoteAccess).some(val => val || typeof val === 'number' || typeof val === 'string' && val.length > 0) || data.remoteAccess.port !== undefined ) ? {
-         ipAddress: data.remoteAccess.ipAddress || null,
-         hostname: data.remoteAccess.hostname || null,
-         protocol: data.remoteAccess.protocol || '',
-         username: data.remoteAccess.username || null,
-         port: data.remoteAccess.port, 
-         notes: data.remoteAccess.notes || null,
-      } : null, 
-      allowQueueing: data.allowQueueing ?? editingResource.allowQueueing ?? false,
+      remoteAccess: remoteAccessDataForFirestore,
+      allowQueueing: data.allowQueueing ?? resource.allowQueueing ?? false,
       lastUpdatedAt: serverTimestamp(),
     };
-    
-    Object.keys(resourceDataToUpdate).forEach(key => {
-        if (resourceDataToUpdate[key] === null) {
-            delete resourceDataToUpdate[key];
-        }
-         if (key === 'remoteAccess' && resourceDataToUpdate.remoteAccess) {
-            Object.keys(resourceDataToUpdate.remoteAccess).forEach(subKey => {
-                if (resourceDataToUpdate.remoteAccess[subKey] === null || resourceDataToUpdate.remoteAccess[subKey] === '') { // also check for empty strings for optional fields
-                    delete resourceDataToUpdate.remoteAccess[subKey];
-                }
-            });
-            if (Object.keys(resourceDataToUpdate.remoteAccess).length === 0) {
-                delete resourceDataToUpdate.remoteAccess;
-            }
-        }
-    });
-        
+            
     try {
-        const resourceDocRef = doc(db, "resources", editingResource.id); // Use editingResource.id
-        await updateDoc(resourceDocRef, {
-            ...resourceDataToUpdate
-            // Keep existing availability and unavailabilityPeriods from the document unless managed by this form
-        });
-        addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: editingResource.id, details: `Resource '${data.name}' updated.`});
+        const resourceDocRef = doc(db, "resources", resource.id);
+        await updateDoc(resourceDocRef, firestorePayload);
+        addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Resource '${data.name}' updated.`});
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
-        await fetchResourceData(); 
+        await fetchResourceData(); // Re-fetch to show updated data
     } catch (error: any) {
         console.error("Error updating resource:", error);
         toast({ title: "Update Failed", description: `Could not update resource: ${error.message}`, variant: "destructive" });
     }
     setIsFormDialogOpen(false);
-    setEditingResource(null);
-  }, [currentUser, canManageResource, editingResource, fetchResourceData, toast]);
+  }, [currentUser, canManageResource, resource, fetchResourceData, toast]);
 
    const handleConfirmDelete = useCallback(async () => {
     if (!resourceToDelete || !currentUser || !canManageResource) {
@@ -514,7 +494,7 @@ export default function ResourceDetailPage() {
       await updateDoc(resourceDocRef, { availability: updatedAvailability, lastUpdatedAt: serverTimestamp() });
       addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Availability for resource '${resource.name}' on ${formatDateSafe(date, 'N/A', 'PPP')} updated.`});
       toast({ title: 'Availability Updated', description: `Daily slots for ${resource.name} on ${formatDateSafe(date, 'N/A', 'PPP')} have been updated.` });
-      setResource(prev => prev ? ({ ...prev, availability: updatedAvailability, lastUpdatedAt: new Date() }) : null);
+      setResource(prev => prev ? ({ ...prev, availability: updatedAvailability, lastUpdatedAt: new Date() }) : null); // Optimistic update
     } catch (error: any) {
       console.error("Error updating availability:", error);
       toast({ title: "Update Failed", description: `Could not save availability: ${error.message}`, variant: "destructive" });
@@ -531,14 +511,13 @@ export default function ResourceDetailPage() {
       await updateDoc(resourceDocRef, { unavailabilityPeriods: updatedPeriods, lastUpdatedAt: serverTimestamp() });
       addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Unavailability periods for resource '${resource.name}' updated.`});
       toast({ title: 'Unavailability Updated', description: `Unavailability periods for ${resource.name} have been updated.` });
-      setResource(prev => prev ? ({ ...prev, unavailabilityPeriods: updatedPeriods, lastUpdatedAt: new Date() }) : null);
+      setResource(prev => prev ? ({ ...prev, unavailabilityPeriods: updatedPeriods, lastUpdatedAt: new Date() }) : null); // Optimistic update
     } catch (error: any) {
       console.error("Error updating unavailability:", error);
       toast({ title: "Update Failed", description: `Could not save unavailability periods: ${error.message}`, variant: "destructive" });
     }
   }, [resource, currentUser, canManageResource, toast]);
 
-  const canBookResource = resource?.status === 'Available';
 
   if (isLoading) {
     return <ResourceDetailPageSkeleton />;
@@ -548,8 +527,9 @@ export default function ResourceDetailPage() {
     return <NotFoundMessage resourceIdParam={resourceId} />;
   }
   
-  if (!resource) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>; // Should be caught by NotFoundMessage
+  if (!resource) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>; 
 
+  const canBookResource = resource.status === 'Available';
 
   return (
     <TooltipProvider>
@@ -828,9 +808,9 @@ export default function ResourceDetailPage() {
             open={isFormDialogOpen}
             onOpenChange={(isOpen) => {
                 setIsFormDialogOpen(isOpen);
-                if (!isOpen) setEditingResource(null); 
+                // No need to setEditingResource here as it's not used by the dialog directly
             }}
-            initialResource={editingResource} // Pass editingResource state
+            initialResource={resource} // Pass the current resource for editing
             onSave={handleSaveResource}
             resourceTypes={fetchedResourceTypesForDialog}
         />
@@ -855,3 +835,5 @@ export default function ResourceDetailPage() {
     </TooltipProvider>
   );
 }
+
+    

@@ -4,13 +4,12 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/auth-context';
 import {
-  ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, Calendar as CalendarIconLucide, CalendarPlus
+  ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, CalendarPlus, Loader2, X
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { useAuth } from '@/components/auth-context';
 import {
   Table,
   TableBody,
@@ -36,14 +35,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval } from 'date-fns';
+import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, addDays as dateFnsAddDays } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, orderBy, where } from 'firebase/firestore';
-import { addAuditLog, labsList } from '@/lib/mock-data'; // Removed allAdminMockResources from here
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, query, orderBy, where, Unsubscribe } from 'firebase/firestore';
+import { labsList } from '@/lib/mock-data';
 
 export default function AdminResourcesPage() {
   const { toast } = useToast();
@@ -68,14 +66,12 @@ export default function AdminResourcesPage() {
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
 
-  const router = useRouter();
-
   const fetchResourcesAndTypes = useCallback(async () => {
     setIsLoadingData(true);
     try {
       const resourcesQuery = query(collection(db, "resources"), orderBy("name", "asc"));
       const resourcesSnapshot = await getDocs(resourcesQuery);
-      const fetchedResources = resourcesSnapshot.docs.map((docSnap) => {
+      const fetchedResourcesPromises = resourcesSnapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
         return {
           id: docSnap.id,
@@ -96,7 +92,7 @@ export default function AdminResourcesPage() {
             hostname: data.remoteAccess.hostname || undefined,
             protocol: data.remoteAccess.protocol || '',
             username: data.remoteAccess.username || undefined,
-            port: data.remoteAccess.port,
+            port: data.remoteAccess.port, // Can be number or null
             notes: data.remoteAccess.notes || undefined,
           } : undefined,
           allowQueueing: data.allowQueueing ?? false,
@@ -106,6 +102,7 @@ export default function AdminResourcesPage() {
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
         } as Resource;
       });
+      const fetchedResources = await Promise.all(fetchedResourcesPromises);
       setResources(fetchedResources);
 
       const typesQuery = query(collection(db, "resourceTypes"), orderBy("name", "asc"));
@@ -161,7 +158,7 @@ export default function AdminResourcesPage() {
             if (!period.startDate || !period.endDate) return false;
             try {
                 const periodStart = startOfDay(parseISO(period.startDate));
-                const periodEnd = startOfDay(parseISO(period.endDate)); // End of day for 'endDate'
+                const periodEnd = startOfDay(parseISO(period.endDate)); 
                 return isValidDateFn(periodStart) && isValidDateFn(periodEnd) &&
                        isWithinInterval(dateToFilter, { start: periodStart, end: periodEnd });
             } catch (e) { console.warn("Error parsing unavailability period dates for filter:", e); return false; }
@@ -234,6 +231,17 @@ export default function AdminResourcesPage() {
                                         ? Timestamp.fromDate(parseISO(data.purchaseDate))
                                         : null;
 
+    const remoteAccessDataForFirestore = data.remoteAccess
+      ? {
+          ipAddress: data.remoteAccess.ipAddress || null,
+          hostname: data.remoteAccess.hostname || null,
+          protocol: data.remoteAccess.protocol || '',
+          username: data.remoteAccess.username || null,
+          port: data.remoteAccess.port ?? null, // Convert undefined from Zod to null for Firestore
+          notes: data.remoteAccess.notes || null,
+        }
+      : null;
+
     const firestorePayload: any = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
@@ -247,33 +255,10 @@ export default function AdminResourcesPage() {
       purchaseDate: purchaseDateForFirestore,
       notes: data.notes || null,
       features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-      remoteAccess: data.remoteAccess && (Object.values(data.remoteAccess).some(val => val || typeof val === 'number' || (typeof val === 'string' && val.length > 0)) ) ? {
-         ipAddress: data.remoteAccess.ipAddress || null,
-         hostname: data.remoteAccess.hostname || null,
-         protocol: data.remoteAccess.protocol || '',
-         username: data.remoteAccess.username || null,
-         port: data.remoteAccess.port === undefined ? null : data.remoteAccess.port,
-         notes: data.remoteAccess.notes || null,
-      } : null,
+      remoteAccess: remoteAccessDataForFirestore,
       allowQueueing: data.allowQueueing ?? false,
     };
     
-    Object.keys(firestorePayload).forEach(key => {
-        if (firestorePayload[key] === null) {
-            delete firestorePayload[key];
-        }
-        if (key === 'remoteAccess' && firestorePayload.remoteAccess) {
-            Object.keys(firestorePayload.remoteAccess).forEach(subKey => {
-                if (firestorePayload.remoteAccess[subKey] === null) {
-                    delete firestorePayload.remoteAccess[subKey];
-                }
-            });
-            if (Object.keys(firestorePayload.remoteAccess).length === 0) {
-                delete firestorePayload.remoteAccess;
-            }
-        }
-    });
-
     const isEditing = !!editingResource;
     const auditAction = isEditing ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
     const auditDetails = `Resource '${data.name}' ${isEditing ? 'updated' : 'created'}.`;
@@ -324,7 +309,7 @@ export default function AdminResourcesPage() {
     if (fetchedResourceTypes.length === 0) {
       toast({
         title: "Resource Types Missing",
-        description: "Cannot edit resource: resource types not loaded. Please try again.",
+        description: "Cannot edit resource: resource types not loaded. Please try again or define types first.",
         variant: "destructive",
       });
       return;
@@ -381,7 +366,7 @@ export default function AdminResourcesPage() {
                           type="search"
                           placeholder="Name, manufacturer, model..."
                           value={tempSearchTerm}
-                          onChange={(e) => setTempSearchTerm(e.target.value)}
+                          onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
                           className="h-9 pl-8"
                           />
                       </div>
@@ -532,15 +517,16 @@ export default function AdminResourcesPage() {
                     : (canAddResources ? "There are currently no resources in the catalog. Add one to get started!" : "There are currently no resources in the system.")
                 }
             </p>
-            {activeFilterCount > 0 && (
+            {activeFilterCount > 0 ? (
                 <Button variant="outline" onClick={resetAllActivePageFilters}>
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
-            )}
-            { !isLoadingData && resources.length === 0 && canAddResources && !activeSearchTerm && activeFilterTypeId === 'all' && activeFilterLab === 'all' && !activeSelectedDate && (
+            ): (
+              !isLoadingData && resources.length === 0 && canAddResources && (
                 <Button onClick={handleOpenNewDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource
                 </Button>
+              )
             )}
           </CardContent>
         </Card>
@@ -560,3 +546,5 @@ export default function AdminResourcesPage() {
     </div>
   );
 }
+
+    
