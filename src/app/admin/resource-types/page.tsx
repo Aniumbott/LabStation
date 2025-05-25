@@ -1,11 +1,10 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon } from 'lucide-react';
+import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2 } from 'lucide-react';
 import type { ResourceType } from '@/types';
-import { initialMockResourceTypes, addAuditLog } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -49,22 +48,56 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { addAuditLog } from '@/lib/mock-data';
 
 
 export default function ResourceTypesPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
-  const [resourceTypes, setResourceTypes] = useState<ResourceType[]>(() => JSON.parse(JSON.stringify(initialMockResourceTypes)));
+  const [resourceTypes, setResourceTypes] = useState<ResourceType[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [typeToDelete, setTypeToDelete] = useState<ResourceType | null>(null);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingType, setEditingType] = useState<ResourceType | null>(null);
 
-  // Active filters for the page
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
-
-  // Filter Dialog State
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-  const [tempSearchTerm, setTempSearchTerm] = useState(activeSearchTerm);
+  const [tempSearchTerm, setTempSearchTerm] = useState('');
+
+  const fetchResourceTypes = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const typesQuery = query(collection(db, "resourceTypes"), orderBy("name", "asc"));
+      const querySnapshot = await getDocs(typesQuery);
+      const fetchedTypes: ResourceType[] = querySnapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        // Ensure id is included; if Firestore auto-generates IDs, docSnap.id is the source.
+        // If 'id' is a field in the doc, use data.id. Prioritize docSnap.id.
+        return {
+          id: docSnap.id,
+          name: data.name || 'Unnamed Type',
+          description: data.description || undefined,
+        } as ResourceType;
+      });
+      setResourceTypes(fetchedTypes);
+    } catch (error: any) {
+      console.error("Error fetching resource types:", error);
+      toast({ title: "Error", description: `Failed to load resource types: ${error.message}`, variant: "destructive" });
+      setResourceTypes([]);
+    }
+    setIsLoading(false);
+  }, [toast]);
+
+  useEffect(() => {
+    if (currentUser?.role === 'Admin') {
+      fetchResourceTypes();
+    } else {
+      setResourceTypes([]);
+      setIsLoading(false); // Ensure loading stops if not admin
+    }
+  }, [currentUser, fetchResourceTypes]);
 
 
   useEffect(() => {
@@ -82,7 +115,8 @@ export default function ResourceTypesPage() {
         (type.description && type.description.toLowerCase().includes(lowerSearchTerm))
       );
     }
-    return currentTypes.sort((a, b) => a.name.localeCompare(b.name));
+    // Already sorted by Firestore query (orderBy name)
+    return currentTypes;
   }, [resourceTypes, activeSearchTerm]);
 
   const handleApplyDialogFilters = () => {
@@ -90,13 +124,13 @@ export default function ResourceTypesPage() {
     setIsFilterDialogOpen(false);
   };
 
-  const resetDialogFilters = () => {
+  const resetDialogFiltersOnly = () => {
     setTempSearchTerm('');
   };
 
   const resetAllActivePageFilters = () => {
     setActiveSearchTerm('');
-    resetDialogFilters();
+    resetDialogFiltersOnly();
     setIsFilterDialogOpen(false);
   };
 
@@ -111,54 +145,89 @@ export default function ResourceTypesPage() {
     setIsFormDialogOpen(true);
   };
 
-  const handleSaveType = (data: ResourceTypeFormValues) => {
-    if (editingType) {
-      const updatedType = { ...editingType, ...data };
-      const updatedTypes = resourceTypes.map(rt => rt.id === editingType.id ? updatedType : rt);
-      setResourceTypes(updatedTypes);
-      const globalIndex = initialMockResourceTypes.findIndex(rt => rt.id === editingType.id);
-      if (globalIndex !== -1) initialMockResourceTypes[globalIndex] = updatedType;
-      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'RESOURCE_TYPE_UPDATED', { entityType: 'ResourceType', entityId: updatedType.id, details: `Resource Type '${updatedType.name}' updated.`});
-      toast({
-        title: 'Resource Type Updated',
-        description: `Resource Type "${data.name}" has been updated.`,
-      });
-    } else {
-      const newType: ResourceType = {
-        id: `rt${initialMockResourceTypes.length + 1 + Date.now()}`,
-        ...data,
-      };
-      setResourceTypes(prevTypes => [...prevTypes, newType].sort((a, b) => a.name.localeCompare(b.name)));
-      initialMockResourceTypes.push(newType);
-      initialMockResourceTypes.sort((a, b) => a.name.localeCompare(b.name));
-      addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'RESOURCE_TYPE_CREATED', { entityType: 'ResourceType', entityId: newType.id, details: `Resource Type '${newType.name}' created.`});
-      toast({
-        title: 'Resource Type Created',
-        description: `Resource Type "${data.name}" has been created.`,
-      });
+  const handleSaveType = async (data: ResourceTypeFormValues) => {
+    if (!currentUser || !currentUser.name) {
+        toast({ title: "Authentication Error", description: "You must be logged in.", variant: "destructive" });
+        return;
     }
-    setIsFormDialogOpen(false);
+    setIsLoading(true); // Indicate loading during save operation
+    try {
+      if (editingType) {
+        const typeDocRef = doc(db, "resourceTypes", editingType.id);
+        await updateDoc(typeDocRef, data as Partial<ResourceType>); // Cast data
+        addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_UPDATED', { entityType: 'ResourceType', entityId: editingType.id, details: `Resource Type '${data.name}' updated.`});
+        toast({
+          title: 'Resource Type Updated',
+          description: `Resource Type "${data.name}" has been updated.`,
+        });
+      } else {
+        const docRef = await addDoc(collection(db, "resourceTypes"), data as Partial<ResourceType>);
+        // Optionally update the new document with its own ID if your ResourceType needs it for local state, though not strictly necessary if always fetching
+        // await updateDoc(doc(db, "resourceTypes", docRef.id), { id: docRef.id });
+        addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_CREATED', { entityType: 'ResourceType', entityId: docRef.id, details: `Resource Type '${data.name}' created.`});
+        toast({
+          title: 'Resource Type Created',
+          description: `Resource Type "${data.name}" has been created.`,
+        });
+      }
+      setIsFormDialogOpen(false);
+      setEditingType(null);
+      await fetchResourceTypes(); // Re-fetch to update the list
+    } catch (error: any) {
+        console.error("Error saving resource type:", error);
+        toast({ title: "Save Error", description: `Could not save resource type: ${error.message}`, variant: "destructive" });
+    } finally {
+        setIsLoading(false);
+    }
   };
 
-  const handleDeleteType = (typeId: string) => {
+  const handleDeleteType = async (typeId: string) => {
+    if (!currentUser || !currentUser.name) {
+        toast({ title: "Authentication Error", description: "You must be logged in.", variant: "destructive" });
+        return;
+    }
     const deletedType = resourceTypes.find(rt => rt.id === typeId);
-    setResourceTypes(currentTypes => currentTypes.filter(type => type.id !== typeId));
+    if (!deletedType) {
+        toast({ title: "Error", description: "Resource type not found for deletion.", variant: "destructive"});
+        return;
+    }
 
-    const globalIndex = initialMockResourceTypes.findIndex(rt => rt.id === typeId);
-    if (globalIndex !== -1) initialMockResourceTypes.splice(globalIndex, 1);
-    addAuditLog(currentUser?.id || 'SYSTEM_ADMIN', currentUser?.name || 'System Admin', 'RESOURCE_TYPE_DELETED', { entityType: 'ResourceType', entityId: typeId, details: `Resource Type '${deletedType?.name || typeId}' deleted.`});
-    toast({
-      title: "Resource Type Deleted",
-      description: `Resource Type "${deletedType?.name}" has been removed.`,
-      variant: "destructive"
-    });
-    setTypeToDelete(null);
+    setIsLoading(true); // Indicate loading during delete operation
+    try {
+        const typeDocRef = doc(db, "resourceTypes", typeId);
+        await deleteDoc(typeDocRef);
+        addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_DELETED', { entityType: 'ResourceType', entityId: typeId, details: `Resource Type '${deletedType.name}' deleted.`});
+        toast({
+          title: "Resource Type Deleted",
+          description: `Resource Type "${deletedType.name}" has been removed.`,
+          variant: "destructive"
+        });
+        setTypeToDelete(null);
+        await fetchResourceTypes(); // Re-fetch to update the list
+    } catch (error: any) {
+        console.error("Error deleting resource type:", error);
+        toast({ title: "Delete Error", description: `Could not delete resource type: ${error.message}`, variant: "destructive" });
+    } finally {
+        setIsLoading(false);
+    }
   };
 
   const activeFilterCount = [activeSearchTerm !== ''].filter(Boolean).length;
   const canAddResourceTypes = currentUser?.role === 'Admin';
   const canManageResourceTypes = currentUser?.role === 'Admin';
 
+  if (!currentUser || !canManageResourceTypes) {
+    return (
+      <div className="space-y-8">
+        <PageHeader title="Resource Types" icon={ListChecks} description="Access Denied." />
+        <Card className="text-center py-10 text-muted-foreground">
+          <CardContent>
+            <p>You do not have permission to view or manage resource types.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <TooltipProvider>
@@ -199,17 +268,17 @@ export default function ResourceTypesPage() {
                         type="search"
                         placeholder="Keyword..."
                         value={tempSearchTerm}
-                        onChange={(e) => setTempSearchTerm(e.target.value.toLowerCase())}
+                        onChange={(e) => setTempSearchTerm(e.target.value)}
                         className="h-9 pl-8"
                         />
                     </div>
                   </div>
                 </div>
-                <DialogFooter className="pt-6 border-t">
-                   <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
+                <DialogFooter className="pt-6 border-t mt-4">
+                   <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
-                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>Cancel</Button>
+                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}><X className="mr-2 h-4 w-4" />Cancel</Button>
                   <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
@@ -223,7 +292,11 @@ export default function ResourceTypesPage() {
         }
       />
 
-      {filteredResourceTypes.length > 0 ? (
+      {isLoading ? (
+        <div className="flex justify-center items-center py-10 text-muted-foreground">
+          <Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading resource types...
+        </div>
+      ) : filteredResourceTypes.length > 0 ? (
         <div className="overflow-x-auto rounded-lg border shadow-sm">
           <Table>
             <TableHeader>
@@ -242,7 +315,7 @@ export default function ResourceTypesPage() {
                       <TableCell className="text-right space-x-1">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDialog(type)}>
+                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDialog(type)} disabled={isLoading}>
                               <Edit className="h-4 w-4" />
                               <span className="sr-only">Edit Resource Type</span>
                             </Button>
@@ -250,11 +323,11 @@ export default function ResourceTypesPage() {
                           <TooltipContent><p>Edit Resource Type</p></TooltipContent>
                         </Tooltip>
 
-                        <AlertDialog>
+                        <AlertDialog open={typeToDelete?.id === type.id} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setTypeToDelete(type)}>
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoading}>
                                     <Trash2 className="h-4 w-4" />
                                     <span className="sr-only">Delete Resource Type</span>
                                 </Button>
@@ -262,24 +335,22 @@ export default function ResourceTypesPage() {
                             </TooltipTrigger>
                             <TooltipContent><p>Delete Resource Type</p></TooltipContent>
                           </Tooltip>
-                          {typeToDelete && typeToDelete.id === type.id && (
-                              <AlertDialogContent>
+                          <AlertDialogContent>
                               <AlertDialogHeader>
                                   <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                   <AlertDialogDescription>
                                   This action cannot be undone. This will remove the resource type
-                                  <span className="font-semibold"> "{typeToDelete.name}"</span>.
+                                  <span className="font-semibold"> "{typeToDelete?.name}"</span>.
                                   This might affect existing resources categorized under this type.
                                   </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                   <AlertDialogCancel onClick={() => setTypeToDelete(null)}>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction variant="destructive" onClick={() => handleDeleteType(typeToDelete.id)}>
+                                  <AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteType(typeToDelete.id)}>
                                   Delete Resource Type
                                   </AlertDialogAction>
                               </AlertDialogFooter>
-                              </AlertDialogContent>
-                          )}
+                          </AlertDialogContent>
                         </AlertDialog>
                       </TableCell>
                     )}
@@ -289,7 +360,7 @@ export default function ResourceTypesPage() {
           </Table>
         </div>
       ) : (
-        <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
+        <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
           <CardContent>
             <ListChecks className="mx-auto h-12 w-12 mb-4 opacity-50" />
             <p className="text-lg font-medium">
@@ -297,8 +368,8 @@ export default function ResourceTypesPage() {
             </p>
             <p className="text-sm mb-4">
                 {activeSearchTerm
-                    ? "Try adjusting your search criteria."
-                    : (canAddResourceTypes ? "Add resource types to categorize your lab equipment and assets." : "No resource types have been defined.")
+                    ? "Try adjusting your search criteria or ensure types are added in Firestore."
+                    : (canAddResourceTypes ? "Add resource types to categorize your lab equipment and assets. Ensure they exist in your Firestore 'resourceTypes' collection." : "No resource types have been defined in Firestore.")
                 }
             </p>
             {activeSearchTerm && (
@@ -314,12 +385,17 @@ export default function ResourceTypesPage() {
           </CardContent>
         </Card>
       )}
-      <ResourceTypeFormDialog
-        open={isFormDialogOpen}
-        onOpenChange={setIsFormDialogOpen}
-        initialType={editingType}
-        onSave={handleSaveType}
-      />
+      {isFormDialogOpen && currentUser && (
+        <ResourceTypeFormDialog
+            open={isFormDialogOpen}
+            onOpenChange={(isOpen) => {
+                setIsFormDialogOpen(isOpen);
+                if (!isOpen) setEditingType(null);
+            }}
+            initialType={editingType}
+            onSave={handleSaveType}
+        />
+      )}
     </div>
     </TooltipProvider>
   );
