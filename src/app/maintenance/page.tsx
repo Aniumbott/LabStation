@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { format, parseISO, isValid as isValidDateFn, Timestamp } from 'date-fns';
+import { format, parseISO, isValid as isValidDateFn } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,7 +42,8 @@ import { Separator } from '@/components/ui/separator';
 import { MaintenanceRequestFormDialog, MaintenanceRequestFormValues } from '@/components/maintenance/maintenance-request-form-dialog';
 import { cn, formatDateSafe } from '@/lib/utils';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, getDoc, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, addDoc, updateDoc, doc, serverTimestamp, getDoc, orderBy, Timestamp, where } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
 
 
 const getMaintenanceStatusBadge = (status: MaintenanceRequestStatus) => {
@@ -63,9 +64,12 @@ const getMaintenanceStatusBadge = (status: MaintenanceRequestStatus) => {
 export default function MaintenanceRequestsPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
+  const router = useRouter();
+
   const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
   const [allResources, setAllResources] = useState<Resource[]>([]);
   const [allTechnicians, setAllTechnicians] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
@@ -86,25 +90,67 @@ export default function MaintenanceRequestsPage() {
   const fetchMaintenanceData = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Fetch All Users (for mapping reporter and technician names)
       const usersSnapshot = await getDocs(query(collection(db, "users"), orderBy("name", "asc")));
-      const fetchedUsers = usersSnapshot.docs.map(d => ({ id: d.id, ...d.data(), createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date() } as User));
-      setAllTechnicians(fetchedUsers.filter(u => u.role === 'Technician').sort((a,b) => (a.name || '').localeCompare(b.name || '')));
+      const fetchedUsers = usersSnapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date()
+      } as User));
+      setAllUsers(fetchedUsers);
+
+      // Fetch All Technicians (for filter and form)
+      // Firestore Index Required: users (role ASC, name ASC)
+      const techniciansQuery = query(collection(db, "users"), where("role", "==", "Technician"), orderBy("name", "asc"));
+      const techniciansSnapshot = await getDocs(techniciansQuery);
+      const fetchedTechnicians = techniciansSnapshot.docs.map(d => ({id: d.id, ...d.data(), createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date()} as User));
+      setAllTechnicians(fetchedTechnicians);
       
+      // Fetch All Resources (for filter and form)
       const resourcesSnapshot = await getDocs(query(collection(db, "resources"), orderBy("name", "asc")));
-      const fetchedResources = resourcesSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Resource));
+      const fetchedResources = resourcesSnapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      } as Resource));
       setAllResources(fetchedResources);
 
-      const requestsQuery = query(collection(db, "maintenanceRequests"), orderBy("dateReported", "desc"));
-      const requestsSnapshot = await getDocs(requestsQuery);
-      const fetchedRequests: MaintenanceRequest[] = requestsSnapshot.docs.map((docSnap) => {
+      // Fetch Maintenance Requests
+      // Firestore Index Required: maintenanceRequests (dateReported DESC)
+      const requestsQueryInstance = query(collection(db, "maintenanceRequests"), orderBy("dateReported", "desc"));
+      const requestsSnapshot = await getDocs(requestsQueryInstance);
+      const fetchedRequestsDataPromises = requestsSnapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
+        let resourceNameStr = "Unknown Resource";
+        if (data.resourceId) {
+            const resourceDoc = await getDoc(doc(db, "resources", data.resourceId));
+            if (resourceDoc.exists()) resourceNameStr = resourceDoc.data()?.name || resourceNameStr;
+        }
+        
+        let reporterNameStr = "Unknown User";
+        if (data.reportedByUserId) {
+            const reporterDoc = await getDoc(doc(db, "users", data.reportedByUserId));
+            if (reporterDoc.exists()) reporterNameStr = reporterDoc.data()?.name || reporterNameStr;
+        }
+
+        let techNameStr : string | undefined = undefined;
+        if (data.assignedTechnicianId) {
+            const techDoc = await getDoc(doc(db, "users", data.assignedTechnicianId));
+            if (techDoc.exists()) techNameStr = techDoc.data()?.name || undefined;
+        }
+
         return {
           id: docSnap.id,
-          ...data,
-          dateReported: data.dateReported instanceof Timestamp ? data.dateReported.toDate() : new Date(),
-          dateResolved: data.dateResolved instanceof Timestamp ? data.dateResolved.toDate() : undefined,
+          resourceId: data.resourceId,
+          reportedByUserId: data.reportedByUserId,
+          issueDescription: data.issueDescription,
+          status: data.status as MaintenanceRequestStatus,
+          assignedTechnicianId: data.assignedTechnicianId,
+          dateReported: (data.dateReported as Timestamp)?.toDate() || new Date(),
+          dateResolved: (data.dateResolved as Timestamp)?.toDate(),
+          resolutionNotes: data.resolutionNotes,
         } as MaintenanceRequest;
       });
+      const fetchedRequests = await Promise.all(fetchedRequestsDataPromises);
       setRequests(fetchedRequests);
 
     } catch (error: any) {
@@ -113,13 +159,22 @@ export default function MaintenanceRequestsPage() {
       setRequests([]);
       setAllResources([]);
       setAllTechnicians([]);
+      setAllUsers([]);
     }
     setIsLoading(false);
   }, [toast]);
 
   useEffect(() => {
-    fetchMaintenanceData();
-  }, [fetchMaintenanceData]);
+    if (currentUser) { // Only fetch if a user is logged in
+        fetchMaintenanceData();
+    } else {
+        setIsLoading(false); // Ensure loading stops if no user
+        setRequests([]);
+        setAllResources([]);
+        setAllTechnicians([]);
+        setAllUsers([]);
+    }
+  }, [currentUser, fetchMaintenanceData]);
 
   useEffect(() => {
     if (isFilterDialogOpen) {
@@ -134,7 +189,7 @@ export default function MaintenanceRequestsPage() {
   const filteredRequests = useMemo(() => {
     return requests.map(req => {
       const resource = allResources.find(r => r.id === req.resourceId);
-      const reporter = allUsers.find(u => u.id === req.reportedByUserId); // Assuming allUsers state contains all users
+      const reporter = allUsers.find(u => u.id === req.reportedByUserId);
       const technician = allTechnicians.find(t => t.id === req.assignedTechnicianId);
       return {
         ...req,
@@ -153,7 +208,7 @@ export default function MaintenanceRequestsPage() {
       const resourceMatch = activeFilterResourceId === 'all' || req.resourceId === activeFilterResourceId;
       let technicianMatch = true;
       if (activeFilterTechnicianId !== 'all') {
-         if (activeFilterTechnicianId === 'unassigned') {
+         if (activeFilterTechnicianId === '--unassigned--') { // Check against the actual value for unassigned
            technicianMatch = !req.assignedTechnicianId;
          } else {
           technicianMatch = req.assignedTechnicianId === activeFilterTechnicianId;
@@ -161,25 +216,18 @@ export default function MaintenanceRequestsPage() {
       }
       return searchMatch && statusMatch && resourceMatch && technicianMatch;
     });
-  }, [requests, allResources, allTechnicians, activeSearchTerm, activeFilterStatus, activeFilterResourceId, activeFilterTechnicianId]);
-
-  const allUsers = useMemo(() => { // Used for mapping reporter names
-    // In a real app, this might be fetched separately or managed in a global state/context if needed by many components
-    // For now, if technicians are already fetched, we can use them, otherwise, it's a limitation of current data fetching.
-    // This is a simplified approach. Ideally, fetch all users once or have a better user lookup.
-    return allTechnicians; // Placeholder, this should ideally be all users if we need to map any reporter.
-  }, [allTechnicians]);
+  }, [requests, allResources, allTechnicians, allUsers, activeSearchTerm, activeFilterStatus, activeFilterResourceId, activeFilterTechnicianId]);
 
 
   const handleApplyDialogFilters = useCallback(() => {
-    setActiveSearchTerm(tempSearchTerm);
+    setActiveSearchTerm(tempSearchTerm.toLowerCase());
     setActiveFilterStatus(tempFilterStatus);
     setActiveFilterResourceId(tempFilterResourceId);
     setActiveFilterTechnicianId(tempFilterTechnicianId);
     setIsFilterDialogOpen(false);
   }, [tempSearchTerm, tempFilterStatus, tempFilterResourceId, tempFilterTechnicianId]);
 
-  const resetDialogFilters = useCallback(() => {
+  const resetDialogFiltersOnly = useCallback(() => {
     setTempSearchTerm('');
     setTempFilterStatus('all');
     setTempFilterResourceId('all');
@@ -191,9 +239,9 @@ export default function MaintenanceRequestsPage() {
     setActiveFilterStatus('all');
     setActiveFilterResourceId('all');
     setActiveFilterTechnicianId('all');
-    resetDialogFilters();
+    resetDialogFiltersOnly(); 
     setIsFilterDialogOpen(false);
-  }, [resetDialogFilters]);
+  }, [resetDialogFiltersOnly]);
 
   const handleOpenNewDialog = useCallback(() => {
     if (!currentUser) {
@@ -210,7 +258,7 @@ export default function MaintenanceRequestsPage() {
   }, []);
 
   const handleSaveRequest = useCallback(async (data: MaintenanceRequestFormValues) => {
-    if (!currentUser) {
+    if (!currentUser || !currentUser.name) {
       toast({ title: "Error", description: "You must be logged in.", variant: "destructive"});
       return;
     }
@@ -222,14 +270,13 @@ export default function MaintenanceRequestsPage() {
     }
     
     let dateResolvedForFirestore: Timestamp | null = null;
-    if (data.status === 'Resolved' || data.status === 'Closed') {
-        if (data.dateResolved && isValidDateFn(new Date(data.dateResolved))) {
-             dateResolvedForFirestore = Timestamp.fromDate(new Date(data.dateResolved));
-        } else if (!editingRequest?.dateResolved) { // If not editing or if editing and no prior dateResolved
-            dateResolvedForFirestore = serverTimestamp() as Timestamp;
-        } else if (editingRequest?.dateResolved) { // If editing and had a dateResolved, keep it
-            dateResolvedForFirestore = Timestamp.fromDate(editingRequest.dateResolved);
-        }
+    if ((data.status === 'Resolved' || data.status === 'Closed') && data.dateResolved && isValidDateFn(new Date(data.dateResolved))) {
+      dateResolvedForFirestore = Timestamp.fromDate(new Date(data.dateResolved));
+    } else if ((data.status === 'Resolved' || data.status === 'Closed') && !editingRequest?.dateResolved) {
+        dateResolvedForFirestore = serverTimestamp() as Timestamp;
+    } else if (editingRequest?.dateResolved && (data.status === 'Resolved' || data.status === 'Closed')) {
+        // Keep existing resolved date if form field is cleared but status remains Resolved/Closed
+        dateResolvedForFirestore = Timestamp.fromDate(editingRequest.dateResolved);
     }
 
 
@@ -237,8 +284,8 @@ export default function MaintenanceRequestsPage() {
       resourceId: data.resourceId,
       issueDescription: data.issueDescription,
       status: data.status,
-      assignedTechnicianId: data.assignedTechnicianId || null, // Save null if empty
-      resolutionNotes: data.resolutionNotes || null, // Save null if empty
+      assignedTechnicianId: data.assignedTechnicianId === '--unassigned--' || !data.assignedTechnicianId ? null : data.assignedTechnicianId,
+      resolutionNotes: data.resolutionNotes || null,
       dateResolved: dateResolvedForFirestore,
     };
 
@@ -248,18 +295,19 @@ export default function MaintenanceRequestsPage() {
         const requestDocRef = doc(db, "maintenanceRequests", editingRequest.id);
         await updateDoc(requestDocRef, requestDataToSave);
 
-        const currentResourceName = allResources.find(r => r.id === editingRequest.resourceId)?.name || 'the resource';
-        addAuditLog(currentUser.id, currentUser.name || 'User', 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingRequest.id, details: `Maintenance request for '${currentResourceName}' updated. Status: ${data.status}.`});
-        toast({ title: 'Request Updated', description: `Maintenance request for "${currentResourceName}" has been updated.` });
+        addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingRequest.id, details: `Maintenance request for '${resource.name}' updated. Status: ${data.status}.`});
+        toast({ title: 'Request Updated', description: `Maintenance request for "${resource.name}" has been updated.` });
 
-        if ((data.status === 'Resolved' && editingRequest.status !== 'Resolved') && editingRequest.reportedByUserId) {
-          addNotification( editingRequest.reportedByUserId, 'Maintenance Resolved', `The issue reported for ${currentResourceName} has been resolved.`, 'maintenance_resolved', '/maintenance');
-        } else if (data.assignedTechnicianId && data.assignedTechnicianId !== editingRequest.assignedTechnicianId) {
-           if(data.assignedTechnicianId) {
-            addNotification( data.assignedTechnicianId, 'Maintenance Task Assigned', `You have been assigned a maintenance task for ${currentResourceName}: ${data.issueDescription.substring(0,50)}...`, 'maintenance_assigned', '/maintenance');
-          }
+        // Notify reporter if resolved by someone else
+        if ((data.status === 'Resolved' && editingRequest.status !== 'Resolved') && editingRequest.reportedByUserId !== currentUser.id && editingRequest.reportedByUserId) {
+          addNotification( editingRequest.reportedByUserId, 'Maintenance Resolved', `The issue reported for ${resource.name} has been resolved.`, 'maintenance_resolved', '/maintenance');
         }
-      } else {
+        // Notify newly assigned technician
+        if (data.assignedTechnicianId && data.assignedTechnicianId !== editingRequest.assignedTechnicianId && data.assignedTechnicianId !== '--unassigned--') {
+           addNotification( data.assignedTechnicianId, 'Maintenance Task Assigned', `You have been assigned a maintenance task for ${resource.name}: ${data.issueDescription.substring(0,50)}...`, 'maintenance_assigned', '/maintenance');
+        }
+
+      } else { // New request
         const newRequestPayload = {
           ...requestDataToSave,
           reportedByUserId: currentUser.id,
@@ -267,17 +315,19 @@ export default function MaintenanceRequestsPage() {
         };
         const docRef = await addDoc(collection(db, "maintenanceRequests"), newRequestPayload);
 
-        addAuditLog(currentUser.id, currentUser.name || 'User', 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New maintenance request for '${resource.name}' logged.`});
+        addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New maintenance request for '${resource.name}' logged by ${currentUser.name}.`});
         toast({ title: 'Request Logged', description: `New maintenance request for "${resource.name}" has been logged.` });
-
-        const usersToNotifyQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager', 'Technician']));
-        const usersToNotifySnapshot = await getDocs(usersToNotifyQuery);
-
-        if(requestDataToSave.assignedTechnicianId){
+        
+        // Notify assigned tech if assigned on creation
+        if(requestDataToSave.assignedTechnicianId && requestDataToSave.assignedTechnicianId !== '--unassigned--'){
           addNotification( requestDataToSave.assignedTechnicianId, 'New Maintenance Request Assigned', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... has been assigned to you.`, 'maintenance_assigned', '/maintenance');
-        } else {
+        } else { 
+            const usersToNotifyQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager', 'Technician']));
+            const usersToNotifySnapshot = await getDocs(usersToNotifyQuery);
             usersToNotifySnapshot.forEach(userDoc => {
-                 addNotification( userDoc.id, 'New Unassigned Maintenance Request', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`, 'maintenance_new', '/maintenance');
+                if(userDoc.id !== currentUser?.id) { 
+                    addNotification( userDoc.id, 'New Unassigned Maintenance Request', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`, 'maintenance_new', '/maintenance');
+                }
             });
         }
       }
@@ -301,13 +351,15 @@ export default function MaintenanceRequestsPage() {
 
   const canEditMaintenanceRequest = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager' || currentUser.role === 'Technician');
 
-  if (!currentUser) {
+  if (!currentUser && !isLoading) { // Updated to also check !isLoading to prevent flash of login prompt
     return (
       <div className="space-y-8">
-        <PageHeader title="Maintenance Requests" icon={Wrench} description="Access Denied." />
-        <Card className="text-center py-10 text-muted-foreground">
+        <PageHeader title="Maintenance Requests" icon={Wrench} description="Please log in to view or manage maintenance requests." />
+        <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
           <CardContent>
-            <p>Please log in to view or manage maintenance requests.</p>
+            <Info className="mx-auto h-12 w-12 mb-4 opacity-50" />
+            <p className="text-lg font-medium">Login Required</p>
+            <p className="text-sm mb-4">You need to be logged in to access this page.</p>
              <Button onClick={() => router.push('/login')} className="mt-4">Go to Login</Button>
           </CardContent>
         </Card>
@@ -323,6 +375,7 @@ export default function MaintenanceRequestsPage() {
           description="Log, track, and manage service requests for lab resources."
           icon={Wrench}
           actions={
+            currentUser && ( // Ensure actions are only available if user is logged in
             <div className="flex items-center gap-2 flex-wrap">
               <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
                 <DialogTrigger asChild>
@@ -372,8 +425,8 @@ export default function MaintenanceRequestsPage() {
                       </div>
                       <div>
                         <Label htmlFor="maintenanceResourceDialog">Resource</Label>
-                        <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId}>
-                            <SelectTrigger id="maintenanceResourceDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Resource" /></SelectTrigger>
+                        <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId} disabled={allResources.length === 0}>
+                            <SelectTrigger id="maintenanceResourceDialog" className="h-9 mt-1"><SelectValue placeholder={allResources.length > 0 ? "Filter by Resource" : "No resources found"} /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Resources</SelectItem>
                                 {allResources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
@@ -383,18 +436,18 @@ export default function MaintenanceRequestsPage() {
                     </div>
                     <div>
                       <Label htmlFor="maintenanceTechnicianDialog">Assigned Technician</Label>
-                      <Select value={tempFilterTechnicianId} onValueChange={setTempFilterTechnicianId}>
-                          <SelectTrigger id="maintenanceTechnicianDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Technician" /></SelectTrigger>
+                      <Select value={tempFilterTechnicianId} onValueChange={setTempFilterTechnicianId} disabled={allTechnicians.length === 0}>
+                          <SelectTrigger id="maintenanceTechnicianDialog" className="h-9 mt-1"><SelectValue placeholder={allTechnicians.length > 0 ? "Filter by Technician" : "No technicians found"} /></SelectTrigger>
                           <SelectContent>
                               <SelectItem value="all">All/Any</SelectItem>
-                              <SelectItem value="unassigned">Unassigned</SelectItem>
+                              <SelectItem value="--unassigned--">Unassigned</SelectItem> {/* Use consistent value */}
                               {allTechnicians.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                           </SelectContent>
                       </Select>
                     </div>
                   </div>
                   <DialogFooter className="pt-6 border-t mt-4">
-                    <Button variant="ghost" onClick={resetDialogFilters} className="mr-auto">
+                    <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                       <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                     </Button>
                     <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}><X className="mr-2 h-4 w-4" />Cancel</Button>
@@ -406,15 +459,16 @@ export default function MaintenanceRequestsPage() {
                 <PlusCircle className="mr-2 h-4 w-4" /> Log New Request
               </Button>
             </div>
+            )
           }
         />
 
-        {isLoading ? (
-            <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading requests...</div>
+        {isLoading && requests.length === 0 ? ( // Show loader only if loading and no requests are yet shown
+            <div className="flex justify-center items-center py-10 text-muted-foreground"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading requests...</div>
         ) : filteredRequests.length > 0 ? (
           <Card>
             <CardHeader>
-              <CardTitle>Maintenance Requests ({filteredRequests.length})</CardTitle>
+              <CardTitle>Maintenance Log ({filteredRequests.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto rounded-lg border shadow-sm">
@@ -422,7 +476,7 @@ export default function MaintenanceRequestsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Resource</TableHead>
-                      <TableHead>Issue</TableHead>
+                      <TableHead className="min-w-[200px]">Issue</TableHead>
                       <TableHead>Reported By</TableHead>
                       <TableHead>Date Reported</TableHead>
                       <TableHead>Status</TableHead>
@@ -431,31 +485,36 @@ export default function MaintenanceRequestsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredRequests.map((request: MaintenanceRequest & { resourceName: string, reportedByUserName: string, assignedTechnicianName?: string }) => (
-                      <TableRow key={request.id}>
-                        <TableCell className="font-medium">{request.resourceName}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{request.issueDescription}</TableCell>
-                        <TableCell>{request.reportedByUserName}</TableCell>
-                        <TableCell>
-                          {formatDateSafe(request.dateReported)}
-                        </TableCell>
-                        <TableCell>{getMaintenanceStatusBadge(request.status)}</TableCell>
-                        <TableCell>{request.assignedTechnicianName || <span className="text-xs italic text-muted-foreground">Unassigned</span>}</TableCell>
-                        {canEditMaintenanceRequest && (
-                          <TableCell className="text-right space-x-1">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDialog(request)} disabled={isLoading}>
-                                  <Edit className="h-4 w-4" />
-                                  <span className="sr-only">Edit Request</span>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent><p>Edit Request</p></TooltipContent>
-                            </Tooltip>
+                    {filteredRequests.map((request) => {
+                      const reporter = allUsers.find(u => u.id === request.reportedByUserId);
+                      const technician = allUsers.find(u => u.id === request.assignedTechnicianId); // Fetch from allUsers for name
+                      const resource = allResources.find(r => r.id === request.resourceId);
+                      return (
+                        <TableRow key={request.id}>
+                          <TableCell className="font-medium">{resource?.name || 'Unknown Resource'}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-xs truncate" title={request.issueDescription}>{request.issueDescription}</TableCell>
+                          <TableCell>{reporter?.name || 'Unknown User'}</TableCell>
+                          <TableCell>
+                            {formatDateSafe(request.dateReported, 'N/A', 'MMM dd, yyyy')}
                           </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
+                          <TableCell>{getMaintenanceStatusBadge(request.status)}</TableCell>
+                          <TableCell>{technician?.name || <span className="text-xs italic text-muted-foreground">Unassigned</span>}</TableCell>
+                          {canEditMaintenanceRequest && (
+                            <TableCell className="text-right space-x-1">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDialog(request)} disabled={isLoading}>
+                                    <Edit className="h-4 w-4" />
+                                    <span className="sr-only">Edit Request</span>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Edit Request</p></TooltipContent>
+                              </Tooltip>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -505,3 +564,4 @@ export default function MaintenanceRequestsPage() {
     </TooltipProvider>
   );
 }
+
