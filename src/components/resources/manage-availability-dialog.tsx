@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Resource, AvailabilitySlot, DayOfWeek } from '@/types';
 import { daysOfWeekArray } from '@/types';
-import { format, startOfDay, isValid as isValidDateFn, parseISO, addDays, eachDayOfInterval, getDay } from 'date-fns';
+import { format, startOfDay, isValid as isValidDateFn, parseISO, addDays, eachDayOfInterval, getDay, isBefore } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '../ui/separator';
 import { ScrollArea } from '../ui/scroll-area';
@@ -58,6 +58,7 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
     setDialogAvailability(resource.availability ? [...resource.availability.map(a => ({...a, slots: [...a.slots]}))] : []);
     const initialDate = startOfDay(new Date());
     setSelectedDate(initialDate);
+    
     const currentAvailabilityForInitialDate = resource.availability?.find(avail => avail.date === format(initialDate, 'yyyy-MM-dd'));
     if (currentAvailabilityForInitialDate) {
       setSlotsInput(currentAvailabilityForInitialDate.slots.join(', '));
@@ -85,7 +86,7 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
         setSlotsInput(currentAvailabilityForSelectedDate.slots.join(', '));
         setIsUnavailableForDay(currentAvailabilityForSelectedDate.slots.length === 0);
       } else {
-        setSlotsInput('09:00-17:00'); // Default slots if not defined for this date
+        setSlotsInput('09:00-17:00'); 
         setIsUnavailableForDay(false);
       }
     }
@@ -134,7 +135,6 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
     } else {
       newSlotsForDay = parseSlotsInput(slotsInput);
       if (newSlotsForDay.length === 0 && slotsInput.trim() !== '') {
-        // Invalid input, but not explicitly marked unavailable
         toast({ title: "No Valid Slots", description: "No valid time slots were entered. The day will be treated as having no specific slots defined.", variant: "default", duration: 7000 });
       }
     }
@@ -153,6 +153,10 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
   };
   
   const handleBulkApplyConfiguration = () => {
+    if (!selectedDate) {
+      toast({ title: "No Template Date", description: "Please select a date in Step 1 to use as the template.", variant: "destructive" });
+      return;
+    }
     if (!bulkApplyRange?.from || targetDaysOfWeek.length === 0) {
       toast({ title: "Missing Information", description: "Please select a date range and target days of the week for bulk apply.", variant: "destructive" });
       return;
@@ -160,12 +164,12 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
 
     const templateSlots = isUnavailableForDay ? [] : parseSlotsInput(slotsInput);
     if (templateSlots.length === 0 && slotsInput.trim() !== '' && !isUnavailableForDay) {
-      toast({ title: "No Valid Slots in Template", description: "The template slots are invalid. Cannot apply.", variant: "destructive" });
+      toast({ title: "No Valid Slots in Template", description: "The template slots (from Step 1) are invalid. Cannot apply.", variant: "destructive" });
       return;
     }
 
     const startDate = startOfDay(bulkApplyRange.from);
-    const endDate = startOfDay(bulkApplyRange.to || bulkApplyRange.from); // If 'to' is not set, apply to single day in range
+    const endDate = startOfDay(bulkApplyRange.to || bulkApplyRange.from); 
 
     if (isBefore(endDate, startDate)) {
       toast({ title: "Invalid Date Range", description: "End date cannot be before start date for bulk apply.", variant: "destructive" });
@@ -177,7 +181,7 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
     const datesInRange = eachDayOfInterval({ start: startDate, end: endDate });
 
     datesInRange.forEach(currentDateIter => {
-      const dayIndex = getDay(currentDateIter); // 0 for Sunday, 1 for Monday...
+      const dayIndex = getDay(currentDateIter); 
       const dayName = daysOfWeekArray[dayIndex];
 
       if (targetDaysOfWeek.includes(dayName)) {
@@ -193,25 +197,30 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
     });
 
     setDialogAvailability(newDialogAvailability.sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime()));
-    toast({ title: "Bulk Apply Successful (Locally)", description: `Configuration from ${selectedDate ? format(selectedDate, 'PPP') : 'current template'} applied to ${updatedCount} day(s). Save all changes to persist.`, icon: <CheckCircle className="h-4 w-4 text-green-500"/> });
+    toast({ title: "Bulk Apply Successful (Locally)", description: `Configuration from ${format(selectedDate, 'PPP')} applied to ${updatedCount} day(s). Save all changes to persist.`, icon: <CheckCircle className="h-4 w-4 text-green-500"/> });
   };
 
 
   const handleSaveAllChanges = async () => {
     setIsSubmitting(true);
     try {
-      const availabilityToSave = dialogAvailability.filter(a => a.slots.length > 0 || resource.availability?.find(ra => ra.date === a.date)); // Only save entries with slots or previously existing entries now made unavailable
+      const availabilityToSave = dialogAvailability
+        .filter(a => a.slots.length > 0 || resource.availability?.find(ra => ra.date === a.date))
+        .sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
       await onSave(availabilityToSave);
-      // Parent should handle closing on successful save if desired
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error in ManageAvailabilityDialog handleSaveAllChanges:", error);
+      toast({ title: "Save Error", description: `Could not save availability: ${error.message}`, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const sortedDialogAvailability = useMemo(() => {
-    return [...dialogAvailability].sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
+    return [...dialogAvailability].sort((a, b) => {
+        try { return parseISO(a.date).getTime() - parseISO(b.date).getTime(); }
+        catch(e) { return 0;}
+    });
   }, [dialogAvailability]);
 
   return (
@@ -226,7 +235,6 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
         </DialogHeader>
         <Separator />
         <div className="grid md:grid-cols-3 gap-6 py-4 max-h-[70vh]">
-          {/* Column 1: Single Date Calendar & Edit */}
           <div className="md:col-span-1 space-y-4 border-r md:pr-6 flex flex-col">
             <div className="flex flex-col items-center">
               <Label className="mb-2 text-center font-semibold">1. Select Date to Configure/Use as Template</Label>
@@ -279,7 +287,6 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
             </Button>
           </div>
 
-          {/* Column 2: Bulk Apply Configuration */}
           <div className="md:col-span-1 space-y-4 border-r md:pr-6 flex flex-col">
             <Label className="font-semibold">2. Bulk Apply Template to Range</Label>
             <div className="space-y-1">
@@ -350,7 +357,6 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
             </p>
           </div>
           
-          {/* Column 3: Current Full Availability List */}
           <div className="md:col-span-1 space-y-2 flex flex-col">
             <Label className="font-semibold">3. Current Availability (Local Session)</Label>
             <ScrollArea className="border rounded-md p-2 flex-grow min-h-[200px]">
@@ -358,7 +364,7 @@ export function ManageAvailabilityDialog({ resource, open, onOpenChange, onSave 
                 <ul className="space-y-1 text-sm">
                   {sortedDialogAvailability.map(avail => (
                     <li key={avail.date} className="text-xs border-b last:border-b-0 pb-1">
-                      <span className="font-medium">{format(parseISO(avail.date), 'EEE, MMM dd, yyyy')}:</span>
+                      <span className="font-medium">{isValidDateFn(parseISO(avail.date)) ? format(parseISO(avail.date), 'EEE, MMM dd, yyyy') : 'Invalid Date'}</span>:
                       <span className="ml-1 text-muted-foreground">
                         {avail.slots.length > 0 ? avail.slots.join('; ') : <span className="italic text-orange-600">Unavailable</span>}
                       </span>
