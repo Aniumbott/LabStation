@@ -8,15 +8,13 @@ export interface ResourceType {
 }
 
 export type ResourceStatus = 'Available' | 'Booked' | 'Maintenance';
-export const resourceStatusesList: ResourceStatus[] = ['Available', 'Booked', 'Maintenance'];
-
 
 export interface RemoteAccessDetails {
   ipAddress?: string;
   hostname?: string;
   protocol?: 'RDP' | 'SSH' | 'VNC' | 'Other' | '';
   username?: string;
-  port?: number; // Will be undefined or number from Zod, then null or number for Firestore
+  port?: number | null;
   notes?: string;
 }
 
@@ -38,28 +36,28 @@ export interface Resource {
   resourceTypeId: string;
   lab: 'Electronics Lab 1' | 'RF Lab' | 'Prototyping Lab' | 'General Test Area';
   status: ResourceStatus;
-  description: string;
-  imageUrl: string;
+  description?: string;
+  imageUrl?: string;
   features?: string[];
   availability?: AvailabilitySlot[];
   unavailabilityPeriods?: UnavailabilityPeriod[];
   manufacturer?: string;
   model?: string;
   serialNumber?: string;
-  purchaseDate?: Date | null; // Changed to Date for frontend state
+  purchaseDate?: Date | null;
   notes?: string;
   remoteAccess?: RemoteAccessDetails | null;
   allowQueueing?: boolean;
-  lastUpdatedAt?: Date; // Changed to Date
-  createdAt?: Date;     // Changed to Date
+  lastUpdatedAt?: Date;
+  createdAt?: Date;
 }
 
 export interface BookingUsageDetails {
-  actualStartTime?: Date | null;  // Changed to Date
-  actualEndTime?: Date | null;    // Changed to Date
+  actualStartTime?: Date | undefined;
+  actualEndTime?: Date | undefined;
   outcome?: 'Success' | 'Failure' | 'Interrupted' | 'Not Applicable';
-  dataStorageLocation?: string;
-  usageComments?: string;
+  dataStorageLocation?: string | undefined;
+  usageComments?: string | undefined;
 }
 export const BookingUsageOutcomes: Array<BookingUsageDetails['outcome']> = ['Success', 'Failure', 'Interrupted', 'Not Applicable'];
 
@@ -68,16 +66,16 @@ export interface Booking {
   id: string;
   resourceId: string;
   userId: string;
-  startTime: Date;    // Changed to Date
-  endTime: Date;      // Changed to Date
-  createdAt: Date;    // Changed to Date
+  startTime: Date;
+  endTime: Date;
+  createdAt: Date;
   status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted';
   notes?: string;
   usageDetails?: BookingUsageDetails | null;
 }
 
 export type RoleName = 'Admin' | 'Lab Manager' | 'Technician' | 'Researcher';
-export const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
+
 export type UserStatus = 'active' | 'pending_approval' | 'suspended';
 
 export interface User {
@@ -87,12 +85,10 @@ export interface User {
   role: RoleName;
   avatarUrl?: string;
   status: UserStatus;
-  createdAt: Date; // Changed to Date
+  createdAt: Date;
 }
 
 export type MaintenanceRequestStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed';
-export const maintenanceRequestStatuses: MaintenanceRequestStatus[] = ['Open', 'In Progress', 'Resolved', 'Closed'];
-
 
 export interface MaintenanceRequest {
   id: string;
@@ -101,8 +97,8 @@ export interface MaintenanceRequest {
   issueDescription: string;
   status: MaintenanceRequestStatus;
   assignedTechnicianId?: string | null;
-  dateReported: Date;     // Changed to Date
-  dateResolved?: Date | null; // Changed to Date
+  dateReported: Date;
+  dateResolved?: Date | null;
   resolutionNotes?: string | null;
 }
 
@@ -126,13 +122,13 @@ export interface Notification {
   message: string;
   type: NotificationType;
   isRead: boolean;
-  createdAt: Date; // Changed to Date
+  createdAt: Date;
   linkTo?: string;
 }
 
 export interface BlackoutDate {
   id: string;
-  date: string; // YYYY-MM-DD format remains string as it's a specific date, not a timestamp
+  date: string; // YYYY-MM-DD format
   reason?: string;
 }
 
@@ -158,7 +154,7 @@ export type AuditActionType =
 
 export interface AuditLogEntry {
   id: string;
-  timestamp: Date; // Changed to Date
+  timestamp: Date;
   userId: string;
   userName: string;
   action: AuditActionType;
