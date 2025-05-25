@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2 } from 'lucide-react';
+import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X } from 'lucide-react'; // Added X
 import type { ResourceType } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import {
@@ -31,7 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+}from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -49,7 +49,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { addAuditLog } from '@/lib/mock-data';
 
 
@@ -62,19 +62,19 @@ export default function ResourceTypesPage() {
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingType, setEditingType] = useState<ResourceType | null>(null);
 
-  const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState('');
+  const [activeSearchTerm, setActiveSearchTerm] = useState('');
+
 
   const fetchResourceTypes = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Firestore Index Required: resourceTypes (name ASC) - usually created automatically for simple orderBy
       const typesQuery = query(collection(db, "resourceTypes"), orderBy("name", "asc"));
       const querySnapshot = await getDocs(typesQuery);
       const fetchedTypes: ResourceType[] = querySnapshot.docs.map(docSnap => {
         const data = docSnap.data();
-        // Ensure id is included; if Firestore auto-generates IDs, docSnap.id is the source.
-        // If 'id' is a field in the doc, use data.id. Prioritize docSnap.id.
         return {
           id: docSnap.id,
           name: data.name || 'Unnamed Type',
@@ -95,7 +95,7 @@ export default function ResourceTypesPage() {
       fetchResourceTypes();
     } else {
       setResourceTypes([]);
-      setIsLoading(false); // Ensure loading stops if not admin
+      setIsLoading(false);
     }
   }, [currentUser, fetchResourceTypes]);
 
@@ -115,24 +115,23 @@ export default function ResourceTypesPage() {
         (type.description && type.description.toLowerCase().includes(lowerSearchTerm))
       );
     }
-    // Already sorted by Firestore query (orderBy name)
-    return currentTypes;
+    return currentTypes; // Already sorted by Firestore query
   }, [resourceTypes, activeSearchTerm]);
 
-  const handleApplyDialogFilters = () => {
+  const handleApplyDialogFilters = useCallback(() => {
     setActiveSearchTerm(tempSearchTerm);
     setIsFilterDialogOpen(false);
-  };
+  }, [tempSearchTerm]);
 
-  const resetDialogFiltersOnly = () => {
+  const resetDialogFiltersOnly = useCallback(() => {
     setTempSearchTerm('');
-  };
+  }, []);
 
-  const resetAllActivePageFilters = () => {
+  const resetAllActivePageFilters = useCallback(() => {
     setActiveSearchTerm('');
     resetDialogFiltersOnly();
     setIsFilterDialogOpen(false);
-  };
+  }, [resetDialogFiltersOnly]);
 
 
   const handleOpenNewDialog = () => {
@@ -146,33 +145,31 @@ export default function ResourceTypesPage() {
   };
 
   const handleSaveType = async (data: ResourceTypeFormValues) => {
-    if (!currentUser || !currentUser.name) {
-        toast({ title: "Authentication Error", description: "You must be logged in.", variant: "destructive" });
+    if (!currentUser || !currentUser.name || currentUser.role !== 'Admin') {
+        toast({ title: "Permission Denied", description: "You are not authorized to save resource types.", variant: "destructive" });
         return;
     }
-    setIsLoading(true); // Indicate loading during save operation
+    setIsLoading(true);
     try {
+      const typeDataToSave: Omit<ResourceType, 'id'> = { // Omit id as Firestore generates it for new docs
+        name: data.name,
+        description: data.description || undefined, // Store undefined if empty for cleaner Firestore docs
+      };
+
       if (editingType) {
         const typeDocRef = doc(db, "resourceTypes", editingType.id);
-        await updateDoc(typeDocRef, data as Partial<ResourceType>); // Cast data
+        await updateDoc(typeDocRef, typeDataToSave);
         addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_UPDATED', { entityType: 'ResourceType', entityId: editingType.id, details: `Resource Type '${data.name}' updated.`});
-        toast({
-          title: 'Resource Type Updated',
-          description: `Resource Type "${data.name}" has been updated.`,
-        });
+        toast({ title: 'Resource Type Updated', description: `Resource Type "${data.name}" has been updated.` });
       } else {
-        const docRef = await addDoc(collection(db, "resourceTypes"), data as Partial<ResourceType>);
-        // Optionally update the new document with its own ID if your ResourceType needs it for local state, though not strictly necessary if always fetching
-        // await updateDoc(doc(db, "resourceTypes", docRef.id), { id: docRef.id });
+        const docRef = await addDoc(collection(db, "resourceTypes"), typeDataToSave);
+        // No need to update the document with its own ID if not part of ResourceType
         addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_CREATED', { entityType: 'ResourceType', entityId: docRef.id, details: `Resource Type '${data.name}' created.`});
-        toast({
-          title: 'Resource Type Created',
-          description: `Resource Type "${data.name}" has been created.`,
-        });
+        toast({ title: 'Resource Type Created', description: `Resource Type "${data.name}" has been created.` });
       }
       setIsFormDialogOpen(false);
       setEditingType(null);
-      await fetchResourceTypes(); // Re-fetch to update the list
+      await fetchResourceTypes();
     } catch (error: any) {
         console.error("Error saving resource type:", error);
         toast({ title: "Save Error", description: `Could not save resource type: ${error.message}`, variant: "destructive" });
@@ -182,8 +179,8 @@ export default function ResourceTypesPage() {
   };
 
   const handleDeleteType = async (typeId: string) => {
-    if (!currentUser || !currentUser.name) {
-        toast({ title: "Authentication Error", description: "You must be logged in.", variant: "destructive" });
+    if (!currentUser || !currentUser.name || currentUser.role !== 'Admin') {
+        toast({ title: "Permission Denied", description: "You are not authorized to delete resource types.", variant: "destructive" });
         return;
     }
     const deletedType = resourceTypes.find(rt => rt.id === typeId);
@@ -192,18 +189,14 @@ export default function ResourceTypesPage() {
         return;
     }
 
-    setIsLoading(true); // Indicate loading during delete operation
+    setIsLoading(true);
     try {
         const typeDocRef = doc(db, "resourceTypes", typeId);
         await deleteDoc(typeDocRef);
         addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_DELETED', { entityType: 'ResourceType', entityId: typeId, details: `Resource Type '${deletedType.name}' deleted.`});
-        toast({
-          title: "Resource Type Deleted",
-          description: `Resource Type "${deletedType.name}" has been removed.`,
-          variant: "destructive"
-        });
+        toast({ title: "Resource Type Deleted", description: `Resource Type "${deletedType.name}" has been removed.`, variant: "destructive" });
         setTypeToDelete(null);
-        await fetchResourceTypes(); // Re-fetch to update the list
+        await fetchResourceTypes();
     } catch (error: any) {
         console.error("Error deleting resource type:", error);
         toast({ title: "Delete Error", description: `Could not delete resource type: ${error.message}`, variant: "destructive" });
@@ -260,8 +253,8 @@ export default function ResourceTypesPage() {
                 <Separator className="my-4" />
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="typeSearchDialog" className="text-sm font-medium mb-1 block">Search by Name/Description</Label>
-                     <div className="relative">
+                    <Label htmlFor="typeSearchDialog">Search by Name/Description</Label>
+                     <div className="relative mt-1">
                        <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                         id="typeSearchDialog"
@@ -372,12 +365,12 @@ export default function ResourceTypesPage() {
                     : (canAddResourceTypes ? "Add resource types to categorize your lab equipment and assets. Ensure they exist in your Firestore 'resourceTypes' collection." : "No resource types have been defined in Firestore.")
                 }
             </p>
-            {activeSearchTerm && (
+            {activeSearchTerm && canManageResourceTypes && (
                 <Button variant="outline" onClick={resetAllActivePageFilters}>
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             )}
-            {!activeSearchTerm && !filteredResourceTypes.length && canAddResourceTypes && (
+            {!activeSearchTerm && !resourceTypes.length && canAddResourceTypes && (
                 <Button onClick={handleOpenNewDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource Type
                 </Button>
