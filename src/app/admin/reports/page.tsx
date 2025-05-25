@@ -28,19 +28,21 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { cn } from '@/lib/utils';
-import { differenceInDays, parseISO, startOfHour, format as formatDateFn, subDays, isValid as isValidDate, Timestamp } from 'date-fns'; // Renamed format to formatDateFn
+// Updated date-fns import: Removed Timestamp
+import { differenceInDays, parseISO, startOfHour, format as formatDateFn, subDays, isValid as isValidDate } from 'date-fns'; 
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+// Updated firebase/firestore import: Added Timestamp
+import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore'; 
 
 interface ReportItem {
   name: string;
   count: number;
-  fill?: string; 
+  fill?: string;
 }
 
 interface UtilizationItem {
   name: string;
-  utilization: number; 
+  utilization: number;
 }
 
 interface PeakHourItem {
@@ -87,6 +89,9 @@ export default function ReportsPage() {
           purchaseDate: data.purchaseDate instanceof Timestamp ? data.purchaseDate.toDate() : undefined,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
           lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
+          // Ensure availability and unavailabilityPeriods are arrays
+          availability: Array.isArray(data.availability) ? data.availability : [],
+          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods : [],
         } as Resource;
       }));
 
@@ -94,8 +99,8 @@ export default function ReportsPage() {
       setAllBookings(bookingsSnapshot.docs.map(d => {
           const data = d.data();
           return {
-            id: d.id, ...data, 
-            startTime: data.startTime instanceof Timestamp ? data.startTime.toDate() : new Date(), 
+            id: d.id, ...data,
+            startTime: data.startTime instanceof Timestamp ? data.startTime.toDate() : new Date(),
             endTime: data.endTime instanceof Timestamp ? data.endTime.toDate() : new Date(),
             createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
             usageDetails: data.usageDetails ? {
@@ -110,7 +115,7 @@ export default function ReportsPage() {
       setAllMaintenanceRequests(maintenanceSnapshot.docs.map(d => {
           const data = d.data();
           return {
-            id: d.id, ...data, 
+            id: d.id, ...data,
             dateReported: data.dateReported instanceof Timestamp ? data.dateReported.toDate() : new Date(),
             dateResolved: data.dateResolved instanceof Timestamp ? data.dateResolved.toDate() : undefined
           } as MaintenanceRequest;
@@ -166,7 +171,7 @@ export default function ReportsPage() {
     });
     return report;
   }, [allMaintenanceRequests, isLoading]);
-  
+
   const maintenanceChartConfig = useMemo(() => {
     const config: ChartConfig = {};
      maintenanceByStatus.forEach(item => {
@@ -187,9 +192,12 @@ export default function ReportsPage() {
     allResources.forEach(resource => {
       const bookedDays = new Set<string>();
       allBookings.forEach(booking => {
-        const bookingDate = booking.startTime; 
+        // Ensure booking.startTime is a valid Date object before processing
+        if (!booking.startTime || !isValidDate(booking.startTime)) return;
+
+        const bookingDate = booking.startTime;
         if (booking.resourceId === resource.id && booking.status === 'Confirmed') {
-          if (isValidDate(bookingDate) && bookingDate >= thirtyDaysAgo && bookingDate <= today) {
+          if (bookingDate >= thirtyDaysAgo && bookingDate <= today) {
             bookedDays.add(formatDateFn(bookingDate, 'yyyy-MM-dd'));
           }
         }
@@ -218,19 +226,20 @@ export default function ReportsPage() {
     if (isLoading) return [];
     const hourCounts: { [hour: string]: number } = {};
     allBookings.forEach(booking => {
+      // Ensure booking.startTime is a valid Date object before processing
+      if (!booking.startTime || !isValidDate(booking.startTime)) return;
+      
       if (booking.status === 'Confirmed') {
-        const bookingDate = booking.startTime; 
-        if (isValidDate(bookingDate)) {
-            const hour = formatDateFn(startOfHour(bookingDate), 'HH:00');
-            hourCounts[hour] = (hourCounts[hour] || 0) + 1;
-        }
+        const bookingDate = booking.startTime;
+        const hour = formatDateFn(startOfHour(bookingDate), 'HH:00');
+        hourCounts[hour] = (hourCounts[hour] || 0) + 1;
       }
     });
     return Object.entries(hourCounts)
       .map(([hour, count]) => ({ hour, count }))
       .sort((a, b) => parseInt(a.hour.split(':')[0]) - parseInt(b.hour.split(':')[0]));
   }, [allBookings, isLoading]);
-  
+
   const peakHoursChartConfig = useMemo(() => {
      const config: ChartConfig = {};
      peakBookingHours.forEach(item => {
@@ -259,7 +268,7 @@ export default function ReportsPage() {
     });
     return report.sort((a, b) => b.count - a.count);
   }, [allResources, allBookings, isLoading]);
-  
+
   const waitlistChartConfig = useMemo(() => {
     const config: ChartConfig = {};
     waitlistedPerResource.forEach(item => {
@@ -419,7 +428,7 @@ export default function ReportsPage() {
             )}
           </CardContent>
         </Card>
-        
+
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -450,3 +459,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    
