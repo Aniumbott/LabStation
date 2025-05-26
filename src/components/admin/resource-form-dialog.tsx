@@ -20,7 +20,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Save, X, PlusCircle, Network, Info, Loader2 } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox'; // Corrected import
+import { Checkbox } from '@/components/ui/checkbox';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
 import { labsList, resourceStatusesList } from '@/lib/mock-data';
 import { parseISO, format, isValid as isValidDateFn } from 'date-fns';
@@ -41,7 +41,7 @@ const resourceFormSchema = z.object({
   model: z.string().max(100).optional().or(z.literal('')),
   serialNumber: z.string().max(100).optional().or(z.literal('')),
   purchaseDate: z.string().optional().refine((val) => {
-    if (val === '' || val === undefined || val === null) return true; // Allow empty or undefined
+    if (val === '' || val === undefined || val === null) return true;
     return isValidDateFn(parseISO(val));
   }, {
     message: "Invalid date format. Use YYYY-MM-DD or leave empty.",
@@ -55,7 +55,7 @@ const resourceFormSchema = z.object({
     username: z.string().max(100).optional().or(z.literal('')),
     port: z.preprocess(
       (val) => (String(val ?? '').trim() === '' ? undefined : String(val).trim()),
-      z.string().transform((val) => { // Use transform to handle empty string or invalid number to undefined
+      z.string().transform((val) => {
         if (val === undefined || val === '') return undefined;
         const num = Number(val);
         return isNaN(num) ? undefined : num;
@@ -83,17 +83,17 @@ export function ResourceFormDialog({
 
   const form = useForm<ResourceFormValues>({
     resolver: zodResolver(resourceFormSchema),
-    defaultValues: { // Default values will be set by useEffect
+    defaultValues: {
         name: '',
         resourceTypeId: '',
-        lab: undefined, // labsList[0] if labsList is not empty, otherwise undefined
+        lab: undefined,
         status: 'Available',
         description: '',
         imageUrl: '',
         manufacturer: '',
         model: '',
         serialNumber: '',
-        purchaseDate: '', // Stored as "YYYY-MM-DD" string from form
+        purchaseDate: '',
         notes: '',
         features: '',
         remoteAccess: {
@@ -150,7 +150,7 @@ export function ResourceFormDialog({
         allowQueueing: false,
       });
     }
-  }, [initialResource, resourceTypes, form.reset]); // form.reset added here
+  }, [initialResource, resourceTypes, form.reset]);
 
   useEffect(() => {
     if (open) {
@@ -179,8 +179,12 @@ export function ResourceFormDialog({
                 processedData.remoteAccess = undefined;
             }
         }
-
+        
+      // For new resources, availability and unavailabilityPeriods are not set via this form.
+      // Firestore rules or backend logic should initialize them as empty arrays if needed.
+      // The form payload no longer includes availability.
       await onSave(processedData, initialResource?.id);
+
     } catch (error) {
       console.error("Error during resource save submission:", error);
     } finally {
@@ -280,7 +284,7 @@ export function ResourceFormDialog({
                      <FormField
                         control={form.control}
                         name="purchaseDate"
-                        render={({ field }) => ( // field.value is YYYY-MM-DD string or empty
+                        render={({ field }) => (
                             <FormItem>
                             <FormLabel>Purchase Date (Optional)</FormLabel>
                             <FormControl><Input type="date" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
@@ -450,7 +454,7 @@ export function ResourceFormDialog({
                                     <FormItem>
                                     <FormLabel>Port (Optional)</FormLabel>
                                     <FormControl><Input
-                                        type="text" // Keep as text for Zod preprocess to handle empty string
+                                        type="text"
                                         placeholder="e.g., 22, 3389"
                                         {...field}
                                         value={field.value === null || field.value === undefined ? '' : String(field.value)} 
@@ -509,5 +513,3 @@ export function ResourceFormDialog({
     </Dialog>
   );
 }
-
-    

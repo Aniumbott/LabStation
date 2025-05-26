@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, X, CalendarPlus } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { labsList, initialMockResourceTypes } from '@/lib/mock-data'; // Removed allAdminMockResources
+import { labsList, initialMockResourceTypes } from '@/lib/mock-data';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -41,7 +41,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, Timestamp as FirestoreTimestamp } from 'date-fns'; // Renamed Timestamp import to avoid conflict
+import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, Timestamp as FirestoreTimestamp } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import {
@@ -55,7 +55,7 @@ import {
   query,
   orderBy,
   where,
-  Timestamp // This is Firestore Timestamp
+  Timestamp
 } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/layout/page-header';
@@ -117,8 +117,8 @@ export default function AdminResourcesPage() {
             notes: data.remoteAccess.notes,
           } : undefined,
           allowQueueing: data.allowQueueing ?? false,
-          availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: a.date })) : [], // Dates are strings 'YYYY-MM-DD'
-          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2,9)), startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [], // Dates are strings 'YYYY-MM-DD'
+          // availability field removed from here
+          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2,9)), startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [],
           lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
         } as Resource;
@@ -178,13 +178,11 @@ export default function AdminResourcesPage() {
       let dateMatch = true;
       if (activeSelectedDate) {
         const dateToFilter = startOfDay(activeSelectedDate);
-        const dateToFilterStr = format(dateToFilter, 'yyyy-MM-dd');
-
         const isUnavailabilityOverlap = resource.unavailabilityPeriods?.some(period => {
             if (!period.startDate || !period.endDate) return false;
             try {
                 const periodStart = startOfDay(parseISO(period.startDate));
-                const periodEnd = startOfDay(parseISO(period.endDate)); // Check if periodEnd itself needs to be inclusive
+                const periodEnd = startOfDay(parseISO(period.endDate));
                 return isValidDateFn(periodStart) && isValidDateFn(periodEnd) &&
                        isWithinInterval(dateToFilter, { start: periodStart, end: periodEnd });
             } catch (e) { console.warn("Error parsing unavailability period dates for filter:", e); return false; }
@@ -193,9 +191,9 @@ export default function AdminResourcesPage() {
         if (isUnavailabilityOverlap) {
             dateMatch = false;
         } else {
-            const dayAvailability = resource.availability?.find(avail => avail.date === dateToFilterStr);
-            // Resource is available on this date if status is Available AND it has slots defined for the day
-            dateMatch = !!(dayAvailability && Array.isArray(dayAvailability.slots) && dayAvailability.slots.length > 0 && resource.status === 'Available');
+            // Resource is considered available if status is 'Available' and not in an unavailability period.
+            // Lab-wide blackouts are not checked here for simplicity of this filter.
+            dateMatch = resource.status === 'Available';
         }
       }
       return searchMatch && typeMatch && labMatch && dateMatch;
@@ -260,7 +258,7 @@ export default function AdminResourcesPage() {
     let purchaseDateForFirestore: Timestamp | null = null;
     if (data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))) {
         purchaseDateForFirestore = Timestamp.fromDate(parseISO(data.purchaseDate));
-    } else if (data.purchaseDate === '' || data.purchaseDate === undefined) { // Explicitly handle empty string as null
+    } else if (data.purchaseDate === '' || data.purchaseDate === undefined) {
         purchaseDateForFirestore = null;
     }
 
@@ -326,7 +324,7 @@ export default function AdminResourcesPage() {
         const newResourceData = {
             ...firestorePayload,
             createdAt: serverTimestamp(),
-            availability: [], 
+            // availability: [], // Removed
             unavailabilityPeriods: [], 
         };
         if (!isEditing && newResourceData.hasOwnProperty('lastUpdatedAt')) { 
@@ -506,6 +504,7 @@ export default function AdminResourcesPage() {
                           alt={resource.name}
                           width={40} height={40}
                           className="rounded-md object-cover h-10 w-10 hover:opacity-80 transition-opacity"
+                          data-ai-hint="lab equipment"
                       />
                     </Link>
                   </TableCell>
@@ -572,10 +571,9 @@ export default function AdminResourcesPage() {
             }}
             initialResource={editingResource}
             onSave={handleSaveResource}
-            resourceTypes={fetchedResourceTypes} // Pass fetched types
+            resourceTypes={fetchedResourceTypes}
         />
       )}
     </div>
   );
 }
-      

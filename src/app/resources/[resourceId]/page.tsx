@@ -25,7 +25,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ManageAvailabilityDialog } from '@/components/resources/manage-availability-dialog';
+// Removed ManageAvailabilityDialog import
 import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavailability-dialog';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore'; // This is Firestore Timestamp
@@ -178,7 +178,7 @@ export default function ResourceDetailPage() {
   const [isAlertOpen, setIsAlertOpen] = useState(false); 
   const [resourceToDeleteId, setResourceToDeleteId] = useState<string | null>(null);
 
-  const [isAvailabilityDialogOpen, setIsAvailabilityDialogOpen] = useState(false);
+  // Removed isAvailabilityDialogOpen, setIsAvailabilityDialogOpen
   const [isUnavailabilityDialogOpen, setIsUnavailabilityDialogOpen] = useState(false);
   const [resourceUserBookings, setResourceUserBookings] = useState<Booking[]>([]);
   const [fetchedResourceTypesForDialog, setFetchedResourceTypesForDialog] = useState<ResourceType[]>([]);
@@ -223,7 +223,7 @@ export default function ResourceDetailPage() {
             notes: data.remoteAccess.notes || undefined,
           } : undefined,
           allowQueueing: data.allowQueueing ?? false,
-          availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: a.date })) : [],
+          // availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: a.date })) : [], // Removed
           unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2,9)), startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [],
           features: Array.isArray(data.features) ? data.features : [],
           lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
@@ -337,7 +337,7 @@ export default function ResourceDetailPage() {
     if (resource && currentUser) { 
       fetchBookingsForResourceUser();
     }
-  }, [resourceId, currentUser, resource, toast]); // Added resource to dependency array
+  }, [resourceId, currentUser, resource, toast]);
 
 
   const canManageResource = useMemo(() => {
@@ -362,32 +362,13 @@ export default function ResourceDetailPage() {
       try { return parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime(); }
       catch(e) { return 0;}
     });
-  }, [resource]); // Updated dependency
+  }, [resource]);
 
-  const upcomingAvailability = useMemo(() => {
-    if (!resource || !Array.isArray(resource.availability)) return [];
-    const today = fnsStartOfDay(new Date());
-    return resource.availability
-        .filter(avail => {
-            if (!avail || !avail.date) return false;
-            try {
-                const availDate = parseISO(avail.date);
-                return isValidDateFn(availDate) && !isBefore(availDate, today) && Array.isArray(avail.slots) && avail.slots.length > 0;
-            } catch (e) { return false; }
-        })
-        .sort((a, b) => {
-            try {
-                const dateA = a.date ? parseISO(a.date).getTime() : 0;
-                const dateB = b.date ? parseISO(b.date).getTime() : 0;
-                return dateA - dateB;
-            } catch(e) { return 0;}
-        });
-  }, [resource]); // Updated dependency
-
+  // Removed upcomingAvailability useMemo block
 
   const handleOpenEditDialog = useCallback(() => {
     if (resource) {
-      setIsFormDialogOpen(true); // This will trigger fetching types
+      setIsFormDialogOpen(true);
     }
   }, [resource]);
 
@@ -401,7 +382,7 @@ export default function ResourceDetailPage() {
     let purchaseDateForFirestore: Timestamp | null = null;
     if (data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))) {
         purchaseDateForFirestore = Timestamp.fromDate(parseISO(data.purchaseDate));
-    } else if (!data.purchaseDate) { // Handle empty string from form as null
+    } else if (!data.purchaseDate) {
         purchaseDateForFirestore = null;
     }
     
@@ -485,40 +466,7 @@ export default function ResourceDetailPage() {
     }
   }, [resourceToDeleteId, currentUser, canManageResource, resource, router, toast]);
 
-  const handleSaveAvailability = useCallback(async (date: string, newSlots: string[]) => {
-    if (!resource || !currentUser || !canManageResource) {
-        toast({ title: "Error", description: "Cannot save availability. Resource not loaded or permission denied.", variant: "destructive"});
-        return;
-    }
-
-    let currentAvailability = resource.availability ? [...resource.availability] : [];
-    const dateIndex = currentAvailability.findIndex(avail => avail.date === date);
-
-    if (dateIndex !== -1) {
-      if (newSlots.length > 0) {
-        currentAvailability[dateIndex].slots = newSlots;
-      } else { 
-        currentAvailability.splice(dateIndex, 1);
-      }
-    } else if (newSlots.length > 0) { 
-      currentAvailability.push({ date, slots: newSlots });
-    }
-    
-    const updatedAvailability = currentAvailability
-      .sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
-      
-    try {
-      const resourceDocRef = doc(db, "resources", resource.id);
-      await updateDoc(resourceDocRef, { availability: updatedAvailability, lastUpdatedAt: serverTimestamp() });
-      addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Availability for resource '${resource.name}' on ${formatDateSafe(parseISO(date), 'N/A', 'PPP')} updated by ${currentUser.name}.`});
-      toast({ title: 'Availability Updated', description: `Daily slots for ${resource.name} on ${formatDateSafe(parseISO(date), 'N/A', 'PPP')} have been updated.` });
-      
-      setResource(prev => prev ? ({ ...prev, availability: updatedAvailability, lastUpdatedAt: new Date() }) : null);
-    } catch (error: any) {
-      console.error("Error updating availability:", error);
-      toast({ title: "Update Failed", description: `Could not save availability: ${error.message}`, variant: "destructive" });
-    }
-  }, [resource, currentUser, canManageResource, toast]);
+  // Removed handleSaveAvailability
 
   const handleSaveUnavailability = useCallback(async (updatedPeriods: UnavailabilityPeriod[]) => {
     if (!resource || !currentUser || !canManageResource) {
@@ -527,7 +475,6 @@ export default function ResourceDetailPage() {
     }
     try {
       const resourceDocRef = doc(db, "resources", resource.id);
-      // Ensure IDs are strings for Firestore
       const periodsToSave = updatedPeriods.map(p => ({...p, id: String(p.id)}));
       await updateDoc(resourceDocRef, { unavailabilityPeriods: periodsToSave, lastUpdatedAt: serverTimestamp() });
       addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Unavailability periods for resource '${resource.name}' updated by ${currentUser.name}.`});
@@ -583,15 +530,7 @@ export default function ResourceDetailPage() {
                   </TooltipTrigger>
                   <TooltipContent><p>Set Unavailability Periods</p></TooltipContent>
                 </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" onClick={() => setIsAvailabilityDialogOpen(true)}>
-                      <CalendarCog className="h-4 w-4" />
-                       <span className="sr-only">Manage Daily Availability</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Manage Daily Availability</p></TooltipContent>
-                </Tooltip>
+                {/* Removed Manage Daily Availability button */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="outline" size="icon" onClick={handleOpenEditDialog}>
@@ -642,7 +581,7 @@ export default function ResourceDetailPage() {
             <Card className="shadow-lg">
                 <CardContent className="p-0">
                     <div className="relative w-full h-64 md:h-80 rounded-t-lg overflow-hidden">
-                        <Image src={resource.imageUrl || 'https://placehold.co/600x400.png'} alt={resource.name} layout="fill" objectFit="cover" />
+                        <Image src={resource.imageUrl || 'https://placehold.co/600x400.png'} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint="lab equipment" />
                     </div>
                 </CardContent>
             </Card>
@@ -767,29 +706,18 @@ export default function ResourceDetailPage() {
                 </Button>
             </CardFooter>
           </Card>
-
-          {upcomingAvailability.length > 0 && (
-             <Card className="shadow-lg">
+          {/* Removed Upcoming Daily Availability card section */}
+            {resource && resource.status === 'Available' && (
+              <Card className="shadow-lg">
                 <CardHeader>
-                    <CardTitle className="text-xl flex items-center gap-2"><CalendarDays className="text-primary h-5 w-5" /> Upcoming Daily Availability</CardTitle>
-                    <CardDescription>Defined available slots for specific days. Check full calendar for all options.</CardDescription>
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <CalendarDays className="text-primary h-5 w-5" /> General Availability
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <ul className="space-y-2">
-                    {upcomingAvailability
-                        .slice(0, 5)
-                        .map((avail, index) => (
-                        <li key={`${avail.date}-${index}`} className="text-sm p-2 border-b last:border-b-0">
-                            <span className="font-medium text-foreground">{formatDateSafe(parseISO(avail.date), 'Invalid Date', 'PPP')}</span>:
-                            <span className="text-muted-foreground ml-2 break-all">
-                                {(Array.isArray(avail.slots) && avail.slots.join(', ').length > 70) ? 'Multiple slots available' : (Array.isArray(avail.slots) && avail.slots.length > 0 ? avail.slots.join(', ') : 'No slots defined')}
-                            </span>
-                        </li>
-                    ))}
-                    </ul>
-                    {upcomingAvailability.length > 5 && (
-                         <p className="text-xs text-muted-foreground mt-2 text-center">More dates available on the booking page...</p>
-                    )}
+                  <p className="text-sm text-muted-foreground">
+                    This resource is generally available for booking during standard lab hours unless an unavailability period is active or it's a lab-wide blackout day.
+                  </p>
                 </CardContent>
                  <CardFooter className="justify-center border-t pt-4">
                     <Button variant="outline" asChild>
@@ -798,27 +726,6 @@ export default function ResourceDetailPage() {
                         </Link>
                     </Button>
                  </CardFooter>
-             </Card>
-          )}
-           {upcomingAvailability.length === 0 && resource && resource.status === 'Available' && (
-              <Card className="shadow-lg">
-                <CardHeader>
-                  <CardTitle className="text-xl flex items-center gap-2">
-                    <CalendarDays className="text-primary h-5 w-5" /> Upcoming Daily Availability
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    No specific daily availability slots defined for upcoming dates. Resource might be generally available or its schedule needs to be set up. Check defined unavailability periods.
-                  </p>
-                </CardContent>
-                {canManageResource && (
-                    <CardFooter className="justify-center border-t pt-4">
-                    <Button variant="outline" onClick={() => setIsAvailabilityDialogOpen(true)}>
-                        <CalendarCog className="mr-2 h-4 w-4" /> Define Daily Slots
-                    </Button>
-                    </CardFooter>
-                )}
               </Card>
            )}
         </div>
@@ -829,21 +736,13 @@ export default function ResourceDetailPage() {
             open={isFormDialogOpen}
             onOpenChange={(isOpen) => {
                 setIsFormDialogOpen(isOpen);
-                // No longer setting editingResource to null here, handleOpenEditDialog does it.
             }}
             initialResource={resource} 
             onSave={handleSaveResource}
             resourceTypes={fetchedResourceTypesForDialog}
         />
       )}
-       {resource && (
-        <ManageAvailabilityDialog
-          resource={resource}
-          open={isAvailabilityDialogOpen}
-          onOpenChange={setIsAvailabilityDialogOpen}
-          onSave={handleSaveAvailability}
-        />
-      )}
+      {/* Removed ManageAvailabilityDialog instance */}
       {resource && (
         <ManageUnavailabilityDialog
           resource={resource}
