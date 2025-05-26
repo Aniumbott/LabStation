@@ -597,50 +597,66 @@ function BookingsPageContent({}: BookingsPageContentProps) {
 
     setIsLoadingBookings(true);
     try {
+      let docRefId: string;
       if (!isNewBooking && formData.id) {
         const bookingDocRef = doc(db, "bookings", formData.id);
         await updateDoc(bookingDocRef, bookingDataToSave);
+        docRefId = formData.id;
         toast({ title: "Success", description: "Booking updated successfully." });
       } else {
         const docRef = await addDoc(collection(db, "bookings"), bookingDataToSave);
-        if (finalStatus === 'Pending' && currentUser?.id && currentUser?.name && selectedResource?.name) {
-          toast({ title: "Success", description: "Booking created and submitted for approval." });
-          addAuditLog(currentUser.id, currentUser.name, 'BOOKING_CREATED', {
-            entityType: 'Booking',
-            entityId: docRef.id,
-            details: `Booking for '${selectedResource.name}' by ${currentUser.name}. Status: ${finalStatus}. Start: ${format(finalStartTime, 'PPpp')}, End: ${format(finalEndTime, 'PPpp')}.`
-          });
-          try {
-            if (currentUser?.id && currentUser.name && selectedResource.name) {
-                const adminUsersQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager']));
-                const adminSnapshot = await getDocs(adminUsersQuery);
-                const notificationPromises = adminSnapshot.docs.map(adminDoc => {
-                if (adminDoc.id !== currentUser?.id) { 
-                    return addNotification(
-                    adminDoc.id,
-                    'New Booking Request',
-                    `Booking for ${selectedResource!.name} by ${currentUser!.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`,
-                    'booking_pending_approval',
-                    `/admin/booking-requests?bookingId=${docRef.id}`
-                    );
-                }
-                return Promise.resolve();
-                });
-                await Promise.all(notificationPromises);
-                console.log("Admin notifications sent for new pending booking.");
-            }
-          } catch (adminNotificationError) {
-            console.error("Error sending notifications to admins:", adminNotificationError);
-          }
-        } else if (finalStatus === 'Waitlisted' && currentUser?.id && selectedResource?.name) {
-          addNotification(
-            currentUser.id,
-            'Added to Waitlist',
-            `Your booking request for ${selectedResource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`,
-            'booking_waitlisted',
-            `/bookings?bookingId=${docRef.id}`
-          );
+        docRefId = docRef.id;
+        toast({ title: "Success", description: `Booking ${finalStatus === 'Pending' ? 'created and submitted for approval' : 'added to waitlist'}.` });
+
+        if (currentUser?.id && currentUser.name && selectedResource?.name) {
+            addAuditLog(currentUser.id, currentUser.name, isNewBooking && finalStatus === 'Pending' ? 'BOOKING_CREATED' : 'BOOKING_WAITLISTED', {
+                entityType: 'Booking',
+                entityId: docRefId,
+                details: `Booking for '${selectedResource.name}' by ${currentUser.name}. Status: ${finalStatus}. Start: ${format(finalStartTime, 'PPpp')}, End: ${format(finalEndTime, 'PPpp')}.`
+            });
         }
+      }
+
+      // Send notifications
+      if (isNewBooking && finalStatus === 'Pending' && currentUser?.id && currentUser.name && selectedResource?.name) {
+        try {
+          const adminUsersQuery = query(
+            collection(db, 'users'),
+            where('role', 'in', ['Admin', 'Lab Manager']),
+            orderBy('name', 'asc') // Added for index consistency
+          );
+          const adminSnapshot = await getDocs(adminUsersQuery);
+          const notificationPromises = adminSnapshot.docs.map(adminDoc => {
+            if (adminDoc.id !== currentUser?.id) {
+              return addNotification(
+                adminDoc.id,
+                'New Booking Request',
+                `Booking for ${selectedResource!.name} by ${currentUser!.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`,
+                'booking_pending_approval',
+                `/admin/booking-requests?bookingId=${docRefId}`
+              );
+            }
+            return Promise.resolve();
+          });
+          await Promise.all(notificationPromises);
+          console.log("Admin notifications sent for new pending booking.");
+        } catch (adminNotificationError: any) {
+          console.error("Error sending notifications to admins:", adminNotificationError);
+          toast({
+            title: "Admin Notification Failed",
+            description: `Booking was created/updated, but failed to notify admins: ${adminNotificationError.message}`,
+            variant: "destructive",
+            duration: 7000,
+          });
+        }
+      } else if (isNewBooking && finalStatus === 'Waitlisted' && currentUser?.id && selectedResource?.name) {
+        addNotification(
+          currentUser.id,
+          'Added to Waitlist',
+          `Your booking request for ${selectedResource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`,
+          'booking_waitlisted',
+          `/bookings?bookingId=${docRefId}`
+        );
       }
       await fetchAllBookingsForUser();
     } catch (error: any) {
@@ -676,17 +692,16 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     } catch (error: any) {
       console.error("Error cancelling booking:", error);
       let userMessage = `Could not cancel booking. Please try again.`;
-      // Check if the error is a Firestore 'not-found' error
-      if (error.code === 'not-found' || (error.message && typeof error.message === 'string' && error.message.toLowerCase().includes("no document to update"))) {
-        userMessage = "Could not cancel booking. The booking may have already been removed or modified elsewhere.";
-      } else if (error.message) {
-        userMessage = `Could not cancel booking: ${error.message}`;
+       if ((error as any).code === 'not-found' || (error as any).message?.toLowerCase().includes("no document to update")) {
+        userMessage = "Could not cancel booking. The booking may have already been removed or modified.";
+      } else if ((error as any).message) {
+        userMessage = `Could not cancel booking: ${(error as any).message}`;
       }
       toast({ title: "Cancellation Failed", description: userMessage, variant: "destructive" });
     } finally {
       setIsLoadingBookings(false);
     }
-  }, [currentUser, allUserBookings, allAvailableResources, fetchAllUserBookings, toast]);
+  }, [currentUser, allUserBookings, allAvailableResources, fetchAllBookingsForUser, toast]);
 
 
   const handleOpenDetailsDialog = useCallback(async (bookingId: string) => {
@@ -707,8 +722,8 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       }
 
       if (bookingFromState.userId && currentUser?.id === bookingFromState.userId) {
-        detailedBooking.userName = currentUser.name; // Use current user's name if it's their booking
-      } else if (bookingFromState.userId) { // Fallback to fetch if not current user (though this page primarily shows current user's bookings)
+        detailedBooking.userName = currentUser.name || "Current User";
+      } else if (bookingFromState.userId) { 
         const userDocSnap = await getDoc(doc(db, 'users', bookingFromState.userId));
         if (userDocSnap.exists()) detailedBooking.userName = userDocSnap.data()?.name || "Unknown User";
          else detailedBooking.userName = "User Not Found";

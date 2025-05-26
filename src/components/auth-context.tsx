@@ -13,8 +13,9 @@ import {
   type User as FirebaseUser,
 } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp, Timestamp, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { addNotification, addAuditLog } from '@/lib/firestore-helpers';
+import { useToast } from '@/hooks/use-toast'; // Added useToast
 
 interface AuthContextType {
   currentUser: User | null;
@@ -30,6 +31,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast(); // Initialize toast
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
@@ -56,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               };
               setCurrentUser(appUser);
               if (typeof window !== 'undefined') {
-                localStorage.setItem('labstation_user', JSON.stringify(appUser)); // Store with JS Date
+                localStorage.setItem('labstation_user', JSON.stringify(appUser)); 
               }
             } else {
               let message = 'Your account is not active.';
@@ -110,7 +112,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged will handle setting currentUser and isLoading to false upon success.
       return { success: true };
     } catch (error: any) {
       console.error("Firebase login error object:", error); 
@@ -139,7 +140,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       await firebaseSignOut(auth);
-      // onAuthStateChanged will set currentUser to null and clear localStorage
     } catch (error) {
       console.error("AuthContext: Firebase logout error:", error);
       setCurrentUser(null);
@@ -148,7 +148,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem('login_message');
       }
     }
-    // onAuthStateChanged will ultimately set isLoading to false.
   }, []);
 
   const signup = useCallback(async (name: string, email: string, password?: string): Promise<{ success: boolean; message: string; userId?: string }> => {
@@ -174,19 +173,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       addAuditLog(firebaseUser.uid, name, 'USER_CREATED', { entityType: 'User', entityId: firebaseUser.uid, details: `User ${name} (${email}) signed up. Status: pending_approval.`});
       
-      const adminUsersQuery = query(collection(db, "users"), where("role", "in", ["Admin", "Lab Manager"]));
-      const adminUsersSnapshot = await getDocs(adminUsersQuery);
-      adminUsersSnapshot.forEach(adminDoc => {
-        if (adminDoc.id !== firebaseUser.uid) { 
-            addNotification(
+      try {
+        const adminUsersQuery = query(
+          collection(db, "users"),
+          where("role", "in", ["Admin", "Lab Manager"]),
+          orderBy("name", "asc") // Added for index consistency
+        );
+        const adminUsersSnapshot = await getDocs(adminUsersQuery);
+        const notificationPromises = adminUsersSnapshot.docs.map(adminDoc => {
+          if (adminDoc.id !== firebaseUser.uid) {
+            return addNotification(
               adminDoc.id,
               'New Signup Request',
               `User ${name} (${email}) has signed up and is awaiting approval.`,
               'signup_pending_admin',
-              '/admin/users' 
+              '/admin/users'
             );
-        }
-      });
+          }
+          return Promise.resolve();
+        });
+        await Promise.all(notificationPromises);
+        console.log("Admin notifications sent for new signup.");
+      } catch (adminNotificationError: any) {
+          console.error("Error sending signup notifications to admins:", adminNotificationError);
+          toast({
+              title: "Admin Notification Failed",
+              description: `Signup was successful, but failed to notify admins: ${adminNotificationError.message}`,
+              variant: "destructive",
+              duration: 7000,
+          });
+      }
       
       await firebaseSignOut(auth); 
       setIsLoading(false);
@@ -204,7 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return { success: false, message };
     }
-  }, []);
+  }, [toast]);
 
   const updateUserProfile = useCallback(async (updatedFields: Partial<Pick<User, 'name' | 'avatarUrl'>>): Promise<{ success: boolean; message?: string }> => {
     const firebaseUser = auth.currentUser;
@@ -236,7 +252,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         addAuditLog(currentUser.id, updatedFields.name || currentUser.name, 'USER_UPDATED', { entityType: 'User', entityId: currentUser.id, details: `Profile updated: ${Object.keys(firestoreUpdates).join(', ')} changed.`});
       }
       
-      // Re-fetch the user profile to update context
       const updatedUserDocSnap = await getDoc(userDocRef);
       if (updatedUserDocSnap.exists()) {
         const updatedProfileData = updatedUserDocSnap.data();
@@ -278,3 +293,4 @@ export function useAuth() {
   }
   return context;
 }
+

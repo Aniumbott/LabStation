@@ -3,7 +3,7 @@
 
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import type { Notification as NotificationAppType, NotificationType, AuditLogEntry, AuditActionType } from '@/types'; // Renamed Notification to NotificationAppType
+import type { Notification as NotificationAppType, NotificationType, AuditLogEntry, AuditActionType } from '@/types';
 
 
 export async function addNotification(
@@ -19,7 +19,7 @@ export async function addNotification(
     message,
     type,
     isRead: false,
-    linkTo: linkTo, // Will be undefined if not passed, which Firestore handles well
+    linkTo: linkTo,
     createdAt: serverTimestamp() as Timestamp, 
   };
   try {
@@ -44,8 +44,8 @@ export async function addAuditLog(
     userId: actingUserId,
     userName: actingUserName,
     action: action,
-    entityType: params.entityType || undefined, // Store undefined if not provided
-    entityId: params.entityId || undefined,     // Store undefined if not provided
+    entityType: params.entityType, 
+    entityId: params.entityId,    
     details: params.details,
     timestamp: serverTimestamp(), 
   };

@@ -117,7 +117,7 @@ export interface Notification {
   type: NotificationType;
   isRead: boolean;
   createdAt: Date; 
-  linkTo?: string; 
+  linkTo?: string | undefined; 
 }
 
 export interface BlackoutDate {
@@ -152,8 +152,8 @@ export interface AuditLogEntry {
   userId: string;
   userName: string;
   action: AuditActionType;
-  entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule' | null;
-  entityId?: string | null;
+  entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule' | undefined;
+  entityId?: string | undefined;
   details: string;
 }
 
