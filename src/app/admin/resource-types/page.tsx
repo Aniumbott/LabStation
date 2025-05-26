@@ -79,7 +79,8 @@ export default function ResourceTypesPage() {
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
 
-  const [sortBy, setSortBy] = useState<string>('name-asc');
+  const [tempSortBy, setTempSortBy] = useState<string>('name-asc'); // Temp state for dialog
+  const [activeSortBy, setActiveSortBy] = useState<string>('name-asc'); // Active sort state for page
 
 
   const fetchData = useCallback(async () => {
@@ -133,8 +134,9 @@ export default function ResourceTypesPage() {
   useEffect(() => {
     if (isFilterDialogOpen) {
       setTempSearchTerm(activeSearchTerm);
+      setTempSortBy(activeSortBy); // Sync temp sort state when dialog opens
     }
-  }, [isFilterDialogOpen, activeSearchTerm]);
+  }, [isFilterDialogOpen, activeSearchTerm, activeSortBy]);
 
   const filteredResourceTypesWithCount = useMemo(() => {
     let currentTypes = [...resourceTypes];
@@ -146,7 +148,7 @@ export default function ResourceTypesPage() {
       );
     }
     
-    const [column, direction] = sortBy.split('-') as [ResourceTypeSortableColumn, 'asc' | 'desc'];
+    const [column, direction] = activeSortBy.split('-') as [ResourceTypeSortableColumn, 'asc' | 'desc'];
 
     let typesWithCount = currentTypes.map(type => ({
       ...type,
@@ -173,19 +175,22 @@ export default function ResourceTypesPage() {
     });
 
     return typesWithCount;
-  }, [resourceTypes, allResources, activeSearchTerm, sortBy]);
+  }, [resourceTypes, allResources, activeSearchTerm, activeSortBy]);
 
   const handleApplyDialogFilters = useCallback(() => {
     setActiveSearchTerm(tempSearchTerm);
+    setActiveSortBy(tempSortBy); // Apply temp sort state
     setIsFilterDialogOpen(false);
-  }, [tempSearchTerm]);
+  }, [tempSearchTerm, tempSortBy]);
 
   const resetDialogFiltersOnly = useCallback(() => {
     setTempSearchTerm('');
+    setTempSortBy('name-asc'); // Reset temp sort state
   }, []);
 
   const resetAllActivePageFilters = useCallback(() => {
     setActiveSearchTerm('');
+    setActiveSortBy('name-asc'); // Reset active sort state
     resetDialogFiltersOnly();
     setIsFilterDialogOpen(false);
   }, [resetDialogFiltersOnly]);
@@ -272,7 +277,7 @@ export default function ResourceTypesPage() {
     }
   };
 
-  const activeFilterCount = [activeSearchTerm !== ''].filter(Boolean).length;
+  const activeFilterCount = [activeSearchTerm !== '', activeSortBy !== 'name-asc'].filter(Boolean).length;
   const canAddResourceTypes = currentUser?.role === 'Admin';
   const canManageResourceTypes = currentUser?.role === 'Admin';
 
@@ -298,21 +303,11 @@ export default function ResourceTypesPage() {
         icon={ListChecks}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-auto h-9 text-xs sm:text-sm sm:w-[200px]">
-                <SelectValue placeholder="Sort by..." />
-              </SelectTrigger>
-              <SelectContent>
-                {sortOptions.map(opt => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm"> {/* Ensured size sm for consistency */}
+                <Button variant="outline" size="sm">
                   <FilterIcon className="mr-2 h-4 w-4" />
-                  Filters
+                  Filters & Sort
                   {activeFilterCount > 0 && (
                     <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
                       {activeFilterCount}
@@ -320,11 +315,11 @@ export default function ResourceTypesPage() {
                   )}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
+              <DialogContent className="w-full max-w-md"> 
                 <DialogHeader>
-                  <DialogTitle>Filter Resource Types</DialogTitle>
+                  <DialogTitle>Filter & Sort Resource Types</DialogTitle>
                   <DialogDescription>
-                    Refine the list of resource types by keyword.
+                    Refine and order the list of resource types.
                   </DialogDescription>
                 </DialogHeader>
                 <Separator className="my-4" />
@@ -343,18 +338,31 @@ export default function ResourceTypesPage() {
                         />
                     </div>
                   </div>
+                  <div>
+                    <Label htmlFor="typeSortDialog">Sort by</Label>
+                    <Select value={tempSortBy} onValueChange={setTempSortBy}>
+                        <SelectTrigger id="typeSortDialog" className="w-full h-9 mt-1">
+                            <SelectValue placeholder="Sort by..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {sortOptions.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <DialogFooter className="pt-6 border-t mt-4">
                    <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
-                    <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
+                    <FilterX className="mr-2 h-4 w-4" /> Reset Dialog
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}><X className="mr-2 h-4 w-4" />Cancel</Button>
-                  <Button onClick={handleApplyDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply Filters</Button>
+                  <Button onClick={handleApplyDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
             {canAddResourceTypes && (
-              <Button onClick={handleOpenNewDialog} size="sm"> {/* Ensured size sm */}
+              <Button onClick={handleOpenNewDialog} size="sm">
                 <PlusCircle className="mr-2 h-4 w-4" /> Add
               </Button>
             )}
@@ -436,20 +444,20 @@ export default function ResourceTypesPage() {
           <CardContent>
             <ListChecks className="mx-auto h-12 w-12 mb-4 opacity-50" />
             <p className="text-lg font-medium">
-                {activeSearchTerm ? "No Resource Types Match Filter" : "No Resource Types Defined"}
+                {activeSearchTerm || activeSortBy !== 'name-asc' ? "No Resource Types Match Criteria" : "No Resource Types Defined"}
             </p>
             <p className="text-sm mb-4">
-                {activeSearchTerm
-                    ? "Try adjusting your search criteria or ensure types are added."
+                {activeSearchTerm || activeSortBy !== 'name-asc'
+                    ? "Try adjusting your filter or sort criteria."
                     : (canAddResourceTypes ? "Add resource types to categorize your lab equipment and assets." : "No resource types have been defined.")
                 }
             </p>
-            {activeSearchTerm && canManageResourceTypes && (
+            {(activeSearchTerm || activeSortBy !== 'name-asc') && canManageResourceTypes && (
                 <Button variant="outline" onClick={resetAllActivePageFilters}>
-                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters & Sort
                 </Button>
             )}
-            {!activeSearchTerm && !resourceTypes.length && canAddResourceTypes && (
+            {!(activeSearchTerm || activeSortBy !== 'name-asc') && !resourceTypes.length && canAddResourceTypes && (
                 <Button onClick={handleOpenNewDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource Type
                 </Button>
