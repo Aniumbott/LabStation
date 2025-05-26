@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, Package, CheckCircle2 } from 'lucide-react'; // Added Package icon
+import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, Package, CheckCircle2, ArrowUp, ArrowDown } from 'lucide-react'; // Added Package icon, ArrowUp, ArrowDown
 import type { ResourceType, Resource } from '@/types'; // Added Resource type
 import { useAuth } from '@/components/auth-context';
 import {
@@ -46,11 +46,23 @@ import { ResourceTypeFormDialog, ResourceTypeFormValues } from '@/components/adm
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Added Select
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { addAuditLog } from '@/lib/mock-data';
+
+type ResourceTypeSortableColumn = 'name' | 'resourceCount' | 'description';
+
+const sortOptions: { value: string; label: string }[] = [
+  { value: 'name-asc', label: 'Name (A-Z)' },
+  { value: 'name-desc', label: 'Name (Z-A)' },
+  { value: 'resourceCount-asc', label: 'Resources (Low to High)' },
+  { value: 'resourceCount-desc', label: 'Resources (High to Low)' },
+  { value: 'description-asc', label: 'Description (A-Z)' },
+  { value: 'description-desc', label: 'Description (Z-A)' },
+];
 
 
 export default function ResourceTypesPage() {
@@ -67,11 +79,13 @@ export default function ResourceTypesPage() {
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
 
+  const [sortBy, setSortBy] = useState<string>('name-asc');
+
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Fetch Resource Types
+      // Fetch Resource Types - initial sort by name from Firestore
       const typesQuery = query(collection(db, "resourceTypes"), orderBy("name", "asc"));
       const typesSnapshot = await getDocs(typesQuery);
       const fetchedTypes: ResourceType[] = typesSnapshot.docs.map(docSnap => {
@@ -85,17 +99,16 @@ export default function ResourceTypesPage() {
       setResourceTypes(fetchedTypes);
 
       // Fetch All Resources
-      const resourcesQuery = query(collection(db, "resources")); // No specific order needed here
+      const resourcesQuery = query(collection(db, "resources")); 
       const resourcesSnapshot = await getDocs(resourcesQuery);
       const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
         const data = docSnap.data();
         return {
           id: docSnap.id,
-          // Only fetch necessary fields for count, adjust Resource type if needed
           resourceTypeId: data.resourceTypeId,
-        } as Pick<Resource, 'id' | 'resourceTypeId'> & { name?: string }; // Minimal fetch for counting
+        } as Pick<Resource, 'id' | 'resourceTypeId'> & { name?: string }; 
       });
-      setAllResources(fetchedResources as Resource[]); // Cast for now, ensure Resource type matches
+      setAllResources(fetchedResources as Resource[]);
 
     } catch (error: any) {
       console.error("Error fetching data:", error);
@@ -132,12 +145,35 @@ export default function ResourceTypesPage() {
         (type.description && type.description.toLowerCase().includes(lowerSearchTerm))
       );
     }
-    // Map to include resource count
-    return currentTypes.map(type => ({
+    
+    const [column, direction] = sortBy.split('-') as [ResourceTypeSortableColumn, 'asc' | 'desc'];
+
+    let typesWithCount = currentTypes.map(type => ({
       ...type,
       resourceCount: allResources.filter(res => res.resourceTypeId === type.id).length,
     }));
-  }, [resourceTypes, allResources, activeSearchTerm]);
+
+    typesWithCount.sort((a, b) => {
+        let comparison = 0;
+        
+        const valA = a[column];
+        const valB = b[column];
+
+        if (column === 'resourceCount') {
+             comparison = (valA as number) - (valB as number);
+        } else if (column === 'name') {
+            comparison = (valA as string).toLowerCase().localeCompare((valB as string).toLowerCase());
+        } else if (column === 'description') {
+            const descA = a.description || '';
+            const descB = b.description || '';
+            comparison = descA.toLowerCase().localeCompare(descB.toLowerCase());
+        }
+        
+        return direction === 'asc' ? comparison : -comparison;
+    });
+
+    return typesWithCount;
+  }, [resourceTypes, allResources, activeSearchTerm, sortBy]);
 
   const handleApplyDialogFilters = useCallback(() => {
     setActiveSearchTerm(tempSearchTerm);
@@ -216,7 +252,7 @@ export default function ResourceTypesPage() {
         variant: "destructive",
         duration: 7000,
       });
-      setTypeToDelete(null); // Close the alert dialog
+      setTypeToDelete(null); 
       return;
     }
 
@@ -262,9 +298,19 @@ export default function ResourceTypesPage() {
         icon={ListChecks}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-auto h-9 text-xs sm:text-sm sm:w-[200px]">
+                <SelectValue placeholder="Sort by..." />
+              </SelectTrigger>
+              <SelectContent>
+                {sortOptions.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline">
+                <Button variant="outline" size="sm"> {/* Ensured size sm for consistency */}
                   <FilterIcon className="mr-2 h-4 w-4" />
                   Filters
                   {activeFilterCount > 0 && (
@@ -308,7 +354,7 @@ export default function ResourceTypesPage() {
               </DialogContent>
             </Dialog>
             {canAddResourceTypes && (
-              <Button onClick={handleOpenNewDialog}>
+              <Button onClick={handleOpenNewDialog} size="sm"> {/* Ensured size sm */}
                 <PlusCircle className="mr-2 h-4 w-4" /> Add
               </Button>
             )}
@@ -426,3 +472,4 @@ export default function ResourceTypesPage() {
     </TooltipProvider>
   );
 }
+
