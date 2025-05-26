@@ -366,7 +366,7 @@ export default function BookingRequestsPage() {
               <CardTitle>Pending & Waitlisted Requests ({bookingsForApproval.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto border">
                 <Table>
                   <TableHeader>
                     <TableRow>

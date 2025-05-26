@@ -376,7 +376,7 @@ export default function BlackoutDatesPage() {
             {isLoading && filteredBlackoutDates.length === 0 && !activeDateSearchTerm ? (
                 <div className="text-center py-10 text-muted-foreground"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary mb-2" />Fetching dates...</div>
             ) : filteredBlackoutDates.length > 0 ? (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -477,7 +477,7 @@ export default function BlackoutDatesPage() {
              {isLoading && recurringRules.length === 0 ? (
                 <div className="text-center py-10 text-muted-foreground"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary mb-2" />Fetching rules...</div>
             ) : recurringRules.length > 0 ? (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto border">
                 <Table>
                   <TableHeader>
                     <TableRow>
