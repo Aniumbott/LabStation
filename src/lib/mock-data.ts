@@ -15,7 +15,8 @@ import type {
   BlackoutDate,
   RecurringBlackoutRule,
 } from '@/types';
-import { serverTimestamp, Timestamp } from 'firebase/firestore'; // Only for type consistency if needed
+import { db } from '@/lib/firebase'; // Added import for db
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore'; // Added imports for Firestore operations
 
 // --- Static Lists (Application Configuration Data) ---
 export const userRolesList: RoleName[] = ['Admin', 'Lab Manager', 'Technician', 'Researcher'];
@@ -27,50 +28,43 @@ export const bookingStatusesForForm: Booking['status'][] = ['Confirmed', 'Pendin
 export const daysOfWeekArray: DayOfWeek[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 
-// --- Dynamic Data Arrays - Should be empty as data comes from Firestore ---
-export let initialMockUsers: User[] = []; // Data fetched from Firestore users collection
-export let initialMockResourceTypes: ResourceType[] = []; // Data fetched from Firestore resourceTypes collection
-export let allAdminMockResources: Resource[] = []; // Data fetched from Firestore resources collection
-export let initialBookings: Booking[] = []; // Data fetched from Firestore bookings collection
-export let initialMaintenanceRequests: MaintenanceRequest[] = []; // Data fetched from Firestore maintenanceRequests collection
-export let initialBlackoutDates: BlackoutDate[] = []; // Data fetched from Firestore blackoutDates collection
-export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = []; // Data fetched from Firestore recurringBlackoutRules collection
+// --- Dynamic Data Arrays - These are effectively deprecated if Firestore is the source of truth ---
+export let initialMockUsers: User[] = [];
+export let initialMockResourceTypes: ResourceType[] = [];
+export let allAdminMockResources: Resource[] = [];
+export let initialBookings: Booking[] = [];
+export let initialMaintenanceRequests: MaintenanceRequest[] = [];
+export let initialBlackoutDates: BlackoutDate[] = [];
+export let initialRecurringBlackoutRules: RecurringBlackoutRule[] = [];
 
 
-// --- In-memory placeholders for Notifications & Audit Logs ---
-// In a full production app, these would also be Firestore collections.
-// For this prototype, they are in-memory and reset on refresh.
-export let initialNotifications: Notification[] = [];
-
-export function addNotification(
+// --- Functions to add Notifications & Audit Logs to Firestore ---
+export async function addNotification(
   userId: string,
   title: string,
   message: string,
   type: NotificationType,
   linkTo?: string
-): void {
-  const newNotification: Notification = {
-    id: `n${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+): Promise<void> {
+  const newNotificationData: Omit<Notification, 'id' | 'createdAt'> & { createdAt: any } = {
     userId,
     title,
     message,
     type,
     isRead: false,
-    createdAt: new Date(), // JS Date for frontend consistency
-    linkTo,
+    linkTo: linkTo || null, // Ensure null if undefined for Firestore
+    createdAt: serverTimestamp(), // Use Firestore server timestamp
   };
-  initialNotifications.unshift(newNotification);
-  // To make this write to Firestore:
-  // import { db } from '@/lib/firebase';
-  // import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-  // try {
-  //   await addDoc(collection(db, 'notifications'), { ...newNotification, createdAt: serverTimestamp() });
-  // } catch (e) { console.error("Error adding notification to Firestore: ", e); }
+  try {
+    await addDoc(collection(db, 'notifications'), newNotificationData);
+    console.log("Notification added to Firestore for user:", userId);
+  } catch (e) {
+    console.error("Error adding notification to Firestore: ", e);
+    // Optionally, re-throw or handle more gracefully
+  }
 }
 
-export let initialAuditLogs: AuditLogEntry[] = [];
-
-export function addAuditLog(
+export async function addAuditLog(
   actingUserId: string,
   actingUserName: string,
   action: AuditActionType,
@@ -79,22 +73,26 @@ export function addAuditLog(
     entityId?: string;
     details: string;
   }
-): void {
-  const newLog: AuditLogEntry = {
-    id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-    timestamp: new Date(), // JS Date for frontend consistency
+): Promise<void> {
+  const newLogData: Omit<AuditLogEntry, 'id' | 'timestamp'> & { timestamp: any } = {
     userId: actingUserId,
     userName: actingUserName,
     action: action,
-    entityType: params.entityType,
-    entityId: params.entityId,
+    entityType: params.entityType || null, // Ensure null if undefined
+    entityId: params.entityId || null,     // Ensure null if undefined
     details: params.details,
+    timestamp: serverTimestamp(), // Use Firestore server timestamp
   };
-  initialAuditLogs.unshift(newLog);
-  // To make this write to Firestore:
-  // import { db } from '@/lib/firebase';
-  // import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-  // try {
-  //   await addDoc(collection(db, 'auditLogs'), { ...newLog, timestamp: serverTimestamp() });
-  // } catch (e) { console.error("Error adding audit log to Firestore: ", e); }
+  try {
+    await addDoc(collection(db, 'auditLogs'), newLogData);
+    console.log("Audit log added to Firestore for action:", action);
+  } catch (e) {
+    console.error("Error adding audit log to Firestore: ", e);
+    // Optionally, re-throw or handle more gracefully
+  }
 }
+
+// The in-memory arrays are no longer the primary store but might be useful for quick reference if not fetching,
+// though generally data should come from Firestore after these changes.
+export let initialNotifications: Notification[] = [];
+export let initialAuditLogs: AuditLogEntry[] = [];

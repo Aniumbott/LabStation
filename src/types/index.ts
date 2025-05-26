@@ -18,8 +18,6 @@ export interface RemoteAccessDetails {
   notes?: string;
 }
 
-// Removed AvailabilitySlot interface
-
 export interface UnavailabilityPeriod {
   id: string;
   startDate: string; // YYYY-MM-DD
@@ -36,7 +34,6 @@ export interface Resource {
   description?: string;
   imageUrl?: string;
   features?: string[];
-  // availability?: AvailabilitySlot[]; // Removed
   unavailabilityPeriods?: UnavailabilityPeriod[];
   manufacturer?: string;
   model?: string;
@@ -50,8 +47,8 @@ export interface Resource {
 }
 
 export interface BookingUsageDetails {
-  actualStartTime?: Date | undefined;
-  actualEndTime?: Date | undefined;
+  actualStartTime?: string | undefined; // Stored as ISO string
+  actualEndTime?: string | undefined;   // Stored as ISO string
   outcome?: 'Success' | 'Failure' | 'Interrupted' | 'Not Applicable';
   dataStorageLocation?: string | undefined;
   usageComments?: string | undefined;
@@ -113,14 +110,14 @@ export type NotificationType =
   | 'signup_pending_admin';
 
 export interface Notification {
-  id: string;
+  id: string; // Will be Firestore generated ID when fetched
   userId: string;
   title: string;
   message: string;
   type: NotificationType;
   isRead: boolean;
-  createdAt: Date;
-  linkTo?: string;
+  createdAt: Date; // Converted from Firestore Timestamp on fetch
+  linkTo?: string | null; // Allow null for Firestore compatibility
 }
 
 export interface BlackoutDate {
@@ -150,12 +147,12 @@ export type AuditActionType =
   | 'RECURRING_RULE_CREATED' | 'RECURRING_RULE_UPDATED' | 'RECURRING_RULE_DELETED';
 
 export interface AuditLogEntry {
-  id: string;
-  timestamp: Date;
+  id: string; // Will be Firestore generated ID when fetched
+  timestamp: Date; // Converted from Firestore Timestamp on fetch
   userId: string;
   userName: string;
   action: AuditActionType;
-  entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule';
-  entityId?: string;
+  entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule' | null;
+  entityId?: string | null;
   details: string;
 }
