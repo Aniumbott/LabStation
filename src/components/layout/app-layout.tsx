@@ -150,7 +150,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <SidebarMenu>
             {visibleNavItems.map((item) => (
               <SidebarMenuItem key={item.label}>
-                <Link href={item.href} passHref legacyBehavior>
+                <Link href={item.href}>
                   <SidebarMenuButton
                     isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href !== '/')}
                     tooltip={item.label}
@@ -177,5 +177,3 @@ export function AppLayout({ children }: { children: ReactNode }) {
     </SidebarProvider>
   );
 }
-
-    
