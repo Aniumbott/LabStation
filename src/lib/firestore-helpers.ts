@@ -1,29 +1,30 @@
 
-'use server'; // Potentially, if these are ever called from Server Components directly. For now, client-side calls are fine.
+'use server'; 
 
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import type { Notification, NotificationType, AuditLogEntry, AuditActionType } from '@/types';
+import type { Notification as NotificationAppType, NotificationType, AuditLogEntry, AuditActionType } from '@/types'; // Renamed Notification to NotificationAppType
+
 
 export async function addNotification(
   userId: string,
   title: string,
   message: string,
   type: NotificationType,
-  linkTo?: string
+  linkTo?: string 
 ): Promise<void> {
-  const newNotificationData: Omit<Notification, 'id' | 'createdAt'> & { createdAt: Timestamp } = {
+  const newNotificationData: Omit<NotificationAppType, 'id' | 'createdAt'> & { createdAt: Timestamp } = {
     userId,
     title,
     message,
     type,
     isRead: false,
-    linkTo: linkTo || null,
-    createdAt: serverTimestamp() as Timestamp, // Use Firestore server timestamp
+    linkTo: linkTo, // Will be undefined if not passed, which Firestore handles well
+    createdAt: serverTimestamp() as Timestamp, 
   };
   try {
     await addDoc(collection(db, 'notifications'), newNotificationData);
-    console.log("Notification added to Firestore for user:", userId);
+    console.log("Notification added to Firestore for user:", userId, "Type:", type);
   } catch (e) {
     console.error("Error adding notification to Firestore: ", e);
   }
@@ -43,10 +44,10 @@ export async function addAuditLog(
     userId: actingUserId,
     userName: actingUserName,
     action: action,
-    entityType: params.entityType || null,
-    entityId: params.entityId || null,
+    entityType: params.entityType || undefined, // Store undefined if not provided
+    entityId: params.entityId || undefined,     // Store undefined if not provided
     details: params.details,
-    timestamp: serverTimestamp(), // Use Firestore server timestamp
+    timestamp: serverTimestamp(), 
   };
   try {
     await addDoc(collection(db, 'auditLogs'), newLogData);
@@ -55,3 +56,4 @@ export async function addAuditLog(
     console.error("Error adding audit log to Firestore: ", e);
   }
 }
+

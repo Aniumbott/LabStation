@@ -166,7 +166,6 @@ function BookingsPageContent({}: BookingsPageContentProps) {
           lab: data.lab,
           resourceTypeId: data.resourceTypeId,
           allowQueueing: data.allowQueueing ?? false,
-          // availability field removed
           unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({ ...p, id: p.id || `unavail-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`, startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [],
         } as Resource;
       });
@@ -521,10 +520,6 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       return;
     }
     
-    // The timeSlots for BookingForm implicitly define the lab's operating hours (e.g. 08:00-17:00).
-    // If a time is selected from the form, it's within these general hours.
-    // The explicit check against daily defined slots (`resourceDayAvailability` and `isWithinAvailableSlot`) is removed.
-
     let conflictingBookingFound: Booking | undefined = undefined;
     try {
       const bookingsCollectionRef = collection(db, 'bookings');
@@ -561,10 +556,12 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       if (selectedResource.allowQueueing) {
         finalStatus = 'Waitlisted';
         toast({ title: "Added to Waitlist", description: `This time slot is currently booked. Your request for ${selectedResource.name} has been added to the waitlist.` });
-        addAuditLog(currentUser.id, currentUser.name, 'BOOKING_WAITLISTED', {
-          entityType: 'Booking',
-          details: `Booking for '${selectedResource.name}' by ${currentUser.name} placed on waitlist. Start: ${format(finalStartTime, 'PPpp')}, End: ${format(finalEndTime, 'PPpp')}.`
-        });
+        if (currentUser?.id && currentUser?.name) {
+          addAuditLog(currentUser.id, currentUser.name, 'BOOKING_WAITLISTED', {
+            entityType: 'Booking',
+            details: `Booking for '${selectedResource.name}' by ${currentUser.name} placed on waitlist. Start: ${format(finalStartTime, 'PPpp')}, End: ${format(finalEndTime, 'PPpp')}.`
+          });
+        }
       } else {
         let conflictingUserName = 'another user';
         if (conflictingBookingFound.userId) {
@@ -591,29 +588,12 @@ function BookingsPageContent({}: BookingsPageContentProps) {
 
     if (isNewBooking) {
       bookingDataToSave.createdAt = formData.createdAt ? Timestamp.fromDate(formData.createdAt) : serverTimestamp();
-      if (finalStatus === 'Pending') {
-        addAuditLog(currentUser.id, currentUser.name, 'BOOKING_CREATED', {
-            entityType: 'Booking',
-            details: `Booking for '${selectedResource.name}' by ${currentUser.name}. Status: ${finalStatus}. Start: ${format(finalStartTime, 'PPpp')}, End: ${format(finalEndTime, 'PPpp')}.`
-         });
-        const adminUsersQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager']));
-        getDocs(adminUsersQuery).then(adminSnapshot => {
-            adminSnapshot.forEach(adminDoc => {
-                addNotification(
-                    adminDoc.id,
-                    'New Booking Request',
-                    `Booking for ${selectedResource.name} by ${currentUser.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`,
-                    'booking_pending_approval',
-                    `/admin/booking-requests`
-                  );
-            });
-        });
-      }
     } else if (formData.id && formData.createdAt instanceof Date) {
       bookingDataToSave.createdAt = Timestamp.fromDate(formData.createdAt);
-      addAuditLog(currentUser.id, currentUser.name, 'BOOKING_UPDATED', { entityType: 'Booking', entityId: formData.id, details: `Booking for '${selectedResource.name}' updated by user ${currentUser.name}. Status: ${finalStatus}.` });
+      if (currentUser?.id && currentUser?.name) {
+        addAuditLog(currentUser.id, currentUser.name, 'BOOKING_UPDATED', { entityType: 'Booking', entityId: formData.id, details: `Booking for '${selectedResource.name}' updated by user ${currentUser.name}. Status: ${finalStatus}.` });
+      }
     }
-
 
     setIsLoadingBookings(true);
     try {
@@ -623,16 +603,41 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         toast({ title: "Success", description: "Booking updated successfully." });
       } else {
         const docRef = await addDoc(collection(db, "bookings"), bookingDataToSave);
-        if (finalStatus === 'Pending') {
+        if (finalStatus === 'Pending' && currentUser?.id && currentUser?.name && selectedResource?.name) {
           toast({ title: "Success", description: "Booking created and submitted for approval." });
-        } else if (finalStatus === 'Waitlisted') {
-            addNotification(
-                currentUser.id,
-                'Added to Waitlist',
-                `Your booking request for ${selectedResource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`,
-                'booking_waitlisted',
-                `/bookings?bookingId=${docRef.id}`
-             );
+          addAuditLog(currentUser.id, currentUser.name, 'BOOKING_CREATED', {
+            entityType: 'Booking',
+            entityId: docRef.id,
+            details: `Booking for '${selectedResource.name}' by ${currentUser.name}. Status: ${finalStatus}. Start: ${format(finalStartTime, 'PPpp')}, End: ${format(finalEndTime, 'PPpp')}.`
+          });
+          try {
+            const adminUsersQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager']));
+            const adminSnapshot = await getDocs(adminUsersQuery);
+            const notificationPromises = adminSnapshot.docs.map(adminDoc => {
+              if (adminDoc.id !== currentUser.id) { 
+                return addNotification(
+                  adminDoc.id,
+                  'New Booking Request',
+                  `Booking for ${selectedResource!.name} by ${currentUser!.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`,
+                  'booking_pending_approval',
+                  `/admin/booking-requests?bookingId=${docRef.id}`
+                );
+              }
+              return Promise.resolve();
+            });
+            await Promise.all(notificationPromises);
+            console.log("Admin notifications sent for new pending booking.");
+          } catch (adminNotificationError) {
+            console.error("Error sending notifications to admins:", adminNotificationError);
+          }
+        } else if (finalStatus === 'Waitlisted' && currentUser?.id && selectedResource?.name) {
+          addNotification(
+            currentUser.id,
+            'Added to Waitlist',
+            `Your booking request for ${selectedResource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`,
+            'booking_waitlisted',
+            `/bookings?bookingId=${docRef.id}`
+          );
         }
       }
       await fetchAllBookingsForUser();
@@ -1409,3 +1414,4 @@ export default function BookingsPage() {
     </Suspense>
   );
 }
+

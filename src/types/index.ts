@@ -110,14 +110,14 @@ export type NotificationType =
   | 'signup_pending_admin';
 
 export interface Notification {
-  id: string; // Will be Firestore generated ID when fetched
+  id: string; 
   userId: string;
   title: string;
   message: string;
   type: NotificationType;
   isRead: boolean;
-  createdAt: Date; // Converted from Firestore Timestamp on fetch
-  linkTo?: string | null; // Allow null for Firestore compatibility
+  createdAt: Date; 
+  linkTo?: string; 
 }
 
 export interface BlackoutDate {
@@ -147,8 +147,8 @@ export type AuditActionType =
   | 'RECURRING_RULE_CREATED' | 'RECURRING_RULE_UPDATED' | 'RECURRING_RULE_DELETED';
 
 export interface AuditLogEntry {
-  id: string; // Will be Firestore generated ID when fetched
-  timestamp: Date; // Converted from Firestore Timestamp on fetch
+  id: string; 
+  timestamp: Date; 
   userId: string;
   userName: string;
   action: AuditActionType;
@@ -156,3 +156,4 @@ export interface AuditLogEntry {
   entityId?: string | null;
   details: string;
 }
+
