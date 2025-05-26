@@ -5,7 +5,8 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Wrench, PlusCircle, Edit, Filter as FilterIcon, FilterX, Search as SearchIcon, ListFilter, CheckCircle, AlertCircle, PenToolIcon, Loader2, Info, X, CheckCircle2 } from 'lucide-react';
 import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource, RoleName } from '@/types';
-import { maintenanceRequestStatuses, addNotification, addAuditLog } from '@/lib/mock-data';
+import { maintenanceRequestStatuses } from '@/lib/app-constants';
+import { addNotification, addAuditLog } from '@/lib/firestore-helpers';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -564,3 +565,6 @@ export default function MaintenanceRequestsPage() {
     </TooltipProvider>
   );
 }
+
+
+    
