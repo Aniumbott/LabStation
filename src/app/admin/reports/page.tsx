@@ -3,11 +3,21 @@
 
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { BarChart3, ClipboardList, AlertTriangle, Users, PieChart as PieChartIcon, Percent, Clock, Hourglass, Loader2 } from 'lucide-react';
+import { BarChart3, ClipboardList, AlertTriangle, Users as Users2Icon, PieChart as PieChartIcon, Percent, Clock, Hourglass, Loader2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import type { Resource, Booking, MaintenanceRequest, User, RoleName, MaintenanceRequestStatus } from '@/types';
 import { maintenanceRequestStatuses, userRolesList } from '@/lib/mock-data';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from '@/components/ui/button';
 import {
   ChartContainer,
   ChartTooltip,
@@ -27,12 +37,10 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from 'recharts';
-import { cn } from '@/lib/utils';
-// Updated date-fns import: Removed Timestamp
-import { differenceInDays, parseISO, startOfHour, format as formatDateFn, subDays, isValid as isValidDate } from 'date-fns'; 
+import { cn, formatDateSafe } from '@/lib/utils';
+import { differenceInDays, parseISO, startOfHour, format as formatDateFn, subDays, isValid as isValidDate } from 'date-fns';
 import { db } from '@/lib/firebase';
-// Updated firebase/firestore import: Added Timestamp
-import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore'; 
+import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 
 interface ReportItem {
   name: string;
@@ -50,6 +58,18 @@ interface PeakHourItem {
   count: number;
 }
 
+interface UserUsageReportItem {
+  userId: string;
+  userName: string;
+  avatarUrl?: string;
+  totalBookings: number;
+  totalHoursBooked: number;
+  lastBookingDate?: Date;
+}
+
+type UserUsageSortableColumn = 'userName' | 'totalBookings' | 'totalHoursBooked' | 'lastBookingDate';
+
+
 const CHART_COLORS = {
   bookings: "hsl(var(--chart-1))",
   maintenance: {
@@ -61,6 +81,7 @@ const CHART_COLORS = {
   utilization: "hsl(var(--chart-2))",
   peakHours: "hsl(var(--chart-3))",
   waitlist: "hsl(var(--chart-4))",
+  userUsage: "hsl(var(--chart-5))", // Added for consistency, though not a chart
 };
 
 const chartTooltipConfig = {
@@ -76,7 +97,12 @@ export default function ReportsPage() {
   const [allResources, setAllResources] = useState<Resource[]>([]);
   const [allBookings, setAllBookings] = useState<Booking[]>([]);
   const [allMaintenanceRequests, setAllMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [userUsageSortColumn, setUserUsageSortColumn] = useState<UserUsageSortableColumn>('totalBookings');
+  const [userUsageSortDirection, setUserUsageSortDirection] = useState<'asc' | 'desc'>('desc');
+
 
   const fetchDataForReports = useCallback(async () => {
     setIsLoading(true);
@@ -89,7 +115,6 @@ export default function ReportsPage() {
           purchaseDate: data.purchaseDate instanceof Timestamp ? data.purchaseDate.toDate() : undefined,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
           lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
-          // Ensure availability and unavailabilityPeriods are arrays
           availability: Array.isArray(data.availability) ? data.availability : [],
           unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods : [],
         } as Resource;
@@ -120,6 +145,15 @@ export default function ReportsPage() {
             dateResolved: data.dateResolved instanceof Timestamp ? data.dateResolved.toDate() : undefined
           } as MaintenanceRequest;
       }));
+
+      const usersSnapshot = await getDocs(collection(db, "users"));
+        setAllUsers(usersSnapshot.docs.map(d => {
+            const data = d.data();
+            return {
+                id: d.id, ...data,
+                createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
+            } as User;
+        }));
 
     } catch (error) {
       console.error("Error fetching data for reports:", error);
@@ -192,7 +226,6 @@ export default function ReportsPage() {
     allResources.forEach(resource => {
       const bookedDays = new Set<string>();
       allBookings.forEach(booking => {
-        // Ensure booking.startTime is a valid Date object before processing
         if (!booking.startTime || !isValidDate(booking.startTime)) return;
 
         const bookingDate = booking.startTime;
@@ -226,7 +259,6 @@ export default function ReportsPage() {
     if (isLoading) return [];
     const hourCounts: { [hour: string]: number } = {};
     allBookings.forEach(booking => {
-      // Ensure booking.startTime is a valid Date object before processing
       if (!booking.startTime || !isValidDate(booking.startTime)) return;
       
       if (booking.status === 'Confirmed') {
@@ -280,6 +312,86 @@ export default function ReportsPage() {
     config["count"] = { label: "Waitlisted", color: CHART_COLORS.waitlist };
     return config;
   }, [waitlistedPerResource]);
+
+  const processedUserUsageData = useMemo(() => {
+    if (isLoading || allUsers.length === 0 || allBookings.length === 0) return [];
+
+    const usageMap = new Map<string, UserUsageReportItem>();
+
+    allUsers.forEach(user => {
+      usageMap.set(user.id, {
+        userId: user.id,
+        userName: user.name || 'Unknown User',
+        avatarUrl: user.avatarUrl,
+        totalBookings: 0,
+        totalHoursBooked: 0,
+        lastBookingDate: undefined,
+      });
+    });
+
+    allBookings.forEach(booking => {
+      if (booking.status === 'Cancelled') return;
+
+      const userReport = usageMap.get(booking.userId);
+      if (userReport) {
+        userReport.totalBookings += 1;
+
+        if (booking.status === 'Confirmed') {
+          const startTime = booking.startTime;
+          const endTime = booking.endTime;
+          if (isValidDate(startTime) && isValidDate(endTime) && endTime > startTime) {
+            const durationMs = endTime.getTime() - startTime.getTime();
+            userReport.totalHoursBooked += durationMs / (1000 * 60 * 60);
+          }
+        }
+
+        if (isValidDate(booking.startTime)) {
+          if (!userReport.lastBookingDate || booking.startTime > userReport.lastBookingDate) {
+            userReport.lastBookingDate = booking.startTime;
+          }
+        }
+      }
+    });
+
+    let sortedData = Array.from(usageMap.values()).filter(item => item.totalBookings > 0);
+
+    sortedData.sort((a, b) => {
+      let comparison = 0;
+      switch (userUsageSortColumn) {
+        case 'userName':
+          comparison = a.userName.localeCompare(b.userName);
+          break;
+        case 'totalBookings':
+          comparison = a.totalBookings - b.totalBookings;
+          break;
+        case 'totalHoursBooked':
+          comparison = a.totalHoursBooked - b.totalHoursBooked;
+          break;
+        case 'lastBookingDate':
+          const dateA = a.lastBookingDate?.getTime() || 0;
+          const dateB = b.lastBookingDate?.getTime() || 0;
+          comparison = dateA - dateB;
+          break;
+      }
+      return userUsageSortDirection === 'asc' ? comparison : -comparison;
+    });
+
+    return sortedData;
+  }, [allUsers, allBookings, isLoading, userUsageSortColumn, userUsageSortDirection]);
+
+  const handleSortUserUsage = (column: UserUsageSortableColumn) => {
+    if (userUsageSortColumn === column) {
+      setUserUsageSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setUserUsageSortColumn(column);
+      setUserUsageSortDirection('desc');
+    }
+  };
+
+  const renderSortIcon = (column: UserUsageSortableColumn) => {
+    if (userUsageSortColumn !== column) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-30" />;
+    return userUsageSortDirection === 'asc' ? <ArrowUp className="ml-2 h-4 w-4 text-primary" /> : <ArrowDown className="ml-2 h-4 w-4 text-primary" />;
+  };
 
   if (isLoading) {
     return (
@@ -456,8 +568,73 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Separator className="my-8" />
+
+       <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Users2Icon className="h-5 w-5 text-primary" />
+              User Activity Report
+            </CardTitle>
+            <CardDescription>Overview of booking activity by user.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            {isLoading ? (
+                <div className="text-center py-10 text-muted-foreground">Loading user activity...</div>
+            ) : processedUserUsageData.length > 0 ? (
+              <div className="overflow-x-auto rounded-lg border shadow-sm">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[250px]">
+                        <Button variant="ghost" onClick={() => handleSortUserUsage('userName')} className="px-1">
+                          User {renderSortIcon('userName')}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button variant="ghost" onClick={() => handleSortUserUsage('totalBookings')} className="px-1">
+                          Total Bookings {renderSortIcon('totalBookings')}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button variant="ghost" onClick={() => handleSortUserUsage('totalHoursBooked')} className="px-1">
+                          Total Hours Booked {renderSortIcon('totalHoursBooked')}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-right">
+                        <Button variant="ghost" onClick={() => handleSortUserUsage('lastBookingDate')} className="px-1">
+                          Last Booking {renderSortIcon('lastBookingDate')}
+                        </Button>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {processedUserUsageData.map((item) => (
+                      <TableRow key={item.userId}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-9 w-9">
+                              <AvatarImage src={item.avatarUrl} alt={item.userName} data-ai-hint="user avatar" />
+                              <AvatarFallback>{item.userName.split(' ').map(n => n[0]).join('').toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <span className="font-medium">{item.userName}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">{item.totalBookings}</TableCell>
+                        <TableCell className="text-center">{item.totalHoursBooked.toFixed(1)} hours</TableCell>
+                        <TableCell className="text-right">{formatDateSafe(item.lastBookingDate, 'N/A', 'PPP')}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-center py-10">No user booking data available.</p>
+            )}
+          </CardContent>
+        </Card>
+
     </div>
   );
 }
-
-    
