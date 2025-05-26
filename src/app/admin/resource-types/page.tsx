@@ -3,8 +3,8 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X } from 'lucide-react'; // Added X
-import type { ResourceType } from '@/types';
+import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, Package } from 'lucide-react'; // Added Package icon
+import type { ResourceType, Resource } from '@/types'; // Added Resource type
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -57,6 +57,7 @@ export default function ResourceTypesPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
   const [resourceTypes, setResourceTypes] = useState<ResourceType[]>([]);
+  const [allResources, setAllResources] = useState<Resource[]>([]); // State for all resources
   const [isLoading, setIsLoading] = useState(true);
   const [typeToDelete, setTypeToDelete] = useState<ResourceType | null>(null);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
@@ -67,13 +68,13 @@ export default function ResourceTypesPage() {
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
 
 
-  const fetchResourceTypes = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Firestore Index Required: resourceTypes (name ASC) - usually created automatically for simple orderBy
+      // Fetch Resource Types
       const typesQuery = query(collection(db, "resourceTypes"), orderBy("name", "asc"));
-      const querySnapshot = await getDocs(typesQuery);
-      const fetchedTypes: ResourceType[] = querySnapshot.docs.map(docSnap => {
+      const typesSnapshot = await getDocs(typesQuery);
+      const fetchedTypes: ResourceType[] = typesSnapshot.docs.map(docSnap => {
         const data = docSnap.data();
         return {
           id: docSnap.id,
@@ -82,22 +83,38 @@ export default function ResourceTypesPage() {
         } as ResourceType;
       });
       setResourceTypes(fetchedTypes);
+
+      // Fetch All Resources
+      const resourcesQuery = query(collection(db, "resources")); // No specific order needed here
+      const resourcesSnapshot = await getDocs(resourcesQuery);
+      const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          // Only fetch necessary fields for count, adjust Resource type if needed
+          resourceTypeId: data.resourceTypeId,
+        } as Pick<Resource, 'id' | 'resourceTypeId'> & { name?: string }; // Minimal fetch for counting
+      });
+      setAllResources(fetchedResources as Resource[]); // Cast for now, ensure Resource type matches
+
     } catch (error: any) {
-      console.error("Error fetching resource types:", error);
-      toast({ title: "Error", description: `Failed to load resource types: ${error.message}`, variant: "destructive" });
+      console.error("Error fetching data:", error);
+      toast({ title: "Error", description: `Failed to load data: ${error.message}`, variant: "destructive" });
       setResourceTypes([]);
+      setAllResources([]);
     }
     setIsLoading(false);
   }, [toast]);
 
   useEffect(() => {
     if (currentUser?.role === 'Admin') {
-      fetchResourceTypes();
+      fetchData();
     } else {
       setResourceTypes([]);
+      setAllResources([]);
       setIsLoading(false);
     }
-  }, [currentUser, fetchResourceTypes]);
+  }, [currentUser, fetchData]);
 
 
   useEffect(() => {
@@ -106,7 +123,7 @@ export default function ResourceTypesPage() {
     }
   }, [isFilterDialogOpen, activeSearchTerm]);
 
-  const filteredResourceTypes = useMemo(() => {
+  const filteredResourceTypesWithCount = useMemo(() => {
     let currentTypes = [...resourceTypes];
     const lowerSearchTerm = activeSearchTerm.toLowerCase();
     if (activeSearchTerm) {
@@ -115,8 +132,12 @@ export default function ResourceTypesPage() {
         (type.description && type.description.toLowerCase().includes(lowerSearchTerm))
       );
     }
-    return currentTypes; // Already sorted by Firestore query
-  }, [resourceTypes, activeSearchTerm]);
+    // Map to include resource count
+    return currentTypes.map(type => ({
+      ...type,
+      resourceCount: allResources.filter(res => res.resourceTypeId === type.id).length,
+    }));
+  }, [resourceTypes, allResources, activeSearchTerm]);
 
   const handleApplyDialogFilters = useCallback(() => {
     setActiveSearchTerm(tempSearchTerm);
@@ -151,9 +172,9 @@ export default function ResourceTypesPage() {
     }
     setIsLoading(true);
     try {
-      const typeDataToSave: Omit<ResourceType, 'id'> = { // Omit id as Firestore generates it for new docs
+      const typeDataToSave: Omit<ResourceType, 'id'> = { 
         name: data.name,
-        description: data.description || undefined, // Store undefined if empty for cleaner Firestore docs
+        description: data.description || undefined,
       };
 
       if (editingType) {
@@ -163,13 +184,12 @@ export default function ResourceTypesPage() {
         toast({ title: 'Resource Type Updated', description: `Resource Type "${data.name}" has been updated.` });
       } else {
         const docRef = await addDoc(collection(db, "resourceTypes"), typeDataToSave);
-        // No need to update the document with its own ID if not part of ResourceType
         addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_CREATED', { entityType: 'ResourceType', entityId: docRef.id, details: `Resource Type '${data.name}' created.`});
         toast({ title: 'Resource Type Created', description: `Resource Type "${data.name}" has been created.` });
       }
       setIsFormDialogOpen(false);
       setEditingType(null);
-      await fetchResourceTypes();
+      await fetchData();
     } catch (error: any) {
         console.error("Error saving resource type:", error);
         toast({ title: "Save Error", description: `Could not save resource type: ${error.message}`, variant: "destructive" });
@@ -188,6 +208,17 @@ export default function ResourceTypesPage() {
         toast({ title: "Error", description: "Resource type not found for deletion.", variant: "destructive"});
         return;
     }
+     const resourcesOfThisType = allResources.filter(res => res.resourceTypeId === typeId).length;
+    if (resourcesOfThisType > 0) {
+      toast({
+        title: "Deletion Blocked",
+        description: `Cannot delete type "${deletedType.name}" as ${resourcesOfThisType} resource(s) are currently assigned to it. Please reassign them first.`,
+        variant: "destructive",
+        duration: 7000,
+      });
+      setTypeToDelete(null); // Close the alert dialog
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -196,7 +227,7 @@ export default function ResourceTypesPage() {
         addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_DELETED', { entityType: 'ResourceType', entityId: typeId, details: `Resource Type '${deletedType.name}' deleted.`});
         toast({ title: "Resource Type Deleted", description: `Resource Type "${deletedType.name}" has been removed.`, variant: "destructive" });
         setTypeToDelete(null);
-        await fetchResourceTypes();
+        await fetchData();
     } catch (error: any) {
         console.error("Error deleting resource type:", error);
         toast({ title: "Delete Error", description: `Could not delete resource type: ${error.message}`, variant: "destructive" });
@@ -285,25 +316,27 @@ export default function ResourceTypesPage() {
         }
       />
 
-      {isLoading ? (
+      {isLoading && filteredResourceTypesWithCount.length === 0 ? (
         <div className="flex justify-center items-center py-10 text-muted-foreground">
           <Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading resource types...
         </div>
-      ) : filteredResourceTypes.length > 0 ? (
+      ) : filteredResourceTypesWithCount.length > 0 ? (
         <div className="overflow-x-auto rounded-lg border shadow-sm">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Description</TableHead>
+                <TableHead className="text-center">No. of Resources</TableHead>
                 {canManageResourceTypes && <TableHead className="text-right w-[100px]">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredResourceTypes.map((type) => (
+              {filteredResourceTypesWithCount.map((type) => (
                   <TableRow key={type.id}>
                     <TableCell className="font-medium">{type.name}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{type.description || 'N/A'}</TableCell>
+                    <TableCell className="text-center">{type.resourceCount}</TableCell>
                     {canManageResourceTypes && (
                       <TableCell className="text-right space-x-1">
                         <Tooltip>
@@ -334,7 +367,7 @@ export default function ResourceTypesPage() {
                                   <AlertDialogDescription>
                                   This action cannot be undone. This will remove the resource type
                                   <span className="font-semibold"> "{typeToDelete?.name}"</span>.
-                                  This might affect existing resources categorized under this type.
+                                  Ensure no resources are using this type before deleting.
                                   </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
@@ -361,8 +394,8 @@ export default function ResourceTypesPage() {
             </p>
             <p className="text-sm mb-4">
                 {activeSearchTerm
-                    ? "Try adjusting your search criteria or ensure types are added in Firestore."
-                    : (canAddResourceTypes ? "Add resource types to categorize your lab equipment and assets. Ensure they exist in your Firestore 'resourceTypes' collection." : "No resource types have been defined in Firestore.")
+                    ? "Try adjusting your search criteria or ensure types are added."
+                    : (canAddResourceTypes ? "Add resource types to categorize your lab equipment and assets." : "No resource types have been defined.")
                 }
             </p>
             {activeSearchTerm && canManageResourceTypes && (
