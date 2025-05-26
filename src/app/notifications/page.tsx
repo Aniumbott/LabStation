@@ -111,6 +111,10 @@ export default function NotificationsPage() {
   }, [authIsLoading, currentUser, fetchNotifications]);
 
   const handleMarkAsRead = useCallback(async (id: string) => {
+    if (!currentUser?.id) {
+        toast({ title: "Authentication Error", description: "You must be logged in to perform this action.", variant: "destructive" });
+        return;
+    }
     try {
       const notifDocRef = doc(db, "notifications", id);
       await updateDoc(notifDocRef, { isRead: true });
@@ -120,10 +124,13 @@ export default function NotificationsPage() {
     } catch (error: any) {
       toast({ title: "Error", description: `Could not mark notification as read: ${error.message}`, variant: "destructive"});
     }
-  }, [toast]);
+  }, [currentUser, toast]);
 
   const handleMarkAllAsRead = useCallback(async () => {
-    if (!currentUser) return;
+    if (!currentUser?.id) {
+        toast({ title: "Authentication Error", description: "You must be logged in to perform this action.", variant: "destructive" });
+        return;
+    }
     const unreadNotifications = notifications.filter(n => !n.isRead);
     if (unreadNotifications.length === 0) {
       toast({ title: "No Unread Notifications", description: "All notifications are already marked as read." });
@@ -148,6 +155,10 @@ export default function NotificationsPage() {
   }, [currentUser, notifications, toast]);
   
   const handleDeleteNotification = useCallback(async (id: string) => {
+    if (!currentUser?.id) {
+        toast({ title: "Authentication Error", description: "You must be logged in to perform this action.", variant: "destructive" });
+        return;
+    }
      try {
        const notifDocRef = doc(db, "notifications", id);
        await deleteDoc(notifDocRef);
@@ -156,10 +167,15 @@ export default function NotificationsPage() {
      } catch (error: any) {
        toast({ title: "Error", description: `Could not delete notification: ${error.message}`, variant: "destructive"});
      }
-  }, [toast]);
+  }, [currentUser, toast]);
 
   const handleDeleteAllNotifications = useCallback(async () => {
-    if (!currentUser || notifications.length === 0) {
+    if (!currentUser?.id) {
+        toast({ title: "Authentication Error", description: "You must be logged in to perform this action.", variant: "destructive" });
+        setIsClearAllAlertOpen(false);
+        return;
+    }
+    if (notifications.length === 0) {
       setIsClearAllAlertOpen(false);
       return;
     }
@@ -321,3 +337,4 @@ export default function NotificationsPage() {
     </TooltipProvider>
   );
 }
+
