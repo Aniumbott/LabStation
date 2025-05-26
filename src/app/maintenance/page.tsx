@@ -471,7 +471,7 @@ export default function MaintenanceRequestsPage() {
               <CardTitle>Maintenance Log ({filteredRequests.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto rounded-lg border shadow-sm">
+              <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow>
