@@ -25,7 +25,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-// Removed ManageAvailabilityDialog import
 import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavailability-dialog';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore'; // This is Firestore Timestamp
@@ -178,7 +177,6 @@ export default function ResourceDetailPage() {
   const [isAlertOpen, setIsAlertOpen] = useState(false); 
   const [resourceToDeleteId, setResourceToDeleteId] = useState<string | null>(null);
 
-  // Removed isAvailabilityDialogOpen, setIsAvailabilityDialogOpen
   const [isUnavailabilityDialogOpen, setIsUnavailabilityDialogOpen] = useState(false);
   const [resourceUserBookings, setResourceUserBookings] = useState<Booking[]>([]);
   const [fetchedResourceTypesForDialog, setFetchedResourceTypesForDialog] = useState<ResourceType[]>([]);
@@ -223,7 +221,6 @@ export default function ResourceDetailPage() {
             notes: data.remoteAccess.notes || undefined,
           } : undefined,
           allowQueueing: data.allowQueueing ?? false,
-          // availability: Array.isArray(data.availability) ? data.availability.map((a: any) => ({...a, date: a.date })) : [], // Removed
           unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2,9)), startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [],
           features: Array.isArray(data.features) ? data.features : [],
           lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
@@ -364,8 +361,6 @@ export default function ResourceDetailPage() {
     });
   }, [resource]);
 
-  // Removed upcomingAvailability useMemo block
-
   const handleOpenEditDialog = useCallback(() => {
     if (resource) {
       setIsFormDialogOpen(true);
@@ -466,8 +461,6 @@ export default function ResourceDetailPage() {
     }
   }, [resourceToDeleteId, currentUser, canManageResource, resource, router, toast]);
 
-  // Removed handleSaveAvailability
-
   const handleSaveUnavailability = useCallback(async (updatedPeriods: UnavailabilityPeriod[]) => {
     if (!resource || !currentUser || !canManageResource) {
         toast({ title: "Error", description: "Cannot save unavailability. Resource not loaded or permission denied.", variant: "destructive"});
@@ -530,7 +523,6 @@ export default function ResourceDetailPage() {
                   </TooltipTrigger>
                   <TooltipContent><p>Set Unavailability Periods</p></TooltipContent>
                 </Tooltip>
-                {/* Removed Manage Daily Availability button */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="outline" size="icon" onClick={handleOpenEditDialog}>
@@ -706,7 +698,6 @@ export default function ResourceDetailPage() {
                 </Button>
             </CardFooter>
           </Card>
-          {/* Removed Upcoming Daily Availability card section */}
             {resource && resource.status === 'Available' && (
               <Card className="shadow-lg">
                 <CardHeader>
@@ -742,7 +733,6 @@ export default function ResourceDetailPage() {
             resourceTypes={fetchedResourceTypesForDialog}
         />
       )}
-      {/* Removed ManageAvailabilityDialog instance */}
       {resource && (
         <ManageUnavailabilityDialog
           resource={resource}
@@ -755,3 +745,5 @@ export default function ResourceDetailPage() {
     </TooltipProvider>
   );
 }
+
+    
