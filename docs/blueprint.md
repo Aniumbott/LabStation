@@ -1,18 +1,13 @@
-# **App Name**: LabStation
+# **App Name**: Greeting Display
 
 ## Core Features:
 
-- Interactive Dashboard: Provide a dashboard interface showing resource availability and quick booking options.
-- Advanced Resource Search: Allow users to search and filter available lab resources based on various criteria such as lab, type, and availability. This provides easy discovery of the right resource.
-- Integrated Booking Calendar: Implement a booking calendar UI, allowing users to book time slots, view the status of their bookings and edit bookings.
-- Smart Calibration Tool: Based on the current resource usage trends, past maintenance logs and upcoming bookings, this tool will determine an optimized schedule for resources calibration
+- Greeting Display: Display a static greeting message on the main page.
 
 ## Style Guidelines:
 
-- Primary color: Red (#e90029).
-- Background color: White (#ffffff) to create a clean and spacious feel.
-- Accent color: Gray (#555555) for interactive elements to add a touch of sophistication and not be as common as other basic colors.
-- Use a clean, sans-serif font for the main text to ensure readability and modernity.
-- Consistent and clear icons representing resource types and actions to improve user navigation.
-- Clean layout, dividing sections, and maximizing the content's visibility.
-- Use micro-interactions for feedback to user interaction
+- Background: Light beige (#F5F5DC) to give a warm, neutral feel. This is intended to suggest approachability without being visually distracting.
+- Primary color: Soft brown (#A0522D) for text, providing contrast on the light background. Evokes a sense of earthiness and reliability.
+- Accent color: Muted gold (#B8860B) to highlight interactive elements. Adds a subtle touch of sophistication.
+- Clean and readable sans-serif font for body text to ensure readability and a modern feel.
+- Simple, centered layout with the greeting message prominently displayed.
