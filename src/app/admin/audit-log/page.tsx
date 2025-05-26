@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { History, Filter as FilterIcon, Search as SearchIcon, X, Loader2, FilterX } from 'lucide-react';
+import { History, Filter as FilterIcon, Search as SearchIcon, X, Loader2, FilterX, CheckCircle2 } from 'lucide-react';
 import type { AuditLogEntry, AuditActionType } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import {
@@ -212,7 +212,7 @@ export default function AuditLogPage() {
                 <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}>
                   <X className="mr-2 h-4 w-4" />Cancel
                 </Button>
-                <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
+                <Button onClick={handleApplyDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4" />Apply Filters</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

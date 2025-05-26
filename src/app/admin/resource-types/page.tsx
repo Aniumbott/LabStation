@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, Package } from 'lucide-react'; // Added Package icon
+import { ListChecks, PlusCircle, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, Package, CheckCircle2 } from 'lucide-react'; // Added Package icon
 import type { ResourceType, Resource } from '@/types'; // Added Resource type
 import { useAuth } from '@/components/auth-context';
 import {
@@ -303,7 +303,7 @@ export default function ResourceTypesPage() {
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
                   <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}><X className="mr-2 h-4 w-4" />Cancel</Button>
-                  <Button onClick={handleApplyDialogFilters}>Apply Filters</Button>
+                  <Button onClick={handleApplyDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
