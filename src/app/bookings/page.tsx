@@ -611,22 +611,24 @@ function BookingsPageContent({}: BookingsPageContentProps) {
             details: `Booking for '${selectedResource.name}' by ${currentUser.name}. Status: ${finalStatus}. Start: ${format(finalStartTime, 'PPpp')}, End: ${format(finalEndTime, 'PPpp')}.`
           });
           try {
-            const adminUsersQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager']));
-            const adminSnapshot = await getDocs(adminUsersQuery);
-            const notificationPromises = adminSnapshot.docs.map(adminDoc => {
-              if (adminDoc.id !== currentUser.id) { 
-                return addNotification(
-                  adminDoc.id,
-                  'New Booking Request',
-                  `Booking for ${selectedResource!.name} by ${currentUser!.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`,
-                  'booking_pending_approval',
-                  `/admin/booking-requests?bookingId=${docRef.id}`
-                );
-              }
-              return Promise.resolve();
-            });
-            await Promise.all(notificationPromises);
-            console.log("Admin notifications sent for new pending booking.");
+            if (currentUser?.id && currentUser.name && selectedResource.name) {
+                const adminUsersQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager']));
+                const adminSnapshot = await getDocs(adminUsersQuery);
+                const notificationPromises = adminSnapshot.docs.map(adminDoc => {
+                if (adminDoc.id !== currentUser?.id) { 
+                    return addNotification(
+                    adminDoc.id,
+                    'New Booking Request',
+                    `Booking for ${selectedResource!.name} by ${currentUser!.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`,
+                    'booking_pending_approval',
+                    `/admin/booking-requests?bookingId=${docRef.id}`
+                    );
+                }
+                return Promise.resolve();
+                });
+                await Promise.all(notificationPromises);
+                console.log("Admin notifications sent for new pending booking.");
+            }
           } catch (adminNotificationError) {
             console.error("Error sending notifications to admins:", adminNotificationError);
           }
@@ -655,7 +657,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
 
     const bookingToCancel = allUserBookings.find(b => b.id === bookingId);
     if (!bookingToCancel) {
-      toast({ title: "Error", description: "Booking not found.", variant: "destructive" });
+      toast({ title: "Error", description: "Booking not found in your current list.", variant: "destructive" });
       return;
     }
     const resourceForCancelledBooking = allAvailableResources.find(r => r.id === bookingToCancel.resourceId);
@@ -673,11 +675,18 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       await fetchAllBookingsForUser();
     } catch (error: any) {
       console.error("Error cancelling booking:", error);
-      toast({ title: "Cancellation Failed", description: `Could not cancel booking. ${error.message}`, variant: "destructive" });
+      let userMessage = `Could not cancel booking. Please try again.`;
+      // Check if the error is a Firestore 'not-found' error
+      if (error.code === 'not-found' || (error.message && typeof error.message === 'string' && error.message.toLowerCase().includes("no document to update"))) {
+        userMessage = "Could not cancel booking. The booking may have already been removed or modified elsewhere.";
+      } else if (error.message) {
+        userMessage = `Could not cancel booking: ${error.message}`;
+      }
+      toast({ title: "Cancellation Failed", description: userMessage, variant: "destructive" });
     } finally {
       setIsLoadingBookings(false);
     }
-  }, [currentUser, allUserBookings, allAvailableResources, fetchAllBookingsForUser, toast]);
+  }, [currentUser, allUserBookings, allAvailableResources, fetchAllUserBookings, toast]);
 
 
   const handleOpenDetailsDialog = useCallback(async (bookingId: string) => {
@@ -697,7 +706,9 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         else detailedBooking.resourceName = "Resource Not Found";
       }
 
-      if (bookingFromState.userId) {
+      if (bookingFromState.userId && currentUser?.id === bookingFromState.userId) {
+        detailedBooking.userName = currentUser.name; // Use current user's name if it's their booking
+      } else if (bookingFromState.userId) { // Fallback to fetch if not current user (though this page primarily shows current user's bookings)
         const userDocSnap = await getDoc(doc(db, 'users', bookingFromState.userId));
         if (userDocSnap.exists()) detailedBooking.userName = userDocSnap.data()?.name || "Unknown User";
          else detailedBooking.userName = "User Not Found";
@@ -711,7 +722,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
 
     setSelectedBookingForDetails(detailedBooking);
     setIsDetailsDialogOpen(true);
-  }, [allUserBookings, toast]);
+  }, [allUserBookings, currentUser, toast]);
 
   const handleBookingUpdateInDetails = useCallback((updatedBooking: Booking) => {
     if (!currentUser) return;
