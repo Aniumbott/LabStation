@@ -52,7 +52,7 @@ import { BlackoutDateFormDialog, BlackoutDateFormValues } from '@/components/adm
 import { RecurringBlackoutRuleFormDialog, RecurringBlackoutRuleFormValues } from '@/components/admin/recurring-blackout-rule-form-dialog';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
-import { addAuditLog } from '@/lib/mock-data';
+import { addAuditLog } from '@/lib/firestore-helpers';
 
 export default function BlackoutDatesPage() {
   const { toast } = useToast();

@@ -50,7 +50,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
-import { userRolesList, addNotification, addAuditLog } from '@/lib/mock-data';
+import { userRolesList } from '@/lib/app-constants';
+import { addNotification, addAuditLog } from '@/lib/firestore-helpers';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, Timestamp, query, orderBy, where } from 'firebase/firestore';
 

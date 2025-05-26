@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter, Clock, Info, X, Loader2, User as UserIcon, Package as ResourceIcon } from 'lucide-react';
 import type { Booking, Resource, User } from '@/types';
-import { addNotification, addAuditLog } from '@/lib/mock-data';
+import { addNotification, addAuditLog } from '@/lib/firestore-helpers';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -453,5 +453,3 @@ export default function BookingRequestsPage() {
     </TooltipProvider>
   );
 }
-
-    

@@ -51,7 +51,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
-import { addAuditLog } from '@/lib/mock-data';
+import { addAuditLog } from '@/lib/firestore-helpers';
 
 type ResourceTypeSortableColumn = 'name' | 'resourceCount' | 'description';
 
@@ -480,4 +480,3 @@ export default function ResourceTypesPage() {
     </TooltipProvider>
   );
 }
-

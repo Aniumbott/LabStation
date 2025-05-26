@@ -18,7 +18,7 @@ import { Calendar, Clock, User, Info, Tag, StickyNote, Activity, CheckCircle, Al
 import { cn } from '@/lib/utils';
 import { Separator } from '../ui/separator';
 import { LogUsageFormDialog } from './log-usage-form-dialog';
-import { initialBookings } from '@/lib/mock-data'; 
+
 
 interface BookingDetailsDialogProps {
   booking: Booking | null;
@@ -33,7 +33,7 @@ const DetailItem = ({ icon: Icon, label, value }: { icon: React.ElementType, lab
     <div className="flex items-start">
       <Icon className="mr-3 h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
       <div>
-        <span className="font-medium text-muted-foreground">{label}:</span>
+        <span className="font-medium text-muted-foreground w-28">{label}:</span>
         <p className="text-foreground whitespace-pre-wrap">{value || 'N/A'}</p>
       </div>
     </div>
@@ -91,10 +91,8 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
     if (currentBookingDetails) {
       const updatedBooking = { ...currentBookingDetails, usageDetails: usageData };
       
-      const globalIndex = initialBookings.findIndex(b => b.id === currentBookingDetails.id);
-      if (globalIndex !== -1) {
-        initialBookings[globalIndex] = updatedBooking;
-      }
+      // The direct manipulation of initialBookings (mock data) is removed.
+      // The parent component will be responsible for updating Firestore based on onBookingUpdate.
       
       setCurrentBookingDetails(updatedBooking); 
       onBookingUpdate(updatedBooking); 

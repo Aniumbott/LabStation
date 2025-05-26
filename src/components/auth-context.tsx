@@ -14,7 +14,7 @@ import {
 } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
-import { addNotification, addAuditLog } from '@/lib/mock-data'; // Keep for in-memory notifications/audit
+import { addNotification, addAuditLog } from '@/lib/firestore-helpers';
 
 interface AuthContextType {
   currentUser: User | null;

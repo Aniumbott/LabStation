@@ -22,7 +22,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Save, X, PlusCircle, Network, Info, Loader2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { labsList, resourceStatusesList } from '@/lib/mock-data';
+import { labsList, resourceStatusesList } from '@/lib/app-constants';
 import { parseISO, format, isValid as isValidDateFn } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';

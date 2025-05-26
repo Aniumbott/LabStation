@@ -28,7 +28,8 @@ import {
 import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavailability-dialog';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore'; // This is Firestore Timestamp
-import { addAuditLog, labsList, resourceStatusesList } from '@/lib/mock-data';
+import { addAuditLog } from '@/lib/firestore-helpers';
+import { labsList, resourceStatusesList } from '@/lib/app-constants';
 
 
 function ResourceDetailPageSkeleton() {
@@ -745,5 +746,3 @@ export default function ResourceDetailPage() {
     </TooltipProvider>
   );
 }
-
-    

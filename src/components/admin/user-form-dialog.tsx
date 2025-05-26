@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { UserPlus, Save, X, Loader2 } from 'lucide-react';
 import type { User, RoleName } from '@/types';
-import { userRolesList } from '@/lib/mock-data';
+import { userRolesList } from '@/lib/app-constants';
 
 const userFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, "Name cannot exceed 100 characters."),

@@ -7,7 +7,7 @@ import { BarChart3, ClipboardList, AlertTriangle, Users as Users2Icon, PieChart 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import type { Resource, Booking, MaintenanceRequest, User, RoleName, MaintenanceRequestStatus } from '@/types';
-import { maintenanceRequestStatuses, userRolesList } from '@/lib/mock-data';
+import { maintenanceRequestStatuses, userRolesList } from '@/lib/app-constants';
 import {
   Table,
   TableBody,

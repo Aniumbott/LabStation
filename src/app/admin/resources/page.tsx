@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, X, CalendarPlus, CheckCircle2 } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { labsList, initialMockResourceTypes } from '@/lib/mock-data';
+import { labsList } from '@/lib/app-constants';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -59,7 +59,7 @@ import {
 } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/layout/page-header';
-import { addAuditLog } from '@/lib/mock-data';
+import { addAuditLog } from '@/lib/firestore-helpers';
 
 
 export default function AdminResourcesPage() {
