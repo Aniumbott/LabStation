@@ -212,7 +212,7 @@ export default function UsersPage() {
           role: data.role,
           // Email and status are not edited here directly; status handled by approve/suspend actions
         });
-        addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_UPDATED', { entityType: 'User', entityId: editingUser.id, details: `User ${data.name} (ID: ${editingUser.id}) details updated. Role set to ${data.role}.` });
+        await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_UPDATED', { entityType: 'User', entityId: editingUser.id, details: `User ${data.name} (ID: ${editingUser.id}) details updated. Role set to ${data.role}.` });
         toast({ title: 'User Updated', description: `User ${data.name} has been updated.` });
       } else { // Admin creating a new user profile (Firestore only, not Auth)
         const newUserId = `admin_created_${Date.now()}_${Math.random().toString(36).substring(2,9)}`;
@@ -225,7 +225,7 @@ export default function UsersPage() {
           status: 'active' as User['status'], // Admin created users are active by default
           createdAt: serverTimestamp(),
         });
-        addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User profile for ${data.name} (${data.email}) created by admin with role ${data.role}. This user cannot log in without a corresponding Auth account.` });
+        await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User profile for ${data.name} (${data.email}) created by admin with role ${data.role}. This user cannot log in without a corresponding Auth account.` });
         toast({ title: 'User Profile Created (Admin)', description: `User profile for ${data.name} created. Note: This does not create a Firebase Auth account for login.` });
       }
       setIsFormDialogOpen(false);
@@ -254,7 +254,7 @@ export default function UsersPage() {
     try {
       const userDocRef = doc(db, "users", userId);
       await deleteDoc(userDocRef); // Deletes Firestore profile
-      addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_DELETED', { entityType: 'User', entityId: userId, details: `User profile for ${userToDeleteDetails.name} (ID: ${userId}) deleted. Associated Firebase Auth user may still exist if one was created via signup.` });
+      await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_DELETED', { entityType: 'User', entityId: userId, details: `User profile for ${userToDeleteDetails.name} (ID: ${userId}) deleted. Associated Firebase Auth user may still exist if one was created via signup.` });
       toast({ title: "User Profile Deleted", description: `User "${userToDeleteDetails.name}" Firestore profile has been removed. Note: Their Firebase Auth account may still exist.`, variant: "destructive" });
       setUserToDelete(null);
       await fetchUsers();
@@ -267,7 +267,7 @@ export default function UsersPage() {
   }, [loggedInUser, users, fetchUsers, toast]);
 
   const handleApproveUser = useCallback(async (userId: string) => {
-    if (!loggedInUser || loggedInUser.role !== 'Admin') {
+    if (!loggedInUser || !loggedInUser.id || loggedInUser.role !== 'Admin') {
       toast({ title: "Permission Denied", description: "You are not authorized to approve users.", variant: "destructive" });
       return;
     }
@@ -282,17 +282,31 @@ export default function UsersPage() {
         const userDocRef = doc(db, "users", userId);
         await updateDoc(userDocRef, { status: 'active' });
         
-        addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_APPROVED', { entityType: 'User', entityId: userId, details: `User ${userToApproveDetails.name} (ID: ${userId}) approved by ${loggedInUser.name}.`});
-        toast({ title: 'User Approved', description: `User ${userToApproveDetails.name} has been approved and is now active.` });
+        const approvedUserName = userToApproveDetails.name || 'A user';
+        const adminName = loggedInUser.name || 'Admin';
+
+        await addAuditLog(loggedInUser.id, adminName, 'USER_APPROVED', { entityType: 'User', entityId: userId, details: `User ${approvedUserName} (ID: ${userId}) approved by ${adminName}.`});
+        toast({ title: 'User Approved', description: `User ${approvedUserName} has been approved and is now active.` });
         
-        addNotification(
-            userId,
-            'Account Approved!',
-            'Your LabStation account has been approved. You can now log in.',
-            'signup_approved',
-            '/login'
-        );
-        await fetchUsers(); // Refresh list
+        console.log(`[UsersPage/handleApproveUser] About to call addNotification for userId: ${userId}`);
+        try {
+            await addNotification(
+                userId,
+                'Account Approved!',
+                'Your LabStation account has been approved. You can now log in.',
+                'signup_approved',
+                '/login'
+            );
+            console.log(`[UsersPage/handleApproveUser] Successfully called addNotification for userId: ${userId}`);
+        } catch (notificationError: any) {
+            console.error(`[UsersPage/handleApproveUser] Error calling addNotification for userId ${userId}:`, notificationError);
+            toast({
+                title: "Notification Error",
+                description: `User ${approvedUserName} was approved, but sending the notification failed. Error: ${notificationError.message}`,
+                variant: "destructive"
+            });
+        }
+        await fetchUsers();
     } catch (error: any) {
         console.error("Error approving user:", error);
         toast({ title: 'Approval Failed', description: `Could not approve user ${userToApproveDetails.name}: ${error.message}`, variant: 'destructive' });
@@ -302,12 +316,12 @@ export default function UsersPage() {
   }, [loggedInUser, users, fetchUsers, toast]);
 
   const handleConfirmRejectUser = useCallback(async () => {
-    if (!userToReject || !loggedInUser || loggedInUser.role !== 'Admin') {
+    if (!userToReject || !loggedInUser || !loggedInUser.id || loggedInUser.role !== 'Admin') {
         toast({ title: "Error", description: "No user selected for rejection or permission denied.", variant: "destructive" });
         setUserToReject(null);
         return;
     }
-    const userDetails = users.find(u => u.id === userToReject.id); // Find from current state for name
+    const userDetails = users.find(u => u.id === userToReject.id); 
     if (!userDetails) {
         toast({ title: "Error", description: "User to reject not found in current list.", variant: "destructive" });
         setUserToReject(null);
@@ -317,12 +331,15 @@ export default function UsersPage() {
     setIsLoadingUsers(true);
     try {
       const userDocRef = doc(db, "users", userToReject.id);
-      await deleteDoc(userDocRef); // Deletes Firestore profile for the pending user
+      await deleteDoc(userDocRef);
 
-      addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_REJECTED', { entityType: 'User', entityId: userToReject.id, details: `Signup request for ${userDetails.name} (ID: ${userToReject.id}) rejected by ${loggedInUser.name} and profile removed. Associated Firebase Auth user may still exist.` });
-      toast({ title: 'Signup Request Rejected', description: `Signup request for ${userDetails.name} has been rejected and profile removed. Note: Their Firebase Auth account may still exist.`, variant: 'destructive' });
+      const rejectedUserName = userDetails.name || 'A user';
+      const adminName = loggedInUser.name || 'Admin';
+
+      await addAuditLog(loggedInUser.id, adminName, 'USER_REJECTED', { entityType: 'User', entityId: userToReject.id, details: `Signup request for ${rejectedUserName} (ID: ${userToReject.id}) rejected by ${adminName} and profile removed. Associated Firebase Auth user may still exist.` });
+      toast({ title: 'Signup Request Rejected', description: `Signup request for ${rejectedUserName} has been rejected and profile removed. Note: Their Firebase Auth account may still exist.`, variant: 'destructive' });
       setUserToReject(null);
-      await fetchUsers(); // Refresh list
+      await fetchUsers();
     } catch (error: any) {
       console.error("Error rejecting user:", error);
       toast({ title: 'Rejection Failed', description: `Could not reject user ${userDetails.name}: ${error.message}`, variant: 'destructive' });
@@ -464,7 +481,7 @@ export default function UsersPage() {
                   <TableRow key={user.id}>
                     <TableCell>
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={user.avatarUrl} alt={user.name} />
+                        <AvatarImage src={user.avatarUrl} alt={user.name} data-ai-hint="user avatar" />
                         <AvatarFallback>{user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'}</AvatarFallback>
                       </Avatar>
                     </TableCell>
@@ -498,7 +515,7 @@ export default function UsersPage() {
                               <TooltipTrigger asChild>
                                 <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToReject(user)} disabled={isLoadingUsers}>
                                     <ThumbsDown className="h-4 w-4" />
-                                    <span className="sr-only">Reject User</span>
+                                    <span className="sr-only">Reject User Signup</span>
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent><p>Reject User Signup</p></TooltipContent>

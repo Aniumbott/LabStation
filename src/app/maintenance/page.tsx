@@ -259,7 +259,7 @@ export default function MaintenanceRequestsPage() {
   }, []);
 
   const handleSaveRequest = useCallback(async (data: MaintenanceRequestFormValues) => {
-    if (!currentUser || !currentUser.name) {
+    if (!currentUser || !currentUser.id || !currentUser.name) {
       toast({ title: "Error", description: "You must be logged in.", variant: "destructive"});
       return;
     }
@@ -296,16 +296,30 @@ export default function MaintenanceRequestsPage() {
         const requestDocRef = doc(db, "maintenanceRequests", editingRequest.id);
         await updateDoc(requestDocRef, requestDataToSave);
 
-        addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingRequest.id, details: `Maintenance request for '${resource.name}' updated. Status: ${data.status}.`});
+        await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingRequest.id, details: `Maintenance request for '${resource.name}' updated. Status: ${data.status}.`});
         toast({ title: 'Request Updated', description: `Maintenance request for "${resource.name}" has been updated.` });
 
         // Notify reporter if resolved by someone else
         if ((data.status === 'Resolved' && editingRequest.status !== 'Resolved') && editingRequest.reportedByUserId !== currentUser.id && editingRequest.reportedByUserId) {
-          addNotification( editingRequest.reportedByUserId, 'Maintenance Resolved', `The issue reported for ${resource.name} has been resolved.`, 'maintenance_resolved', '/maintenance');
+          console.log(`[MaintenancePage/handleSaveRequest] About to call addNotification (Resolved) for userId: ${editingRequest.reportedByUserId}`);
+          try {
+            await addNotification( editingRequest.reportedByUserId, 'Maintenance Resolved', `The issue reported for ${resource.name} has been resolved.`, 'maintenance_resolved', '/maintenance');
+            console.log(`[MaintenancePage/handleSaveRequest] Successfully called addNotification (Resolved) for userId: ${editingRequest.reportedByUserId}`);
+          } catch (notificationError: any) {
+             console.error(`[MaintenancePage/handleSaveRequest] Error calling addNotification (Resolved) for userId ${editingRequest.reportedByUserId}:`, notificationError);
+             toast({ title: "Notification Error", description: `Request updated, but sending 'Resolved' notification failed. Error: ${notificationError.message}`, variant: "destructive" });
+          }
         }
         // Notify newly assigned technician
         if (data.assignedTechnicianId && data.assignedTechnicianId !== editingRequest.assignedTechnicianId && data.assignedTechnicianId !== '--unassigned--') {
-           addNotification( data.assignedTechnicianId, 'Maintenance Task Assigned', `You have been assigned a maintenance task for ${resource.name}: ${data.issueDescription.substring(0,50)}...`, 'maintenance_assigned', '/maintenance');
+           console.log(`[MaintenancePage/handleSaveRequest] About to call addNotification (Assigned) for userId: ${data.assignedTechnicianId}`);
+           try {
+            await addNotification( data.assignedTechnicianId, 'Maintenance Task Assigned', `You have been assigned a maintenance task for ${resource.name}: ${data.issueDescription.substring(0,50)}...`, 'maintenance_assigned', '/maintenance');
+            console.log(`[MaintenancePage/handleSaveRequest] Successfully called addNotification (Assigned) for userId: ${data.assignedTechnicianId}`);
+           } catch (notificationError: any) {
+             console.error(`[MaintenancePage/handleSaveRequest] Error calling addNotification (Assigned) for userId ${data.assignedTechnicianId}:`, notificationError);
+             toast({ title: "Notification Error", description: `Request updated, but sending 'Assigned' notification failed. Error: ${notificationError.message}`, variant: "destructive" });
+           }
         }
 
       } else { // New request
@@ -316,20 +330,35 @@ export default function MaintenanceRequestsPage() {
         };
         const docRef = await addDoc(collection(db, "maintenanceRequests"), newRequestPayload);
 
-        addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New maintenance request for '${resource.name}' logged by ${currentUser.name}.`});
+        await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New maintenance request for '${resource.name}' logged by ${currentUser.name}.`});
         toast({ title: 'Request Logged', description: `New maintenance request for "${resource.name}" has been logged.` });
         
-        // Notify assigned tech if assigned on creation
-        if(requestDataToSave.assignedTechnicianId && requestDataToSave.assignedTechnicianId !== '--unassigned--'){
-          addNotification( requestDataToSave.assignedTechnicianId, 'New Maintenance Request Assigned', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... has been assigned to you.`, 'maintenance_assigned', '/maintenance');
+        const techIdForNotification = requestDataToSave.assignedTechnicianId;
+        if(techIdForNotification && techIdForNotification !== '--unassigned--'){
+          console.log(`[MaintenancePage/handleSaveRequest] About to call addNotification (New & Assigned) for userId: ${techIdForNotification}`);
+          try {
+            await addNotification( techIdForNotification, 'New Maintenance Request Assigned', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... has been assigned to you.`, 'maintenance_assigned', '/maintenance');
+            console.log(`[MaintenancePage/handleSaveRequest] Successfully called addNotification (New & Assigned) for userId: ${techIdForNotification}`);
+          } catch (notificationError: any) {
+             console.error(`[MaintenancePage/handleSaveRequest] Error calling addNotification (New & Assigned) for userId ${techIdForNotification}:`, notificationError);
+             toast({ title: "Notification Error", description: `Request logged, but sending 'New & Assigned' notification failed. Error: ${notificationError.message}`, variant: "destructive" });
+          }
         } else { 
-            const usersToNotifyQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager', 'Technician']));
+            const usersToNotifyQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager', 'Technician']), orderBy('name', 'asc'));
             const usersToNotifySnapshot = await getDocs(usersToNotifyQuery);
-            usersToNotifySnapshot.forEach(userDoc => {
+            const notificationPromises = usersToNotifySnapshot.docs.map(userDoc => {
                 if(userDoc.id !== currentUser?.id) { 
-                    addNotification( userDoc.id, 'New Unassigned Maintenance Request', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`, 'maintenance_new', '/maintenance');
+                    console.log(`[MaintenancePage/handleSaveRequest] About to call addNotification (New Unassigned) for userId: ${userDoc.id}`);
+                    return addNotification( userDoc.id, 'New Unassigned Maintenance Request', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`, 'maintenance_new', '/maintenance')
+                        .then(() => console.log(`[MaintenancePage/handleSaveRequest] Successfully called addNotification (New Unassigned) for userId: ${userDoc.id}`))
+                        .catch(notificationError => {
+                            console.error(`[MaintenancePage/handleSaveRequest] Error calling addNotification (New Unassigned) for userId ${userDoc.id}:`, notificationError);
+                            toast({ title: "Partial Notification Error", description: `Request logged, but failed to notify ${userDoc.data().name}. Error: ${notificationError.message}`, variant: "destructive" });
+                        });
                 }
+                return Promise.resolve();
             });
+            await Promise.all(notificationPromises);
         }
       }
       setIsFormDialogOpen(false);
@@ -352,7 +381,7 @@ export default function MaintenanceRequestsPage() {
 
   const canEditMaintenanceRequest = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager' || currentUser.role === 'Technician');
 
-  if (!currentUser && !isLoading) { // Updated to also check !isLoading to prevent flash of login prompt
+  if (!currentUser && !isLoading) { 
     return (
       <div className="space-y-8">
         <PageHeader title="Maintenance Requests" icon={Wrench} description="Please log in to view or manage maintenance requests." />
@@ -376,7 +405,7 @@ export default function MaintenanceRequestsPage() {
           description="Log, track, and manage service requests for lab resources."
           icon={Wrench}
           actions={
-            currentUser && ( // Ensure actions are only available if user is logged in
+            currentUser && ( 
             <div className="flex items-center gap-2 flex-wrap">
               <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
                 <DialogTrigger asChild>
@@ -441,7 +470,7 @@ export default function MaintenanceRequestsPage() {
                           <SelectTrigger id="maintenanceTechnicianDialog" className="h-9 mt-1"><SelectValue placeholder={allTechnicians.length > 0 ? "Filter by Technician" : "No technicians found"} /></SelectTrigger>
                           <SelectContent>
                               <SelectItem value="all">All/Any</SelectItem>
-                              <SelectItem value="--unassigned--">Unassigned</SelectItem> {/* Use consistent value */}
+                              <SelectItem value="--unassigned--">Unassigned</SelectItem> 
                               {allTechnicians.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                           </SelectContent>
                       </Select>
@@ -464,7 +493,7 @@ export default function MaintenanceRequestsPage() {
           }
         />
 
-        {isLoading && requests.length === 0 ? ( // Show loader only if loading and no requests are yet shown
+        {isLoading && requests.length === 0 ? ( 
             <div className="flex justify-center items-center py-10 text-muted-foreground"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading requests...</div>
         ) : filteredRequests.length > 0 ? (
           <Card>
@@ -488,7 +517,7 @@ export default function MaintenanceRequestsPage() {
                   <TableBody>
                     {filteredRequests.map((request) => {
                       const reporter = allUsers.find(u => u.id === request.reportedByUserId);
-                      const technician = allUsers.find(u => u.id === request.assignedTechnicianId); // Fetch from allUsers for name
+                      const technician = allUsers.find(u => u.id === request.assignedTechnicianId); 
                       const resource = allResources.find(r => r.id === request.resourceId);
                       return (
                         <TableRow key={request.id}>
@@ -565,6 +594,3 @@ export default function MaintenanceRequestsPage() {
     </TooltipProvider>
   );
 }
-
-
-    
