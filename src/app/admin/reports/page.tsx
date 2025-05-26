@@ -115,7 +115,6 @@ export default function ReportsPage() {
           purchaseDate: data.purchaseDate instanceof Timestamp ? data.purchaseDate.toDate() : undefined,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
           lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
-          availability: Array.isArray(data.availability) ? data.availability : [],
           unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods : [],
         } as Resource;
       }));
@@ -583,7 +582,7 @@ export default function ReportsPage() {
             {isLoading ? (
                 <div className="text-center py-10 text-muted-foreground">Loading user activity...</div>
             ) : processedUserUsageData.length > 0 ? (
-              <div className="overflow-x-auto rounded-lg border">
+              <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
