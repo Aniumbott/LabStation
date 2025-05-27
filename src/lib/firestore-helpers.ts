@@ -1,50 +1,56 @@
 
 'use server';
 
-import { db, auth } from '@/lib/firebase'; // auth is firebase client SDK
+import { db } from '@/lib/firebase'; // db is client SDK Firestore
 import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import type { Notification as NotificationAppType, NotificationType, AuditLogEntry, AuditActionType } from '@/types';
+import type { Notification as NotificationAppType, NotificationType as AppNotificationType, AuditLogEntry, AuditActionType } from '@/types';
 
 export async function addNotification(
   userId: string, // Recipient ID
   title: string,
   message: string,
-  type: NotificationType,
-  linkTo?: string | undefined // Kept linkTo as it's a common field and might be useful later
+  type: AppNotificationType,
+  linkToParam?: string | null | undefined // Explicitly allow null/undefined from call site
 ): Promise<void> {
-  console.log("--- [firestore-helpers/addNotification V4 DEBUG] ENTERING FUNCTION ---");
-  console.log("[firestore-helpers/addNotification V4 DEBUG] Parameters received:", { userId, title, message, type, linkTo });
+  const functionName = "addNotification";
+  console.log(`--- [${functionName} V3 DEBUG] ENTERING FUNCTION ---`);
+  const receivedParams = { userId, title, message, type, linkToParam };
+  console.log(`[${functionName} V3 DEBUG] Parameters received:`, JSON.stringify(receivedParams));
 
   if (!userId || !title || !message || !type) {
-    const errorMsg = "[firestore-helpers/addNotification V4 DEBUG] CRITICAL: Missing required parameters.";
-    console.error(errorMsg, { userId, title, message, type });
-    throw new Error("addNotification: Critical parameters (userId, title, message, or type) are missing or falsy.");
+    const errorMsg = `${functionName}: Critical parameters (userId, title, message, or type) are missing or falsy.`;
+    console.error(`!!! CRITICAL ERROR IN ${functionName} !!!`, errorMsg, receivedParams);
+    throw new Error(errorMsg);
   }
 
-  // SUPER MINIMAL payload for testing Firestore permissions
-  const newNotificationData = {
+  // Ensure linkTo is either a valid string or undefined
+  const finalLinkTo = (linkToParam && typeof linkToParam === 'string' && linkToParam.trim() !== '') ? linkToParam.trim() : undefined;
+
+  // Construct the data to be saved, ensuring all fields are defined as per NotificationAppType or are optional
+  const newNotificationData: Omit<NotificationAppType, 'id'> & { createdAt: Timestamp } = {
     userId: userId,
     title: title,
     message: message,
     type: type,
     createdAt: serverTimestamp() as Timestamp,
-    // Temporarily removing isRead and linkTo for extreme debugging
-    isRead: false, // Firestore needs a defined value if the field is part of an index or rule logic, let's keep it simple.
-    // linkTo: linkTo, // Temporarily removed
+    isRead: false, // Default isRead to false
   };
 
-  console.log("[firestore-helpers/addNotification V4 DEBUG] Attempting to add VERY MINIMAL notification to Firestore. Data:", JSON.stringify(newNotificationData));
+  if (finalLinkTo !== undefined) {
+    newNotificationData.linkTo = finalLinkTo;
+  }
+
+  console.log(`[${functionName} V3 DEBUG] Attempting to add notification to Firestore. Data:`, JSON.stringify(newNotificationData));
 
   try {
     const docRef = await addDoc(collection(db, 'notifications'), newNotificationData);
-    console.log("!!! SUCCESS !!! [firestore-helpers/addNotification V4 DEBUG] Successfully added VERY MINIMAL notification to Firestore. Doc ID:", docRef.id, "For user:", userId);
+    console.log(`!!! SUCCESS !!! [${functionName} V3 DEBUG] Successfully added notification to Firestore. Doc ID:`, docRef.id, "For user:", userId);
   } catch (e: any) {
-    const errorMsg = "!!! FIRESTORE ERROR IN addNotification (V4 DEBUG) !!!";
-    console.error(errorMsg, "Error object:", e);
-    console.error("[firestore-helpers/addNotification V4 DEBUG] Data that failed:", JSON.stringify(newNotificationData));
-    if (e.code === 7 || e.code === 'permission-denied') {
-        console.error("Firebase detailed error code for PERMISSION_DENIED:", e.code, e.toString());
+    console.error(`!!! FIRESTORE ERROR IN ${functionName} !!!`, "Error object:", e);
+    if (e.details) {
+      console.error(`[${functionName} V3 DEBUG] Firestore Error Details:`, e.details);
     }
+    console.error(`[${functionName} V3 DEBUG] Data that failed:`, JSON.stringify(newNotificationData));
     throw e; // Re-throw the error to be caught by the caller
   }
 }
@@ -59,39 +65,43 @@ export async function addAuditLog(
     details: string;
   }
 ): Promise<void> {
-  console.log("--- [firestore-helpers/addAuditLog] ENTERING FUNCTION ---");
-  console.log("[firestore-helpers/addAuditLog] Parameters received:", { actingUserId, actingUserName, action, params });
+  const functionName = "addAuditLog";
+  console.log(`--- [${functionName}] ENTERING FUNCTION ---`);
+  const receivedParams = { actingUserId, actingUserName, action, params };
+  console.log(`[${functionName}] Parameters received:`, JSON.stringify(receivedParams));
 
   if (!actingUserId || !actingUserName || !action || !params.details) {
-    const errorMsg = "[firestore-helpers/addAuditLog] CRITICAL: Called with invalid or missing parameters.";
-    console.error(errorMsg, { actingUserId, actingUserName, action, params });
-    throw new Error("addAuditLog: Critical parameters (actingUserId, actingUserName, action, or params.details) are missing or falsy.");
+    const errorMsg = `${functionName}: Critical parameters (actingUserId, actingUserName, action, or params.details) are missing or falsy.`;
+    console.error(`!!! CRITICAL ERROR IN ${functionName} !!!`, errorMsg, receivedParams);
+    throw new Error(errorMsg); // Throw an error for explicit failure
   }
 
   const newLogData: Omit<AuditLogEntry, 'id' | 'timestamp'> & { timestamp: Timestamp } = {
     userId: actingUserId,
     userName: actingUserName,
     action: action,
-    entityType: params.entityType,
-    entityId: params.entityId,
+    entityType: params.entityType, // Will be undefined if not provided
+    entityId: params.entityId,     // Will be undefined if not provided
     details: params.details,
     timestamp: serverTimestamp() as Timestamp,
   };
 
-  console.log("[firestore-helpers/addAuditLog] Attempting to add audit log to Firestore. Data:", JSON.stringify(newLogData, null, 2));
+  console.log(`[${functionName}] Attempting to add audit log to Firestore. Data:`, JSON.stringify(newLogData, null, 2));
 
   try {
     const docRef = await addDoc(collection(db, 'auditLogs'), newLogData);
-    console.log(`!!! SUCCESS !!! [firestore-helpers/addAuditLog] Successfully added audit log. Doc ID: ${docRef.id}`);
+    console.log(`!!! SUCCESS !!! [${functionName}] Successfully added audit log. Doc ID: ${docRef.id}`);
   } catch (e: any) {
-    const errorMsg = "!!! FIRESTORE ERROR IN addAuditLog !!!";
-    console.error(errorMsg, "Error object:", e);
-    console.error("[firestore-helpers/addAuditLog] Audit log data that failed to add:", JSON.stringify(newLogData, (key, value) => {
+    console.error(`!!! FIRESTORE ERROR IN ${functionName} !!!`, "Error object:", e);
+    if (e.details) {
+      console.error(`[${functionName}] Firestore Error Details:`, e.details);
+    }
+    console.error(`[${functionName}] Audit log data that failed to add:`, JSON.stringify(newLogData, (key, value) => {
         if (value && typeof value === 'object' && value.constructor && value.constructor.name === 'Timestamp') {
             return '[Firebase Timestamp]';
         }
         return value;
     }, 2));
-    throw e;
+    throw e; // Re-throw the error
   }
 }

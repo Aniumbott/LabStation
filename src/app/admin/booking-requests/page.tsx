@@ -186,15 +186,21 @@ export default function BookingRequestsPage() {
       }
       
       if (bookingToUpdate.userId && bookingToUpdate.resourceName) {
-        console.log(`[BookingRequestsPage/handleApproveBooking] Preparing to send notification. Recipient UserID: ${bookingToUpdate.userId}, Resource: ${bookingToUpdate.resourceName}, StartTime: ${bookingToUpdate.startTime}`);
+        const notificationParams = {
+            userId: bookingToUpdate.userId,
+            title: 'Booking Confirmed',
+            message: `Your booking for ${bookingToUpdate.resourceName} on ${formatDateSafe(bookingToUpdate.startTime, '', 'MMM dd, HH:mm')} has been confirmed.`,
+            type: 'booking_confirmed' as const,
+            linkTo: `/bookings?bookingId=${bookingToUpdate.id}`
+        };
+        console.log(`[BookingRequestsPage/handleApproveBooking] Preparing to send 'Booking Confirmed' notification with params:`, JSON.stringify(notificationParams));
         try {
-          console.log(`[BookingRequestsPage/handleApproveBooking] About to call addNotification for userId: ${bookingToUpdate.userId}`);
           await addNotification(
-            bookingToUpdate.userId,
-            'Booking Confirmed',
-            `Your booking for ${bookingToUpdate.resourceName} on ${formatDateSafe(bookingToUpdate.startTime, '', 'MMM dd, HH:mm')} has been confirmed.`,
-            'booking_confirmed',
-            `/bookings?bookingId=${bookingToUpdate.id}`
+            notificationParams.userId,
+            notificationParams.title,
+            notificationParams.message,
+            notificationParams.type,
+            notificationParams.linkTo
           );
           console.log(`[BookingRequestsPage/handleApproveBooking] Successfully called addNotification for userId: ${bookingToUpdate.userId}`);
         } catch (notificationError: any) {
@@ -247,15 +253,21 @@ export default function BookingRequestsPage() {
       }
       
       if (bookingToUpdate.userId && bookingToUpdate.resourceName) {
-        console.log(`[BookingRequestsPage/handleRejectBooking] Preparing to send notification. Recipient UserID: ${bookingToUpdate.userId}, Resource: ${bookingToUpdate.resourceName}, StartTime: ${bookingToUpdate.startTime}`);
+         const notificationParams = {
+            userId: bookingToUpdate.userId,
+            title: 'Booking Rejected',
+            message: `Your booking for ${bookingToUpdate.resourceName} on ${formatDateSafe(bookingToUpdate.startTime, '', 'MMM dd, HH:mm')} has been rejected and cancelled.`,
+            type: 'booking_rejected' as const,
+            linkTo: `/bookings?bookingId=${bookingToUpdate.id}`
+        };
+        console.log(`[BookingRequestsPage/handleRejectBooking] Preparing to send 'Booking Rejected' notification with params:`, JSON.stringify(notificationParams));
         try {
-          console.log(`[BookingRequestsPage/handleRejectBooking] About to call addNotification for userId: ${bookingToUpdate.userId}`);
           await addNotification(
-            bookingToUpdate.userId,
-            'Booking Rejected',
-            `Your booking for ${bookingToUpdate.resourceName} on ${formatDateSafe(bookingToUpdate.startTime, '', 'MMM dd, HH:mm')} has been rejected and cancelled.`,
-            'booking_rejected',
-            `/bookings?bookingId=${bookingToUpdate.id}`
+            notificationParams.userId,
+            notificationParams.title,
+            notificationParams.message,
+            notificationParams.type,
+            notificationParams.linkTo
           );
           console.log(`[BookingRequestsPage/handleRejectBooking] Successfully called addNotification for userId: ${bookingToUpdate.userId}`);
         } catch (notificationError: any) {
@@ -503,3 +515,4 @@ export default function BookingRequestsPage() {
     </TooltipProvider>
   );
 }
+
