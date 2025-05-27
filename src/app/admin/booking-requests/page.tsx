@@ -33,14 +33,14 @@ import {
 } from "@/components/ui/tooltip";
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { format, parseISO, isValid as isValidDateFn } from 'date-fns'; // Timestamp removed from here
+import { format, parseISO, isValid as isValidDateFn } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { cn, formatDateSafe } from '@/lib/utils';
-import { db, auth } from '@/lib/firebase'; // Import auth directly from firebase
+import { db, auth } from '@/lib/firebase'; 
 import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy, Timestamp } from 'firebase/firestore';
 
 
@@ -48,10 +48,9 @@ const bookingStatusesForApprovalFilter: Array<'all' | 'Pending' | 'Waitlisted'> 
 
 export default function BookingRequestsPage() {
   const { toast } = useToast();
-  const { currentUser: loggedInUserFromContext } = useAuth(); // Renamed for clarity
+  const { currentUser: loggedInUserFromContext } = useAuth(); 
   const [allBookingsState, setAllBookingsState] = useState<(Booking & { resourceName?: string, userName?: string })[]>([]);
   const [allResources, setAllResources] = useState<Resource[]>([]);
-  // Removed allUsers state as user names are fetched on demand now for the table
 
   const [isLoading, setIsLoading] = useState(true);
 
@@ -72,7 +71,6 @@ export default function BookingRequestsPage() {
     }
     setIsLoading(true);
     try {
-      // Fetch resources for filter dropdown
       const resourcesQueryInstance = query(collection(db, "resources"), orderBy("name", "asc"));
       const resourcesSnapshot = await getDocs(resourcesQueryInstance);
       const fetchedResources = resourcesSnapshot.docs.map(d => ({
@@ -81,8 +79,6 @@ export default function BookingRequestsPage() {
       } as Resource));
       setAllResources(fetchedResources);
       
-      // Fetch bookings
-      // Firestore Index Required: bookings (status ASC, startTime ASC)
       const bookingsRef = collection(db, "bookings");
       const q = query(bookingsRef, where("status", "in", ["Pending", "Waitlisted"]), orderBy("startTime", "asc"));
       const querySnapshot = await getDocs(q);
@@ -159,7 +155,10 @@ export default function BookingRequestsPage() {
   }, [allBookingsState, activeSearchTerm, activeFilterResourceId, activeFilterStatus]);
 
   const handleApproveBooking = useCallback(async (bookingId: string) => {
-    if (!loggedInUserFromContext || !loggedInUserFromContext.id || !loggedInUserFromContext.name) return;
+    if (!loggedInUserFromContext || !loggedInUserFromContext.id || !loggedInUserFromContext.name) {
+        toast({ title: "Authentication Error", description: "Current user context is missing ID or name.", variant: "destructive" });
+        return;
+    }
     const bookingToUpdate = allBookingsState.find(b => b.id === bookingId);
     if (!bookingToUpdate || !bookingToUpdate.resourceId || !bookingToUpdate.userId || !bookingToUpdate.startTime) {
         toast({ title: "Error", description: "Booking data is incomplete for approval.", variant: "destructive" });
@@ -172,22 +171,20 @@ export default function BookingRequestsPage() {
       await updateDoc(bookingDocRef, { status: 'Confirmed' });
       
       toast({ title: 'Booking Approved', description: `Booking for "${bookingToUpdate.resourceName || 'Unknown Resource'}" by ${bookingToUpdate.userName || 'Unknown User'} has been confirmed.`});
-      await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_APPROVED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} approved.`});
       
-      const directAuthCurrentUser = auth.currentUser; // Direct SDK check
-      console.log("[BookingRequestsPage/handleApproveBooking] BEFORE NOTIFICATION ATTEMPT:");
-      console.log("loggedInUserFromContext.id:", loggedInUserFromContext.id);
-      console.log("directAuthCurrentUser?.uid:", directAuthCurrentUser?.uid);
-
-      if (!directAuthCurrentUser) {
-        console.error("[BookingRequestsPage/handleApproveBooking] CRITICAL: User became unauthenticated before sending 'Booking Confirmed' notification.");
-        toast({
-            title: "Notification Error (Auth State)",
-            description: "Critical: User became unauthenticated before sending 'Booking Confirmed' notification. Booking was approved.",
-            variant: "destructive",
-            duration: 10000,
-        });
-      } else if (bookingToUpdate.userId && bookingToUpdate.resourceName) {
+      try {
+        await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_APPROVED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} approved.`});
+      } catch (auditError: any) {
+          console.error("[BookingRequestsPage/handleApproveBooking] Error calling addAuditLog:", auditError);
+          toast({
+              title: "Audit Log Error",
+              description: `Booking approved, but audit log failed: ${auditError.message}`,
+              variant: "destructive",
+          });
+          // Decide if we should proceed or stop if audit log fails. For now, proceeding.
+      }
+      
+      if (bookingToUpdate.userId && bookingToUpdate.resourceName) {
         try {
           console.log(`[BookingRequestsPage/handleApproveBooking] About to call addNotification for userId: ${bookingToUpdate.userId}`);
           await addNotification(
@@ -211,15 +208,18 @@ export default function BookingRequestsPage() {
       }
       await fetchBookingRequestsAndRelatedData(); 
     } catch (error: any) {
-      console.error("Error approving booking:", error);
-      toast({ title: "Error", description: `Failed to approve booking: ${error.message}`, variant: "destructive" });
+      console.error("Error approving booking (main try-catch):", error);
+      toast({ title: "Error Approving Booking", description: `Failed to approve booking: ${error.message}`, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   }, [loggedInUserFromContext, allBookingsState, fetchBookingRequestsAndRelatedData, toast]);
 
   const handleRejectBooking = useCallback(async (bookingId: string) => {
-    if(!loggedInUserFromContext || !loggedInUserFromContext.id || !loggedInUserFromContext.name) return;
+    if(!loggedInUserFromContext || !loggedInUserFromContext.id || !loggedInUserFromContext.name) {
+        toast({ title: "Authentication Error", description: "Current user context is missing ID or name.", variant: "destructive" });
+        return;
+    }
     const bookingToUpdate = allBookingsState.find(b => b.id === bookingId);
      if (!bookingToUpdate || !bookingToUpdate.resourceId || !bookingToUpdate.userId || !bookingToUpdate.startTime) {
         toast({ title: "Error", description: "Booking data is incomplete for rejection.", variant: "destructive" });
@@ -232,22 +232,19 @@ export default function BookingRequestsPage() {
       await updateDoc(bookingDocRef, { status: 'Cancelled' }); 
       
       toast({ title: 'Booking Rejected', description: `Booking for "${bookingToUpdate.resourceName || 'Unknown Resource'}" by ${bookingToUpdate.userName || 'Unknown User'} has been cancelled.`, variant: 'destructive'});
-      await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_REJECTED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} rejected/cancelled.`});
-      
-      const directAuthCurrentUser = auth.currentUser; // Direct SDK check
-      console.log("[BookingRequestsPage/handleRejectBooking] BEFORE NOTIFICATION ATTEMPT:");
-      console.log("loggedInUserFromContext.id:", loggedInUserFromContext.id);
-      console.log("directAuthCurrentUser?.uid:", directAuthCurrentUser?.uid);
 
-      if (!directAuthCurrentUser) {
-         console.error("[BookingRequestsPage/handleRejectBooking] CRITICAL: User became unauthenticated before sending 'Booking Rejected' notification.");
-        toast({
-            title: "Notification Error (Auth State)",
-            description: "Critical: User became unauthenticated before sending 'Booking Rejected' notification. Booking was rejected.",
-            variant: "destructive",
-            duration: 10000,
-        });
-      } else if (bookingToUpdate.userId && bookingToUpdate.resourceName) {
+      try {
+        await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_REJECTED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} rejected/cancelled.`});
+      } catch (auditError: any) {
+          console.error("[BookingRequestsPage/handleRejectBooking] Error calling addAuditLog:", auditError);
+          toast({
+              title: "Audit Log Error",
+              description: `Booking rejected, but audit log failed: ${auditError.message}`,
+              variant: "destructive",
+          });
+      }
+      
+      if (bookingToUpdate.userId && bookingToUpdate.resourceName) {
         try {
           console.log(`[BookingRequestsPage/handleRejectBooking] About to call addNotification for userId: ${bookingToUpdate.userId}`);
           await addNotification(
@@ -271,8 +268,8 @@ export default function BookingRequestsPage() {
       }
       await fetchBookingRequestsAndRelatedData(); 
     } catch (error: any) {
-      console.error("Error rejecting booking:", error);
-      toast({ title: "Error", description: `Failed to reject booking: ${error.message}`, variant: "destructive" });
+      console.error("Error rejecting booking (main try-catch):", error);
+      toast({ title: "Error Rejecting Booking", description: `Failed to reject booking: ${error.message}`, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }

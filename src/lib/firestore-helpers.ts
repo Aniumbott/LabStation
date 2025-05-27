@@ -1,7 +1,7 @@
 
 'use server';
 
-import { db, auth } from '@/lib/firebase'; // Ensure auth is imported
+import { db, auth } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import type { Notification as NotificationAppType, NotificationType, AuditLogEntry, AuditActionType } from '@/types';
 
@@ -13,50 +13,43 @@ export async function addNotification(
   type: NotificationType,
   linkTo?: string | undefined
 ): Promise<void> {
-  console.log("--- [firestore-helpers/addNotification V2 DEBUG] ENTERING FUNCTION ---");
-  const currentFirebaseUser = auth.currentUser; // Get current auth state *directly* from Firebase JS SDK
-  
-  if (!currentFirebaseUser) {
-    console.error("!!! CRITICAL ERROR IN addNotification V2 DEBUG !!! Firebase JS SDK reports NO authenticated user (auth.currentUser is null) at function entry. Aborting notification creation.");
-    // It's possible the Firestore rules check request.auth, which might differ if the token is stale,
-    // but this client-side check is a strong indicator.
-    throw new Error("addNotification: Client-side Firebase auth.currentUser is null. Cannot create notification.");
-  }
-  console.log("[firestore-helpers/addNotification V2 DEBUG] Client-side Firebase Auth User UID:", currentFirebaseUser.uid);
-  console.log("[firestore-helpers/addNotification V2 DEBUG] Parameters received:", { userId, title, message, type, linkTo });
-
+  console.log("--- [firestore-helpers/addNotification V3 DEBUG] ENTERING FUNCTION ---");
+  console.log("[firestore-helpers/addNotification V3 DEBUG] Parameters received:", { userId, title, message, type, linkTo });
 
   if (!userId || !title || !message || !type) {
-    console.error("!!! CRITICAL ERROR IN addNotification V2 DEBUG !!! Missing required parameters.", { userId, title, message, type });
+    const errorMsg = "[firestore-helpers/addNotification V3 DEBUG] CRITICAL: Missing required parameters.";
+    console.error(errorMsg, { userId, title, message, type });
+    // For server actions, it's often better to throw to signal failure to the client explicitly.
     throw new Error("addNotification: Critical parameters (userId, title, message, or type) are missing or falsy.");
   }
 
-  // EXTREMELY SIMPLIFIED PAYLOAD FOR DEBUGGING
-  // Using only fields that are absolutely necessary and have simple string types
-  // Temporarily using a client-side timestamp to rule out serverTimestamp() issues.
-  const minimalNotificationData: any = {
-    userId: userId, 
-    title: title,   
-    message: `DEBUG PAYLOAD V2: ${message}`, 
-    type: type,     
-    debugClientCreatedAt: new Date().toISOString(), 
-    // isRead: false, // Intentionally removed for debugging
-    // linkTo: linkTo, // Intentionally removed for debugging
-    // createdAt: serverTimestamp(), // Temporarily replaced
+  // In a server action context, auth.currentUser (from client SDK) will be null.
+  // Authentication is handled by Next.js for invoking the action, and Firestore rules
+  // will use request.auth. The check for auth.currentUser has been removed.
+
+  const newNotificationData: Omit<NotificationAppType, 'id' | 'isRead' | 'createdAt'> & { createdAt: Timestamp, isRead: boolean } = {
+    userId: userId,
+    title: title,
+    message: message,
+    type: type,
+    linkTo: linkTo, // linkTo can be undefined, Firestore handles this by not storing the field
+    isRead: false,
+    createdAt: serverTimestamp() as Timestamp,
   };
 
-  console.log("[firestore-helpers/addNotification V2 DEBUG] Attempting to add EXTREMELY SIMPLIFIED notification to Firestore. Data:", JSON.stringify(minimalNotificationData));
+  console.log("[firestore-helpers/addNotification V3 DEBUG] Attempting to add notification to Firestore. Data:", JSON.stringify(newNotificationData));
 
   try {
-    const docRef = await addDoc(collection(db, 'notifications'), minimalNotificationData);
-    console.log("!!! SUCCESS !!! [firestore-helpers/addNotification V2 DEBUG] Successfully added EXTREMELY SIMPLIFIED notification to Firestore. Doc ID:", docRef.id, "For user:", userId);
+    const docRef = await addDoc(collection(db, 'notifications'), newNotificationData);
+    console.log("!!! SUCCESS !!! [firestore-helpers/addNotification V3 DEBUG] Successfully added notification to Firestore. Doc ID:", docRef.id, "For user:", userId);
   } catch (e: any) {
-    console.error("!!! FIRESTORE ERROR IN addNotification V2 DEBUG !!! Error adding EXTREMELY SIMPLIFIED notification. Full error object:", e);
-    console.error("[firestore-helpers/addNotification V2 DEBUG] Data that failed:", JSON.stringify(minimalNotificationData));
-    if (e.code === 7 || e.code === 'permission-denied') { // Explicitly check for permission denied code
+    const errorMsg = "[firestore-helpers/addNotification V3 DEBUG] FIRESTORE ERROR when adding notification.";
+    console.error(errorMsg, "Error object:", e);
+    console.error("[firestore-helpers/addNotification V3 DEBUG] Data that failed:", JSON.stringify(newNotificationData));
+    if (e.code === 7 || e.code === 'permission-denied') {
         console.error("Firebase detailed error code for PERMISSION_DENIED:", e.code, e.toString());
     }
-    throw e; // Re-throw the error
+    throw e; // Re-throw the error to be caught by the caller
   }
 }
 
@@ -71,27 +64,34 @@ export async function addAuditLog(
   }
 ): Promise<void> {
   if (!actingUserId || !actingUserName || !action || !params.details) {
-    console.error("[firestore-helpers/addAuditLog] CRITICAL: Called with invalid or missing parameters.", { actingUserId, actingUserName, action, params });
-    return;
+    const errorMsg = "[firestore-helpers/addAuditLog] CRITICAL: Called with invalid or missing parameters.";
+    console.error(errorMsg, { actingUserId, actingUserName, action, params });
+    throw new Error(errorMsg); // Throw error instead of just returning
   }
+
+  // entityType and entityId can be undefined if not provided in params.
+  // Firestore handles undefined fields by not writing them, which is acceptable.
   const newLogData: Omit<AuditLogEntry, 'id' | 'timestamp'> & { timestamp: Timestamp } = {
     userId: actingUserId,
     userName: actingUserName,
     action: action,
-    entityType: params.entityType, 
-    entityId: params.entityId,     
+    entityType: params.entityType,
+    entityId: params.entityId,
     details: params.details,
     timestamp: serverTimestamp() as Timestamp,
   };
+
   try {
     const docRef = await addDoc(collection(db, 'auditLogs'), newLogData);
+    console.log(`[firestore-helpers/addAuditLog] Successfully added audit log. Doc ID: ${docRef.id}`); // Added success log
   } catch (e: any) {
     console.error("[firestore-helpers/addAuditLog] Error adding audit log to Firestore:", e);
-     console.error("[firestore-helpers/addAuditLog] Audit log data that failed to add:", JSON.stringify(newLogData, (key, value) => {
+    console.error("[firestore-helpers/addAuditLog] Audit log data that failed to add:", JSON.stringify(newLogData, (key, value) => {
         if (value && typeof value === 'object' && value.constructor && value.constructor.name === 'Timestamp') {
             return '[Firebase Timestamp]';
         }
         return value;
     }, 2));
+    throw e; // Re-throw to ensure the caller is aware and it can be handled (e.g. to prevent 500)
   }
 }
