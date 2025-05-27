@@ -40,7 +40,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { cn, formatDateSafe } from '@/lib/utils';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase'; // Import auth directly from firebase
 import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy, Timestamp } from 'firebase/firestore';
 
 
@@ -48,7 +48,7 @@ const bookingStatusesForApprovalFilter: Array<'all' | 'Pending' | 'Waitlisted'> 
 
 export default function BookingRequestsPage() {
   const { toast } = useToast();
-  const { currentUser } = useAuth();
+  const { currentUser: loggedInUserFromContext } = useAuth(); // Renamed for clarity
   const [allBookingsState, setAllBookingsState] = useState<(Booking & { resourceName?: string, userName?: string })[]>([]);
   const [allResources, setAllResources] = useState<Resource[]>([]);
   // Removed allUsers state as user names are fetched on demand now for the table
@@ -65,7 +65,7 @@ export default function BookingRequestsPage() {
   const [activeFilterStatus, setActiveFilterStatus] = useState<'Pending' | 'Waitlisted' | 'all'>('Pending');
 
   const fetchBookingRequestsAndRelatedData = useCallback(async () => {
-    if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Lab Manager')) {
+    if (!loggedInUserFromContext || (loggedInUserFromContext.role !== 'Admin' && loggedInUserFromContext.role !== 'Lab Manager')) {
       setAllBookingsState([]);
       setIsLoading(false);
       return;
@@ -128,7 +128,7 @@ export default function BookingRequestsPage() {
       setAllBookingsState([]);
     }
     setIsLoading(false);
-  }, [currentUser, toast]);
+  }, [loggedInUserFromContext, toast]);
 
 
   useEffect(() => {
@@ -159,7 +159,7 @@ export default function BookingRequestsPage() {
   }, [allBookingsState, activeSearchTerm, activeFilterResourceId, activeFilterStatus]);
 
   const handleApproveBooking = useCallback(async (bookingId: string) => {
-    if (!currentUser || !currentUser.id || !currentUser.name) return;
+    if (!loggedInUserFromContext || !loggedInUserFromContext.id || !loggedInUserFromContext.name) return;
     const bookingToUpdate = allBookingsState.find(b => b.id === bookingId);
     if (!bookingToUpdate || !bookingToUpdate.resourceId || !bookingToUpdate.userId || !bookingToUpdate.startTime) {
         toast({ title: "Error", description: "Booking data is incomplete for approval.", variant: "destructive" });
@@ -171,26 +171,43 @@ export default function BookingRequestsPage() {
     try {
       await updateDoc(bookingDocRef, { status: 'Confirmed' });
       
-      toast({ title: 'Booking Approved', description: `Booking for "${bookingToUpdate.resourceName}" by ${bookingToUpdate.userName} has been confirmed.`});
-      await addAuditLog(currentUser.id, currentUser.name, 'BOOKING_APPROVED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName} by ${bookingToUpdate.userName} approved.`});
+      toast({ title: 'Booking Approved', description: `Booking for "${bookingToUpdate.resourceName || 'Unknown Resource'}" by ${bookingToUpdate.userName || 'Unknown User'} has been confirmed.`});
+      await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_APPROVED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} approved.`});
       
-      console.log(`[BookingRequestsPage/handleApproveBooking] About to call addNotification for userId: ${bookingToUpdate.userId}`);
-      try {
-        await addNotification(
-          bookingToUpdate.userId,
-          'Booking Confirmed',
-          `Your booking for ${bookingToUpdate.resourceName} on ${formatDateSafe(bookingToUpdate.startTime, '', 'MMM dd, HH:mm')} has been confirmed.`,
-          'booking_confirmed',
-          `/bookings?bookingId=${bookingToUpdate.id}`
-        );
-        console.log(`[BookingRequestsPage/handleApproveBooking] Successfully called addNotification for userId: ${bookingToUpdate.userId}`);
-      } catch (notificationError: any) {
-        console.error(`[BookingRequestsPage/handleApproveBooking] Error calling addNotification for userId ${bookingToUpdate.userId}:`, notificationError);
+      const directAuthCurrentUser = auth.currentUser; // Direct SDK check
+      console.log("[BookingRequestsPage/handleApproveBooking] BEFORE NOTIFICATION ATTEMPT:");
+      console.log("loggedInUserFromContext.id:", loggedInUserFromContext.id);
+      console.log("directAuthCurrentUser?.uid:", directAuthCurrentUser?.uid);
+
+      if (!directAuthCurrentUser) {
+        console.error("[BookingRequestsPage/handleApproveBooking] CRITICAL: User became unauthenticated before sending 'Booking Confirmed' notification.");
         toast({
-            title: "Notification Error",
-            description: `Booking was approved, but sending the notification failed. Error: ${notificationError.message}`,
-            variant: "destructive"
+            title: "Notification Error (Auth State)",
+            description: "Critical: User became unauthenticated before sending 'Booking Confirmed' notification. Booking was approved.",
+            variant: "destructive",
+            duration: 10000,
         });
+      } else if (bookingToUpdate.userId && bookingToUpdate.resourceName) {
+        try {
+          console.log(`[BookingRequestsPage/handleApproveBooking] About to call addNotification for userId: ${bookingToUpdate.userId}`);
+          await addNotification(
+            bookingToUpdate.userId,
+            'Booking Confirmed',
+            `Your booking for ${bookingToUpdate.resourceName} on ${formatDateSafe(bookingToUpdate.startTime, '', 'MMM dd, HH:mm')} has been confirmed.`,
+            'booking_confirmed',
+            `/bookings?bookingId=${bookingToUpdate.id}`
+          );
+          console.log(`[BookingRequestsPage/handleApproveBooking] Successfully called addNotification for userId: ${bookingToUpdate.userId}`);
+        } catch (notificationError: any) {
+          console.error(`[BookingRequestsPage/handleApproveBooking] Error calling addNotification for userId ${bookingToUpdate.userId}:`, notificationError);
+          toast({
+              title: "Notification Error",
+              description: `Booking was approved, but sending the notification failed. Error: ${notificationError.message}`,
+              variant: "destructive"
+          });
+        }
+      } else {
+        console.warn("[BookingRequestsPage/handleApproveBooking] Skipping notification: Missing userId or resourceName for the booking being approved.", bookingToUpdate);
       }
       await fetchBookingRequestsAndRelatedData(); 
     } catch (error: any) {
@@ -199,10 +216,10 @@ export default function BookingRequestsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser, allBookingsState, fetchBookingRequestsAndRelatedData, toast]);
+  }, [loggedInUserFromContext, allBookingsState, fetchBookingRequestsAndRelatedData, toast]);
 
   const handleRejectBooking = useCallback(async (bookingId: string) => {
-    if(!currentUser || !currentUser.id || !currentUser.name) return;
+    if(!loggedInUserFromContext || !loggedInUserFromContext.id || !loggedInUserFromContext.name) return;
     const bookingToUpdate = allBookingsState.find(b => b.id === bookingId);
      if (!bookingToUpdate || !bookingToUpdate.resourceId || !bookingToUpdate.userId || !bookingToUpdate.startTime) {
         toast({ title: "Error", description: "Booking data is incomplete for rejection.", variant: "destructive" });
@@ -214,26 +231,43 @@ export default function BookingRequestsPage() {
     try {
       await updateDoc(bookingDocRef, { status: 'Cancelled' }); 
       
-      toast({ title: 'Booking Rejected', description: `Booking for "${bookingToUpdate.resourceName}" by ${bookingToUpdate.userName} has been cancelled.`, variant: 'destructive'});
-      await addAuditLog(currentUser.id, currentUser.name, 'BOOKING_REJECTED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName} by ${bookingToUpdate.userName} rejected/cancelled.`});
+      toast({ title: 'Booking Rejected', description: `Booking for "${bookingToUpdate.resourceName || 'Unknown Resource'}" by ${bookingToUpdate.userName || 'Unknown User'} has been cancelled.`, variant: 'destructive'});
+      await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_REJECTED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} rejected/cancelled.`});
       
-      console.log(`[BookingRequestsPage/handleRejectBooking] About to call addNotification for userId: ${bookingToUpdate.userId}`);
-      try {
-        await addNotification(
-          bookingToUpdate.userId,
-          'Booking Rejected',
-          `Your booking for ${bookingToUpdate.resourceName} on ${formatDateSafe(bookingToUpdate.startTime, '', 'MMM dd, HH:mm')} has been rejected and cancelled.`,
-          'booking_rejected',
-          `/bookings?bookingId=${bookingToUpdate.id}`
-        );
-        console.log(`[BookingRequestsPage/handleRejectBooking] Successfully called addNotification for userId: ${bookingToUpdate.userId}`);
-      } catch (notificationError: any) {
-        console.error(`[BookingRequestsPage/handleRejectBooking] Error calling addNotification for userId ${bookingToUpdate.userId}:`, notificationError);
+      const directAuthCurrentUser = auth.currentUser; // Direct SDK check
+      console.log("[BookingRequestsPage/handleRejectBooking] BEFORE NOTIFICATION ATTEMPT:");
+      console.log("loggedInUserFromContext.id:", loggedInUserFromContext.id);
+      console.log("directAuthCurrentUser?.uid:", directAuthCurrentUser?.uid);
+
+      if (!directAuthCurrentUser) {
+         console.error("[BookingRequestsPage/handleRejectBooking] CRITICAL: User became unauthenticated before sending 'Booking Rejected' notification.");
         toast({
-            title: "Notification Error",
-            description: `Booking was rejected, but sending the notification failed. Error: ${notificationError.message}`,
-            variant: "destructive"
+            title: "Notification Error (Auth State)",
+            description: "Critical: User became unauthenticated before sending 'Booking Rejected' notification. Booking was rejected.",
+            variant: "destructive",
+            duration: 10000,
         });
+      } else if (bookingToUpdate.userId && bookingToUpdate.resourceName) {
+        try {
+          console.log(`[BookingRequestsPage/handleRejectBooking] About to call addNotification for userId: ${bookingToUpdate.userId}`);
+          await addNotification(
+            bookingToUpdate.userId,
+            'Booking Rejected',
+            `Your booking for ${bookingToUpdate.resourceName} on ${formatDateSafe(bookingToUpdate.startTime, '', 'MMM dd, HH:mm')} has been rejected and cancelled.`,
+            'booking_rejected',
+            `/bookings?bookingId=${bookingToUpdate.id}`
+          );
+          console.log(`[BookingRequestsPage/handleRejectBooking] Successfully called addNotification for userId: ${bookingToUpdate.userId}`);
+        } catch (notificationError: any) {
+          console.error(`[BookingRequestsPage/handleRejectBooking] Error calling addNotification for userId ${bookingToUpdate.userId}:`, notificationError);
+          toast({
+              title: "Notification Error",
+              description: `Booking was rejected, but sending the notification failed. Error: ${notificationError.message}`,
+              variant: "destructive"
+          });
+        }
+      } else {
+        console.warn("[BookingRequestsPage/handleRejectBooking] Skipping notification: Missing userId or resourceName for the booking being rejected.", bookingToUpdate);
       }
       await fetchBookingRequestsAndRelatedData(); 
     } catch (error: any) {
@@ -242,7 +276,7 @@ export default function BookingRequestsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser, allBookingsState, fetchBookingRequestsAndRelatedData, toast]);
+  }, [loggedInUserFromContext, allBookingsState, fetchBookingRequestsAndRelatedData, toast]);
 
   const handleApplyDialogFilters = useCallback(() => {
     setActiveSearchTerm(tempSearchTerm);
@@ -276,7 +310,7 @@ export default function BookingRequestsPage() {
     return dateInput && isValidDateFn(dateInput) ? format(dateInput, 'p') : 'Invalid Time';
   };
 
-  if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Lab Manager')) {
+  if (!loggedInUserFromContext || (loggedInUserFromContext.role !== 'Admin' && loggedInUserFromContext.role !== 'Lab Manager')) {
     return (
       <div className="space-y-8">
         <PageHeader title="Booking Requests" icon={CheckSquare} description="Access Denied." />
@@ -469,3 +503,4 @@ export default function BookingRequestsPage() {
     </TooltipProvider>
   );
 }
+
