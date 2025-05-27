@@ -173,7 +173,9 @@ export default function BookingRequestsPage() {
       toast({ title: 'Booking Approved', description: `Booking for "${bookingToUpdate.resourceName || 'Unknown Resource'}" by ${bookingToUpdate.userName || 'Unknown User'} has been confirmed.`});
       
       try {
+        console.log(`[BookingRequestsPage/handleApproveBooking] About to call addAuditLog. Admin: ${loggedInUserFromContext.name} (${loggedInUserFromContext.id})`);
         await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_APPROVED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} approved.`});
+        console.log(`[BookingRequestsPage/handleApproveBooking] Successfully called addAuditLog.`);
       } catch (auditError: any) {
           console.error("[BookingRequestsPage/handleApproveBooking] Error calling addAuditLog:", auditError);
           toast({
@@ -181,10 +183,10 @@ export default function BookingRequestsPage() {
               description: `Booking approved, but audit log failed: ${auditError.message}`,
               variant: "destructive",
           });
-          // Decide if we should proceed or stop if audit log fails. For now, proceeding.
       }
       
       if (bookingToUpdate.userId && bookingToUpdate.resourceName) {
+        console.log(`[BookingRequestsPage/handleApproveBooking] Preparing to send notification. Recipient UserID: ${bookingToUpdate.userId}, Resource: ${bookingToUpdate.resourceName}, StartTime: ${bookingToUpdate.startTime}`);
         try {
           console.log(`[BookingRequestsPage/handleApproveBooking] About to call addNotification for userId: ${bookingToUpdate.userId}`);
           await addNotification(
@@ -245,6 +247,7 @@ export default function BookingRequestsPage() {
       }
       
       if (bookingToUpdate.userId && bookingToUpdate.resourceName) {
+        console.log(`[BookingRequestsPage/handleRejectBooking] Preparing to send notification. Recipient UserID: ${bookingToUpdate.userId}, Resource: ${bookingToUpdate.resourceName}, StartTime: ${bookingToUpdate.startTime}`);
         try {
           console.log(`[BookingRequestsPage/handleRejectBooking] About to call addNotification for userId: ${bookingToUpdate.userId}`);
           await addNotification(
@@ -460,7 +463,7 @@ export default function BookingRequestsPage() {
                           </Tooltip>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button variant="outline" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => handleRejectBooking(booking.id)} disabled={isLoading}>
+                              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => handleRejectBooking(booking.id)} disabled={isLoading}>
                                 <ThumbsDown className="h-4 w-4" />
                                 <span className="sr-only">Reject Booking</span>
                               </Button>
@@ -500,4 +503,3 @@ export default function BookingRequestsPage() {
     </TooltipProvider>
   );
 }
-
