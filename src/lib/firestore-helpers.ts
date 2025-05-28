@@ -1,93 +1,121 @@
 
 'use server';
 
-import { db } from '@/lib/firebase'; // db is client SDK Firestore
-import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { adminDb } from '@/lib/firebase-admin'; // Import Admin SDK Firestore
+import { FieldValue } from 'firebase-admin/firestore'; // Import Admin SDK FieldValue for serverTimestamp
 import type { Notification as NotificationAppType, AuditLogEntry, AuditActionType, NotificationType as AppNotificationType } from '@/types';
-// Removed import { auth as firebaseAuth } from '@/lib/firebase'; as it's not used here and can be confusing in server context
+
+// IMPORTANT:
+// These functions now use the Firebase Admin SDK. This means they will BYPASS
+// Firestore security rules by default. Ensure that these server actions are
+// themselves protected (e.g., only callable by authenticated users through Next.js mechanisms)
+// and that the logic within them correctly determines who can perform actions
+// and for whom notifications/logs are created.
 
 export async function addNotification(
-  userId: string, // Parameter kept for signature, but will be ignored in this test
-  title: string, // Parameter kept for signature, but will be ignored in this test
-  message: string, // Parameter kept for signature, but will be ignored in this test
-  type: AppNotificationType, // Parameter kept for signature, but will be ignored in this test
-  linkToParam?: string | undefined // Parameter kept for signature, but will be ignored in this test
+  userId: string,
+  title: string,
+  message: string,
+  type: AppNotificationType,
+  linkToParam?: string | undefined
 ): Promise<void> {
-  const functionName = "addNotification V8 DEBUG (Hardcoded Test)";
+  const functionName = "addNotification V10 (Admin SDK)";
   console.log(`--- [${functionName}] ENTERING FUNCTION ---`);
-  console.log(`[${functionName}] typeof window: ${typeof window}`); // Should be 'undefined'
-  // Log original params for context, though we won't use them for the write
-  console.log(`[${functionName}] Original Params received:`, JSON.stringify({ userId, title, message, type, linkToParam }));
+  console.log(`[${functionName}] Server Context Check (typeof window): ${typeof window}`);
 
+  const paramsReceived = { userId, title, message, type, linkToParam };
+  console.log(`[${functionName}] Parameters received:`, JSON.stringify(paramsReceived, null, 2));
 
-  const hardcodedNotificationData: Omit<NotificationAppType, 'id'> & { createdAt: Timestamp } = {
-    userId: "HARDCODED_RECIPIENT_TEST_UID", // Use a known, valid UID for testing if needed, or a placeholder
-    title: "Hardcoded Test Notification Title",
-    message: "This is a hardcoded test notification message.",
-    type: "booking_confirmed" as AppNotificationType,
-    createdAt: serverTimestamp() as Timestamp,
+  if (!userId || !title || !message || !type) {
+    const errorMsg = `!!! CRITICAL ERROR IN ${functionName} !!! Missing required parameters. Data: ${JSON.stringify(paramsReceived, null, 2)}`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+
+  const finalLinkTo = typeof linkToParam === 'string' && linkToParam.trim() !== '' ? linkToParam.trim() : undefined;
+
+  // Using Admin SDK - Omit 'id' as Firestore Admin SDK generates it.
+  // Use Admin SDK FieldValue for serverTimestamp.
+  const newNotificationData: Omit<NotificationAppType, 'id' | 'createdAt'> & { createdAt: FieldValue } & { linkTo?: string } = {
+    userId: userId,
+    title: title,
+    message: message,
+    type: type,
     isRead: false,
-    linkTo: "/bookings/hardcoded-test-link",
+    createdAt: FieldValue.serverTimestamp(),
   };
+  if (finalLinkTo !== undefined) {
+    newNotificationData.linkTo = finalLinkTo;
+  }
 
-  console.log(`[${functionName}] Attempting to add HARDCODED notification to Firestore. Data:`, JSON.stringify(hardcodedNotificationData, null, 2));
+  console.log(`[${functionName}] Attempting to add notification to Firestore using Admin SDK. Data:`, JSON.stringify(newNotificationData, null, 2));
 
   try {
-    const docRef = await addDoc(collection(db, 'notifications'), hardcodedNotificationData);
-    console.log(`!!! SUCCESS !!! [${functionName}] Successfully added HARDCODED notification. Doc ID: ${docRef.id}`);
+    const docRef = await adminDb.collection('notifications').add(newNotificationData);
+    console.log(`!!! SUCCESS !!! [${functionName}] Successfully added notification using Admin SDK. Doc ID: ${docRef.id}`);
   } catch (e: any) {
-    console.error(`!!! FIRESTORE ERROR IN ${functionName} (HARDCODED TEST) !!!`);
+    console.error(`!!! FIRESTORE ADMIN SDK ERROR IN ${functionName} !!!`);
     console.error(`[${functionName}] Error Code:`, e.code);
     console.error(`[${functionName}] Error Message:`, e.message);
     if (e.details) {
       console.error(`[${functionName}] Firestore Error Details:`, e.details);
     }
-    console.error(`[${functionName}] Error Stack:`, e.stack ? e.stack.split('\n').slice(0, 5).join('\n') : 'No stack'); // Limit stack trace
-    console.error(`[${functionName}] HARDCODED Notification data that failed:`, JSON.stringify(hardcodedNotificationData, null, 2));
-    throw e; // Re-throw the error so the caller (and Next.js) knows it failed
+    console.error(`[${functionName}] Error Stack:`, e.stack ? e.stack.split('\\n').slice(0, 7).join('\\n') : 'No stack');
+    console.error(`[${functionName}] Notification data that failed:`, JSON.stringify(newNotificationData, null, 2));
+    throw e; // Re-throw the error
   }
 }
 
 export async function addAuditLog(
-  actingUserId: string, // Parameter kept for signature, but will be ignored in this test
-  actingUserName: string, // Parameter kept for signature, but will be ignored in this test
-  action: AuditActionType, // Parameter kept for signature, but will be ignored in this test
+  actingUserId: string,
+  actingUserName: string,
+  action: AuditActionType,
   params: {
     entityType?: AuditLogEntry['entityType'] | undefined;
     entityId?: string | undefined;
-    details: string; // Parameter kept for signature, but will be ignored in this test
+    details: string;
   }
 ): Promise<void> {
-  const functionName = "addAuditLog V8 DEBUG (Hardcoded Test)";
+  const functionName = "addAuditLog V10 (Admin SDK)";
   console.log(`--- [${functionName}] ENTERING FUNCTION ---`);
-  console.log(`[${functionName}] typeof window: ${typeof window}`); // Should be 'undefined'
-  // Log original params for context, though we won't use them for the write
-  console.log(`[${functionName}] Original Params received:`, JSON.stringify({ actingUserId, actingUserName, action, params }));
+  console.log(`[${functionName}] Server Context Check (typeof window): ${typeof window}`);
 
-  const hardcodedLogData: Omit<AuditLogEntry, 'id' | 'timestamp'> & { timestamp: Timestamp } = {
-    userId: "HARDCODED_ADMIN_TEST_UID", // Use your admin UID here for testing if needed, or a placeholder
-    userName: "Hardcoded Test Admin User",
-    action: "USER_APPROVED" as AuditActionType, // Example action
-    entityType: "User" as const,
-    entityId: "hardcoded_test_entity_id",
-    details: "This is a hardcoded audit log for testing server action auth context from addAuditLog.",
-    timestamp: serverTimestamp() as Timestamp,
+  const paramsReceived = { actingUserId, actingUserName, action, params };
+  console.log(`[${functionName}] Parameters received:`, JSON.stringify(paramsReceived, null, 2));
+
+  if (!actingUserId || !actingUserName || !action || !params.details) {
+    const errorMsg = `!!! CRITICAL ERROR IN ${functionName} !!! Missing required parameters. Data: ${JSON.stringify(paramsReceived, null, 2)}`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+
+  // Using Admin SDK - Omit 'id' as Firestore Admin SDK generates it.
+  // Use Admin SDK FieldValue for serverTimestamp.
+  const newLogData: Omit<AuditLogEntry, 'id' | 'timestamp'> & { timestamp: FieldValue } & { entityType?: string, entityId?: string } = {
+    userId: actingUserId,
+    userName: actingUserName,
+    action: action,
+    details: params.details,
+    timestamp: FieldValue.serverTimestamp(),
   };
 
-  console.log(`[${functionName}] Attempting to add HARDCODED audit log to Firestore. Data:`, JSON.stringify(hardcodedLogData, null, 2));
+  if (params.entityType) newLogData.entityType = params.entityType;
+  if (params.entityId) newLogData.entityId = params.entityId;
+
+  console.log(`[${functionName}] Attempting to add audit log to Firestore using Admin SDK. Data:`, JSON.stringify(newLogData, null, 2));
 
   try {
-    const docRef = await addDoc(collection(db, 'auditLogs'), hardcodedLogData);
-    console.log(`!!! SUCCESS !!! [${functionName}] Successfully added HARDCODED audit log. Doc ID: ${docRef.id}`);
+    const docRef = await adminDb.collection('auditLogs').add(newLogData);
+    console.log(`!!! SUCCESS !!! [${functionName}] Successfully added audit log using Admin SDK. Doc ID: ${docRef.id}`);
   } catch (e: any) {
-    console.error(`!!! FIRESTORE ERROR IN ${functionName} (HARDCODED TEST) !!!`);
+    console.error(`!!! FIRESTORE ADMIN SDK ERROR IN ${functionName} !!!`);
     console.error(`[${functionName}] Error Code:`, e.code);
     console.error(`[${functionName}] Error Message:`, e.message);
     if (e.details) {
       console.error(`[${functionName}] Firestore Error Details:`, e.details);
     }
-    console.error(`[${functionName}] Error Stack:`, e.stack ? e.stack.split('\n').slice(0, 5).join('\n') : 'No stack'); // Limit stack trace
-    console.error(`[${functionName}] HARDCODED Audit log data that failed:`, JSON.stringify(hardcodedLogData, null, 2));
+    console.error(`[${functionName}] Error Stack:`, e.stack ? e.stack.split('\\n').slice(0, 7).join('\\n') : 'No stack');
+    console.error(`[${functionName}] Audit log data that failed:`, JSON.stringify(newLogData, null, 2));
     throw e; // Re-throw the error
   }
 }
