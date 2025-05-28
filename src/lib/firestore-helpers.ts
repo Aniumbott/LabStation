@@ -3,105 +3,91 @@
 
 import { db } from '@/lib/firebase'; // db is client SDK Firestore
 import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import type { Notification as NotificationAppType, NotificationType as AppNotificationType, AuditLogEntry, AuditActionType } from '@/types';
+import type { Notification as NotificationAppType, AuditLogEntry, AuditActionType, NotificationType as AppNotificationType } from '@/types';
+// Removed import { auth as firebaseAuth } from '@/lib/firebase'; as it's not used here and can be confusing in server context
 
 export async function addNotification(
-  userId: string, // Recipient ID
-  title: string,
-  message: string,
-  type: AppNotificationType,
-  linkToParam?: string | null | undefined // Explicitly allow null/undefined from call site
+  userId: string, // Parameter kept for signature, but will be ignored in this test
+  title: string, // Parameter kept for signature, but will be ignored in this test
+  message: string, // Parameter kept for signature, but will be ignored in this test
+  type: AppNotificationType, // Parameter kept for signature, but will be ignored in this test
+  linkToParam?: string | undefined // Parameter kept for signature, but will be ignored in this test
 ): Promise<void> {
-  const functionName = "addNotification";
-  console.log(`--- [${functionName} V3 DEBUG] ENTERING FUNCTION ---`);
-  const receivedParams = { userId, title, message, type, linkToParam };
-  console.log(`[${functionName} V3 DEBUG] Parameters received:`, JSON.stringify(receivedParams));
+  const functionName = "addNotification V8 DEBUG (Hardcoded Test)";
+  console.log(`--- [${functionName}] ENTERING FUNCTION ---`);
+  console.log(`[${functionName}] typeof window: ${typeof window}`); // Should be 'undefined'
+  // Log original params for context, though we won't use them for the write
+  console.log(`[${functionName}] Original Params received:`, JSON.stringify({ userId, title, message, type, linkToParam }));
 
-  if (!userId || !title || !message || !type) {
-    const errorMsg = `${functionName}: Critical parameters (userId, title, message, or type) are missing or falsy.`;
-    console.error(`!!! CRITICAL ERROR IN ${functionName} !!!`, errorMsg, receivedParams);
-    throw new Error(errorMsg);
-  }
 
-  // Ensure linkTo is either a valid string or undefined
-  const finalLinkTo = (linkToParam && typeof linkToParam === 'string' && linkToParam.trim() !== '') ? linkToParam.trim() : undefined;
-
-  // Construct the data to be saved, ensuring all fields are defined as per NotificationAppType or are optional
-  const newNotificationData: Omit<NotificationAppType, 'id'> & { createdAt: Timestamp } = {
-    userId: userId,
-    title: title,
-    message: message,
-    type: type,
+  const hardcodedNotificationData: Omit<NotificationAppType, 'id'> & { createdAt: Timestamp } = {
+    userId: "HARDCODED_RECIPIENT_TEST_UID", // Use a known, valid UID for testing if needed, or a placeholder
+    title: "Hardcoded Test Notification Title",
+    message: "This is a hardcoded test notification message.",
+    type: "booking_confirmed" as AppNotificationType,
     createdAt: serverTimestamp() as Timestamp,
-    isRead: false, // Default isRead to false
+    isRead: false,
+    linkTo: "/bookings/hardcoded-test-link",
   };
 
-  if (finalLinkTo !== undefined) {
-    newNotificationData.linkTo = finalLinkTo;
-  }
-
-  console.log(`[${functionName} V3 DEBUG] Attempting to add notification to Firestore. Data:`, JSON.stringify(newNotificationData));
+  console.log(`[${functionName}] Attempting to add HARDCODED notification to Firestore. Data:`, JSON.stringify(hardcodedNotificationData, null, 2));
 
   try {
-    const docRef = await addDoc(collection(db, 'notifications'), newNotificationData);
-    console.log(`!!! SUCCESS !!! [${functionName} V3 DEBUG] Successfully added notification to Firestore. Doc ID:`, docRef.id, "For user:", userId);
+    const docRef = await addDoc(collection(db, 'notifications'), hardcodedNotificationData);
+    console.log(`!!! SUCCESS !!! [${functionName}] Successfully added HARDCODED notification. Doc ID: ${docRef.id}`);
   } catch (e: any) {
-    console.error(`!!! FIRESTORE ERROR IN ${functionName} !!!`, "Error object:", e);
+    console.error(`!!! FIRESTORE ERROR IN ${functionName} (HARDCODED TEST) !!!`);
+    console.error(`[${functionName}] Error Code:`, e.code);
+    console.error(`[${functionName}] Error Message:`, e.message);
     if (e.details) {
-      console.error(`[${functionName} V3 DEBUG] Firestore Error Details:`, e.details);
+      console.error(`[${functionName}] Firestore Error Details:`, e.details);
     }
-    console.error(`[${functionName} V3 DEBUG] Data that failed:`, JSON.stringify(newNotificationData));
-    throw e; // Re-throw the error to be caught by the caller
+    console.error(`[${functionName}] Error Stack:`, e.stack ? e.stack.split('\n').slice(0, 5).join('\n') : 'No stack'); // Limit stack trace
+    console.error(`[${functionName}] HARDCODED Notification data that failed:`, JSON.stringify(hardcodedNotificationData, null, 2));
+    throw e; // Re-throw the error so the caller (and Next.js) knows it failed
   }
 }
 
 export async function addAuditLog(
-  actingUserId: string,
-  actingUserName: string,
-  action: AuditActionType,
+  actingUserId: string, // Parameter kept for signature, but will be ignored in this test
+  actingUserName: string, // Parameter kept for signature, but will be ignored in this test
+  action: AuditActionType, // Parameter kept for signature, but will be ignored in this test
   params: {
     entityType?: AuditLogEntry['entityType'] | undefined;
     entityId?: string | undefined;
-    details: string;
+    details: string; // Parameter kept for signature, but will be ignored in this test
   }
 ): Promise<void> {
-  const functionName = "addAuditLog";
+  const functionName = "addAuditLog V8 DEBUG (Hardcoded Test)";
   console.log(`--- [${functionName}] ENTERING FUNCTION ---`);
-  const receivedParams = { actingUserId, actingUserName, action, params };
-  console.log(`[${functionName}] Parameters received:`, JSON.stringify(receivedParams));
+  console.log(`[${functionName}] typeof window: ${typeof window}`); // Should be 'undefined'
+  // Log original params for context, though we won't use them for the write
+  console.log(`[${functionName}] Original Params received:`, JSON.stringify({ actingUserId, actingUserName, action, params }));
 
-  if (!actingUserId || !actingUserName || !action || !params.details) {
-    const errorMsg = `${functionName}: Critical parameters (actingUserId, actingUserName, action, or params.details) are missing or falsy.`;
-    console.error(`!!! CRITICAL ERROR IN ${functionName} !!!`, errorMsg, receivedParams);
-    throw new Error(errorMsg); // Throw an error for explicit failure
-  }
-
-  const newLogData: Omit<AuditLogEntry, 'id' | 'timestamp'> & { timestamp: Timestamp } = {
-    userId: actingUserId,
-    userName: actingUserName,
-    action: action,
-    entityType: params.entityType, // Will be undefined if not provided
-    entityId: params.entityId,     // Will be undefined if not provided
-    details: params.details,
+  const hardcodedLogData: Omit<AuditLogEntry, 'id' | 'timestamp'> & { timestamp: Timestamp } = {
+    userId: "HARDCODED_ADMIN_TEST_UID", // Use your admin UID here for testing if needed, or a placeholder
+    userName: "Hardcoded Test Admin User",
+    action: "USER_APPROVED" as AuditActionType, // Example action
+    entityType: "User" as const,
+    entityId: "hardcoded_test_entity_id",
+    details: "This is a hardcoded audit log for testing server action auth context from addAuditLog.",
     timestamp: serverTimestamp() as Timestamp,
   };
 
-  console.log(`[${functionName}] Attempting to add audit log to Firestore. Data:`, JSON.stringify(newLogData, null, 2));
+  console.log(`[${functionName}] Attempting to add HARDCODED audit log to Firestore. Data:`, JSON.stringify(hardcodedLogData, null, 2));
 
   try {
-    const docRef = await addDoc(collection(db, 'auditLogs'), newLogData);
-    console.log(`!!! SUCCESS !!! [${functionName}] Successfully added audit log. Doc ID: ${docRef.id}`);
+    const docRef = await addDoc(collection(db, 'auditLogs'), hardcodedLogData);
+    console.log(`!!! SUCCESS !!! [${functionName}] Successfully added HARDCODED audit log. Doc ID: ${docRef.id}`);
   } catch (e: any) {
-    console.error(`!!! FIRESTORE ERROR IN ${functionName} !!!`, "Error object:", e);
+    console.error(`!!! FIRESTORE ERROR IN ${functionName} (HARDCODED TEST) !!!`);
+    console.error(`[${functionName}] Error Code:`, e.code);
+    console.error(`[${functionName}] Error Message:`, e.message);
     if (e.details) {
       console.error(`[${functionName}] Firestore Error Details:`, e.details);
     }
-    console.error(`[${functionName}] Audit log data that failed to add:`, JSON.stringify(newLogData, (key, value) => {
-        if (value && typeof value === 'object' && value.constructor && value.constructor.name === 'Timestamp') {
-            return '[Firebase Timestamp]';
-        }
-        return value;
-    }, 2));
+    console.error(`[${functionName}] Error Stack:`, e.stack ? e.stack.split('\n').slice(0, 5).join('\n') : 'No stack'); // Limit stack trace
+    console.error(`[${functionName}] HARDCODED Audit log data that failed:`, JSON.stringify(hardcodedLogData, null, 2));
     throw e; // Re-throw the error
   }
 }
