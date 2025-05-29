@@ -7,7 +7,7 @@ LabStation is a comprehensive web application designed to streamline the managem
 
 *   **User Management & Authentication:**
     *   Secure **Email/Password Authentication** powered by Firebase.
-    *   User **Signup** with an 
+    *   User **Signup** with an
     admin approval workflow.
     *   User **Login** and persistent sessions.
     *   **User Profiles:** Users can view and manage their basic profile information (e.g., update name) and a mock password change UI.
@@ -174,14 +174,14 @@ LabStation is a comprehensive web application designed to streamline the managem
                               && request.resource.data.role == 'Researcher'; // Default role
 
               // Users can read their own profile
-              // Admins and Technicians can read any user profile (Technicians need for names)
+              // Admins and Technicians can read any user profile
               allow read: if request.auth != null && (
-                            request.auth.uid == userId || 
+                            request.auth.uid == userId ||
                             isAdmin(request.auth.uid) ||
                             isTechnician(request.auth.uid)
                           );
-              
-              // Admins and Technicians can list users (Technicians need for assignment dropdowns & name display)
+
+              // Admins and Technicians can list users
               allow list: if request.auth != null && (isAdmin(request.auth.uid) || isTechnician(request.auth.uid));
 
               // Users can update their own 'name' and 'avatarUrl'
@@ -190,7 +190,7 @@ LabStation is a comprehensive web application designed to streamline the managem
                               (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'avatarUrl'])) ||
                               (isAdmin(request.auth.uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'role', 'status', 'avatarUrl']))
                             );
-              
+
               // Admins can delete user profiles (note: this doesn't delete Firebase Auth user)
               allow delete: if request.auth != null && isAdmin(request.auth.uid);
             }
@@ -198,36 +198,37 @@ LabStation is a comprehensive web application designed to streamline the managem
             // RESOURCE TYPES Collection
             match /resourceTypes/{typeId} {
               allow read: if request.auth != null; // All authenticated users can read types
+              allow list: if request.auth != null; // All authenticated users can list types
               allow write: if request.auth != null && isAdmin(request.auth.uid); // Only Admins can create, update, delete
             }
 
             // RESOURCES Collection
             match /resources/{resourceId} {
               allow read: if request.auth != null; // All authenticated users can read resources
-              allow list: if request.auth != null; // All authenticated users can list resources (for dropdowns)
+              allow list: if request.auth != null; // All authenticated users can list resources
               allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid); // Admins/Lab Managers can CUD
             }
 
             // BOOKINGS Collection
             match /bookings/{bookingId} {
               allow list: if request.auth != null && isAdminOrLabManager(request.auth.uid); // For admin views
-              allow read: if request.auth != null && 
-                            (resource.data.userId == request.auth.uid || 
+              allow read: if request.auth != null &&
+                            (resource.data.userId == request.auth.uid ||
                              isAdminOrLabManager(request.auth.uid));
 
               allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
                               && request.resource.data.status == 'Pending';
 
               allow update: if request.auth != null && (
-                              (resource.data.userId == request.auth.uid && 
-                               (resource.data.status == 'Pending' || resource.data.status == 'Waitlisted') && 
+                              (resource.data.userId == request.auth.uid &&
+                               (resource.data.status == 'Pending' || resource.data.status == 'Waitlisted') &&
                                request.resource.data.status == 'Cancelled') || // User can cancel their pending/waitlisted
                               isAdminOrLabManager(request.auth.uid) // Admins/Managers can update status, notes, etc.
                             );
-              
-              allow delete: if request.auth != null && 
-                             ( (resource.data.userId == request.auth.uid && 
-                                (resource.data.status == 'Pending' || resource.data.status == 'Waitlisted') ) || 
+
+              allow delete: if request.auth != null &&
+                             ( (resource.data.userId == request.auth.uid &&
+                                (resource.data.status == 'Pending' || resource.data.status == 'Waitlisted') ) ||
                                isAdminOrLabManager(request.auth.uid) );
             }
 
@@ -248,16 +249,16 @@ LabStation is a comprehensive web application designed to streamline the managem
 
             // BLACKOUT DATES (Specific) Collection
             match /blackoutDates/{blackoutId} {
-              allow read: if request.auth != null; 
+              allow read: if request.auth != null;
               allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid);
             }
 
             // RECURRING BLACKOUT RULES Collection
             match /recurringBlackoutRules/{ruleId} {
-              allow read: if request.auth != null; 
+              allow read: if request.auth != null;
               allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid);
             }
-            
+
             // NOTIFICATIONS Collection - Creation handled by Admin SDK (server-side)
             match /notifications/{notificationId} {
               // Users can read their own notifications
@@ -268,7 +269,7 @@ LabStation is a comprehensive web application designed to streamline the managem
               // Users can delete their own notifications
               allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
               // No client-side create rule needed if Admin SDK handles it
-              allow create: if false; 
+              allow create: if false;
             }
 
             // AUDIT LOGS Collection - Creation handled by Admin SDK (server-side)
@@ -276,7 +277,7 @@ LabStation is a comprehensive web application designed to streamline the managem
               // Only Admins can read audit logs
               allow read: if request.auth != null && isAdmin(request.auth.uid);
               // No client-side create rule needed if Admin SDK handles it
-              allow create: if false; 
+              allow create: if false;
               // Audit logs should generally be immutable
               allow update, delete: if false;
             }
@@ -308,4 +309,3 @@ LabStation is a comprehensive web application designed to streamline the managem
 ## Deployment
 
 This application is configured to be easily deployable on platforms like [Vercel](https://vercel.com/) (which is recommended for Next.js projects). Connect your Git repository (GitHub, GitLab, Bitbucket) to Vercel, and it will typically auto-detect the Next.js settings. Remember to configure your Firebase environment variables (from your `.env.local` file, including the Admin SDK credentials) in Vercel's project settings.
-
