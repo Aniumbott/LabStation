@@ -21,13 +21,11 @@ LabStation is a comprehensive web application designed to streamline the managem
     *   Users can create, view, modify, and cancel bookings for available resources.
     *   **Conflict Detection:** Prevents double-bookings by checking against:
         *   Other existing bookings.
-        *   Resource-specific daily availability slots.
-        *   Resource-specific one-off unavailability periods.
+        *   Resource-specific one-off unavailability periods (maintenance, etc.).
         *   Lab-wide specific blackout dates.
         *   Lab-wide weekly recurring unavailability rules.
     *   **Availability Scheduling:**
-        *   Admins can define resource-specific daily availability slots.
-        *   Set up resource-specific unavailability periods (e.g., for maintenance).
+        *   Admins/Lab Managers can define resource-specific unavailability periods (e.g., for maintenance).
         *   Manage lab-wide **Blackout Dates** (specific holidays or closure days).
         *   Define lab-wide **Recurring Unavailability Rules** (e.g., lab closed on weekends).
     *   **Queue Management (Basic):**
@@ -73,7 +71,7 @@ LabStation is a comprehensive web application designed to streamline the managem
 *   **Icons:** Lucide React
 *   **Authentication:** Firebase Authentication (Email/Password)
 *   **Database:** Firebase Firestore (for user profiles and application data)
-*   **Server-Side Operations:** Firebase Admin SDK (for notifications, audit logs)
+*   **Server-Side Operations:** Firebase Admin SDK (for notifications, audit logs, and other server-side operations)
 
 ## Getting Started (Local Development)
 
@@ -142,7 +140,7 @@ LabStation is a comprehensive web application designed to streamline the managem
             *   `status`: "active" - Type: string
             *   `avatarUrl`: "https://placehold.co/100x100.png" - Type: string
             *   `createdAt`: (Current timestamp) - Type: timestamp
-    *   **Security Rules:** Update your Firestore security rules. Go to **Firestore Database > Rules** tab and replace the default rules with the following more comprehensive example. **Review and adapt these rules for your production security needs.**
+    *   **Security Rules:** Update your Firestore security rules. Go to **Firestore Database > Rules** tab and replace the default rules with the following comprehensive example. **Review and adapt these rules for your production security needs.**
         ```firestore-rules
         rules_version = '2';
 
@@ -165,67 +163,101 @@ LabStation is a comprehensive web application designed to streamline the managem
               return get(/databases/$(database)/documents/users/$(userId)).data.role == 'Technician';
             }
 
+            // Helper function to check if the request is from the owner of the document
+            function isOwner(userId) {
+              return request.auth.uid == userId;
+            }
+
             // USERS Collection
             match /users/{userId} {
-              // Authenticated users can create their own profile (on signup)
-              allow create: if request.auth != null && request.auth.uid == userId
-                              && request.resource.data.email == request.auth.token.email // Ensure email matches
-                              && request.resource.data.status == 'pending_approval' // New signups are pending
-                              && request.resource.data.role == 'Researcher'; // Default role
+              // New users are created with 'pending_approval' status and 'Researcher' role by default.
+              allow create: if request.auth != null
+                              && isOwner(userId) // User can only create their own profile
+                              && request.resource.data.email == request.auth.token.email // Email must match token
+                              && request.resource.data.status == 'pending_approval'
+                              && request.resource.data.role == 'Researcher'
+                              && !("createdAt" in request.resource.data); // Prevent client from setting createdAt
 
-              // Users can read their own profile
-              // Admins and Technicians can read any user profile
+              // Users can read their own profile. Admins, Lab Managers, and Technicians can read any user profile.
               allow read: if request.auth != null && (
-                            request.auth.uid == userId ||
+                            isOwner(userId) ||
                             isAdmin(request.auth.uid) ||
-                            isTechnician(request.auth.uid)
+                            isTechnician(request.auth.uid) ||
+                            isAdminOrLabManager(request.auth.uid)
                           );
 
-              // Admins and Technicians can list users
+              // Admins and Technicians can list users (e.g., for admin panels or technician assignment).
               allow list: if request.auth != null && (isAdmin(request.auth.uid) || isTechnician(request.auth.uid));
 
-              // Users can update their own 'name' and 'avatarUrl'
-              // Admins can update 'name', 'role', 'status', 'avatarUrl'
+              // Users can update their own 'name' and 'avatarUrl'.
+              // Admins can update 'name', 'role', 'status', 'avatarUrl' for any user.
+              // Admin cannot demote themselves from Admin role.
               allow update: if request.auth != null && (
-                              (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'avatarUrl'])) ||
-                              (isAdmin(request.auth.uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'role', 'status', 'avatarUrl']))
+                              (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'avatarUrl'])) ||
+                              (isAdmin(request.auth.uid) &&
+                               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'role', 'status', 'avatarUrl']) &&
+                               !(isOwner(userId) && resource.data.role == 'Admin' && request.resource.data.role != 'Admin')
+                              )
                             );
 
-              // Admins can delete user profiles (note: this doesn't delete Firebase Auth user)
-              allow delete: if request.auth != null && isAdmin(request.auth.uid);
+              // Admins can delete user profiles (note: this doesn't delete Firebase Auth user).
+              // Prevent Admin from deleting their own profile through this rule.
+              allow delete: if request.auth != null && isAdmin(request.auth.uid) && !isOwner(userId);
             }
 
             // RESOURCE TYPES Collection
             match /resourceTypes/{typeId} {
-              allow read: if request.auth != null; // All authenticated users can read types
-              allow list: if request.auth != null; // All authenticated users can list types
-              allow write: if request.auth != null && isAdmin(request.auth.uid); // Only Admins can create, update, delete
+              // All authenticated users can read and list resource types.
+              allow read, list: if request.auth != null;
+              // Only Admins can create, update, or delete resource types.
+              allow write: if request.auth != null && isAdmin(request.auth.uid);
             }
 
             // RESOURCES Collection
             match /resources/{resourceId} {
-              allow read: if request.auth != null; // All authenticated users can read resources
-              allow list: if request.auth != null; // All authenticated users can list resources
-              allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid); // Admins/Lab Managers can CUD
+              // All authenticated users can read and list resources.
+              allow read, list: if request.auth != null;
+              // Only Admins or Lab Managers can create, update, or delete resources.
+              allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid);
             }
 
             // BOOKINGS Collection
             match /bookings/{bookingId} {
-              allow list: if request.auth != null; // Any authenticated user can list (e.g., for conflict checking)
+              // All authenticated users can list bookings (e.g., for conflict checking).
+              allow list: if request.auth != null;
+
+              // Users can read their own bookings. Admins, Lab Managers, and Technicians can read any booking.
               allow read: if request.auth != null &&
-                            (resource.data.userId == request.auth.uid ||
-                             isAdminOrLabManager(request.auth.uid));
-
-              allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
-                              && request.resource.data.status == 'Pending';
-
-              allow update: if request.auth != null && (
-                              (resource.data.userId == request.auth.uid &&
-                               (resource.data.status == 'Pending' || resource.data.status == 'Waitlisted') &&
-                               request.resource.data.status == 'Cancelled') || // User can cancel their pending/waitlisted
-                              isAdminOrLabManager(request.auth.uid) // Admins/Managers can update status, notes, etc.
+                            (resource.data.userId == request.auth.uid || // Owner
+                             isAdminOrLabManager(request.auth.uid) ||   // Admin or Lab Manager
+                             isTechnician(request.auth.uid)             // Technician can also read any booking
                             );
 
+              // Authenticated users can create bookings for themselves, which start in 'Pending' status.
+              allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
+                              && request.resource.data.status == 'Pending'
+                              && !("createdAt" in request.resource.data); // Prevent client from setting createdAt
+
+              // Users can cancel their own 'Pending' or 'Waitlisted' bookings.
+              // Users can log usage ('usageDetails') for their own 'Confirmed' bookings if the booking is in the past.
+              // Admins or Lab Managers can perform other updates (e.g., change status).
+              allow update: if request.auth != null && (
+                              // User cancelling their own pending/waitlisted booking
+                              (resource.data.userId == request.auth.uid &&
+                               (resource.data.status == 'Pending' || resource.data.status == 'Waitlisted') &&
+                               request.resource.data.status == 'Cancelled' &&
+                               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
+                              // User logging usage details for their past confirmed booking
+                              (resource.data.userId == request.auth.uid &&
+                               resource.data.status == 'Confirmed' &&
+                               resource.data.endTime < request.time && // Check if booking is past
+                               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usageDetails'])) ||
+                              // Admin or Lab Manager can update (e.g., approve, reject, modify other details)
+                              (isAdminOrLabManager(request.auth.uid))
+                            );
+
+              // Users can delete their own 'Pending' or 'Waitlisted' bookings (if direct deletion is allowed instead of just 'Cancelled' status).
+              // Admins or Lab Managers can delete any booking.
               allow delete: if request.auth != null &&
                              ( (resource.data.userId == request.auth.uid &&
                                 (resource.data.status == 'Pending' || resource.data.status == 'Waitlisted') ) ||
@@ -234,51 +266,55 @@ LabStation is a comprehensive web application designed to streamline the managem
 
             // MAINTENANCE REQUESTS Collection
             match /maintenanceRequests/{requestId} {
-              allow read: if request.auth != null; // All authenticated users can read individual requests
-              allow list: if request.auth != null; // All authenticated users can list requests
-              allow create: if request.auth != null && request.resource.data.reportedByUserId == request.auth.uid
-                              && request.resource.data.status == 'Open';
+              // All authenticated users can read and list maintenance requests.
+              allow read, list: if request.auth != null;
 
+              // Authenticated users can create maintenance requests for a resource, which start in 'Open' status.
+              allow create: if request.auth != null && request.resource.data.reportedByUserId == request.auth.uid
+                              && request.resource.data.status == 'Open'
+                              && !("dateReported" in request.resource.data)
+                              && !("dateResolved" in request.resource.data);
+
+              // Admins/Lab Managers can perform broader updates.
+              // Assigned Technicians can update status, resolution notes, and resolved date.
+              // The user who reported the issue can update the description if the status is still 'Open'.
               allow update: if request.auth != null && (
-                              isAdminOrLabManager(request.auth.uid) ||
-                              (resource.data.assignedTechnicianId != null && resource.data.assignedTechnicianId == request.auth.uid) ||
-                              (resource.data.reportedByUserId == request.auth.uid && resource.data.status == 'Open' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['issueDescription']))
+                              (isAdminOrLabManager(request.auth.uid)) ||
+                              (resource.data.assignedTechnicianId != null && resource.data.assignedTechnicianId == request.auth.uid &&
+                               request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'resolutionNotes', 'dateResolved'])) ||
+                              (resource.data.reportedByUserId == request.auth.uid && resource.data.status == 'Open' &&
+                               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['issueDescription']))
                             );
+
+              // Only Admins or Lab Managers can delete maintenance requests.
               allow delete: if request.auth != null && isAdminOrLabManager(request.auth.uid);
             }
 
             // BLACKOUT DATES (Specific) Collection
             match /blackoutDates/{blackoutId} {
-              allow read: if request.auth != null;
+              allow read, list: if request.auth != null;
               allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid);
             }
 
             // RECURRING BLACKOUT RULES Collection
             match /recurringBlackoutRules/{ruleId} {
-              allow read: if request.auth != null;
+              allow read, list: if request.auth != null;
               allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid);
             }
 
             // NOTIFICATIONS Collection - Creation handled by Admin SDK (server-side)
             match /notifications/{notificationId} {
-              // Users can read their own notifications
               allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-              // Users can update 'isRead' for their own notifications
               allow update: if request.auth != null && resource.data.userId == request.auth.uid &&
                                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
-              // Users can delete their own notifications
               allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
-              // No client-side create rule needed if Admin SDK handles it
-              allow create: if false;
+              allow create: if false; // Creation is server-side only via Admin SDK
             }
 
             // AUDIT LOGS Collection - Creation handled by Admin SDK (server-side)
             match /auditLogs/{logId} {
-              // Only Admins can read audit logs
-              allow read: if request.auth != null && isAdmin(request.auth.uid);
-              // No client-side create rule needed if Admin SDK handles it
-              allow create: if false;
-              // Audit logs should generally be immutable
+              allow read, list: if request.auth != null && isAdmin(request.auth.uid);
+              allow create: if false; // Creation is server-side only via Admin SDK
               allow update, delete: if false;
             }
           }
@@ -288,14 +324,17 @@ LabStation is a comprehensive web application designed to streamline the managem
 6.  **Firestore Indexes:**
     *   As you use the application, Firestore might prompt you in the browser console if specific queries require composite indexes for performance. These errors usually include a direct link to create the needed index in the Firebase console. Create them as needed. Common indexes you might need (or have already been prompted for):
         *   `bookings` collection: `userId` (ASC), `startTime` (ASC)
-        *   `bookings` collection: `resourceId` (ASC), `userId` (ASC), `startTime` (DESC)
-        *   `bookings` collection: `status` (ASC), `startTime` (ASC)
+        *   `bookings` collection: `resourceId` (ASC), `status` (ASC), `startTime` (ASC) *(for conflict checks and resource-specific views)*
+        *   `bookings` collection: `status` (ASC), `startTime` (ASC) *(for booking request/approval views)*
         *   `maintenanceRequests` collection: `dateReported` (DESC)
+        *   `maintenanceRequests` collection: `resourceId` (ASC), `dateReported` (DESC)
         *   `maintenanceRequests` collection: `status` (ASC), `dateReported` (DESC)
+        *   `maintenanceRequests` collection: `assignedTechnicianId` (ASC), `dateReported` (DESC)
         *   `auditLogs` collection: `timestamp` (DESC)
-        *   `users` collection: `role` (ASC), `name` (ASC) (For querying technicians)
-        *   `users` collection: `name` (ASC) (For general user listing by admins/technicians)
+        *   `users` collection: `role` (ASC), `name` (ASC) *(For querying technicians/admins etc.)*
+        *   `users` collection: `name` (ASC) *(For general user listing by admins/technicians)*
         *   `notifications` collection: `userId` (ASC), `createdAt` (DESC)
+        *   `resources` collection: `name` (ASC)
 
 
 7.  **Run the Development Server:**
@@ -310,4 +349,4 @@ LabStation is a comprehensive web application designed to streamline the managem
 
 This application is configured to be easily deployable on platforms like [Vercel](https://vercel.com/) (which is recommended for Next.js projects). Connect your Git repository (GitHub, GitLab, Bitbucket) to Vercel, and it will typically auto-detect the Next.js settings. Remember to configure your Firebase environment variables (from your `.env.local` file, including the Admin SDK credentials) in Vercel's project settings.
 
-```
+    
