@@ -211,7 +211,7 @@ LabStation is a comprehensive web application designed to streamline the managem
 
             // BOOKINGS Collection
             match /bookings/{bookingId} {
-              allow list: if request.auth != null && isAdminOrLabManager(request.auth.uid); // For admin views
+              allow list: if request.auth != null; // Any authenticated user can list (e.g., for conflict checking)
               allow read: if request.auth != null &&
                             (resource.data.userId == request.auth.uid ||
                              isAdminOrLabManager(request.auth.uid));
@@ -309,3 +309,5 @@ LabStation is a comprehensive web application designed to streamline the managem
 ## Deployment
 
 This application is configured to be easily deployable on platforms like [Vercel](https://vercel.com/) (which is recommended for Next.js projects). Connect your Git repository (GitHub, GitLab, Bitbucket) to Vercel, and it will typically auto-detect the Next.js settings. Remember to configure your Firebase environment variables (from your `.env.local` file, including the Admin SDK credentials) in Vercel's project settings.
+
+```
