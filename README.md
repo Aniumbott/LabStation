@@ -223,17 +223,20 @@ LabStation is a comprehensive web application designed to streamline the managem
 
             // BOOKINGS Collection
             match /bookings/{bookingId} {
+              // All authenticated users can list bookings (e.g., for conflict checking).
               allow list: if request.auth != null;
 
+              // Users can read their own bookings. Admins, Lab Managers, and Technicians can read any booking.
               allow read: if request.auth != null &&
-                            (resource.data.userId == request.auth.uid ||
-                            isAdminOrLabManager(request.auth.uid) ||
-                            isTechnician(request.auth.uid)
+                            (resource.data.userId == request.auth.uid || // Owner
+                             isAdminOrLabManager(request.auth.uid) ||   // Admin or Lab Manager
+                             isTechnician(request.auth.uid)             // Technician can also read any booking
                             );
 
+              // Authenticated users can create bookings for themselves, which start in 'Pending' status.
               allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
-                              && (request.resource.data.status == 'Pending' || request.resource.data.status == 'Waitlisted') // <--- MODIFIED
-                              && !("createdAt" in request.resource.data);
+                              && request.resource.data.status == 'Pending'
+                              && !("createdAt" in request.resource.data); // Prevent client from setting createdAt
 
               // Users can cancel their own 'Pending' or 'Waitlisted' bookings.
               // Users can log usage ('usageDetails') for their own 'Confirmed' bookings if the booking is in the past.

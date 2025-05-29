@@ -39,7 +39,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormMessage, FormLabel } from '@/components/ui/form';
 import { useAuth } from '@/components/auth-context';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase'; // Import auth from firebase
 import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, Timestamp, getDoc, orderBy, limit, writeBatch } from 'firebase/firestore';
 
 
@@ -436,10 +436,21 @@ function BookingsPageContent({}: BookingsPageContentProps) {
 
 
   const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
-    if (!currentUser || !currentUser.id || !currentUser.name) {
-      toast({ title: "Error", description: "You must be logged in to save a booking.", variant: "destructive" });
+    // Use Firebase SDK's auth.currentUser for immediate auth state
+    const currentFirebaseUser = auth.currentUser;
+
+    if (!currentFirebaseUser || !currentFirebaseUser.uid) {
+      toast({
+        title: "Authentication Error",
+        description: "You must be logged in with a valid session to save a booking. Please re-login.",
+        variant: "destructive",
+      });
+      setIsLoadingBookings(false); // Ensure loading state is reset
       return;
     }
+    const currentUserId = currentFirebaseUser.uid;
+    const currentUserName = currentFirebaseUser.displayName || currentUser?.name || 'User'; // Fallback to context name
+
     if (!formData.resourceId) {
       toast({ title: "Error", description: "Please select a resource.", variant: "destructive" }); return;
     }
@@ -458,7 +469,9 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       seconds: 0, milliseconds: 0
     });
 
-    if (isBefore(startOfDay(finalStartTime), startOfToday()) && !formData.id) {
+    const isNewBooking = !formData.id;
+
+    if (isBefore(startOfDay(finalStartTime), startOfToday()) && isNewBooking) {
       toast({ title: "Invalid Date", description: "Cannot create new bookings for past dates.", variant: "destructive" }); return;
     }
     if (finalEndTime <= finalStartTime) { toast({ title: "Invalid Time", description: "End time must be after start time.", variant: "destructive" }); return; }
@@ -515,7 +528,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       }
     }
 
-    if (selectedResource.status !== 'Available' && !formData.id && formData.status !== 'Waitlisted') {
+    if (selectedResource.status !== 'Available' && isNewBooking && formData.status !== 'Waitlisted') {
       toast({ title: "Resource Not Available", description: `${selectedResource.name} is currently ${selectedResource.status.toLowerCase()} and cannot be booked.`, variant: "destructive", duration: 7000 });
       return;
     }
@@ -540,7 +553,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       });
 
       conflictingBookingFound = existingBookingsForResource.find(existingBooking => {
-        if (formData.id && existingBooking.id === formData.id) return false; // Don't conflict with itself if editing
+        if (formData.id && existingBooking.id === formData.id) return false;
         return (finalStartTime < existingBooking.endTime && finalEndTime > existingBooking.startTime);
       });
     } catch (e: any) {
@@ -549,9 +562,8 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       return;
     }
 
-    const isNewBooking = !formData.id;
     let finalStatus: Booking['status'] = isNewBooking ? 'Pending' : (formData.status || 'Pending');
-    let docRefId: string = formData.id || ''; // Initialize for audit log and notifications
+    let docRefId: string = formData.id || '';
 
     if (conflictingBookingFound && finalStatus !== 'Waitlisted') { 
       if (selectedResource.allowQueueing) {
@@ -574,7 +586,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
 
     const bookingDataToSave: any = {
       resourceId: formData.resourceId!,
-      userId: currentUser.id,
+      userId: currentUserId, // Use UID from direct SDK check
       startTime: Timestamp.fromDate(finalStartTime),
       endTime: Timestamp.fromDate(finalEndTime),
       status: finalStatus,
@@ -586,123 +598,125 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       if (isNewBooking) {
         bookingDataToSave.createdAt = serverTimestamp();
 
-        // --- START NEW LOGS V4 ---
         console.log(
-          "--- DEBUG V4: Preparing to call addDoc for NEW Booking ---"
+          "--- DEBUG V6: Preparing to call addDoc for NEW Booking ---"
         );
-        if (currentUser && currentUser.id) {
-          console.log(
-            "[handleSaveBooking V4] currentUser.id (for request.auth.uid check):",
-            currentUser.id
-          );
-          const payloadForFirestoreLog = { ...bookingDataToSave };
-          delete payloadForFirestoreLog.createdAt; // Don't log the serverTimestamp placeholder itself
-          console.log(
-            "[handleSaveBooking V4] Actual payload being sent to addDoc (client data):",
-            JSON.stringify(payloadForFirestoreLog, null, 2)
-          );
-        } else {
-          console.error("[handleSaveBooking V4] CRITICAL: currentUser or currentUser.id is null/undefined before addDoc for new booking!");
-        }
-        // --- END NEW LOGS V4 ---
+        console.log(
+          "[handleSaveBooking V6] auth.currentUser.uid from Firebase SDK directly:",
+          currentUserId
+        );
+        const payloadForFirestoreLog = { ...bookingDataToSave };
+        delete payloadForFirestoreLog.createdAt; // Remove placeholder for accurate logging of client data
 
+        console.log(
+          "[handleSaveBooking V6] Actual payload being sent to addDoc (client data):",
+          JSON.stringify(payloadForFirestoreLog, null, 2)
+        );
+        
+        console.log("[handleSaveBooking V6] BEFORE addDoc call.");
         const docRef = await addDoc(collection(db, "bookings"), bookingDataToSave);
-        docRefId = docRef.id; // Get the new document ID
+        console.log("[handleSaveBooking V6] AFTER addDoc call. Doc ID:", docRef.id);
+        docRefId = docRef.id;
         toast({ title: "Success", description: `Booking ${finalStatus === 'Pending' ? 'created and submitted for approval' : 'added to waitlist'}.` });
 
+        // Audit Log for New Booking
+        try {
+            await addAuditLog(currentUserId, currentUserName, 
+                finalStatus === 'Waitlisted' ? 'BOOKING_WAITLISTED' : 'BOOKING_CREATED', 
+                {
+                entityType: 'Booking',
+                entityId: docRefId,
+                details: `Booking for '${selectedResource.name}'. Status: ${finalStatus}. Start: ${format(finalStartTime, 'PPpp')}, End: ${format(finalEndTime, 'PPpp')}.`
+            });
+        } catch (auditError: any) {
+            console.error(`[handleSaveBooking V6] Error adding audit log for new booking:`, auditError);
+            toast({ title: "Audit Log Failed", description: `Booking saved, but audit log failed: ${auditError.message}`, variant: "destructive"});
+        }
+
+        // Notifications for New Booking
+        if (finalStatus === 'Pending') {
+            try {
+                const adminUsersQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager']), orderBy('name', 'asc'));
+                const adminSnapshot = await getDocs(adminUsersQuery);
+                const notificationPromises = adminSnapshot.docs.map(adminDoc => {
+                    if (adminDoc.id !== currentUserId) {
+                        return addNotification(
+                            adminDoc.id,
+                            'New Booking Request',
+                            `Booking for ${selectedResource.name} by ${currentUserName} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`,
+                            'booking_pending_approval',
+                            `/admin/booking-requests?bookingId=${docRefId}`
+                        );
+                    }
+                    return Promise.resolve();
+                });
+                await Promise.all(notificationPromises);
+            } catch (adminNotificationError: any) {
+                console.error("[handleSaveBooking V6] Error sending notifications to admins:", adminNotificationError);
+                toast({ title: "Admin Notification Failed", description: `Booking created, but failed to notify admins: ${adminNotificationError.message}`, variant: "destructive" });
+            }
+        } else if (finalStatus === 'Waitlisted') {
+            try {
+                await addNotification(
+                    currentUserId,
+                    'Added to Waitlist',
+                    `Your booking request for ${selectedResource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`,
+                    'booking_waitlisted',
+                    `/bookings?bookingId=${docRefId}`
+                );
+            } catch (waitlistNotificationError: any) {
+                console.error("[handleSaveBooking V6] Error sending waitlist notification to user:", waitlistNotificationError);
+                toast({ title: "Waitlist Notification Failed", description: `Failed to send waitlist confirmation: ${waitlistNotificationError.message}`, variant: "destructive"});
+            }
+        }
+
+
       } else if (formData.id) { // Editing existing booking
-        // Ensure createdAt is not overwritten or set to null if it exists and is a Date
         if (formData.createdAt && formData.createdAt instanceof Date) {
           bookingDataToSave.createdAt = Timestamp.fromDate(formData.createdAt);
         } else if (currentBooking?.createdAt && currentBooking.createdAt instanceof Date){
            bookingDataToSave.createdAt = Timestamp.fromDate(currentBooking.createdAt);
         }
-        // No serverTimestamp() for updates unless specifically re-setting it,
-        // which we are not doing for 'createdAt'. 'lastUpdatedAt' could be added if needed.
         
         const bookingDocRef = doc(db, "bookings", formData.id);
+        console.log("[handleSaveBooking V6] BEFORE updateDoc call. Payload:", JSON.stringify(bookingDataToSave, null, 2));
         await updateDoc(bookingDocRef, bookingDataToSave);
+        console.log("[handleSaveBooking V6] AFTER updateDoc call.");
         toast({ title: "Success", description: "Booking updated successfully." });
-      }
 
-      // Add Audit Log (moved here to ensure docRefId is set for new bookings)
-      if (currentUser?.id && currentUser.name && selectedResource?.name) {
-        const auditActionType = isNewBooking 
-            ? (finalStatus === 'Waitlisted' ? 'BOOKING_WAITLISTED' : 'BOOKING_CREATED') 
-            : 'BOOKING_UPDATED';
-        const auditDetails = isNewBooking
-            ? `Booking for '${selectedResource.name}' by ${currentUser.name}. Status: ${finalStatus}. Start: ${format(finalStartTime, 'PPpp')}, End: ${format(finalEndTime, 'PPpp')}.`
-            : `Booking for '${selectedResource.name}' updated by user ${currentUser.name}. Status: ${finalStatus}.`;
-        
+        // Audit Log for Updated Booking
         try {
-            await addAuditLog(currentUser.id, currentUser.name, auditActionType, {
+            await addAuditLog(currentUserId, currentUserName, 'BOOKING_UPDATED', {
                 entityType: 'Booking',
-                entityId: docRefId, // Use the obtained or existing doc ID
-                details: auditDetails
+                entityId: formData.id,
+                details: `Booking for '${selectedResource.name}' updated. Status: ${finalStatus}.`
             });
-        } catch (auditError) {
-            console.error(`[handleSaveBooking] Error adding audit log for ${auditActionType}:`, auditError);
-            toast({ title: "Audit Log Failed", description: `Booking saved, but audit log failed.`, variant: "destructive"});
+        } catch (auditError: any) {
+            console.error(`[handleSaveBooking V6] Error adding audit log for updated booking:`, auditError);
+            toast({ title: "Audit Log Failed", description: `Booking updated, but audit log failed: ${auditError.message}`, variant: "destructive"});
         }
-      }
-
-      // Send notifications
-      if (isNewBooking && finalStatus === 'Pending' && currentUser?.id && currentUser.name && selectedResource?.name) {
-        try {
-          const adminUsersQuery = query(
-            collection(db, 'users'),
-            where('role', 'in', ['Admin', 'Lab Manager']),
-            orderBy('name', 'asc')
-          );
-          const adminSnapshot = await getDocs(adminUsersQuery);
-          const notificationPromises = adminSnapshot.docs.map(adminDoc => {
-            if (adminDoc.id !== currentUser?.id) { 
-              return addNotification(
-                adminDoc.id,
-                'New Booking Request',
-                `Booking for ${selectedResource.name} by ${currentUser.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`,
-                'booking_pending_approval',
-                `/admin/booking-requests?bookingId=${docRefId}`
-              );
-            }
-            return Promise.resolve();
-          });
-          await Promise.all(notificationPromises);
-          console.log("Admin notifications sent for new pending booking.");
-        } catch (adminNotificationError: any) {
-          console.error("Error sending notifications to admins:", adminNotificationError);
-          toast({
-            title: "Admin Notification Failed",
-            description: `Booking was created, but failed to notify admins: ${adminNotificationError.message}`,
-            variant: "destructive",
-            duration: 7000,
-          });
-        }
-      } else if (isNewBooking && finalStatus === 'Waitlisted' && currentUser?.id && selectedResource?.name) {
-         try {
-          await addNotification(
-            currentUser.id,
-            'Added to Waitlist',
-            `Your booking request for ${selectedResource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`,
-            'booking_waitlisted',
-            `/bookings?bookingId=${docRefId}`
-          );
-         } catch (waitlistNotificationError: any) {
-            console.error("Error sending waitlist notification to user:", waitlistNotificationError);
-             toast({ title: "Waitlist Notification Failed", description: `Failed to send waitlist confirmation: ${waitlistNotificationError.message}`, variant: "destructive"});
-         }
       }
       await fetchAllBookingsForUser();
     } catch (error: any) {
       console.error(
-        `Error saving booking to Firestore (Status: ${finalStatus}):`,
+        `[handleSaveBooking V6] Error saving booking to Firestore (Status: ${finalStatus}):`,
         error
       );
+      // Log the full error object for more details
+      console.error("[handleSaveBooking V6] Full Firestore error object:", error);
+      if ((error as any).code) {
+        console.error("[handleSaveBooking V6] Firestore error code:", (error as any).code);
+      }
+      if ((error as any).details) {
+          console.error("[handleSaveBooking V6] Firestore error details:", (error as any).details);
+      }
       toast({
-        title: "Save Failed",
+        title: "Save Failed (addDoc/updateDoc)",
         description: `Could not save your booking (Status: ${finalStatus}). Error: ${error.message}`,
         variant: "destructive",
       });
+      setIsLoadingBookings(false); // Ensure loading state is reset on error
+      return; // Stop further execution on error
     } finally {
       setIsLoadingBookings(false);
       handleDialogClose(false);
