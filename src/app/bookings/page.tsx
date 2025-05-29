@@ -540,27 +540,29 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       });
 
       conflictingBookingFound = existingBookingsForResource.find(existingBooking => {
-        if (formData.id && existingBooking.id === formData.id) return false;
+        if (formData.id && existingBooking.id === formData.id) return false; // Don't conflict with itself if editing
         return (finalStartTime < existingBooking.endTime && finalEndTime > existingBooking.startTime);
       });
-    } catch (e) {
-      console.error("Error fetching existing bookings for conflict check:", e);
-      toast({ title: "Error", description: "Could not verify existing bookings. Please try again.", variant: "destructive" });
+    } catch (e: any) {
+      console.error("[handleSaveBooking] Error fetching existing bookings for conflict check:", e);
+      toast({ title: "Conflict Check Failed", description: `Could not verify existing bookings. ${e.message || 'Please try again.'}`, variant: "destructive" });
       return;
     }
 
     const isNewBooking = !formData.id;
     let finalStatus: Booking['status'] = isNewBooking ? 'Pending' : (formData.status || 'Pending');
 
-    if (conflictingBookingFound && finalStatus !== 'Waitlisted') {
+    if (conflictingBookingFound && finalStatus !== 'Waitlisted') { 
       if (selectedResource.allowQueueing) {
         finalStatus = 'Waitlisted';
         toast({ title: "Added to Waitlist", description: `This time slot is currently booked. Your request for ${selectedResource.name} has been added to the waitlist.` });
         if (currentUser?.id && currentUser?.name) {
-          addAuditLog(currentUser.id, currentUser.name, 'BOOKING_WAITLISTED', {
-            entityType: 'Booking',
-            details: `Booking for '${selectedResource.name}' by ${currentUser.name} placed on waitlist. Start: ${format(finalStartTime, 'PPpp')}, End: ${format(finalEndTime, 'PPpp')}.`
-          });
+          try {
+            await addAuditLog(currentUser.id, currentUser.name, 'BOOKING_WAITLISTED', {
+              entityType: 'Booking',
+              details: `Booking for '${selectedResource.name}' by ${currentUser.name} placed on waitlist. Start: ${format(finalStartTime, 'PPpp')}, End: ${format(finalEndTime, 'PPpp')}.`
+            });
+          } catch (auditError) { console.error("Error adding waitlist audit log:", auditError); }
         }
       } else {
         let conflictingUserName = 'another user';
@@ -587,13 +589,32 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     };
 
     if (isNewBooking) {
-      bookingDataToSave.createdAt = formData.createdAt ? Timestamp.fromDate(formData.createdAt) : serverTimestamp();
-    } else if (formData.id && formData.createdAt instanceof Date) {
+      bookingDataToSave.createdAt = serverTimestamp(); 
+    } else if (formData.id && formData.createdAt instanceof Date) { 
       bookingDataToSave.createdAt = Timestamp.fromDate(formData.createdAt);
       if (currentUser?.id && currentUser?.name) {
-        addAuditLog(currentUser.id, currentUser.name, 'BOOKING_UPDATED', { entityType: 'Booking', entityId: formData.id, details: `Booking for '${selectedResource.name}' updated by user ${currentUser.name}. Status: ${finalStatus}.` });
+        try {
+          await addAuditLog(currentUser.id, currentUser.name, 'BOOKING_UPDATED', { entityType: 'Booking', entityId: formData.id, details: `Booking for '${selectedResource.name}' updated by user ${currentUser.name}. Status: ${finalStatus}.` });
+        } catch (auditError) { console.error("Error adding update audit log:", auditError); }
       }
     }
+    
+    if (finalStatus === 'Waitlisted' && isNewBooking) {
+      console.log("--- DEBUG: Attempting to create WAITLISTED Booking ---");
+      console.log("Current User ID for bookingDataToSave.userId:", currentUser.id);
+      console.log("Full bookingDataToSave payload being sent to addDoc:", JSON.stringify(bookingDataToSave, (key, value) => {
+        // Firestore Timestamps don't stringify well by default, show a placeholder
+        if (value && typeof value === 'object' && value.hasOwnProperty('seconds') && value.hasOwnProperty('nanoseconds')) {
+          return `Firestore Timestamp (approx ${new Date(value.seconds * 1000).toISOString()})`;
+        }
+        if (key === 'createdAt' && typeof value === 'object' && value && value._methodName === 'serverTimestamp') {
+            return 'Firestore Server Timestamp';
+        }
+        return value;
+      }, 2));
+      console.log("--- END DEBUG ---");
+    }
+
 
     setIsLoadingBookings(true);
     try {
@@ -604,16 +625,19 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         docRefId = formData.id;
         toast({ title: "Success", description: "Booking updated successfully." });
       } else {
+        console.log("[handleSaveBooking] Calling addDoc for new booking with status:", finalStatus);
         const docRef = await addDoc(collection(db, "bookings"), bookingDataToSave);
         docRefId = docRef.id;
         toast({ title: "Success", description: `Booking ${finalStatus === 'Pending' ? 'created and submitted for approval' : 'added to waitlist'}.` });
 
         if (currentUser?.id && currentUser.name && selectedResource?.name) {
-            addAuditLog(currentUser.id, currentUser.name, isNewBooking && finalStatus === 'Pending' ? 'BOOKING_CREATED' : 'BOOKING_WAITLISTED', {
-                entityType: 'Booking',
-                entityId: docRefId,
-                details: `Booking for '${selectedResource.name}' by ${currentUser.name}. Status: ${finalStatus}. Start: ${format(finalStartTime, 'PPpp')}, End: ${format(finalEndTime, 'PPpp')}.`
-            });
+            try {
+              await addAuditLog(currentUser.id, currentUser.name, isNewBooking && finalStatus === 'Pending' ? 'BOOKING_CREATED' : 'BOOKING_WAITLISTED', {
+                  entityType: 'Booking',
+                  entityId: docRefId,
+                  details: `Booking for '${selectedResource.name}' by ${currentUser.name}. Status: ${finalStatus}. Start: ${format(finalStartTime, 'PPpp')}, End: ${format(finalEndTime, 'PPpp')}.`
+              });
+            } catch (auditError) { console.error("Error adding create/waitlist audit log:", auditError); }
         }
       }
 
@@ -623,15 +647,15 @@ function BookingsPageContent({}: BookingsPageContentProps) {
           const adminUsersQuery = query(
             collection(db, 'users'),
             where('role', 'in', ['Admin', 'Lab Manager']),
-            orderBy('name', 'asc') // Added for index consistency
+            orderBy('name', 'asc')
           );
           const adminSnapshot = await getDocs(adminUsersQuery);
           const notificationPromises = adminSnapshot.docs.map(adminDoc => {
-            if (adminDoc.id !== currentUser?.id) {
+            if (adminDoc.id !== currentUser?.id && currentUser?.name && selectedResource?.name) { 
               return addNotification(
                 adminDoc.id,
                 'New Booking Request',
-                `Booking for ${selectedResource!.name} by ${currentUser!.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`,
+                `Booking for ${selectedResource.name} by ${currentUser.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`,
                 'booking_pending_approval',
                 `/admin/booking-requests?bookingId=${docRefId}`
               );
@@ -650,18 +674,29 @@ function BookingsPageContent({}: BookingsPageContentProps) {
           });
         }
       } else if (isNewBooking && finalStatus === 'Waitlisted' && currentUser?.id && selectedResource?.name) {
-        addNotification(
-          currentUser.id,
-          'Added to Waitlist',
-          `Your booking request for ${selectedResource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`,
-          'booking_waitlisted',
-          `/bookings?bookingId=${docRefId}`
-        );
+         try {
+          await addNotification(
+            currentUser.id,
+            'Added to Waitlist',
+            `Your booking request for ${selectedResource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`,
+            'booking_waitlisted',
+            `/bookings?bookingId=${docRefId}`
+          );
+         } catch (waitlistNotificationError: any) {
+            console.error("Error sending waitlist notification to user:", waitlistNotificationError);
+             toast({ title: "Waitlist Notification Failed", description: `Failed to send waitlist confirmation: ${waitlistNotificationError.message}`, variant: "destructive"});
+         }
       }
       await fetchAllBookingsForUser();
     } catch (error: any) {
-      console.error("Error saving booking:", error);
-      toast({ title: "Save Failed", description: `Could not save your booking. ${error.message}`, variant: "destructive" });
+      console.error(`Error saving booking to Firestore (Status: ${finalStatus}):`, error);
+      let userMessage = "Could not save your booking. Please try again.";
+      if ((error as any).code === 'permission-denied' || (error as any).message?.includes('PERMISSION_DENIED')) {
+        userMessage = `Save Failed: Missing or insufficient permissions to create booking (Status: ${finalStatus}).`;
+      } else if ((error as any).message) {
+        userMessage = `Save Failed: ${(error as any).message}`;
+      }
+      toast({ title: "Save Failed", description: userMessage, variant: "destructive" });
     } finally {
       setIsLoadingBookings(false);
       handleDialogClose(false);
@@ -686,7 +721,9 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       toast({ title: "Info", description: "Booking cancelled." });
 
       let resourceNameForLog = resourceForCancelledBooking?.name || 'Unknown Resource';
-      addAuditLog(currentUser.id, currentUser.name, 'BOOKING_CANCELLED', { entityType: 'Booking', entityId: bookingId, details: `Booking for '${resourceNameForLog}' cancelled by user ${currentUser.name}.` });
+      try {
+        await addAuditLog(currentUser.id, currentUser.name, 'BOOKING_CANCELLED', { entityType: 'Booking', entityId: bookingId, details: `Booking for '${resourceNameForLog}' cancelled by user ${currentUser.name}.` });
+      } catch (auditError) { console.error("Error adding cancellation audit log:", auditError); }
       
       await fetchAllBookingsForUser();
     } catch (error: any) {
