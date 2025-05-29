@@ -7,7 +7,8 @@ LabStation is a comprehensive web application designed to streamline the managem
 
 *   **User Management & Authentication:**
     *   Secure **Email/Password Authentication** powered by Firebase.
-    *   User **Signup** with an admin approval workflow.
+    *   User **Signup** with an 
+    admin approval workflow.
     *   User **Login** and persistent sessions.
     *   **User Profiles:** Users can view and manage their basic profile information (e.g., update name) and a mock password change UI.
     *   **Role-Based Access Control (RBAC):** Predefined roles (Admin, Lab Manager, Technician, Researcher) with UI elements and actions conditionally rendered based on user role.
