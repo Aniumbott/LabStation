@@ -73,6 +73,7 @@ LabStation is a comprehensive web application designed to streamline the managem
 *   **Icons:** Lucide React
 *   **Authentication:** Firebase Authentication (Email/Password)
 *   **Database:** Firebase Firestore (for user profiles and application data)
+*   **Server-Side Operations:** Firebase Admin SDK (for notifications, audit logs)
 
 ## Getting Started (Local Development)
 
@@ -102,19 +103,31 @@ LabStation is a comprehensive web application designed to streamline the managem
     *   **Enable Authentication:** In your Firebase project, go to "Authentication" -> "Sign-in method" and enable the "Email/Password" provider.
     *   **Enable Firestore:** In your Firebase project, go to "Firestore Database" -> "Create database". Start in **Test Mode** for development (remember to secure rules for production). Choose a location.
     *   **Register your Web App:** In Project Overview, click the Web icon (`</>`) to add your app. Get the `firebaseConfig` object.
+    *   **Service Account for Admin SDK:**
+        *   Go to Project Settings > Service accounts.
+        *   Click "Generate new private key" and download the JSON file.
+        *   Store this file securely.
 
 4.  **Configure Environment Variables:**
-    *   Create a `.env.local` file in the root of your project by copying `.env.local.example`.
-    *   Fill in your Firebase project's configuration values from the `firebaseConfig` object you obtained in the previous step.
-    ```env
-    NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
-    NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
-    NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id # Optional
-    ```
+    *   Create a `.env.local` file in the root of your project by copying `.env.local.example` (if it exists, otherwise create it).
+    *   Fill in your Firebase project's configuration values from the `firebaseConfig` object:
+        ```env
+        NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
+        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+        NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+        NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+        NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+        NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id # Optional
+
+        # For Firebase Admin SDK (Server-Side Operations)
+        # Option 1: Path to your service account key JSON file (Recommended for local dev)
+        # Replace with the ACTUAL ABSOLUTE PATH to your downloaded file
+        GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/serviceAccountKey.json"
+
+        # Option 2: JSON content of the service account key (if Option 1 is not suitable)
+        # FIREBASE_SERVICE_ACCOUNT_KEY_JSON='{"type": "service_account", ...}'
+        ```
     *   **Important:** Add `.env.local` to your `.gitignore` file to prevent committing your Firebase credentials.
 
 5.  **Seed Initial Admin User (Important!):**
@@ -147,6 +160,11 @@ LabStation is a comprehensive web application designed to streamline the managem
               return userRole == 'Admin' || userRole == 'Lab Manager';
             }
 
+            // Helper function to check if a user is a Technician
+            function isTechnician(userId) {
+              return get(/databases/$(database)/documents/users/$(userId)).data.role == 'Technician';
+            }
+
             // USERS Collection
             match /users/{userId} {
               // Authenticated users can create their own profile (on signup)
@@ -156,9 +174,15 @@ LabStation is a comprehensive web application designed to streamline the managem
                               && request.resource.data.role == 'Researcher'; // Default role
 
               // Users can read their own profile
-              // Admins can read any profile (for listing)
-              allow read: if request.auth != null && (request.auth.uid == userId || isAdmin(request.auth.uid));
-              allow list: if request.auth != null && isAdmin(request.auth.uid); // Admins can list users
+              // Admins and Technicians can read any user profile (Technicians need for names)
+              allow read: if request.auth != null && (
+                            request.auth.uid == userId || 
+                            isAdmin(request.auth.uid) ||
+                            isTechnician(request.auth.uid)
+                          );
+              
+              // Admins and Technicians can list users (Technicians need for assignment dropdowns & name display)
+              allow list: if request.auth != null && (isAdmin(request.auth.uid) || isTechnician(request.auth.uid));
 
               // Users can update their own 'name' and 'avatarUrl'
               // Admins can update 'name', 'role', 'status', 'avatarUrl'
@@ -180,6 +204,7 @@ LabStation is a comprehensive web application designed to streamline the managem
             // RESOURCES Collection
             match /resources/{resourceId} {
               allow read: if request.auth != null; // All authenticated users can read resources
+              allow list: if request.auth != null; // All authenticated users can list resources (for dropdowns)
               allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid); // Admins/Lab Managers can CUD
             }
 
@@ -208,7 +233,8 @@ LabStation is a comprehensive web application designed to streamline the managem
 
             // MAINTENANCE REQUESTS Collection
             match /maintenanceRequests/{requestId} {
-              allow read: if request.auth != null; 
+              allow read: if request.auth != null; // All authenticated users can read individual requests
+              allow list: if request.auth != null; // All authenticated users can list requests
               allow create: if request.auth != null && request.resource.data.reportedByUserId == request.auth.uid
                               && request.resource.data.status == 'Open';
 
@@ -232,7 +258,7 @@ LabStation is a comprehensive web application designed to streamline the managem
               allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid);
             }
             
-            // NOTIFICATIONS Collection
+            // NOTIFICATIONS Collection - Creation handled by Admin SDK (server-side)
             match /notifications/{notificationId} {
               // Users can read their own notifications
               allow read: if request.auth != null && resource.data.userId == request.auth.uid;
@@ -241,18 +267,16 @@ LabStation is a comprehensive web application designed to streamline the managem
                                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
               // Users can delete their own notifications
               allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
-              // Creation is typically handled by backend/trusted environment (e.g., Cloud Functions)
-              // For this client-side app, allow create if authenticated for mock purposes.
-              allow create: if request.auth != null; 
+              // No client-side create rule needed if Admin SDK handles it
+              allow create: if false; 
             }
 
-            // AUDIT LOGS Collection
+            // AUDIT LOGS Collection - Creation handled by Admin SDK (server-side)
             match /auditLogs/{logId} {
               // Only Admins can read audit logs
               allow read: if request.auth != null && isAdmin(request.auth.uid);
-              // Creation is typically handled by backend/trusted environment
-              // For this client-side app, allow create if authenticated for mock purposes.
-              allow create: if request.auth != null; 
+              // No client-side create rule needed if Admin SDK handles it
+              allow create: if false; 
               // Audit logs should generally be immutable
               allow update, delete: if false;
             }
@@ -265,8 +289,13 @@ LabStation is a comprehensive web application designed to streamline the managem
         *   `bookings` collection: `userId` (ASC), `startTime` (ASC)
         *   `bookings` collection: `resourceId` (ASC), `userId` (ASC), `startTime` (DESC)
         *   `bookings` collection: `status` (ASC), `startTime` (ASC)
-        *   `maintenanceRequests` collection: `status` (ASC), `dateReported` (DESC) (if you add sorting by date)
-        *   `auditLogs` collection: `timestamp` (DESC) (if you add sorting)
+        *   `maintenanceRequests` collection: `dateReported` (DESC)
+        *   `maintenanceRequests` collection: `status` (ASC), `dateReported` (DESC)
+        *   `auditLogs` collection: `timestamp` (DESC)
+        *   `users` collection: `role` (ASC), `name` (ASC) (For querying technicians)
+        *   `users` collection: `name` (ASC) (For general user listing by admins/technicians)
+        *   `notifications` collection: `userId` (ASC), `createdAt` (DESC)
+
 
 7.  **Run the Development Server:**
     ```bash
@@ -278,4 +307,5 @@ LabStation is a comprehensive web application designed to streamline the managem
 
 ## Deployment
 
-This application is configured to be easily deployable on platforms like [Vercel](https://vercel.com/) (which is recommended for Next.js projects). Connect your Git repository (GitHub, GitLab, Bitbucket) to Vercel, and it will typically auto-detect the Next.js settings. Remember to configure your Firebase environment variables (from your `.env.local` file) in Vercel's project settings.
+This application is configured to be easily deployable on platforms like [Vercel](https://vercel.com/) (which is recommended for Next.js projects). Connect your Git repository (GitHub, GitLab, Bitbucket) to Vercel, and it will typically auto-detect the Next.js settings. Remember to configure your Firebase environment variables (from your `.env.local` file, including the Admin SDK credentials) in Vercel's project settings.
+
