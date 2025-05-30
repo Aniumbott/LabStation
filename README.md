@@ -7,8 +7,7 @@ LabStation is a comprehensive web application designed to streamline the managem
 
 *   **User Management & Authentication:**
     *   Secure **Email/Password Authentication** powered by Firebase.
-    *   User **Signup** with an
-    admin approval workflow.
+    *   User **Signup** with an admin approval workflow.
     *   User **Login** and persistent sessions.
     *   **User Profiles:** Users can view and manage their basic profile information (e.g., update name) and a mock password change UI.
     *   **Role-Based Access Control (RBAC):** Predefined roles (Admin, Lab Manager, Technician, Researcher) with UI elements and actions conditionally rendered based on user role.
@@ -21,11 +20,11 @@ LabStation is a comprehensive web application designed to streamline the managem
     *   Users can create, view, modify, and cancel bookings for available resources.
     *   **Conflict Detection:** Prevents double-bookings by checking against:
         *   Other existing bookings.
-        *   Resource-specific one-off unavailability periods (maintenance, etc.).
+        *   Resource-specific one-off unavailability periods (maintenance, etc.). // Updated
         *   Lab-wide specific blackout dates.
         *   Lab-wide weekly recurring unavailability rules.
     *   **Availability Scheduling:**
-        *   Admins/Lab Managers can define resource-specific unavailability periods (e.g., for maintenance).
+        *   Admins/Lab Managers can define resource-specific unavailability periods (e.g., for maintenance). // Updated
         *   Manage lab-wide **Blackout Dates** (specific holidays or closure days).
         *   Define lab-wide **Recurring Unavailability Rules** (e.g., lab closed on weekends).
     *   **Queue Management (Basic):**
@@ -94,6 +93,8 @@ LabStation is a comprehensive web application designed to streamline the managem
     npm install
     # or
     yarn install
+    # or
+    npm install firebase-admin # If not already in package.json or to ensure latest
     ```
 
 3.  **Set up Firebase:**
@@ -101,14 +102,14 @@ LabStation is a comprehensive web application designed to streamline the managem
     *   **Enable Authentication:** In your Firebase project, go to "Authentication" -> "Sign-in method" and enable the "Email/Password" provider.
     *   **Enable Firestore:** In your Firebase project, go to "Firestore Database" -> "Create database". Start in **Test Mode** for development (remember to secure rules for production). Choose a location.
     *   **Register your Web App:** In Project Overview, click the Web icon (`</>`) to add your app. Get the `firebaseConfig` object.
-    *   **Service Account for Admin SDK:**
+    *   **Service Account for Admin SDK (CRITICAL for server-side functions like notifications/audit logs):**
         *   Go to Project Settings > Service accounts.
-        *   Click "Generate new private key" and download the JSON file.
-        *   Store this file securely.
+        *   Click "Generate new private key" and download the JSON file. This file contains sensitive credentials. **Store this file securely and DO NOT commit it to your Git repository.**
+        *   Note the absolute path to this file on your system.
 
 4.  **Configure Environment Variables:**
     *   Create a `.env.local` file in the root of your project by copying `.env.local.example` (if it exists, otherwise create it).
-    *   Fill in your Firebase project's configuration values from the `firebaseConfig` object:
+    *   Fill in your Firebase project's configuration values from the `firebaseConfig` object (for client-side Firebase):
         ```env
         NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
         NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
@@ -117,15 +118,23 @@ LabStation is a comprehensive web application designed to streamline the managem
         NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
         NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
         NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id # Optional
-
-        # For Firebase Admin SDK (Server-Side Operations)
-        # Option 1: Path to your service account key JSON file (Recommended for local dev)
-        # Replace with the ACTUAL ABSOLUTE PATH to your downloaded file
-        GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/serviceAccountKey.json"
-
-        # Option 2: JSON content of the service account key (if Option 1 is not suitable)
-        # FIREBASE_SERVICE_ACCOUNT_KEY_JSON='{"type": "service_account", ...}'
         ```
+    *   **For Firebase Admin SDK (Server-Side Operations):** Choose **ONE** of the following methods:
+        *   **Option A (Recommended for local dev - File Path):**
+            Set `GOOGLE_APPLICATION_CREDENTIALS` to the **absolute path** of the service account JSON file you downloaded.
+            ```env
+            # Example for GOOGLE_APPLICATION_CREDENTIALS (replace with your actual path)
+            # macOS/Linux: /Users/yourname/path/to/your-service-account-file.json
+            # Windows: C:\\Users\\yourname\\path\\to\\your-service-account-file.json
+            GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/serviceAccountKey.json"
+            ```
+        *   **Option B (JSON Content):**
+            If file paths are problematic, you can set `FIREBASE_SERVICE_ACCOUNT_KEY_JSON` to the *entire JSON content* of the service account key file.
+            ```env
+            # Example for FIREBASE_SERVICE_ACCOUNT_KEY_JSON (paste the JSON content as a single line or ensure your environment handles multi-line)
+            # FIREBASE_SERVICE_ACCOUNT_KEY_JSON='{"type": "service_account", ...}'
+            ```
+            The `src/lib/firebase-admin.ts` is configured to prioritize `FIREBASE_SERVICE_ACCOUNT_KEY_JSON` if both are set.
     *   **Important:** Add `.env.local` to your `.gitignore` file to prevent committing your Firebase credentials.
 
 5.  **Seed Initial Admin User (Important!):**
@@ -140,7 +149,7 @@ LabStation is a comprehensive web application designed to streamline the managem
             *   `status`: "active" - Type: string
             *   `avatarUrl`: "https://placehold.co/100x100.png" - Type: string
             *   `createdAt`: (Current timestamp) - Type: timestamp
-    *   **Security Rules:** Update your Firestore security rules. Go to **Firestore Database > Rules** tab and replace the default rules with the following comprehensive example. **Review and adapt these rules for your production security needs.**
+    *   **Security Rules:** Update your Firestore security rules. Go to **Firestore Database > Rules** tab and replace the default rules with the following comprehensive version. **Review and adapt these rules for your production security needs.**
         ```firestore-rules
         rules_version = '2';
 
@@ -160,7 +169,7 @@ LabStation is a comprehensive web application designed to streamline the managem
 
             // Helper function to check if a user is a Technician
             function isTechnician(userId) {
-              return get(/databases/$(database)/documents/users/$(userId)).data.role == 'Technician';
+              return get(/databases/$(database)/documents/users/$(userId)).data.role;
             }
             
             // Helper function to check if the request is from the owner of the document
@@ -236,10 +245,9 @@ LabStation is a comprehensive web application designed to streamline the managem
               // Authenticated users can create bookings for themselves, with 'Pending' or 'Waitlisted' status.
               allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
                               && (request.resource.data.status == 'Pending' || request.resource.data.status == 'Waitlisted');
-                              // Removed: && !("createdAt" in request.resource.data); // Removed as it was causing issues with serverTimestamp
+                              // Removed: && !("createdAt" in request.resource.data); // This was causing issues with serverTimestamp
 
-              // Users can cancel their own 'Pending' or 'Waitlisted' bookings.
-              // Users can cancel their own 'Confirmed' bookings.
+              // Users can cancel their own 'Pending', 'Waitlisted', or 'Confirmed' bookings.
               // Users can log usage ('usageDetails') for their own 'Confirmed' bookings if the booking is in the past.
               // Admins or Lab Managers can perform other updates (e.g., change status).
               allow update: if request.auth != null && (
@@ -328,27 +336,39 @@ LabStation is a comprehensive web application designed to streamline the managem
         ```
 
 6.  **Firestore Indexes:**
-    *   As you use the application, Firestore might prompt you in the browser console if specific queries require composite indexes for performance. These errors usually include a direct link to create the needed index in the Firebase console. Create them as needed. Common indexes you will likely need:
-        *   `users` collection: `role` (ASC), `name` (ASC) *(For querying users by role and sorting)*
-        *   `users` collection: `name` (ASC) *(For general user listing)*
-        *   `bookings` collection: `userId` (ASC), `startTime` (ASC) *(For user's own bookings list)*
-        *   `bookings` collection: `resourceId` (ASC), `status` (ASC), `startTime` (ASC) *(For conflict checks and resource-specific views)*
-        *   `bookings` collection: `status` (ASC), `startTime` (ASC) *(For booking request/approval views)*
-        *   `bookings` collection: `resourceId` (ASC), `createdAt` (ASC) *(For waitlist processing by resource)*
-        *   `maintenanceRequests` collection: `dateReported` (DESC) *(For general listing)*
-        *   `maintenanceRequests` collection: `resourceId` (ASC), `dateReported` (DESC)
-        *   `maintenanceRequests` collection: `status` (ASC), `dateReported` (DESC)
-        *   `maintenanceRequests` collection: `assignedTechnicianId` (ASC), `dateReported` (DESC)
-        *   `auditLogs` collection: `timestamp` (DESC) *(For listing audit logs)*
-        *   `notifications` collection: `userId` (ASC), `createdAt` (DESC) *(For user's notification list)*
-        *   `resources` collection: `name` (ASC) *(For general resource listing)*
-        *   `resourceTypes` collection: `name` (ASC) *(For listing resource types)*
-        *   `blackoutDates` collection: `date` (ASC) *(For listing blackout dates)*
-        *   `recurringBlackoutRules` collection: `name` (ASC) *(For listing recurring rules)*
+    *   As you use the application, Firestore might prompt you in the browser console if specific queries require composite indexes for performance. These errors usually include a direct link to create the needed index in the Firebase console. Create them as needed.
+    *   **Proactively create these essential indexes:**
+        *   `users` collection:
+            *   `role` (ASC), `name` (ASC)
+            *   `name` (ASC)
+        *   `bookings` collection:
+            *   `userId` (ASC), `startTime` (ASC)
+            *   `resourceId` (ASC), `status` (ASC), `startTime` (ASC)
+            *   `resourceId` (ASC), `status` (ASC), `endTime` (ASC), `startTime` (ASC) *(For conflict checks - verify exact fields and order Firestore suggests if error occurs)*
+            *   `status` (ASC), `startTime` (ASC)
+            *   `resourceId` (ASC), `status` (ASC), `createdAt` (ASC) *(For waitlist processing)*
+        *   `maintenanceRequests` collection:
+            *   `dateReported` (DESC)
+            *   `resourceId` (ASC), `dateReported` (DESC)
+            *   `status` (ASC), `dateReported` (DESC)
+            *   `assignedTechnicianId` (ASC), `dateReported` (DESC)
+        *   `auditLogs` collection:
+            *   `timestamp` (DESC)
+        *   `notifications` collection:
+            *   `userId` (ASC), `createdAt` (DESC)
+        *   `resources` collection:
+            *   `name` (ASC)
+        *   `resourceTypes` collection:
+            *   `name` (ASC)
+        *   `blackoutDates` collection:
+            *   `date` (ASC)
+        *   `recurringBlackoutRules` collection:
+            *   `name` (ASC)
 
 
 7.  **Run the Development Server:**
     ```bash
+    # Important: Restart your server after setting/changing environment variables!
     npm run dev
     # or
     yarn dev
@@ -358,7 +378,5 @@ LabStation is a comprehensive web application designed to streamline the managem
 ## Deployment
 
 This application is configured to be easily deployable on platforms like [Vercel](https://vercel.com/) (which is recommended for Next.js projects). Connect your Git repository (GitHub, GitLab, Bitbucket) to Vercel, and it will typically auto-detect the Next.js settings. Remember to configure your Firebase environment variables (from your `.env.local` file, including the Admin SDK credentials) in Vercel's project settings.
-
-    
 
     
