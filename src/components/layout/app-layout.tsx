@@ -153,9 +153,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <Sidebar>
         <SidebarHeader className="p-4 border-b border-sidebar-border">
           <Link href="/dashboard" className="focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-sm">
-            <span className="inline-flex items-center justify-center gap-2">
-              <Logo />
-            </span>
+            {/* The Link component will render an <a> tag.
+                The children of Link (Logo) will be inside this <a> tag.
+            */}
+            <Logo />
           </Link>
         </SidebarHeader>
 
@@ -173,10 +174,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
                       'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
                     )}
                   >
-                    <>
+                    {/* This span becomes the single child element for SidebarMenuButton's Slot.
+                        The Link component wraps this SidebarMenuButton, providing the <a> tag.
+                        Props from SidebarMenuButton (like className, data-active) are merged onto the Link's <a>.
+                    */}
+                    <span className="inline-flex w-full items-center gap-2 overflow-hidden">
                       <item.icon />
-                      <span>{item.label}</span>
-                    </>
+                      <span className="truncate group-data-[collapsible=icon]:hidden">{item.label}</span>
+                    </span>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
