@@ -168,7 +168,7 @@ LabStation is a comprehensive web application designed to streamline the managem
             function isTechnician(userId) {
               return get(/databases/$(database)/documents/users/$(userId)).data.role == 'Technician';
             }
-
+            
             // Helper function to check if the request is from the owner of the document
             function isOwner(userId) {
               return request.auth.uid == userId;
@@ -189,7 +189,7 @@ LabStation is a comprehensive web application designed to streamline the managem
                             isOwner(userId) ||
                             isAdmin(request.auth.uid) ||
                             isTechnician(request.auth.uid) ||
-                            isAdminOrLabManager(request.auth.uid)
+                            isAdminOrLabManager(request.auth.uid) 
                           );
 
               // Admins and Technicians can list users (e.g., for admin panels or technician assignment).
@@ -239,10 +239,10 @@ LabStation is a comprehensive web application designed to streamline the managem
                              isTechnician(request.auth.uid)             // Technician can also read any booking
                             );
 
-              // Authenticated users can create bookings for themselves, with 'Pending' or 'Waitlisted' status.
+              // Authenticated users can create bookings for themselves.
               allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
                               && (request.resource.data.status == 'Pending' || request.resource.data.status == 'Waitlisted');
-                              // Removed: && !("createdAt" in request.resource.data); Client uses serverTimestamp()
+                              // Removed: && !("createdAt" in request.resource.data); // This was causing issues with serverTimestamp()
 
               // Users can cancel their own 'Pending', 'Waitlisted', or 'Confirmed' bookings.
               // Users can log usage ('usageDetails') for their own 'Confirmed' bookings if the booking is in the past.
@@ -344,11 +344,11 @@ LabStation is a comprehensive web application designed to streamline the managem
         *   **`bookings` collection:**
             *   Fields: `userId` (Ascending), `startTime` (Ascending)
                 *   *Purpose: For users to view their own bookings, sorted by start time.*
-            *   Fields: `userId` (Ascending), `endTime` (Ascending), `startTime` (Ascending)
-                *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('endTime', '>=', ...).orderBy('startTime', 'asc')`).*
+            *   Fields: `userId` (Ascending), `endTime` (Ascending), `startTime` (Ascending)  <!-- THIS IS THE ONE FOR THE DASHBOARD -->
+                *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('endTime', '>=', ...).orderBy('startTime', 'asc')`). Ensure this matches Firestore's suggestion if it differs.*
             *   Fields: `resourceId` (Ascending), `status` (Ascending), `startTime` (Ascending)
                 *   *Purpose: For viewing bookings for a specific resource, filtered by status, and ordered by start time (e.g., on admin booking requests page if filtered by resource).*
-            *   Fields: `resourceId` (Ascending), `status` (Ascending), `endTime` (Ascending), `startTime` (Ascending)
+            *   Fields: `resourceId` (Ascending), `status` (Ascending), `endTime` (Ascending), `startTime` (Ascending) <!-- CONFLICT CHECK -->
                 *   *Purpose: Critical for booking conflict checks (`where('resourceId', ...).where('status', 'in', ...).where('startTime', '<', ...).where('endTime', '>', ...)`).*
             *   Fields: `status` (Ascending), `startTime` (Ascending)
                 *   *Purpose: For admin views of booking requests, filtered by status and sorted by start time.*
@@ -362,7 +362,6 @@ LabStation is a comprehensive web application designed to streamline the managem
                 *   *Purpose: For filtering maintenance requests by status and sorting them by report date.*
             *   Fields: `assignedTechnicianId` (Ascending), `dateReported` (Descending)
                 *   *Purpose: For viewing maintenance requests assigned to a specific technician, sorted by report date.*
-            *   *(Note: Simple `orderBy("dateReported", "desc")` for all requests is covered by automatic single-field index.)*
 
         *   **`notifications` collection:**
             *   Fields: `userId` (Ascending), `createdAt` (Descending)
@@ -385,3 +384,4 @@ LabStation is a comprehensive web application designed to streamline the managem
 ## Deployment
 
 This application is configured to be easily deployable on platforms like [Vercel](https://vercel.com/) (which is recommended for Next.js projects). Connect your Git repository (GitHub, GitLab, Bitbucket) to Vercel, and it will typically auto-detect the Next.js settings. Remember to configure your Firebase environment variables (from your `.env.local` file, including the Admin SDK credentials) in Vercel's project settings.
+
