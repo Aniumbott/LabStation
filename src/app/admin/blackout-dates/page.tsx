@@ -39,8 +39,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger, // Added AlertDialogTrigger
-} from "@/components/ui/alert-dialog";
+  AlertDialogTrigger,
+}from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { format, parseISO, isValid as isValidDateFn, Timestamp } from 'date-fns';
@@ -74,6 +74,8 @@ export default function BlackoutDatesPage() {
   const [tempDateSearchTerm, setTempDateSearchTerm] = useState('');
   const [activeDateSearchTerm, setActiveDateSearchTerm] = useState('');
 
+  const canManageBlackouts = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
+
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -81,7 +83,6 @@ export default function BlackoutDatesPage() {
       const boSnapshot = await getDocs(boQuery);
       setBlackoutDates(boSnapshot.docs.map(d => {
         const data = d.data();
-        // date is already string 'YYYY-MM-DD' from Firestore
         return { id: d.id, ...data } as BlackoutDate;
       }));
 
@@ -99,14 +100,14 @@ export default function BlackoutDatesPage() {
   }, [toast]);
 
   useEffect(() => {
-    if (currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager')) {
+    if (canManageBlackouts) {
       fetchData();
     } else {
       setIsLoading(false);
       setBlackoutDates([]);
       setRecurringRules([]);
     }
-  }, [fetchData, currentUser]);
+  }, [fetchData, canManageBlackouts]);
 
   useEffect(() => {
     if (isDateFilterDialogOpen) {
@@ -117,7 +118,6 @@ export default function BlackoutDatesPage() {
   const filteredBlackoutDates = useMemo(() => {
     return blackoutDates.filter(bd => {
         const lowerSearchTerm = activeDateSearchTerm.toLowerCase();
-        // Ensure bd.date and bd.reason exist before calling toLowerCase or format
         const reasonMatch = bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm);
         const dateMatch = bd.date && isValidDateFn(parseISO(bd.date)) && format(parseISO(bd.date), 'PPP').toLowerCase().includes(lowerSearchTerm);
         return !activeDateSearchTerm || reasonMatch || dateMatch;
@@ -144,7 +144,7 @@ export default function BlackoutDatesPage() {
 
     const blackoutDataToSave: Omit<BlackoutDate, 'id'> = {
       date: formattedDateOnly,
-      reason: data.reason || undefined, // Store undefined if reason is empty
+      reason: data.reason || undefined,
     };
 
     setIsLoading(true);
@@ -156,8 +156,6 @@ export default function BlackoutDatesPage() {
         toast({ title: 'Blackout Date Updated', description: `Blackout date for ${displayDate} has been updated.` });
       } else {
         const docRef = await addDoc(collection(db, "blackoutDates"), blackoutDataToSave);
-        // Optionally, update the document with its own ID if needed for your BlackoutDate type locally
-        // await updateDoc(docRef, { id: docRef.id }); 
         addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_CREATED', { entityType: 'BlackoutDate', entityId: docRef.id, details: `Blackout Date for ${displayDate} created. Reason: ${data.reason || 'N/A'}`});
         toast({ title: 'Blackout Date Added', description: `Blackout date for ${displayDate} has been added.` });
       }
@@ -201,14 +199,14 @@ export default function BlackoutDatesPage() {
     setIsDateFilterDialogOpen(false);
   }, [tempDateSearchTerm]);
 
-  const resetDialogFiltersOnly = useCallback(() => { // Renamed from resetDateDialogFilters for clarity
+  const resetDialogFiltersOnly = useCallback(() => {
     setTempDateSearchTerm('');
   }, []);
 
   const resetAllActiveDatePageFilters = useCallback(() => {
     setActiveDateSearchTerm('');
-    resetDialogFiltersOnly(); 
-    setIsDateFilterDialogOpen(false); 
+    resetDialogFiltersOnly();
+    setIsDateFilterDialogOpen(false);
   }, [resetDialogFiltersOnly]);
 
 
@@ -282,7 +280,6 @@ export default function BlackoutDatesPage() {
     }
   }, [currentUser, recurringRules, fetchData, toast]);
 
-  const canManageBlackouts = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
 
   if (!currentUser || !canManageBlackouts) {
     return (
@@ -296,7 +293,7 @@ export default function BlackoutDatesPage() {
       </div>
     );
   }
-  
+
   if (isLoading && blackoutDates.length === 0 && recurringRules.length === 0) {
     return <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading blackout data...</div>;
   }
@@ -308,7 +305,7 @@ export default function BlackoutDatesPage() {
           title="Blackout Dates & Recurring Closures"
           description="Define specific dates and recurring rules when the entire lab is closed or unavailable."
           icon={CalendarOff}
-          actions={ 
+          actions={
             canManageBlackouts && (
                 <div className="flex items-center gap-2">
                 <Button onClick={handleOpenNewDateDialog} size="sm">

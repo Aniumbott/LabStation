@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, X, CalendarPlus, CheckCircle2 } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { labsList } from '@/lib/app-constants'; // resourceStatusesList removed as it's for the new statuses
+import { labsList, resourceStatusesList } from '@/lib/app-constants';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -42,7 +42,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, Timestamp as FirestoreTimestamp } from 'date-fns';
-import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils'; // getResourceStatusBadge will use new statuses
+import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import {
   collection,
@@ -86,6 +86,8 @@ export default function AdminResourcesPage() {
   const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
 
+  const canManageResources = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
+
   const fetchResourcesAndTypes = useCallback(async () => {
     setIsLoadingData(true);
     try {
@@ -99,7 +101,7 @@ export default function AdminResourcesPage() {
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
           lab: data.lab || (labsList.length > 0 ? labsList[0] : 'Electronics Lab 1'),
-          status: data.status || 'Working', // Default to 'Working' for new status system
+          status: data.status || 'Working',
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
           manufacturer: data.manufacturer,
@@ -190,7 +192,6 @@ export default function AdminResourcesPage() {
         if (isUnavailabilityOverlap) {
             dateMatch = false;
         } else {
-            // Resource is considered available for booking if its operational status is 'Working' and not in an unavailability period.
             dateMatch = resource.status === 'Working';
         }
       }
@@ -231,7 +232,7 @@ export default function AdminResourcesPage() {
             description: "Please add resource types first before adding resources.",
             variant: "destructive",
         });
-        router.push('/admin/resource-types');
+        router.push('/admin/labs'); // Updated to point to labs (inventory) page
         return;
     }
     setEditingResource(null);
@@ -240,7 +241,7 @@ export default function AdminResourcesPage() {
 
 
   const handleSaveResource = useCallback(async (data: ResourceFormValues) => {
-    if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Lab Manager')) {
+    if (!currentUser || !canManageResources) {
       toast({ title: "Permission Denied", description: "You are not authorized to perform this action.", variant: "destructive" });
       setIsFormDialogOpen(false);
       return;
@@ -275,7 +276,7 @@ export default function AdminResourcesPage() {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
       lab: data.lab,
-      status: data.status, // Will be 'Working', 'Maintenance', or 'Broken'
+      status: data.status,
       description: data.description || '',
       imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
       manufacturer: data.manufacturer || null,
@@ -340,7 +341,7 @@ export default function AdminResourcesPage() {
     } finally {
       setIsLoadingData(false);
     }
-  }, [currentUser, editingResource, fetchedResourceTypes, fetchResourcesAndTypes, toast]);
+  }, [currentUser, canManageResources, editingResource, fetchedResourceTypes, fetchResourcesAndTypes, toast]);
 
 
   const activeFilterCount = useMemo(() => [
@@ -349,8 +350,6 @@ export default function AdminResourcesPage() {
     activeFilterLab !== 'all',
     activeSelectedDate !== undefined
   ].filter(Boolean).length, [activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
-
-  const canAddResources = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
 
 
   const handleOpenEditDialog = (resource: Resource) => {
@@ -416,7 +415,7 @@ export default function AdminResourcesPage() {
                             ))}
                           </SelectContent>
                         </Select>
-                         {fetchedResourceTypes.length === 0 && <p className="text-xs text-muted-foreground mt-1">No resource types found. Add types in Admin &gt; Resource Types.</p>}
+                         {fetchedResourceTypes.length === 0 && <p className="text-xs text-muted-foreground mt-1">No resource types found. Add types in Admin &gt; Lab Management.</p>}
                       </div>
                       <div>
                         <Label htmlFor="resourceLabFilterDialog">Lab</Label>
@@ -468,7 +467,7 @@ export default function AdminResourcesPage() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            {canAddResources && (
+            {canManageResources && (
                 <Button onClick={handleOpenNewDialog}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Add
                 </Button>
@@ -519,7 +518,7 @@ export default function AdminResourcesPage() {
                       asChild
                       size="sm"
                       variant="default"
-                      disabled={resource.status !== 'Working'} // Only bookable if 'Working'
+                      disabled={resource.status !== 'Working'}
                       className="h-8 text-xs"
                     >
                       <Link href={`/bookings?resourceId=${resource.id}${activeSelectedDate ? `&date=${format(activeSelectedDate, 'yyyy-MM-dd')}`: ''}`}>
@@ -543,7 +542,7 @@ export default function AdminResourcesPage() {
             <p className="text-sm mb-4">
                 {activeFilterCount > 0
                     ? "Try adjusting your filter or search criteria."
-                    : (canAddResources ? "There are currently no resources in the catalog. Add one to get started!" : "There are currently no resources in the system.")
+                    : (canManageResources ? "There are currently no resources in the catalog. Add one to get started!" : "There are currently no resources in the system.")
                 }
             </p>
             {activeFilterCount > 0 ? (
@@ -551,7 +550,7 @@ export default function AdminResourcesPage() {
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             ): (
-              !isLoadingData && resources.length === 0 && canAddResources && (
+              !isLoadingData && resources.length === 0 && canManageResources && (
                 <Button onClick={handleOpenNewDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource
                 </Button>

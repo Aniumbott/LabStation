@@ -5,7 +5,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, AlertCircle, CheckCircle, Construction, User as UserIconLucide, Calendar as CalendarIcon, XCircle } from 'lucide-react'; // Added XCircle
+import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, AlertCircle, CheckCircle, Construction, User as UserIconLucide, Calendar as CalendarIcon, XCircle } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
 import type { Resource, ResourceType, Booking, UnavailabilityPeriod, RoleName } from '@/types';
 import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay, isBefore, compareAsc, isWithinInterval, isSameDay, addDays as dateFnsAddDays, Timestamp as FirestoreTimestamp } from 'date-fns';
-import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils'; // getResourceStatusBadge will use new statuses
+import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, type ResourceFormValues } from '@/components/admin/resource-form-dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -29,7 +29,7 @@ import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavai
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
 import { addAuditLog } from '@/lib/firestore-helpers';
-import { labsList, resourceStatusesList } from '@/lib/app-constants'; // resourceStatusesList for new statuses
+import { labsList, resourceStatusesList } from '@/lib/app-constants';
 
 
 function ResourceDetailPageSkeleton() {
@@ -205,7 +205,7 @@ export default function ResourceDetailPage() {
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
           lab: data.lab || (labsList.length > 0 ? labsList[0] : 'Electronics Lab 1'),
-          status: data.status || 'Working', // Default to 'Working' for new status system
+          status: data.status || 'Working',
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
           manufacturer: data.manufacturer || undefined,
@@ -339,7 +339,7 @@ export default function ResourceDetailPage() {
 
   const canManageResource = useMemo(() => {
     if (!currentUser) return false;
-    return currentUser.role === 'Admin' || currentUser.role === 'Lab Manager';
+    return currentUser.role === 'Admin'; // Only Admin can manage directly
   }, [currentUser]);
 
   const userPastBookingsForResource = useMemo(() => {
@@ -396,7 +396,7 @@ export default function ResourceDetailPage() {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
       lab: data.lab,
-      status: data.status, // Will be 'Working', 'Maintenance', or 'Broken'
+      status: data.status,
       description: data.description || '',
       imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
       manufacturer: data.manufacturer || null,
@@ -490,7 +490,7 @@ export default function ResourceDetailPage() {
 
   if (!resource) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>;
 
-  const canBookResource = resource.status === 'Working'; // Updated logic
+  const canBookResource = resource.status === 'Working';
 
   return (
     <TooltipProvider>
@@ -698,7 +698,7 @@ export default function ResourceDetailPage() {
                 </Button>
             </CardFooter>
           </Card>
-            {resource && resource.status === 'Working' && ( // Only show availability card if resource is 'Working'
+            {resource && resource.status === 'Working' && (
               <Card className="shadow-lg">
                 <CardHeader>
                   <CardTitle className="text-xl flex items-center gap-2">

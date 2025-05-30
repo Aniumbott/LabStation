@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { UserPlus, Save, X, Loader2 } from 'lucide-react';
 import type { User, RoleName } from '@/types';
-import { userRolesList } from '@/lib/app-constants';
+import { userRolesList } from '@/lib/app-constants'; // Will now use the updated list
 
 const userFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, "Name cannot exceed 100 characters."),
@@ -33,7 +33,7 @@ interface UserFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialUser: User | null;
-  onSave: (data: UserFormValues) => Promise<void>; // Make onSave async
+  onSave: (data: UserFormValues) => Promise<void>;
 }
 
 export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: UserFormDialogProps) {
@@ -51,7 +51,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
       form.reset({
         name: initialUser.name,
         email: initialUser.email,
-        role: initialUser.role,
+        role: userRolesList.includes(initialUser.role) ? initialUser.role : 'Researcher', // Fallback if old role was 'Lab Manager'
       });
     } else {
       form.reset({
@@ -70,7 +70,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
   }, [open, initialUser, form.reset, resetForm]);
 
   async function onSubmit(data: UserFormValues) {
-    await onSave(data); // Await the onSave promise
+    await onSave(data);
   }
 
   return (
@@ -104,11 +104,11 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
                 <FormItem>
                   <FormLabel>Email Address</FormLabel>
                   <FormControl>
-                    <Input 
-                        type="email" 
-                        placeholder="e.g., ada.lovelace@labstation.com" 
-                        {...field} 
-                        disabled={!!initialUser || form.formState.isSubmitting} 
+                    <Input
+                        type="email"
+                        placeholder="e.g., ada.lovelace@labstation.com"
+                        {...field}
+                        disabled={!!initialUser || form.formState.isSubmitting}
                     />
                   </FormControl>
                   {!!initialUser && <FormMessage className="text-xs text-muted-foreground !mt-0.5">Email cannot be changed for existing user profiles.</FormMessage>}
@@ -129,7 +129,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {userRolesList.map((role) => (
+                      {userRolesList.map((role) => ( // userRolesList is now updated
                         <SelectItem key={role} value={role}>
                           {role}
                         </SelectItem>

@@ -43,11 +43,12 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   adminOnly?: boolean;
-  adminOrLabManager?: boolean;
+  // adminOrLabManager prop is no longer needed after Lab Manager role removal
 }
 
 const PUBLIC_ROUTES = ['/login', '/signup'];
 
+// Updated navItems: 'adminOrLabManager' checks are simplified to 'adminOnly' where appropriate
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/resources', label: 'Resources', icon: ClipboardList },
@@ -59,19 +60,19 @@ const navItems: NavItem[] = [
     href: '/admin/booking-requests',
     label: 'Booking Requests',
     icon: CheckSquare,
-    adminOrLabManager: true,
+    adminOnly: true, // Was adminOrLabManager
   },
   {
-    href: '/admin/labs', // <-- UPDATED URL HERE
-    label: 'Lab Management',
+    href: '/admin/labs', // Updated URL
+    label: 'Lab Management', // Updated Label
     icon: Archive,
-    adminOrLabManager: true,
+    adminOnly: true, // Was adminOrLabManager
   },
   {
     href: '/admin/blackout-dates',
     label: 'Lab Closures',
     icon: CalendarOff,
-    adminOrLabManager: true,
+    adminOnly: true, // Was adminOrLabManager
   },
   {
     href: '/admin/users',
@@ -83,7 +84,7 @@ const navItems: NavItem[] = [
     href: '/admin/reports',
     label: 'Reports',
     icon: BarChart3,
-    adminOrLabManager: true,
+    adminOnly: true, // Was adminOrLabManager
   },
   {
     href: '/admin/audit-log',
@@ -112,9 +113,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       if (item.adminOnly) {
         return currentUser.role === 'Admin';
       }
-      if (item.adminOrLabManager) {
-        return currentUser.role === 'Admin' || currentUser.role === 'Lab Manager';
-      }
+      // No more adminOrLabManager check needed
       return true;
     });
   }, [currentUser]);
@@ -163,7 +162,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <SidebarMenu>
             {visibleNavItems.map((item) => (
               <SidebarMenuItem key={item.label}>
-                <Link href={item.href}>
+                <Link href={item.href} passHref>
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href !== '/')}

@@ -31,9 +31,9 @@ const maintenanceRequestFormSchema = z.object({
   resourceId: z.string().min(1, { message: 'Please select a resource.' }),
   issueDescription: z.string().min(10, { message: 'Issue description must be at least 10 characters.' }).max(1000, { message: 'Description cannot exceed 1000 characters.' }),
   status: z.enum(maintenanceRequestStatuses as [MaintenanceRequestStatus, ...MaintenanceRequestStatus[]], { required_error: 'Please select a status.'}),
-  assignedTechnicianId: z.string().optional().or(z.literal('')), 
+  assignedTechnicianId: z.string().optional().or(z.literal('')),
   resolutionNotes: z.string().max(1000).optional().or(z.literal('')),
-  dateResolved: z.string().optional().refine(val => !val || isValidDateFn(parseISO(val)), { // For datetime-local input
+  dateResolved: z.string().optional().refine(val => !val || isValidDateFn(parseISO(val)), {
     message: "Invalid resolved date/time format. Use YYYY-MM-DDTHH:mm",
   }).or(z.literal('')),
 }).refine(data => {
@@ -52,7 +52,7 @@ interface MaintenanceRequestFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialRequest: MaintenanceRequest | null;
-  onSave: (data: MaintenanceRequestFormValues) => Promise<void>; // Changed to remove requestId
+  onSave: (data: MaintenanceRequestFormValues) => Promise<void>;
   technicians: User[];
   resources: Resource[];
   currentUserRole?: RoleName;
@@ -71,7 +71,7 @@ export function MaintenanceRequestFormDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const form = useForm<MaintenanceRequestFormValues>({
     resolver: zodResolver(maintenanceRequestFormSchema),
-    defaultValues: { // Default values will be set by useEffect
+    defaultValues: {
         resourceId: '',
         issueDescription: '',
         status: 'Open',
@@ -116,8 +116,8 @@ export function MaintenanceRequestFormDialog({
     setIsSubmitting(true);
     const dataToSave = {
       ...data,
-      assignedTechnicianId: data.assignedTechnicianId === UNASSIGNED_TECHNICIAN_VALUE || data.assignedTechnicianId === '' 
-                            ? undefined 
+      assignedTechnicianId: data.assignedTechnicianId === UNASSIGNED_TECHNICIAN_VALUE || data.assignedTechnicianId === ''
+                            ? undefined
                             : data.assignedTechnicianId,
     };
     try {
@@ -129,10 +129,20 @@ export function MaintenanceRequestFormDialog({
     }
   }
 
-  const canEditSensitiveFields = useMemo(() => {
-    if (!currentUserRole) return false; // Should not happen if dialog is opened correctly
-    return currentUserRole === 'Admin' || currentUserRole === 'Lab Manager' || currentUserRole === 'Technician';
+  const canOnlyEditDescription = useMemo(() => {
+    if (!currentUserRole || !initialRequest) return false;
+    return initialRequest.status === 'Open' && currentUserRole === 'Researcher' && initialRequest.reportedByUserId === form.getValues('reportedByUserId'); // Assuming reportedByUserId is implicitly part of initialRequest and not changed
+  }, [currentUserRole, initialRequest, form]);
+
+  const canEditAsTechnician = useMemo(() => {
+     if (!currentUserRole || !initialRequest) return false;
+     return currentUserRole === 'Technician' && initialRequest.assignedTechnicianId === form.getValues('assignedTechnicianId'); // Assuming assignedTechnicianId is implicitly part of initialRequest
+  }, [currentUserRole, initialRequest, form]);
+
+  const canAdminister = useMemo(() => {
+      return currentUserRole === 'Admin';
   }, [currentUserRole]);
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -177,8 +187,8 @@ export function MaintenanceRequestFormDialog({
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Issue Description</FormLabel>
-                        <FormControl><Textarea placeholder="Detailed description of the problem..." {...field} value={field.value || ''} rows={5} disabled={isSubmitting || (!!initialRequest && !canEditSensitiveFields && initialRequest.status !== 'Open')} /></FormControl>
-                        {(!!initialRequest && !canEditSensitiveFields && initialRequest.status !== 'Open') && <FormDescription>Description can only be edited by authorized personnel or if status is 'Open'.</FormDescription>}
+                        <FormControl><Textarea placeholder="Detailed description of the problem..." {...field} value={field.value || ''} rows={5} disabled={isSubmitting || (!!initialRequest && !canAdminister && !canEditAsTechnician && !canOnlyEditDescription)} /></FormControl>
+                        {(!!initialRequest && !canAdminister && !canEditAsTechnician && !canOnlyEditDescription) && <FormDescription>Description can only be edited by authorized personnel or if you reported it and status is 'Open'.</FormDescription>}
                         <FormMessage />
                         </FormItem>
                     )}
@@ -190,7 +200,7 @@ export function MaintenanceRequestFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Status</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || 'Open'} disabled={!canEditSensitiveFields || isSubmitting}>
+                            <Select onValueChange={field.onChange} value={field.value || 'Open'} disabled={!canAdminister && !canEditAsTechnician || isSubmitting}>
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
                                 <SelectContent>
                                 {maintenanceRequestStatuses.map(statusVal => (
@@ -198,7 +208,7 @@ export function MaintenanceRequestFormDialog({
                                 ))}
                                 </SelectContent>
                             </Select>
-                            {!canEditSensitiveFields && <FormDescription>Status can only be changed by authorized personnel.</FormDescription>}
+                            {(!canAdminister && !canEditAsTechnician) && <FormDescription>Status can only be changed by authorized personnel.</FormDescription>}
                             <FormMessage />
                             </FormItem>
                         )}
@@ -212,7 +222,7 @@ export function MaintenanceRequestFormDialog({
                             <Select
                                 onValueChange={(value) => field.onChange(value)}
                                 value={field.value || UNASSIGNED_TECHNICIAN_VALUE}
-                                disabled={!canEditSensitiveFields || isSubmitting}
+                                disabled={!canAdminister || isSubmitting}
                             >
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select a technician" /></SelectTrigger></FormControl>
                                 <SelectContent>
@@ -222,7 +232,7 @@ export function MaintenanceRequestFormDialog({
                                 ))}
                                 </SelectContent>
                             </Select>
-                            {!canEditSensitiveFields && <FormDescription>Technician assignment can only be changed by authorized personnel.</FormDescription>}
+                            {!canAdminister && <FormDescription>Technician assignment can only be changed by Admins.</FormDescription>}
                             <FormMessage />
                             </FormItem>
                         )}
@@ -236,9 +246,9 @@ export function MaintenanceRequestFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Resolution Notes {watchStatus === 'Resolved' || watchStatus === 'Closed' ? <span className="text-destructive">*</span> : ''}</FormLabel>
-                            <FormControl><Textarea placeholder="Describe the resolution steps taken..." {...field} value={field.value || ''} rows={4} disabled={!canEditSensitiveFields || isSubmitting} /></FormControl>
+                            <FormControl><Textarea placeholder="Describe the resolution steps taken..." {...field} value={field.value || ''} rows={4} disabled={!canAdminister && !canEditAsTechnician || isSubmitting} /></FormControl>
                              <FormDescription>Required if status is Resolved or Closed.
-                             {!canEditSensitiveFields && " Only authorized personnel can add resolution notes."}
+                             {(!canAdminister && !canEditAsTechnician) && " Only authorized personnel can add resolution notes."}
                              </FormDescription>
                             <FormMessage />
                             </FormItem>
@@ -250,7 +260,7 @@ export function MaintenanceRequestFormDialog({
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Date Resolved (Optional)</FormLabel>
-                            <FormControl><Input type="datetime-local" {...field} value={field.value || ''} disabled={!canEditSensitiveFields || isSubmitting} /></FormControl>
+                            <FormControl><Input type="datetime-local" {...field} value={field.value || ''} disabled={!canAdminister && !canEditAsTechnician || isSubmitting} /></FormControl>
                             <FormDescription>Defaults to now if status is set to Resolved/Closed and no date is provided.</FormDescription>
                             <FormMessage />
                             </FormItem>
@@ -264,7 +274,7 @@ export function MaintenanceRequestFormDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting || (!!initialRequest && !canEditSensitiveFields && initialRequest.status !== 'Open' && initialRequest.issueDescription === form.getValues('issueDescription') )}>
+              <Button type="submit" disabled={isSubmitting || (!!initialRequest && !canAdminister && !canEditAsTechnician && !canOnlyEditDescription) }>
                 {isSubmitting
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   : (initialRequest ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)

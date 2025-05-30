@@ -10,8 +10,8 @@ LabStation is a comprehensive web application designed to streamline the managem
     *   User **Signup** with an admin approval workflow.
     *   User **Login** and persistent sessions.
     *   **User Profiles:** Users can view and manage their basic profile information (e.g., update name) and a mock password change UI.
-    *   **Role-Based Access Control (RBAC):** Predefined roles (Admin, Lab Manager, Technician, Researcher) with UI elements and actions conditionally rendered based on user role.
-*   **Resource Catalog & Management:**
+    *   **Role-Based Access Control (RBAC):** Predefined roles (Admin, Technician, Researcher) with UI elements and actions conditionally rendered based on user role.
+*   **Resource Catalog & Management (Admin):**
     *   Add, edit, view, and delete detailed information for lab resources (e.g., oscilloscopes, power supplies, soldering stations).
     *   Resource operational status: 'Working', 'Maintenance', 'Broken'.
     *   Categorize resources using customizable **Resource Types**.
@@ -25,7 +25,7 @@ LabStation is a comprehensive web application designed to streamline the managem
         *   Lab-wide specific blackout dates.
         *   Lab-wide weekly recurring unavailability rules.
     *   **Availability Scheduling:**
-        *   Admins/Lab Managers can define resource-specific unavailability periods (e.g., for maintenance). Resource must be in 'Working' status to be bookable.
+        *   Admins can define resource-specific unavailability periods (e.g., for maintenance). Resource must be in 'Working' status to be bookable.
         *   Manage lab-wide **Blackout Dates** (specific holidays or closure days).
         *   Define lab-wide **Recurring Unavailability Rules** (e.g., lab closed on weekends).
     *   **Queue Management (Basic):**
@@ -33,7 +33,7 @@ LabStation is a comprehensive web application designed to streamline the managem
         *   If a slot is full, users can join a waitlist.
         *   Bookings are automatically promoted from the waitlist (to 'Pending' status) when a conflicting confirmed booking is cancelled or rejected by an admin.
         *   Users can see their position in the waitlist (if this UI is implemented).
-    *   **Booking Approval Workflow:** New booking requests enter a 'Pending' state and require approval from an Admin or Lab Manager before being confirmed.
+    *   **Booking Approval Workflow (Admin):** New booking requests enter a 'Pending' state and require approval from an Admin before being confirmed.
 *   **Maintenance Requests:**
     *   Log service issues for specific resources.
     *   Admins/Technicians can assign requests, update status (Open, In Progress, Resolved, Closed), and add resolution notes.
@@ -55,8 +55,8 @@ LabStation is a comprehensive web application designed to streamline the managem
 *   **Audit Logging (Admin):**
     *   Tracks key system events and actions for administrative review.
 *   **Admin Panel:**
-    *   Centralized sections for managing Users (including signup requests), Resources, Inventory (Labs, Resource Types), Booking Requests, Lab Closures (Blackout Dates & Recurring Rules), Maintenance Requests, Reports, and Audit Logs.
-*   **Inventory Management:**
+    *   Centralized sections for managing Users (including signup requests), Resources, Lab Management (Labs, Resource Types), Booking Requests, Lab Closures (Blackout Dates & Recurring Rules), Maintenance Requests, Reports, and Audit Logs.
+*   **Lab Management (Admin):**
     *   Manage **Labs** (CRUD operations for lab entities: name, location, description).
     *   Manage **Resource Types** (CRUD operations for resource categories).
 
@@ -162,12 +162,6 @@ LabStation is a comprehensive web application designed to streamline the managem
               return get(/databases/$(database)/documents/users/$(userId)).data.role == 'Admin';
             }
 
-            // Helper function to check if a user is an Admin or Lab Manager
-            function isAdminOrLabManager(userId) {
-              let userRole = get(/databases/$(database)/documents/users/$(userId)).data.role;
-              return userRole == 'Admin' || userRole == 'Lab Manager';
-            }
-
             // Helper function to check if a user is a Technician
             function isTechnician(userId) {
               return get(/databases/$(database)/documents/users/$(userId)).data.role == 'Technician';
@@ -188,12 +182,11 @@ LabStation is a comprehensive web application designed to streamline the managem
                               && request.resource.data.role == 'Researcher'
                               && !("createdAt" in request.resource.data); // Prevent client from setting createdAt
 
-              // Users can read their own profile. Admins, Lab Managers, and Technicians can read any user profile.
+              // Users can read their own profile. Admins and Technicians can read any user profile.
               allow read: if request.auth != null && (
                             isOwner(userId) ||
                             isAdmin(request.auth.uid) ||
-                            isTechnician(request.auth.uid) ||
-                            isAdminOrLabManager(request.auth.uid)
+                            isTechnician(request.auth.uid)
                           );
 
               // Admins and Technicians can list users (e.g., for admin panels or technician assignment).
@@ -219,25 +212,24 @@ LabStation is a comprehensive web application designed to streamline the managem
             match /labs/{labId} {
               // Authenticated users can read and list labs.
               allow read, list: if request.auth != null;
-              // Only Admins or Lab Managers can create, update, or delete labs.
-              allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid);
+              // Only Admins can create, update, or delete labs.
+              allow write: if request.auth != null && isAdmin(request.auth.uid);
             }
 
             // RESOURCE TYPES Collection
             match /resourceTypes/{typeId} {
               // All authenticated users can read and list resource types.
               allow read, list: if request.auth != null;
-              // Only Admins or Lab Managers can create, update, or delete resource types.
-              allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid);
+              // Only Admins can create, update, or delete resource types.
+              allow write: if request.auth != null && isAdmin(request.auth.uid);
             }
 
             // RESOURCES Collection
-            // Resource status can be 'Working', 'Maintenance', 'Broken'
             match /resources/{resourceId} {
               // All authenticated users can read and list resources.
               allow read, list: if request.auth != null;
-              // Only Admins or Lab Managers can create, update, or delete resources.
-              allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid);
+              // Only Admins can create, update, or delete resources.
+              allow write: if request.auth != null && isAdmin(request.auth.uid);
             }
 
             // BOOKINGS Collection
@@ -245,30 +237,27 @@ LabStation is a comprehensive web application designed to streamline the managem
               // All authenticated users can list bookings (e.g., for conflict checking).
               allow list: if request.auth != null;
 
-              // Users can read their own bookings. Admins, Lab Managers, and Technicians can read any booking.
+              // Users can read their own bookings. Admins and Technicians can read any booking.
               allow read: if request.auth != null &&
                             (resource.data.userId == request.auth.uid || // Owner
-                             isAdminOrLabManager(request.auth.uid) ||   // Admin or Lab Manager
+                             isAdmin(request.auth.uid) ||   // Admin
                              isTechnician(request.auth.uid)             // Technician can also read any booking
                             );
 
-              // Booking creation uses Admin SDK via server action.
-              // Client-side rule only needs to ensure user is authenticated to call the server action.
-              allow create: if request.auth != null;
+              // Authenticated users can create bookings for themselves, which start in 'Pending' or 'Waitlisted' status.
+              // Client should not be able to set createdAt.
+              allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
+                              && (request.resource.data.status == 'Pending' || request.resource.data.status == 'Waitlisted')
+                              && !("createdAt" in request.resource.data);
 
 
               // Users can cancel their own 'Pending', 'Waitlisted', or 'Confirmed' bookings.
               // Users can log usage ('usageDetails') for their own 'Confirmed' bookings if the booking is in the past.
-              // Admins or Lab Managers can perform other updates (e.g., change status).
+              // Admins can perform other updates (e.g., change status).
               allow update: if request.auth != null && (
-                              // User cancelling their own pending/waitlisted booking
+                              // User cancelling their own pending/waitlisted/confirmed booking
                               (resource.data.userId == request.auth.uid &&
-                               (resource.data.status == 'Pending' || resource.data.status == 'Waitlisted') &&
-                               request.resource.data.status == 'Cancelled' &&
-                               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
-                              // User cancelling their own confirmed booking
-                              (resource.data.userId == request.auth.uid &&
-                               resource.data.status == 'Confirmed' &&
+                               (resource.data.status == 'Pending' || resource.data.status == 'Waitlisted' || resource.data.status == 'Confirmed') &&
                                request.resource.data.status == 'Cancelled' &&
                                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
                               // User logging usage details for their past confirmed booking
@@ -276,16 +265,16 @@ LabStation is a comprehensive web application designed to streamline the managem
                                resource.data.status == 'Confirmed' &&
                                resource.data.endTime < request.time && // Check if booking is past
                                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usageDetails'])) ||
-                              // Admin or Lab Manager can update (e.g., approve, reject, modify other details)
-                              (isAdminOrLabManager(request.auth.uid))
+                              // Admin can update (e.g., approve, reject, modify other details)
+                              (isAdmin(request.auth.uid))
                             );
 
               // Users can delete their own 'Pending' or 'Waitlisted' bookings (if direct deletion is allowed instead of just 'Cancelled' status).
-              // Admins or Lab Managers can delete any booking.
+              // Admins can delete any booking.
               allow delete: if request.auth != null &&
                              ( (resource.data.userId == request.auth.uid &&
                                 (resource.data.status == 'Pending' || resource.data.status == 'Waitlisted') ) ||
-                               isAdminOrLabManager(request.auth.uid) );
+                               isAdmin(request.auth.uid) );
             }
 
             // MAINTENANCE REQUESTS Collection
@@ -299,31 +288,31 @@ LabStation is a comprehensive web application designed to streamline the managem
                               && !("dateReported" in request.resource.data)
                               && !("dateResolved" in request.resource.data);
 
-              // Admins/Lab Managers can perform broader updates.
+              // Admins can perform broader updates.
               // Assigned Technicians can update status, resolution notes, and resolved date.
               // The user who reported the issue can update the description if the status is still 'Open'.
               allow update: if request.auth != null && (
-                              (isAdminOrLabManager(request.auth.uid)) ||
+                              (isAdmin(request.auth.uid)) ||
                               (resource.data.assignedTechnicianId != null && resource.data.assignedTechnicianId == request.auth.uid &&
                                request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'resolutionNotes', 'dateResolved'])) ||
                               (resource.data.reportedByUserId == request.auth.uid && resource.data.status == 'Open' &&
                                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['issueDescription']))
                             );
 
-              // Only Admins or Lab Managers can delete maintenance requests.
-              allow delete: if request.auth != null && isAdminOrLabManager(request.auth.uid);
+              // Only Admins can delete maintenance requests.
+              allow delete: if request.auth != null && isAdmin(request.auth.uid);
             }
 
             // BLACKOUT DATES (Specific) Collection
             match /blackoutDates/{blackoutId} {
               allow read, list: if request.auth != null;
-              allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid);
+              allow write: if request.auth != null && isAdmin(request.auth.uid);
             }
 
             // RECURRING BLACKOUT RULES Collection
             match /recurringBlackoutRules/{ruleId} {
               allow read, list: if request.auth != null;
-              allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid);
+              allow write: if request.auth != null && isAdmin(request.auth.uid);
             }
 
             // NOTIFICATIONS Collection - Creation handled by Admin SDK (server-side)
@@ -346,48 +335,43 @@ LabStation is a comprehensive web application designed to streamline the managem
         ```
 
 6.  **Firestore Indexes:**
-    *   **Note on Automatic Single-Field Indexes:** Firestore automatically creates single-field indexes for every field (both ascending and descending). You do not need to manually create these. They cover simple queries like filtering or ordering by one field.
+    *   **Note on Automatic Single-Field Indexes:** Firestore automatically creates single-field indexes for every field (both ascending and descending). You do not need to manually create these.
     *   **Note on `__name__` in Indexes:** Firestore may automatically append `__name__ (asc)` or `__name__ (desc)` to composite index definitions for internal consistency and tie-breaking, especially when suggested via an error link in the console. This is normal, and you should typically accept it.
-    *   **Required Composite Indexes:** Manually create the following COMPOSITE indexes in the Firebase console. Firestore might prompt for others if specific query patterns are not covered.
+    *   **Proactively create these essential COMPOSITE indexes** in the Firebase console. Firestore might prompt for others if specific query patterns are not covered.
 
         *   **`users` collection:**
-            *   Fields: `role` (Ascending), `name` (Ascending)
+            *   `role (Ascending), name (Ascending)`
                 *   *Purpose: For filtering users by role and sorting them by name (e.g., in admin user lists, technician dropdowns).*
 
-        *   **`labs` collection:**
-            *   (Note: A simple `orderBy("name", "asc")` for all labs is covered by automatic single-field index. If combined with filters, a composite index might be needed.)
-
         *   **`bookings` collection:**
-            *   Fields: `userId` (Ascending), `startTime` (Ascending)
+            *   `userId (Ascending), startTime (Ascending)`
                 *   *Purpose: For users to view their own bookings, sorted by start time (My Bookings page).*
-            *   Fields: `userId` (Ascending), `startTime` (Ascending), `endTime` (Ascending)
-                 *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('startTime', '>=', ...).orderBy('startTime', 'asc')`).*
-            *   Fields: `resourceId` (Ascending), `status` (Ascending), `startTime` (Ascending)
+            *   `userId (Ascending), startTime (Ascending), endTime (Ascending)`
+                 *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('startTime', '>=', ...).orderBy('startTime', 'asc')`). This index specifically uses `startTime` for the range filter as initially intended for "upcoming." The dashboard query was later adjusted to filter on `endTime` and order by `startTime`, requiring `userId ASC, endTime ASC, startTime ASC` which is also listed.*
+            *   `userId (Ascending), endTime (Ascending), startTime (Ascending)`
+                 *   *Purpose: Critical for dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('endTime', '>=', ...).orderBy('startTime', 'asc')`).*
+            *   `resourceId (Ascending), status (Ascending), startTime (Ascending)`
                 *   *Purpose: For viewing bookings for a specific resource, filtered by status, and ordered by start time (e.g., on admin booking requests page if filtered by resource).*
-            *   Fields: `resourceId` (Ascending), `status` (Ascending), `endTime` (Ascending), `startTime` (Ascending)
+            *   `resourceId (Ascending), status (Ascending), endTime (Ascending), startTime (Ascending)`
                 *   *Purpose: Critical for booking conflict checks (`where('resourceId', ...).where('status', 'in', ...).where('startTime', '<', ...).where('endTime', '>', ...)`).*
-            *   Fields: `status` (Ascending), `startTime` (Ascending)
+            *   `status (Ascending), startTime (Ascending)`
                 *   *Purpose: For admin views of booking requests, filtered by status and sorted by start time.*
-            *   Fields: `resourceId` (Ascending), `status` (Ascending), `createdAt` (Ascending)
+            *   `resourceId (Ascending), status (Ascending), createdAt (Ascending)`
                 *   *Purpose: For processing waitlists in FIFO order for a specific resource.*
-            *   Fields: `resourceId` (Ascending), `userId` (Ascending), `startTime` (Descending)
+            *   `resourceId (Ascending), userId (Ascending), startTime (Descending)`
                 *   *Purpose: For `src/app/resources/[resourceId]/page.tsx` to fetch user's past bookings for a specific resource.*
 
         *   **`maintenanceRequests` collection:**
-            *   Fields: `resourceId` (Ascending), `dateReported` (Descending)
+            *   `resourceId (Ascending), dateReported (Descending)`
                 *   *Purpose: For viewing maintenance requests associated with a specific resource, sorted by report date.*
-            *   Fields: `status` (Ascending), `dateReported` (Descending)
+            *   `status (Ascending), dateReported (Descending)`
                 *   *Purpose: For filtering maintenance requests by status and sorting them by report date.*
-            *   Fields: `assignedTechnicianId` (Ascending), `dateReported` (Descending)
+            *   `assignedTechnicianId (Ascending), dateReported (Descending)`
                 *   *Purpose: For viewing maintenance requests assigned to a specific technician, sorted by report date.*
 
         *   **`notifications` collection:**
-            *   Fields: `userId` (Ascending), `createdAt` (Descending)
+            *   `userId (Ascending), createdAt (Descending)`
                 *   *Purpose: For users to view their notifications, sorted by creation time.*
-
-        *   **`auditLogs` collection:**
-            *   (Note: Simple `orderBy("timestamp", "desc")` for all logs is covered by automatic single-field index. If combined with filters, a composite index might be needed.)
-            *   To support filtering by `userId` and ordering by `timestamp` (if needed for a specific admin view): Fields: `userId` (Ascending), `timestamp` (Descending).
 
         *   **A Note on Index Creation Links:** If Firestore errors with "The query requires an index" and provides a link, **use that link**. It will pre-configure the index exactly as Firestore's query planner needs it.
 

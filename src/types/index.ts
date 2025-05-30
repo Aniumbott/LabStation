@@ -29,7 +29,7 @@ export interface Resource {
   id: string;
   name: string;
   resourceTypeId: string;
-  lab: string; // Changed from specific enum to string to support dynamic labs
+  lab: string;
   status: ResourceStatus;
   description?: string;
   imageUrl?: string;
@@ -71,7 +71,7 @@ export interface Booking {
   userName?: string;
 }
 
-export type RoleName = 'Admin' | 'Lab Manager' | 'Technician' | 'Researcher';
+export type RoleName = 'Admin' | 'Technician' | 'Researcher'; // Removed 'Lab Manager'
 
 export type UserStatus = 'active' | 'pending_approval' | 'suspended';
 
@@ -171,6 +171,6 @@ export interface Lab {
   name: string;
   location?: string;
   description?: string;
-  createdAt?: Date; // Stored as Firestore Timestamp, converted to Date on fetch
-  lastUpdatedAt?: Date; // Stored as Firestore Timestamp, converted to Date on fetch
+  createdAt?: Date;
+  lastUpdatedAt?: Date;
 }
