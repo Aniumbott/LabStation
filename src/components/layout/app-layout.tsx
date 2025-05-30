@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { ReactNode } from 'react';
@@ -63,7 +62,7 @@ const navItems: NavItem[] = [
   },
   {
     href: '/admin/inventory',
-    label: 'Lab & Resource Setup', // Updated Label
+    label: 'Lab Management', // Updated Label
     icon: Archive,
     adminOrLabManager: true,
   },
@@ -152,7 +151,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <SidebarProvider defaultOpen>
       <Sidebar>
         <SidebarHeader className="p-4 border-b border-sidebar-border">
-          <Link href="/dashboard" className="focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-sm inline-block">
+          <Link href="/dashboard">
             <Logo />
           </Link>
         </SidebarHeader>
@@ -161,7 +160,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <SidebarMenu>
             {visibleNavItems.map((item) => (
               <SidebarMenuItem key={item.label}>
-                <Link href={item.href} passHref>
+                <Link href={item.href}>
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href !== '/')}
@@ -171,7 +170,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
                       'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
                     )}
                   >
-                    {/* Single span child for the Link component */}
                     <span className="inline-flex w-full items-center gap-2 overflow-hidden">
                       <item.icon />
                       <span className="truncate group-data-[collapsible=icon]:hidden">{item.label}</span>

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -333,7 +332,7 @@ export default function InventoryManagementPage() {
   if (!currentUser || !canManageInventory) {
     return (
       <div className="space-y-8">
-        <PageHeader title="Lab &amp; Resource Setup" icon={Archive} description="Access Denied." />
+        <PageHeader title="Lab Management" icon={Archive} description="Access Denied." />
         <Card className="text-center py-10 text-muted-foreground">
           <CardContent><p>You do not have permission to manage lab setup and resource types.</p></CardContent>
         </Card>
@@ -345,8 +344,8 @@ export default function InventoryManagementPage() {
     <TooltipProvider>
       <div className="space-y-8">
         <PageHeader
-          title="Lab &amp; Resource Setup"
-          description="Define and manage labs and resource types."
+          title="Lab Management"
+          description="Define and manage labs, resource types, and other core lab configurations."
           icon={Archive}
         />
         <Tabs defaultValue="labs" className="w-full">
@@ -382,7 +381,7 @@ export default function InventoryManagementPage() {
               <CardContent className="p-0">
                 {isLoadingLabs && filteredLabs.length === 0 && !activeLabSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
                 ) : filteredLabs.length > 0 ? (
-                  <div className="overflow-x-auto border rounded-md"><Table>
+                  <div className="overflow-x-auto rounded-md border shadow-sm"><Table>
                     <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead>Description</TableHead>{canManageInventory && <TableHead className="text-right w-[100px]">Actions</TableHead>}</TableRow></TableHeader>
                     <TableBody>{filteredLabs.map(lab => (<TableRow key={lab.id}><TableCell className="font-medium">{lab.name}</TableCell><TableCell>{lab.location || 'N/A'}</TableCell><TableCell className="text-sm text-muted-foreground max-w-xs truncate" title={lab.description || undefined}>{lab.description || 'N/A'}</TableCell>
                       {canManageInventory && <TableCell className="text-right space-x-1">
@@ -422,7 +421,7 @@ export default function InventoryManagementPage() {
                 <CardContent className="p-0">
                     {isLoadingResourceTypes && filteredResourceTypesWithCount.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
                     ) : filteredResourceTypesWithCount.length > 0 ? (
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto border rounded-md shadow-sm">
                         <Table>
                         <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead>{canManageInventory && <TableHead className="text-right w-[100px]">Actions</TableHead>}</TableRow></TableHeader>
                         <TableBody>{filteredResourceTypesWithCount.map(type => (<TableRow key={type.id}><TableCell className="font-medium">{type.name}</TableCell><TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell><TableCell className="text-center">{type.resourceCount}</TableCell>
