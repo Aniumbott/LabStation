@@ -7,15 +7,15 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
+  // DialogFooter, // No longer needed if only containing a close button
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+// import { Button } from "@/components/ui/button"; // No longer needed if only for the close button
 import type { AuditLogEntry } from '@/types';
 import { formatDateSafe } from '@/lib/utils';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { User, Tag, Info, CalendarDays, Hash, Database, Fingerprint, X } from "lucide-react";
+import { User, Tag, Info, CalendarDays, Hash, Database, Fingerprint } from "lucide-react"; // Removed X as it was for the button
 
 interface AuditLogDetailsDialogProps {
   logEntry: AuditLogEntry | null;
@@ -76,12 +76,7 @@ export function AuditLogDetailsDialog({ logEntry, isOpen, onOpenChange }: AuditL
             </div>
           </div>
         </ScrollArea>
-        <Separator className="my-3"/>
-        <DialogFooter className="pt-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            <X className="mr-2 h-4 w-4" /> Close
-          </Button>
-        </DialogFooter>
+        {/* Separator and DialogFooter removed as the explicit close button is gone */}
       </DialogContent>
     </Dialog>
   );
