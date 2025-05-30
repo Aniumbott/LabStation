@@ -31,9 +31,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+}from "@/components/ui/alert-dialog";
 import {
-  Dialog as FilterSortDialog, 
+  Dialog as FilterSortDialog,
   DialogContent as FilterSortDialogContent,
   DialogDescription as FilterSortDialogDescription,
   DialogFooter as FilterSortDialogFooter,
@@ -311,7 +311,7 @@ export default function InventoryManagementPage() {
     }
     const deletedLab = labs.find(lab => lab.id === labId);
     if (!deletedLab) { toast({ title: "Error", description: "Lab not found.", variant: "destructive" }); return; }
-    
+
     const resourcesInThisLab = allResources.filter(res => res.lab === deletedLab.name).length;
     if (resourcesInThisLab > 0) {
       toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as ${resourcesInThisLab} resource(s) are currently assigned to it. Please reassign them first.`, variant: "destructive", duration: 7000 });
@@ -333,9 +333,9 @@ export default function InventoryManagementPage() {
   if (!currentUser || !canManageInventory) {
     return (
       <div className="space-y-8">
-        <PageHeader title="Inventory Management" icon={Archive} description="Access Denied." />
+        <PageHeader title="Lab &amp; Resource Setup" icon={Archive} description="Access Denied." />
         <Card className="text-center py-10 text-muted-foreground">
-          <CardContent><p>You do not have permission to manage inventory.</p></CardContent>
+          <CardContent><p>You do not have permission to manage lab setup and resource types.</p></CardContent>
         </Card>
       </div>
     );
@@ -345,8 +345,8 @@ export default function InventoryManagementPage() {
     <TooltipProvider>
       <div className="space-y-8">
         <PageHeader
-          title="Inventory Management"
-          description="Manage labs, resource types, and other inventory aspects."
+          title="Lab &amp; Resource Setup"
+          description="Define and manage labs and resource types."
           icon={Archive}
         />
         <Tabs defaultValue="labs" className="w-full">
@@ -354,16 +354,16 @@ export default function InventoryManagementPage() {
             <TabsTrigger value="labs">Manage Labs</TabsTrigger>
             <TabsTrigger value="resource-types">Manage Resource Types</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="labs" className="mt-6">
             <Card>
               <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div><CardTitle className="text-xl">Labs</CardTitle><p className="text-sm text-muted-foreground mt-1">Define and manage laboratory locations.</p></div>
                 <div className="flex gap-2 flex-wrap">
                   <FilterSortDialog open={isLabFilterDialogOpen} onOpenChange={setIsLabFilterDialogOpen}>
-                    <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter & Sort</Button></FilterSortDialogTrigger>
+                    <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter &amp; Sort</Button></FilterSortDialogTrigger>
                     <FilterSortDialogContent className="sm:max-w-md">
-                      <FilterSortDialogHeader><FilterSortDialogTitle>Filter & Sort Labs</FilterSortDialogTitle></FilterSortDialogHeader>
+                      <FilterSortDialogHeader><FilterSortDialogTitle>Filter &amp; Sort Labs</FilterSortDialogTitle></FilterSortDialogHeader>
                       <Separator className="my-3" />
                       <div className="space-y-3">
                         <div className="relative">
@@ -405,9 +405,9 @@ export default function InventoryManagementPage() {
                     <div><CardTitle className="text-xl">Resource Types</CardTitle><p className="text-sm text-muted-foreground mt-1">Define and manage categories for lab resources.</p></div>
                     <div className="flex gap-2 flex-wrap">
                     <FilterSortDialog open={isResourceTypeFilterDialogOpen} onOpenChange={setIsResourceTypeFilterDialogOpen}>
-                        <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter & Sort</Button></FilterSortDialogTrigger>
+                        <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter &amp; Sort</Button></FilterSortDialogTrigger>
                         <FilterSortDialogContent className="sm:max-w-md">
-                        <FilterSortDialogHeader><FilterSortDialogTitle>Filter & Sort Resource Types</FilterSortDialogTitle></FilterSortDialogHeader>
+                        <FilterSortDialogHeader><FilterSortDialogTitle>Filter &amp; Sort Resource Types</FilterSortDialogTitle></FilterSortDialogHeader>
                         <Separator className="my-3" />
                         <div className="space-y-3">
                             <div className="relative"><Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="typeSearchDialog" value={tempResourceTypeSearchTerm} onChange={e => setTempResourceTypeSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>

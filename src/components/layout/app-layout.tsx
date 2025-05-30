@@ -63,7 +63,7 @@ const navItems: NavItem[] = [
   },
   {
     href: '/admin/inventory',
-    label: 'Inventory Mgmt',
+    label: 'Lab & Resource Setup', // Updated Label
     icon: Archive,
     adminOrLabManager: true,
   },
@@ -152,10 +152,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <SidebarProvider defaultOpen>
       <Sidebar>
         <SidebarHeader className="p-4 border-b border-sidebar-border">
-          <Link href="/dashboard" className="focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-sm">
-            {/* The Link component will render an <a> tag.
-                The children of Link (Logo) will be inside this <a> tag.
-            */}
+          <Link href="/dashboard" className="focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-sm inline-block">
             <Logo />
           </Link>
         </SidebarHeader>
@@ -164,7 +161,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <SidebarMenu>
             {visibleNavItems.map((item) => (
               <SidebarMenuItem key={item.label}>
-                <Link href={item.href}>
+                <Link href={item.href} passHref>
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href !== '/')}
@@ -174,10 +171,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                       'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
                     )}
                   >
-                    {/* This span becomes the single child element for SidebarMenuButton's Slot.
-                        The Link component wraps this SidebarMenuButton, providing the <a> tag.
-                        Props from SidebarMenuButton (like className, data-active) are merged onto the Link's <a>.
-                    */}
+                    {/* Single span child for the Link component */}
                     <span className="inline-flex w-full items-center gap-2 overflow-hidden">
                       <item.icon />
                       <span className="truncate group-data-[collapsible=icon]:hidden">{item.label}</span>
