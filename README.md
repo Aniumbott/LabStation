@@ -246,8 +246,7 @@ LabStation is a comprehensive web application designed to streamline the managem
               // Client should not send 'createdAt'.
               allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
                               && (request.resource.data.status == 'Pending' || request.resource.data.status == 'Waitlisted');
-                              // Removed: && !("createdAt" in request.resource.data); as serverTimestamp interaction with rules can be tricky.
-                              // Client code now ensures serverTimestamp() is used and client does not send createdAt.
+                              // Removed: && !("createdAt" in request.resource.data); as client uses serverTimestamp() which is handled correctly by Firestore rules.
 
               // Users can cancel their own 'Pending', 'Waitlisted', or 'Confirmed' bookings.
               // Users can log usage ('usageDetails') for their own 'Confirmed' bookings if the booking is in the past.
@@ -338,9 +337,9 @@ LabStation is a comprehensive web application designed to streamline the managem
         ```
 
 6.  **Firestore Indexes:**
-    *   **Note on Single-Field Indexes:** Firestore automatically creates single-field indexes for every field in your documents (both ascending and descending). You do not need to manually create these. These automatic indexes cover simple queries like filtering on one field or ordering by one field.
-    *   **Required Composite Indexes:** For more complex queries, you must manually create composite indexes in the Firebase console. As you use the application, Firestore might prompt you if a specific query requires a new composite index; these errors usually include a direct link to create it. Firestore may also add `__name__` (Ascending or Descending) as the last field to its suggested indexes for tie-breaking and consistency; this is normal and you should typically accept it if the console suggests it.
-    *   **Proactively create the following essential COMPOSITE indexes in the Firebase console (ensure these match the needs of your application queries):**
+    *   **Note on Automatic Single-Field Indexes:** Firestore automatically creates single-field indexes for every field (both ascending and descending). You do not need to manually create these. They cover simple queries like filtering or ordering by one field.
+    *   **Note on `__name__` in Indexes:** Firestore may automatically append `__name__ (asc)` or `__name__ (desc)` to composite index definitions for internal consistency and tie-breaking, especially when suggested via an error link in the console. This is normal, and you should typically accept it.
+    *   **Required Composite Indexes:** Manually create the following COMPOSITE indexes in the Firebase console. Firestore might prompt for others if specific query patterns are not covered.
 
         *   **`users` collection:**
             *   Fields: `role` (Ascending), `name` (Ascending)
@@ -348,9 +347,9 @@ LabStation is a comprehensive web application designed to streamline the managem
 
         *   **`bookings` collection:**
             *   Fields: `userId` (Ascending), `startTime` (Ascending)
-                *   *Purpose: For users to view their own bookings, sorted by start time.*
+                *   *Purpose: For users to view their own bookings, sorted by start time (My Bookings page).*
             *   Fields: `userId` (Ascending), `startTime` (Ascending), `endTime` (Ascending)
-                 *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('endTime', '>=', ...).orderBy('startTime', 'asc')`). Firestore's error link will confirm the exact order, often `userId ASC, startTime ASC, endTime ASC` or `userId ASC, endTime ASC, startTime ASC`.*
+                 *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('endTime', '>=', ...).orderBy('startTime', 'asc')`). Firestore's error link will confirm the exact order.*
             *   Fields: `resourceId` (Ascending), `status` (Ascending), `startTime` (Ascending)
                 *   *Purpose: For viewing bookings for a specific resource, filtered by status, and ordered by start time (e.g., on admin booking requests page if filtered by resource).*
             *   Fields: `resourceId` (Ascending), `status` (Ascending), `endTime` (Ascending), `startTime` (Ascending)
@@ -369,15 +368,15 @@ LabStation is a comprehensive web application designed to streamline the managem
                 *   *Purpose: For filtering maintenance requests by status and sorting them by report date.*
             *   Fields: `assignedTechnicianId` (Ascending), `dateReported` (Descending)
                 *   *Purpose: For viewing maintenance requests assigned to a specific technician, sorted by report date.*
-            *   *(Note: Simple `orderBy("dateReported", "desc")` for all maintenance requests is covered by automatic single-field index unless combined with other filters that would necessitate a composite index.)*
 
         *   **`notifications` collection:**
             *   Fields: `userId` (Ascending), `createdAt` (Descending)
                 *   *Purpose: For users to view their notifications, sorted by creation time.*
 
         *   **`auditLogs` collection:**
-            *   *(Note: Simple `orderBy("timestamp", "desc")` for all logs is covered by automatic single-field index.)*
-        *   **A Note on Index Creation Links:** If Firestore errors with "The query requires an index" and provides a link, **use that link**. It will pre-configure the index exactly as Firestore's query planner needs it, including the correct field order and ascending/descending options.
+            *   (Note: Simple `orderBy("timestamp", "desc")` for all logs is covered by automatic single-field index, unless combined with filters that would require a composite index.)
+
+        *   **A Note on Index Creation Links:** If Firestore errors with "The query requires an index" and provides a link, **use that link**. It will pre-configure the index exactly as Firestore's query planner needs it.
 
 7.  **Run the Development Server:**
     ```bash
@@ -391,3 +390,4 @@ LabStation is a comprehensive web application designed to streamline the managem
 ## Deployment
 
 This application is configured to be easily deployable on platforms like [Vercel](https://vercel.com/) (which is recommended for Next.js projects). Connect your Git repository (GitHub, GitLab, Bitbucket) to Vercel, and it will typically auto-detect the Next.js settings. Remember to configure your Firebase environment variables (from your `.env.local` file, including the Admin SDK credentials) in Vercel's project settings.
+
