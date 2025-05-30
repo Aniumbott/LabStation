@@ -422,7 +422,8 @@ export default function InventoryManagementPage() {
                 <CardContent className="p-0">
                     {isLoadingResourceTypes && filteredResourceTypesWithCount.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
                     ) : filteredResourceTypesWithCount.length > 0 ? (
-                    <div className="overflow-x-auto border rounded-md"><Table>
+                    <div className="overflow-x-auto">
+                        <Table>
                         <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead>{canManageInventory && <TableHead className="text-right w-[100px]">Actions</TableHead>}</TableRow></TableHeader>
                         <TableBody>{filteredResourceTypesWithCount.map(type => (<TableRow key={type.id}><TableCell className="font-medium">{type.name}</TableCell><TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell><TableCell className="text-center">{type.resourceCount}</TableCell>
                         {canManageInventory && <TableCell className="text-right space-x-1">
