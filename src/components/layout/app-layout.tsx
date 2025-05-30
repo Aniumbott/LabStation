@@ -10,15 +10,14 @@ import {
   CalendarDays,
   UserCog,
   Users as UsersIconLucide,
-  ListChecks,
+  Archive, // Changed from ListChecks for Inventory
   CheckSquare,
   Wrench,
   Bell,
   CalendarOff,
-  Building,
   Loader2,
-  UserCheck2,
-  BarChart3,
+  BarChart3, 
+  History
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
@@ -44,49 +43,57 @@ interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  allowedRoles?: RoleName[];
+  adminOnly?: boolean;
+  adminOrLabManager?: boolean;
 }
 
 const PUBLIC_ROUTES = ['/login', '/signup'];
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/admin/resources', label: 'Resources', icon: ClipboardList},
-  { href: '/bookings', label: 'Bookings', icon: CalendarDays},
+  { href: '/admin/resources', label: 'Resources', icon: ClipboardList },
+  { href: '/bookings', label: 'My Bookings', icon: CalendarDays },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/profile', label: 'My Profile', icon: UserCog },
-  { href: '/maintenance', label: 'Maintenance', icon: Wrench},
+  { href: '/maintenance', label: 'Maintenance', icon: Wrench },
   {
     href: '/admin/booking-requests',
     label: 'Booking Requests',
     icon: CheckSquare,
-    allowedRoles: ['Admin', 'Lab Manager'],
+    adminOrLabManager: true,
+  },
+  {
+    href: '/admin/inventory', // New Href
+    label: 'Inventory Mgmt',    // New Label
+    icon: Archive,          // New Icon
+    adminOrLabManager: true,
   },
   {
     href: '/admin/blackout-dates',
-    label: 'Blackout Dates',
+    label: 'Lab Closures',
     icon: CalendarOff,
-    allowedRoles: ['Admin', 'Lab Manager'],
+    adminOrLabManager: true,
   },
   {
     href: '/admin/users',
-    label: 'Users',
+    label: 'User Management',
     icon: UsersIconLucide,
-    allowedRoles: ['Admin'],
-  },
-  {
-    href: '/admin/resource-types',
-    label: 'Resource Types',
-    icon: ListChecks,
-    allowedRoles: ['Admin'],
+    adminOnly: true,
   },
   {
     href: '/admin/reports',
     label: 'Reports',
     icon: BarChart3,
-    allowedRoles: ['Admin', 'Lab Manager'],
+    adminOrLabManager: true,
+  },
+  {
+    href: '/admin/audit-log',
+    label: 'Audit Log',
+    icon: History,
+    adminOnly: true,
   },
 ];
+
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -100,13 +107,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const visibleNavItems = useMemo(() => {
     if (!currentUser) {
-      return navItems.filter(item => !item.allowedRoles || item.allowedRoles.length === 0);
+      return [];
     }
     return navItems.filter(item => {
-      if (!item.allowedRoles || item.allowedRoles.length === 0) {
-        return true;
+      if (item.adminOnly) {
+        return currentUser.role === 'Admin';
       }
-      return item.allowedRoles.includes(currentUser.role);
+      if (item.adminOrLabManager) {
+        return currentUser.role === 'Admin' || currentUser.role === 'Lab Manager';
+      }
+      return true;
     });
   }, [currentUser]);
 
@@ -138,28 +148,36 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </div>
     );
   }
-
+  
   return (
     <SidebarProvider defaultOpen>
       <Sidebar>
-        <SidebarHeader className="p-4">
-          <Logo />
+        <SidebarHeader className="p-4 border-b border-sidebar-border">
+          <Link href="/dashboard" className="focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-sm">
+             <span className="inline-flex items-center justify-center gap-2">
+                <Logo />
+             </span>
+          </Link>
         </SidebarHeader>
-        <SidebarSeparator />
+        
         <SidebarContent>
           <SidebarMenu>
             {visibleNavItems.map((item) => (
               <SidebarMenuItem key={item.label}>
-                <Link href={item.href}>
+                <Link href={item.href} legacyBehavior passHref>
                   <SidebarMenuButton
+                    asChild
                     isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href !== '/')}
                     tooltip={item.label}
                     className={cn(
-                      (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href !== '/')) && 'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
+                      (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href !== '/')) && 
+                      'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
                     )}
                   >
-                    <item.icon />
-                    <span>{item.label}</span>
+                     <a>
+                      <item.icon />
+                      <span>{item.label}</span>
+                     </a>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
@@ -170,7 +188,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       <SidebarInset className="flex flex-col relative">
         <MobileSidebarToggle />
-        <div className="p-4 md:p-6 lg:p-8 flex-grow">
+        <div className="p-4 md:p-6 lg:p-8 flex-grow bg-background">
           {children}
         </div>
       </SidebarInset>

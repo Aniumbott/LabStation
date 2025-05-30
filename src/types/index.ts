@@ -29,7 +29,7 @@ export interface Resource {
   id: string;
   name: string;
   resourceTypeId: string;
-  lab: 'Electronics Lab 1' | 'RF Lab' | 'Prototyping Lab' | 'General Test Area';
+  lab: string; // Changed from specific enum to string to support dynamic labs
   status: ResourceStatus;
   description?: string;
   imageUrl?: string;
@@ -66,6 +66,9 @@ export interface Booking {
   status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted';
   notes?: string;
   usageDetails?: BookingUsageDetails | null;
+  // Denormalized fields for display - populated client-side
+  resourceName?: string;
+  userName?: string;
 }
 
 export type RoleName = 'Admin' | 'Lab Manager' | 'Technician' | 'Researcher';
@@ -94,6 +97,10 @@ export interface MaintenanceRequest {
   dateReported: Date;
   dateResolved?: Date | null;
   resolutionNotes?: string | null;
+  // Denormalized fields for display - populated client-side
+  resourceName?: string;
+  reportedByUserName?: string;
+  assignedTechnicianName?: string;
 }
 
 export type NotificationType =
@@ -144,7 +151,8 @@ export type AuditActionType =
   | 'BOOKING_CREATED' | 'BOOKING_UPDATED' | 'BOOKING_APPROVED' | 'BOOKING_REJECTED' | 'BOOKING_CANCELLED' | 'BOOKING_PROMOTED' | 'BOOKING_WAITLISTED'
   | 'MAINTENANCE_CREATED' | 'MAINTENANCE_UPDATED'
   | 'BLACKOUT_DATE_CREATED' | 'BLACKOUT_DATE_UPDATED' | 'BLACKOUT_DATE_DELETED'
-  | 'RECURRING_RULE_CREATED' | 'RECURRING_RULE_UPDATED' | 'RECURRING_RULE_DELETED';
+  | 'RECURRING_RULE_CREATED' | 'RECURRING_RULE_UPDATED' | 'RECURRING_RULE_DELETED'
+  | 'LAB_CREATED' | 'LAB_UPDATED' | 'LAB_DELETED';
 
 export interface AuditLogEntry {
   id: string;
@@ -152,7 +160,17 @@ export interface AuditLogEntry {
   userId: string;
   userName: string;
   action: AuditActionType;
-  entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule' | undefined;
+  entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule' | 'Lab' | undefined;
   entityId?: string | undefined;
   details: string;
+}
+
+// New Lab Interface
+export interface Lab {
+  id: string;
+  name: string;
+  location?: string;
+  description?: string;
+  createdAt?: Date; // Stored as Firestore Timestamp, converted to Date on fetch
+  lastUpdatedAt?: Date; // Stored as Firestore Timestamp, converted to Date on fetch
 }

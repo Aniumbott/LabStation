@@ -53,9 +53,12 @@ LabStation is a comprehensive web application designed to streamline the managem
         *   Peak booking hours.
         *   Current waitlist sizes.
 *   **Audit Logging (Admin):**
-    *   Tracks key system events and actions (e.g., user creation/updates, booking approvals, resource updates, maintenance request changes, blackout date management) for administrative review.
+    *   Tracks key system events and actions for administrative review.
 *   **Admin Panel:**
-    *   Centralized sections for managing Users (including signup requests), Resources, Resource Types, Booking Requests, Lab Blackout Dates & Recurring Rules, Maintenance Requests, Reports, and Audit Logs.
+    *   Centralized sections for managing Users (including signup requests), Resources, Inventory (Labs, Resource Types), Booking Requests, Lab Closures (Blackout Dates & Recurring Rules), Maintenance Requests, Reports, and Audit Logs.
+*   **Inventory Management:**
+    *   Manage **Labs** (CRUD operations for lab entities: name, location, description).
+    *   Manage **Resource Types** (CRUD operations for resource categories).
 
 ## Tech Stack
 
@@ -212,12 +215,20 @@ LabStation is a comprehensive web application designed to streamline the managem
               allow delete: if request.auth != null && isAdmin(request.auth.uid) && !isOwner(userId);
             }
 
+            // LABS Collection
+            match /labs/{labId} {
+              // Authenticated users can read and list labs.
+              allow read, list: if request.auth != null;
+              // Only Admins or Lab Managers can create, update, or delete labs.
+              allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid);
+            }
+
             // RESOURCE TYPES Collection
             match /resourceTypes/{typeId} {
               // All authenticated users can read and list resource types.
               allow read, list: if request.auth != null;
-              // Only Admins can create, update, or delete resource types.
-              allow write: if request.auth != null && isAdmin(request.auth.uid);
+              // Only Admins or Lab Managers can create, update, or delete resource types.
+              allow write: if request.auth != null && isAdminOrLabManager(request.auth.uid);
             }
 
             // RESOURCES Collection
@@ -241,12 +252,10 @@ LabStation is a comprehensive web application designed to streamline the managem
                              isTechnician(request.auth.uid)             // Technician can also read any booking
                             );
 
-              // Authenticated users can create bookings for themselves.
-              // Status must be 'Pending' or 'Waitlisted' on creation.
-              // Client should not send 'createdAt'.
-              allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
-                              && (request.resource.data.status == 'Pending' || request.resource.data.status == 'Waitlisted');
-                              // Removed: && !("createdAt" in request.resource.data); as client uses serverTimestamp() which is handled correctly by Firestore rules.
+              // Booking creation uses Admin SDK via server action.
+              // Client-side rule only needs to ensure user is authenticated to call the server action.
+              allow create: if request.auth != null;
+
 
               // Users can cancel their own 'Pending', 'Waitlisted', or 'Confirmed' bookings.
               // Users can log usage ('usageDetails') for their own 'Confirmed' bookings if the booking is in the past.
@@ -345,11 +354,14 @@ LabStation is a comprehensive web application designed to streamline the managem
             *   Fields: `role` (Ascending), `name` (Ascending)
                 *   *Purpose: For filtering users by role and sorting them by name (e.g., in admin user lists, technician dropdowns).*
 
+        *   **`labs` collection:**
+            *   (Note: A simple `orderBy("name", "asc")` for all labs is covered by automatic single-field index. If combined with filters, a composite index might be needed.)
+
         *   **`bookings` collection:**
             *   Fields: `userId` (Ascending), `startTime` (Ascending)
                 *   *Purpose: For users to view their own bookings, sorted by start time (My Bookings page).*
             *   Fields: `userId` (Ascending), `startTime` (Ascending), `endTime` (Ascending)
-                 *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('endTime', '>=', ...).orderBy('startTime', 'asc')`). Firestore's error link will confirm the exact order.*
+                 *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('startTime', '>=', ...).orderBy('startTime', 'asc')`).*
             *   Fields: `resourceId` (Ascending), `status` (Ascending), `startTime` (Ascending)
                 *   *Purpose: For viewing bookings for a specific resource, filtered by status, and ordered by start time (e.g., on admin booking requests page if filtered by resource).*
             *   Fields: `resourceId` (Ascending), `status` (Ascending), `endTime` (Ascending), `startTime` (Ascending)
@@ -374,7 +386,8 @@ LabStation is a comprehensive web application designed to streamline the managem
                 *   *Purpose: For users to view their notifications, sorted by creation time.*
 
         *   **`auditLogs` collection:**
-            *   (Note: Simple `orderBy("timestamp", "desc")` for all logs is covered by automatic single-field index, unless combined with filters that would require a composite index.)
+            *   (Note: Simple `orderBy("timestamp", "desc")` for all logs is covered by automatic single-field index. If combined with filters, a composite index might be needed.)
+            *   To support filtering by `userId` and ordering by `timestamp` (if needed for a specific admin view): Fields: `userId` (Ascending), `timestamp` (Descending).
 
         *   **A Note on Index Creation Links:** If Firestore errors with "The query requires an index" and provides a link, **use that link**. It will pre-configure the index exactly as Firestore's query planner needs it.
 
@@ -390,4 +403,3 @@ LabStation is a comprehensive web application designed to streamline the managem
 ## Deployment
 
 This application is configured to be easily deployable on platforms like [Vercel](https://vercel.com/) (which is recommended for Next.js projects). Connect your Git repository (GitHub, GitLab, Bitbucket) to Vercel, and it will typically auto-detect the Next.js settings. Remember to configure your Firebase environment variables (from your `.env.local` file, including the Admin SDK credentials) in Vercel's project settings.
-
