@@ -10,13 +10,13 @@ import {
   CalendarDays,
   UserCog,
   Users as UsersIconLucide,
-  Archive, // Changed from ListChecks for Inventory
+  Archive,
   CheckSquare,
   Wrench,
   Bell,
   CalendarOff,
   Loader2,
-  BarChart3, 
+  BarChart3,
   History
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -31,7 +31,6 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarInset,
-  SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/icons/logo';
@@ -63,9 +62,9 @@ const navItems: NavItem[] = [
     adminOrLabManager: true,
   },
   {
-    href: '/admin/inventory', // New Href
-    label: 'Inventory Mgmt',    // New Label
-    icon: Archive,          // New Icon
+    href: '/admin/inventory',
+    label: 'Inventory Mgmt',
+    icon: Archive,
     adminOrLabManager: true,
   },
   {
@@ -148,36 +147,36 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  
+
   return (
     <SidebarProvider defaultOpen>
       <Sidebar>
         <SidebarHeader className="p-4 border-b border-sidebar-border">
           <Link href="/dashboard" className="focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-sm">
-             <span className="inline-flex items-center justify-center gap-2">
-                <Logo />
-             </span>
+            <span className="inline-flex items-center justify-center gap-2">
+              <Logo />
+            </span>
           </Link>
         </SidebarHeader>
-        
+
         <SidebarContent>
           <SidebarMenu>
             {visibleNavItems.map((item) => (
               <SidebarMenuItem key={item.label}>
-                <Link href={item.href} legacyBehavior passHref>
+                <Link href={item.href}>
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href !== '/')}
                     tooltip={item.label}
                     className={cn(
-                      (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href !== '/')) && 
+                      (pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href) && item.href !== '/')) &&
                       'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
                     )}
                   >
-                     <a>
+                    <>
                       <item.icon />
                       <span>{item.label}</span>
-                     </a>
+                    </>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
