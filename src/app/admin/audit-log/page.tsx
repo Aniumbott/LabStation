@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { History, Filter as FilterIcon, Search as SearchIcon, X, Loader2, FilterX, CheckCircle2, Eye } from 'lucide-react';
+import { History, Filter as FilterIcon, Search as SearchIcon, X, Loader2, FilterX, CheckCircle2 } from 'lucide-react';
 import type { AuditLogEntry, AuditActionType } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import {
@@ -33,7 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatDateSafe, cn } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
-import { AuditLogDetailsDialog } from '@/components/admin/audit-log-details-dialog'; // Added import
+import { AuditLogDetailsDialog } from '@/components/admin/audit-log-details-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 const auditActionTypesForFilter: AuditActionType[] = [
@@ -240,7 +240,6 @@ export default function AuditLogPage() {
                 <TableHead>User</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead>Entity Type</TableHead>
-                <TableHead className="text-right w-10">View</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -250,12 +249,6 @@ export default function AuditLogPage() {
                   <TableCell>{log.userName || 'N/A'}</TableCell>
                   <TableCell><Badge variant="outline">{log.action.replace(/_/g, ' ')}</Badge></TableCell>
                   <TableCell>{log.entityType || 'N/A'}</TableCell>
-                  <TableCell className="text-right">
-                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleRowClick(log); }}>
-                        <Eye className="h-4 w-4" />
-                        <span className="sr-only">View Details</span>
-                    </Button>
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
