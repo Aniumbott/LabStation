@@ -23,16 +23,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Booking, Resource, RoleName, BookingUsageDetails, ResourceStatus } from '@/types';
-import { format, parseISO, isValid as isValidDateFn, startOfDay, isSameDay, set, isBefore, getDay, startOfToday, compareAsc, addDays as dateFnsAddDays, isSameMonth } from 'date-fns';
+import { format, parseISO, isValid as isValidDateFn, startOfDay, isSameDay, set, isBefore, getDay, startOfToday, compareAsc, addDays as dateFnsAddDays, Timestamp as FirestoreTimestamp } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn, formatDateSafe } from '@/lib/utils';
 import { BookingDetailsDialog } from '@/components/bookings/booking-details-dialog';
-import { Separator } from '@/components/ui/separator'; // Corrected import path
+import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { bookingStatusesForFilter, bookingStatusesForForm } from '@/lib/app-constants';
-import { addNotification, addAuditLog, processWaitlistForResource, createBooking_SA } from '@/lib/firestore-helpers';
+import { addNotification, addAuditLog, createBooking_SA, processWaitlistForResource } from '@/lib/firestore-helpers';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -433,30 +433,32 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     }
   }, [searchParams, router, pathname]);
 
+  const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
+    console.log("[handleSaveBooking V9 DEBUG] Function called with form data:", JSON.stringify(formData, null, 2));
 
- const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
-    console.log("[handleSaveBooking V8] Function called.");
-    const directAuthUserForSave = auth.currentUser; // Get fresh auth state
-    if (!directAuthUserForSave || !directAuthUserForSave.uid) {
-        toast({ title: "Authentication Error", description: "User not authenticated. Please log in.", variant: "destructive" });
-        setIsLoadingBookings(false); // Ensure loading state is released
-        return;
+    const directAuthUser = auth.currentUser;
+    if (!directAuthUser || !directAuthUser.uid) {
+      toast({ title: "Authentication Error", description: "User not authenticated. Please log in.", variant: "destructive" });
+      console.error("[handleSaveBooking V9 DEBUG] User not authenticated (directAuthUser is null or no uid).");
+      setIsLoadingBookings(false); // Ensure loading state is reset
+      return;
     }
-    const currentUserId = directAuthUserForSave.uid;
-    const currentUserName = currentUser?.name || directAuthUserForSave.displayName || directAuthUserForSave.email || 'User';
-    console.log(`[handleSaveBooking V8] Acting user: ID=${currentUserId}, Name=${currentUserName}`);
+    const currentUserId = directAuthUser.uid;
+    const currentUserName = currentUser?.name || directAuthUser.displayName || directAuthUser.email || 'User';
+    console.log(`[handleSaveBooking V9 DEBUG] Authenticated user: ${currentUserName} (ID: ${currentUserId})`);
 
 
     if (!formData.resourceId) {
       toast({ title: "Resource Not Selected", description: "Please select a resource for the booking.", variant: "destructive" });
+      console.error("[handleSaveBooking V9 DEBUG] formData.resourceId is missing.");
       return;
     }
     const selectedResource = allAvailableResources.find(r => r.id === formData.resourceId);
     if (!selectedResource) {
       toast({ title: "Resource Not Found", description: "The selected resource could not be found.", variant: "destructive" });
+      console.error(`[handleSaveBooking V9 DEBUG] Selected resource with ID ${formData.resourceId} not found in allAvailableResources.`);
       return;
     }
-    // Operational status check
     if (selectedResource.status !== 'Working') {
       toast({
         title: "Resource Not Operational",
@@ -464,29 +466,40 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         variant: "destructive",
         duration: 7000,
       });
+      console.warn(`[handleSaveBooking V9 DEBUG] Attempt to book non-working resource: ${selectedResource.name} (Status: ${selectedResource.status})`);
       return;
     }
 
+    let finalStartTime: Date;
+    let finalEndTime: Date;
+    try {
+        finalStartTime = set(formData.bookingDate, {
+        hours: parseInt(formData.startTime.split(':')[0], 10),
+        minutes: parseInt(formData.startTime.split(':')[1], 10),
+        seconds: 0, milliseconds: 0
+        });
+        finalEndTime = set(formData.bookingDate, {
+        hours: parseInt(formData.endTime.split(':')[0], 10),
+        minutes: parseInt(formData.endTime.split(':')[1], 10),
+        seconds: 0, milliseconds: 0
+        });
+    } catch (dateParseError) {
+        toast({ title: "Invalid Date/Time", description: "Could not parse the selected date or time.", variant: "destructive" });
+        console.error("[handleSaveBooking V9 DEBUG] Error parsing formData.bookingDate, startTime, or endTime:", dateParseError);
+        return;
+    }
 
-    const finalStartTime = set(formData.bookingDate, {
-      hours: parseInt(formData.startTime.split(':')[0]),
-      minutes: parseInt(formData.startTime.split(':')[1]),
-      seconds: 0, milliseconds: 0
-    });
-    const finalEndTime = set(formData.bookingDate, {
-      hours: parseInt(formData.endTime.split(':')[0]),
-      minutes: parseInt(formData.endTime.split(':')[1]),
-      seconds: 0, milliseconds: 0
-    });
 
     const isNewBooking = !formData.id;
 
     if (isNewBooking && isBefore(startOfDay(finalStartTime), startOfToday())) {
       toast({ title: "Invalid Date", description: "Cannot create new bookings for past dates.", variant: "destructive" });
+      console.warn("[handleSaveBooking V9 DEBUG] Attempt to book for past date.");
       return;
     }
     if (finalEndTime <= finalStartTime) {
       toast({ title: "Invalid Time", description: "End time must be after start time.", variant: "destructive" });
+      console.warn("[handleSaveBooking V9 DEBUG] End time is not after start time.");
       return;
     }
 
@@ -496,12 +509,14 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     const recurringLabBlackout = fetchedRecurringRules.find(rule => rule.daysOfWeek.includes(bookingDayName));
     if (recurringLabBlackout) {
       toast({ title: "Lab Closed", description: `The lab is regularly closed on ${bookingDayName}s. Reason: ${recurringLabBlackout.name}.`, variant: "destructive", duration: 7000 });
+      console.warn(`[handleSaveBooking V9 DEBUG] Lab closed due to recurring rule: ${recurringLabBlackout.name}`);
       return;
     }
     const proposedDateOnlyStr = format(finalStartTime, 'yyyy-MM-dd');
     const isSpecificBlackout = fetchedBlackoutDates.find(bd => bd.date === proposedDateOnlyStr);
     if (isSpecificBlackout) {
       toast({ title: "Lab Closed", description: `The lab is closed on ${formatDateSafe(finalStartTime, '', 'PPP')}. Reason: ${isSpecificBlackout.reason || 'N/A'}.`, variant: "destructive", duration: 7000 });
+      console.warn(`[handleSaveBooking V9 DEBUG] Lab closed due to specific blackout date: ${isSpecificBlackout.reason || 'N/A'}`);
       return;
     }
 
@@ -510,37 +525,38 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       for (const period of selectedResource.unavailabilityPeriods) {
         if (!period.startDate || !period.endDate) continue;
         const unavailabilityStart = startOfDay(parseISO(period.startDate));
-        const unavailabilityEnd = dateFnsAddDays(startOfDay(parseISO(period.endDate)), 1); // End date is inclusive
+        const unavailabilityEnd = dateFnsAddDays(startOfDay(parseISO(period.endDate)), 1); // end is exclusive for check
         if ((finalStartTime >= unavailabilityStart && finalStartTime < unavailabilityEnd) || (finalEndTime > unavailabilityStart && finalEndTime <= unavailabilityEnd) || (finalStartTime <= unavailabilityStart && finalEndTime >= unavailabilityEnd)) {
           toast({ title: "Resource Unavailable", description: `${selectedResource.name} is unavailable due to: ${period.reason || 'Scheduled Unavailability'}.`, variant: "destructive", duration: 7000 });
+          console.warn(`[handleSaveBooking V9 DEBUG] Resource unavailable due to period: ${period.reason || 'Scheduled Unavailability'}`);
           return;
         }
       }
     }
 
     let finalStatus: Booking['status'] = isNewBooking ? 'Pending' : (formData.status || 'Pending');
-    let conflictingBookingFound: Booking | undefined = undefined;
+    let conflictingBookingFound: (Booking & { id: string }) | undefined = undefined;
 
     if (isNewBooking) {
       setIsLoadingBookings(true);
+      const bookingsCollectionRef = collection(db, 'bookings');
+      const q = query(
+        bookingsCollectionRef,
+        where('resourceId', '==', formData.resourceId!),
+        where('status', 'in', ['Confirmed', 'Pending']),
+        where('startTime', '<', Timestamp.fromDate(finalEndTime)),
+        where('endTime', '>', Timestamp.fromDate(finalStartTime))
+      );
+      console.log(`[handleSaveBooking V9 DEBUG] Conflict check query for resource ${formData.resourceId!}`);
       try {
-        const bookingsCollectionRef = collection(db, 'bookings');
-        const q = query(
-          bookingsCollectionRef,
-          where('resourceId', '==', formData.resourceId!),
-          where('status', 'in', ['Confirmed', 'Pending']),
-          where('startTime', '<', Timestamp.fromDate(finalEndTime)),
-          where('endTime', '>', Timestamp.fromDate(finalStartTime))
-        );
-        console.log(`[handleSaveBooking V8] Conflict check query for resource ${formData.resourceId!}`);
         const existingBookingsSnapshot = await getDocs(q);
         if (!existingBookingsSnapshot.empty) {
-           conflictingBookingFound = existingBookingsSnapshot.docs[0].data() as Booking;
-           conflictingBookingFound.id = existingBookingsSnapshot.docs[0].id;
+           const firstConflictData = existingBookingsSnapshot.docs[0].data() as Omit<Booking, 'id'>;
+           conflictingBookingFound = { ...firstConflictData, id: existingBookingsSnapshot.docs[0].id };
         }
-        console.log(`[handleSaveBooking V8] Conflict check found ${existingBookingsSnapshot.docs.length} bookings. Conflicting:`, conflictingBookingFound);
+        console.log(`[handleSaveBooking V9 DEBUG] Conflict check found ${existingBookingsSnapshot.docs.length} bookings. Conflicting:`, conflictingBookingFound ? conflictingBookingFound.id : "None");
       } catch (e: any) {
-        console.error("[handleSaveBooking V8] Error fetching existing bookings for conflict check:", e.toString(), e);
+        console.error("[handleSaveBooking V9 DEBUG] Error fetching existing bookings for conflict check:", e.toString(), e);
         toast({ title: "Conflict Check Failed", description: `Could not verify existing bookings. ${e.message || 'Please try again.'}`, variant: "destructive" });
         setIsLoadingBookings(false);
         return;
@@ -557,10 +573,11 @@ function BookingsPageContent({}: BookingsPageContentProps) {
             try {
                 const userDocSnap = await getDoc(doc(db, "users", conflictingBookingFound.userId));
                 if (userDocSnap.exists()) conflictingUserName = userDocSnap.data()?.name || 'another user';
-            } catch (userFetchError) { console.error("[handleSaveBooking V8] Error fetching conflicting user's name:", userFetchError); }
+            } catch (userFetchError) { console.error("[handleSaveBooking V9 DEBUG] Error fetching conflicting user's name:", userFetchError); }
         }
         toast({ title: "Booking Conflict", description: `${selectedResource.name} is already booked by ${conflictingUserName}. This resource does not allow queueing.`, variant: "destructive", duration: 7000 });
-        setIsLoadingBookings(false); // Release loading state as we are returning
+        console.warn(`[handleSaveBooking V9 DEBUG] Booking conflict for ${selectedResource.name}, queueing not allowed.`);
+        setIsLoadingBookings(false);
         return;
       }
     }
@@ -577,63 +594,60 @@ function BookingsPageContent({}: BookingsPageContentProps) {
           notes: formData.notes || '',
         };
 
-        if (!currentUser || !currentUser.id || !currentUser.name) {
-          toast({ title: "Error", description: "User details missing for server action.", variant: "destructive" });
-          throw new Error("User details missing for createBooking_SA call.");
-        }
-
-        console.log("[handleSaveBooking V8] Calling createBooking_SA server action. Payload:", JSON.stringify(bookingPayloadForServerAction, null, 2), "Acting User:", currentUser);
+        console.log("[handleSaveBooking V9 DEBUG] Calling createBooking_SA server action. Payload:", JSON.stringify(bookingPayloadForServerAction, null, 2));
         let newBookingId: string | undefined;
 
         try {
-          newBookingId = await createBooking_SA(bookingPayloadForServerAction, { id: currentUser.id, name: currentUser.name });
+          newBookingId = await createBooking_SA(bookingPayloadForServerAction, { id: currentUserId, name: currentUserName });
+          console.log(`[handleSaveBooking V9 DEBUG] createBooking_SA successful. New Booking ID: ${newBookingId}`);
           toast({ title: "Success", description: `Booking request ${finalStatus === 'Pending' ? 'submitted for approval' : 'added to waitlist'}.` });
         } catch (serverActionError: any) {
-            console.error("[handleSaveBooking V8] Server action createBooking_SA failed:", serverActionError.toString(), serverActionError);
+            console.error("[handleSaveBooking V9 DEBUG] Server action createBooking_SA failed:", serverActionError.toString(), serverActionError);
             toast({ title: "Booking Creation Failed", description: `Server action failed: ${serverActionError.message || 'Please try again.'}`, variant: "destructive" });
             setIsLoadingBookings(false);
             return;
         }
 
-        if (finalStatus === 'Pending' && newBookingId) {
-          console.log("[handleSaveBooking V8] Preparing to send 'Pending Approval' notifications to Admins/Lab Managers.");
-          try {
-            const adminUsersQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager']), orderBy('name', 'asc'));
-            const adminSnapshot = await getDocs(adminUsersQuery);
-            const notificationPromises = adminSnapshot.docs.map(adminDoc => {
-              if (adminDoc.id !== currentUserId) { // currentUserId is from the top of the function
-                return addNotification(adminDoc.id, 'New Booking Request', `Booking for ${selectedResource.name} by ${currentUserName} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`, 'booking_pending_approval', `/admin/booking-requests?bookingId=${newBookingId}`);
-              }
-              return Promise.resolve();
-            });
-            await Promise.all(notificationPromises);
-            console.log("[handleSaveBooking V8] 'Pending Approval' notifications sent.");
-          } catch (adminNotificationError: any) {
-            console.error("[handleSaveBooking V8] Error sending 'Pending Approval' notifications to admins:", adminNotificationError);
-            toast({ title: "Admin Notification Failed", description: "Booking created, but failed to notify admins. Check console.", variant: "destructive" });
-          }
-        } else if (finalStatus === 'Waitlisted' && newBookingId) {
-           console.log("[handleSaveBooking V8] Preparing to send 'Waitlisted' notification to user.");
-          try {
-            await addNotification(currentUserId, 'Added to Waitlist', `Your booking request for ${selectedResource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`, 'booking_waitlisted', `/bookings?bookingId=${newBookingId}`);
-            console.log("[handleSaveBooking V8] 'Waitlisted' notification sent to user.");
-          } catch (waitlistNotificationError: any) {
-            console.error("[handleSaveBooking V8] Error sending 'Waitlisted' notification to user:", waitlistNotificationError);
-            toast({ title: "Waitlist Notification Failed", description: "Failed to send waitlist confirmation. Check console.", variant: "destructive" });
+        // Notifications after successful server action
+        if (newBookingId && currentUser && currentUser.id && currentUser.name) {
+          if (finalStatus === 'Pending') {
+            console.log("[handleSaveBooking V9 DEBUG] Preparing to send 'Pending Approval' notifications to Admins/Lab Managers.");
+            try {
+              const adminUsersQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager']), orderBy('name', 'asc'));
+              const adminSnapshot = await getDocs(adminUsersQuery);
+              const notificationPromises = adminSnapshot.docs.map(adminDoc => {
+                if (adminDoc.id !== currentUser.id) { // Don't notify self
+                  return addNotification(adminDoc.id, 'New Booking Request', `Booking for ${selectedResource.name} by ${currentUser.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`, 'booking_pending_approval', `/admin/booking-requests?bookingId=${newBookingId}`);
+                }
+                return Promise.resolve();
+              });
+              await Promise.all(notificationPromises);
+              console.log("[handleSaveBooking V9 DEBUG] 'Pending Approval' notifications attempt completed.");
+            } catch (adminNotificationError: any) {
+              console.error("[handleSaveBooking V9 DEBUG] Error sending 'Pending Approval' notifications to admins:", adminNotificationError);
+              toast({ title: "Admin Notification Failed", description: "Booking created, but failed to notify admins. Check console.", variant: "destructive" });
+            }
+          } else if (finalStatus === 'Waitlisted') {
+             console.log("[handleSaveBooking V9 DEBUG] Preparing to send 'Waitlisted' notification to user.");
+            try {
+              await addNotification(currentUser.id, 'Added to Waitlist', `Your booking request for ${selectedResource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`, 'booking_waitlisted', `/bookings?bookingId=${newBookingId}`);
+              console.log("[handleSaveBooking V9 DEBUG] 'Waitlisted' notification attempt completed for user.");
+            } catch (waitlistNotificationError: any) {
+              console.error("[handleSaveBooking V9 DEBUG] Error sending 'Waitlisted' notification to user:", waitlistNotificationError);
+              toast({ title: "Waitlist Notification Failed", description: "Failed to send waitlist confirmation. Check console.", variant: "destructive" });
+            }
           }
         }
-      } else if (formData.id) { // Editing existing booking
+      } else if (formData.id) { // Editing existing booking (client-side update)
         const bookingDataToUpdate: any = {
           resourceId: formData.resourceId!,
           startTime: Timestamp.fromDate(finalStartTime),
           endTime: Timestamp.fromDate(finalEndTime),
-          status: formData.status || 'Pending', // Keep existing status if not changed by form
+          status: formData.status || 'Pending',
           notes: formData.notes || '',
-          // Retain createdAt if it exists on the original booking
-          createdAt: currentBooking?.createdAt ? Timestamp.fromDate(currentBooking.createdAt) : serverTimestamp(),
         };
 
-        console.log("[handleSaveBooking V8] Preparing to update existing booking. Payload:", JSON.stringify(bookingDataToUpdate, null, 2));
+        console.log("[handleSaveBooking V9 DEBUG] Preparing to update existing booking (client-side). Payload:", JSON.stringify(bookingDataToUpdate, null, 2));
         const bookingDocRef = doc(db, "bookings", formData.id);
         await updateDoc(bookingDocRef, bookingDataToUpdate);
         toast({ title: "Success", description: "Booking updated successfully." });
@@ -642,15 +656,15 @@ function BookingsPageContent({}: BookingsPageContentProps) {
            try {
                 await addAuditLog(currentUser.id, currentUser.name, 'BOOKING_UPDATED', { entityType: 'Booking', entityId: formData.id, details: `Booking for '${selectedResource.name}' updated by ${currentUser.name}. Status: ${bookingDataToUpdate.status}.` });
             } catch (auditError: any) {
-                console.error("[handleSaveBooking V8] Error adding audit log for booking update:", auditError);
+                console.error("[handleSaveBooking V9 DEBUG] Error adding audit log for booking update:", auditError);
                 toast({ title: "Audit Log Failed", description: "Booking updated, but audit log failed. Check console.", variant: "destructive" });
             }
         }
       }
     await fetchAllBookingsForUser();
     handleDialogClose(false);
-  } catch (error: any) { // Catch block for the entire handleSaveBooking function's try
-      console.error("[handleSaveBooking V8] Outer catch block error:", error.toString(), error);
+  } catch (error: any) {
+      console.error("[handleSaveBooking V9 DEBUG] Outer catch block error:", error.toString(), error);
       toast({
           title: "Operation Failed",
           description: `An unexpected error occurred: ${error.message || 'Please try again.'}`,
@@ -659,7 +673,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     } finally {
       setIsLoadingBookings(false);
     }
-  }, [currentUser, allAvailableResources, fetchedBlackoutDates, fetchedRecurringRules, fetchAllBookingsForUser, toast, handleDialogClose, currentBooking, setIsLoadingBookings]);
+  }, [currentUser, allAvailableResources, fetchedBlackoutDates, fetchedRecurringRules, fetchAllBookingsForUser, toast, handleDialogClose, setIsLoadingBookings]);
 
 
   const handleCancelBookingLocal = useCallback(async (bookingId: string) => {
@@ -1118,18 +1132,17 @@ const bookingFormSchema = z.object({
   endTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid end time format. Use HH:mm."),
   status: z.enum(bookingStatusesForForm as [Booking['status'], ...Array<Booking['status'] >]).optional(),
   notes: z.string().max(500, "Notes cannot exceed 500 characters.").optional().or(z.literal('')),
-  createdAt: z.date().optional(),
-  userId: z.string().optional(),
+  // createdAt and userId are not part of this form's direct editable values after initial setup
 }).refine(data => {
   if (!data.bookingDate || !data.startTime || !data.endTime) return true;
   try {
     const startDateTime = set(data.bookingDate, {
-      hours: parseInt(data.startTime.split(':')[0]),
-      minutes: parseInt(data.startTime.split(':')[1])
+      hours: parseInt(data.startTime.split(':')[0], 10),
+      minutes: parseInt(data.startTime.split(':')[1], 10)
     });
     const endDateTime = set(data.bookingDate, {
-      hours: parseInt(data.endTime.split(':')[0]),
-      minutes: parseInt(data.endTime.split(':')[1])
+      hours: parseInt(data.endTime.split(':')[0], 10),
+      minutes: parseInt(data.endTime.split(':')[1], 10)
     });
     return endDateTime > startDateTime;
   } catch (e) {
@@ -1155,213 +1168,64 @@ interface BookingFormProps {
 const timeSlots = Array.from({ length: (17 - 8) * 2 + 1 }, (_, i) => {
   const hour = 8 + Math.floor(i / 2);
   const minute = i % 2 === 0 ? '00' : '30';
-  if (hour > 17 || (hour === 17 && minute !== '00')) return null;
+  if (hour > 17 || (hour === 17 && minute !== '00')) return null; // Max time 17:00
   return `${String(hour).padStart(2, '0')}:${minute}`;
 }).filter(Boolean) as string[];
 
 
 function BookingForm({ initialData, onSave, onCancel, currentUserFullName, currentUserRole, allAvailableResources, selectedDateProp }: BookingFormProps) {
-
   const form = useForm<BookingFormValues>({
-    resolver: zodResolver(bookingFormSchema),
-    defaultValues: {
-      id: undefined,
-      resourceId: '',
-      bookingDate: startOfToday(),
-      startTime: '09:00',
-      endTime: '11:00',
-      status: 'Pending',
-      notes: '',
-      createdAt: new Date(),
-      userId: undefined,
-    },
+    // resolver: zodResolver(bookingFormSchema), // Temporarily commented out for extreme simplification
+    // defaultValues: { /* ... */ }, // Temporarily commented out
   });
 
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const watchBookingDate = form.watch('bookingDate');
-  const watchStartTime = form.watch('startTime');
+  // const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  // const watchBookingDate = form.watch('bookingDate');
+  // const watchStartTime = form.watch('startTime');
+
+  // All useEffect and useMemo hooks are commented out for extreme simplification
+  /*
+  useEffect(() => {
+    // ... form reset logic ...
+  }, [initialData, selectedDateProp, allAvailableResources, form, form.reset]); // Adjusted dependencies
 
   useEffect(() => {
-    let defaultBookingDate = selectedDateProp ? startOfDay(selectedDateProp) : startOfToday();
-    let defaultStartTimeStr = '09:00';
-    let defaultEndTimeStr = '11:00';
-    let defaultResourceId = allAvailableResources.length > 0 ? allAvailableResources[0].id : '';
-    let defaultStatus: Booking['status'] = 'Pending';
-    let defaultNotes = '';
-    let defaultCreatedAt = new Date();
-    let defaultUserId = initialData?.userId;
+    // ... end time adjustment logic ...
+  }, [watchBookingDate, watchStartTime, form]); // Adjusted dependencies
+  */
 
-    if (initialData) {
-      defaultBookingDate = initialData.startTime ? startOfDay(initialData.startTime) : defaultBookingDate;
-      defaultStartTimeStr = initialData.startTime ? format(initialData.startTime, 'HH:mm') : defaultStartTimeStr;
-      defaultEndTimeStr = initialData.endTime ? format(initialData.endTime, 'HH:mm') : defaultEndTimeStr;
-      defaultResourceId = initialData.resourceId || defaultResourceId;
-      defaultStatus = initialData.status || defaultStatus;
-      defaultNotes = initialData.notes || defaultNotes;
-      defaultCreatedAt = initialData.createdAt || defaultCreatedAt;
-    } else if(selectedDateProp) {
-        defaultBookingDate = startOfDay(selectedDateProp);
-    }
-
-    if (defaultStartTimeStr && defaultBookingDate) {
-        try {
-            const startH = parseInt(defaultStartTimeStr.split(':')[0]);
-            const startM = parseInt(defaultStartTimeStr.split(':')[1]);
-            if (!isNaN(startH) && !isNaN(startM)) {
-              const tempStartDate = set(defaultBookingDate, { hours: startH, minutes: startM });
-              let tempEndDate = new Date(tempStartDate.getTime() + 2 * 60 * 60 * 1000);
-
-              const maxEndTimeForDay = set(defaultBookingDate, { hours: 17, minutes: 0 });
-              if (tempEndDate > maxEndTimeForDay) {
-                tempEndDate = maxEndTimeForDay;
-              }
-               if (tempEndDate <= tempStartDate && defaultStartTimeStr !== "17:00") {
-                 const newStartTimePlus30Min = new Date(tempStartDate.getTime() + 30 * 60 * 1000);
-                 if (newStartTimePlus30Min <= maxEndTimeForDay) tempEndDate = newStartTimePlus30Min;
-                 else tempEndDate = maxEndTimeForDay;
-               } else if (defaultStartTimeStr === "17:00") {
-                 tempEndDate = tempStartDate;
-               }
-              defaultEndTimeStr = format(tempEndDate, 'HH:mm');
-            }
-        } catch(e) { /* ignore */ }
-    }
-
-    form.reset({
-      id: initialData?.id,
-      resourceId: defaultResourceId,
-      bookingDate: defaultBookingDate,
-      startTime: defaultStartTimeStr,
-      endTime: defaultEndTimeStr,
-      status: defaultStatus,
-      notes: defaultNotes,
-      createdAt: defaultCreatedAt,
-      userId: defaultUserId,
-    });
-  }, [initialData, selectedDateProp, allAvailableResources, form]);
-
-
-  useEffect(() => {
-    const currentStartTimeStr = form.getValues('startTime');
-    const currentBookingDate = form.getValues('bookingDate');
-
-    if (currentBookingDate && isValidDateFn(currentBookingDate) && currentStartTimeStr && timeSlots.includes(currentStartTimeStr)) {
-      const currentStartTimeParts = currentStartTimeStr.split(':');
-      const currentStartTimeHours = parseInt(currentStartTimeParts[0]);
-      const currentStartTimeMinutes = parseInt(currentStartTimeParts[1]);
-
-      if (!isNaN(currentStartTimeHours) && !isNaN(currentStartTimeMinutes)) {
-        const newStartTimeDt = set(new Date(currentBookingDate), { hours: currentStartTimeHours, minutes: currentStartTimeMinutes });
-        let newEndTimeDt;
-        const currentEndTimeStr = form.getValues('endTime');
-        const currentEndTimeParts = currentEndTimeStr.split(':');
-        const currentEndTimeHours = parseInt(currentEndTimeParts[0]);
-        const currentEndTimeMinutes = parseInt(currentEndTimeParts[1]);
-
-        if (!isNaN(currentEndTimeHours) && !isNaN(currentEndTimeMinutes)) {
-            newEndTimeDt = set(new Date(currentBookingDate), { hours: currentEndTimeHours, minutes: currentEndTimeMinutes });
-            if (newEndTimeDt <= newStartTimeDt) {
-                newEndTimeDt = new Date(newStartTimeDt.getTime() + 2 * 60 * 60 * 1000);
-            }
-        } else {
-            newEndTimeDt = new Date(newStartTimeDt.getTime() + 2 * 60 * 60 * 1000);
-        }
-
-        const maxEndTimeForDay = set(new Date(currentBookingDate), { hours: 17, minutes: 0 });
-        if (newEndTimeDt > maxEndTimeForDay) {
-          newEndTimeDt = maxEndTimeForDay;
-        }
-
-        if (newEndTimeDt <= newStartTimeDt && currentStartTimeStr !== "17:00") {
-          const newStartTimePlus30Min = new Date(newStartTimeDt.getTime() + 30 * 60 * 1000);
-          if (newStartTimePlus30Min <= maxEndTimeForDay) newEndTimeDt = newStartTimePlus30Min;
-          else newEndTimeDt = maxEndTimeForDay;
-        } else if (currentStartTimeStr === "17:00") {
-          newEndTimeDt = newStartTimeDt;
-        }
-
-        const formattedNewEndTime = format(newEndTimeDt, 'HH:mm');
-        if (form.getValues('endTime') !== formattedNewEndTime && (timeSlots.includes(formattedNewEndTime) || formattedNewEndTime === "17:00")) {
-          form.setValue('endTime', formattedNewEndTime, { shouldValidate: true });
-        } else if (form.getValues('endTime') !== formattedNewEndTime && newStartTimeDt >= newEndTimeDt && formattedNewEndTime === "17:00") {
-           form.setValue('endTime', "17:00", { shouldValidate: true });
-        }
-      }
-    }
-  }, [watchStartTime, watchBookingDate, form]);
-
+  // const isNewBookingForm = useMemo(() => !initialData?.id, [initialData?.id]);
+  // const canEditStatus = useMemo(() => {
+  //   if (!currentUserRole || !initialData?.id) return false;
+  //   return currentUserRole === 'Admin' || currentUserRole === 'Lab Manager';
+  // }, [currentUserRole, initialData?.id]);
 
   function handleRHFSubmit(data: BookingFormValues) {
     onSave(data);
   }
-
-  const canEditStatus = (currentUserRole === 'Admin' || currentUserRole === 'Lab Manager') && !!initialData?.id;
-  const isNewBookingForm = !initialData?.id;
-
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleRHFSubmit)}>
         <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
           <div className="space-y-4 py-4 px-1">
-             <FormField
-                control={form.control}
-                name="bookingDate"
-                render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                    <FormLabel>Date</FormLabel>
-                    <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                        <PopoverTrigger asChild>
-                        <FormControl>
-                            <Button
-                            id="bookingFormDialogDate"
-                            variant={"outline"}
-                            className={cn(
-                                "w-full justify-start text-left font-normal h-10",
-                                !field.value && "text-muted-foreground"
-                            )}
-                            disabled={form.formState.isSubmitting}
-                            >
-                            <CalendarIconLucide className="mr-2 h-4 w-4" />
-                            {field.value && isValidDateFn(field.value) ? format(field.value, "PPP") : <span>Pick a date</span>}
-                            </Button>
-                        </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={(date) => {
-                                if(date) {
-                                  const newDate = startOfDay(date);
-                                  field.onChange(newDate);
-                                }
-                                setIsCalendarOpen(false);
-                            }}
-                            disabled={(date) => isBefore(date, startOfToday()) && isNewBookingForm}
-                            initialFocus
-                        />
-                        </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                    </FormItem>
-                )}
-            />
-
+            {/* Minimal Fields for Testing */}
             <FormField
               control={form.control}
               name="resourceId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Resource</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ''} disabled={form.formState.isSubmitting || allAvailableResources.length === 0}>
+                  <FormLabel>Resource (Test)</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || ''} disabled={allAvailableResources.length === 0}>
                     <FormControl>
-                      <SelectTrigger id="bookingFormDialogResource"><SelectValue placeholder={allAvailableResources.length > 0 ? "Select a resource" : "No resources available"} /></SelectTrigger>
+                      <SelectTrigger id="bookingFormDialogResource_Test">
+                        <SelectValue placeholder={allAvailableResources.length > 0 ? "Select a resource" : "No resources available"} />
+                      </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       {allAvailableResources.map(resource => (
                         <SelectItem key={resource.id} value={resource.id} disabled={resource.status !== 'Working' && resource.id !== initialData?.resourceId}>
-                          {resource.name} ({resource.status === 'Working' ? 'Working' : resource.status})
+                          {resource.name} ({resource.status})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1370,96 +1234,33 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
                 </FormItem>
               )}
             />
-
-            <FormItem>
-              <FormLabel htmlFor="bookingFormUserNameRHF">Booked By</FormLabel>
-              <Input id="bookingFormUserNameRHF" value={currentUserFullName} readOnly className="bg-muted/50" />
-              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Info size={12} /> This is automatically set.</p>
-            </FormItem>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
+             <FormField
                 control={form.control}
-                name="startTime"
+                name="bookingDate"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel htmlFor="bookingFormDialogStartTime">Start Time</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={form.formState.isSubmitting}>
-                      <FormControl>
-                        <SelectTrigger id="bookingFormDialogStartTime"><SelectValue placeholder="Select start time" /></SelectTrigger>
-                      </FormControl>
-                      <SelectContent>{timeSlots.map(slot => <SelectItem key={`start-${slot}`} value={slot}>{slot}</SelectItem>)}</SelectContent>
-                    </Select>
+                    <FormItem className="flex flex-col">
+                    <FormLabel>Date (Test)</FormLabel>
+                    <Input type="date" onChange={(e) => field.onChange(e.target.valueAsDate)} />
                     <FormMessage />
-                  </FormItem>
+                    </FormItem>
                 )}
-              />
-              <FormField
-                control={form.control}
-                name="endTime"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel htmlFor="bookingFormDialogEndTime">End Time</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={form.formState.isSubmitting}>
-                      <FormControl>
-                        <SelectTrigger id="bookingFormDialogEndTime"><SelectValue placeholder="Select end time" /></SelectTrigger>
-                      </FormControl>
-                      <SelectContent>{timeSlots.map(slot => <SelectItem key={`end-${slot}`} value={slot}>{slot}</SelectItem>)}</SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            {initialData?.id && (
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel htmlFor="bookingFormDialogStatus">Status</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || 'Pending'} disabled={!canEditStatus || form.formState.isSubmitting}>
-                      <FormControl>
-                        <SelectTrigger id="bookingFormDialogStatus"><SelectValue placeholder="Select status" /></SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {bookingStatusesForForm.map(statusVal => (
-                          <SelectItem key={statusVal} value={statusVal}>{statusVal}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {!canEditStatus && <p className="text-xs text-muted-foreground mt-1">Status can only be changed by Admins or Lab Managers.</p>}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel htmlFor="bookingFormDialogNotes">Notes (Optional)</FormLabel>
-                  <FormControl>
-                    <Textarea id="bookingFormDialogNotes" placeholder="Any specific requirements or purpose of booking..." {...field} value={field.value || ''} disabled={form.formState.isSubmitting} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
             />
+
+            {/* All other FormFields are temporarily commented out */}
+            
           </div>
         </ScrollArea>
         <DialogFooter className="pt-6 border-t mt-4">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={form.formState.isSubmitting}><X className="mr-2 h-4 w-4" /> Cancel</Button>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={form.formState.isSubmitting}>
+            <X className="mr-2 h-4 w-4" /> Cancel
+          </Button>
           <Button type="submit" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (initialData?.id ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)}
-            {form.formState.isSubmitting ? (initialData?.id ? "Saving..." : "Creating...") : (initialData?.id ? "Save Changes" : "Create Booking")}
+            {form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            {form.formState.isSubmitting ? "Saving..." : "Save (Test)"}
           </Button>
         </DialogFooter>
       </form>
     </Form>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -1471,4 +1272,3 @@ export default function BookingsPage() {
   );
 }
 
-    
