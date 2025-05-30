@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Archive, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building } from 'lucide-react';
+import { Archive, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle } from 'lucide-react'; // Added PlusCircle
 import type { ResourceType, Resource, Lab, RoleName } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import {
@@ -312,9 +312,6 @@ export default function InventoryManagementPage() {
     const deletedLab = labs.find(lab => lab.id === labId);
     if (!deletedLab) { toast({ title: "Error", description: "Lab not found.", variant: "destructive" }); return; }
     
-    // Check if any resources are assigned to this lab before deleting.
-    // This requires resources to store labId if using IDs, or lab name if using names.
-    // For now, assuming 'lab' field in Resource is a string name matching Lab['name'].
     const resourcesInThisLab = allResources.filter(res => res.lab === deletedLab.name).length;
     if (resourcesInThisLab > 0) {
       toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as ${resourcesInThisLab} resource(s) are currently assigned to it. Please reassign them first.`, variant: "destructive", duration: 7000 });
