@@ -22,8 +22,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { Booking, Resource, RoleName } from '@/types';
-import { BookingUsageOutcomes } from '@/types';
+import type { Booking, Resource, RoleName, BookingUsageDetails } from '@/types'; // Added BookingUsageDetails
+// Removed BookingUsageOutcomes as it's now in types/index.ts
 import { format, parseISO, isValid as isValidDateFn, startOfDay, isSameDay, set, isBefore, getDay, startOfToday, compareAsc, addDays as dateFnsAddDays, isSameMonth } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -33,14 +33,14 @@ import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { bookingStatusesForFilter, bookingStatusesForForm } from '@/lib/app-constants';
-import { addNotification, addAuditLog } from '@/lib/firestore-helpers';
+import { addNotification, addAuditLog, processWaitlistForResource, createBooking_SA } from '@/lib/firestore-helpers'; // Added createBooking_SA
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormMessage, FormLabel } from '@/components/ui/form';
 import { useAuth } from '@/components/auth-context';
 import { db, auth } from '@/lib/firebase';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, Timestamp, getDoc, orderBy, limit, writeBatch } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp, Timestamp, getDoc, orderBy, limit, writeBatch } from 'firebase/firestore';
 
 
 function BookingsPageLoader() {
@@ -135,8 +135,8 @@ function BookingsPageContent({}: BookingsPageContentProps) {
           notes: data.notes,
           usageDetails: data.usageDetails ? {
             ...data.usageDetails,
-            actualStartTime: data.usageDetails.actualStartTime instanceof Timestamp ? data.usageDetails.actualStartTime.toDate() : undefined,
-            actualEndTime: data.usageDetails.actualEndTime instanceof Timestamp ? data.usageDetails.actualEndTime.toDate() : undefined,
+            actualStartTime: data.usageDetails.actualStartTime instanceof Timestamp ? data.usageDetails.actualStartTime.toDate().toISOString() : undefined,
+            actualEndTime: data.usageDetails.actualEndTime instanceof Timestamp ? data.usageDetails.actualEndTime.toDate().toISOString() : undefined,
           } : undefined,
         } as Booking;
       });
@@ -435,35 +435,27 @@ function BookingsPageContent({}: BookingsPageContentProps) {
   }, [searchParams, router, pathname]);
 
 
-  const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
-    // V8 DEBUG Marker
-    console.log("--- [handleSaveBooking V8] Entering function ---");
+ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
+    console.log("[handleSaveBooking V8] Function called. formData:", formData);
 
-    const directAuthUser = auth.currentUser; // Use Firebase SDK directly for current auth state
-
+    const directAuthUser = auth.currentUser;
     if (!directAuthUser || !directAuthUser.uid) {
-      toast({
-        title: "Authentication Error",
-        description: "You must be logged in to save a booking. Please re-login if issues persist.",
-        variant: "destructive",
-      });
-      setIsLoadingBookings(false); // Ensure loading state is reset
+      toast({ title: "Authentication Error", description: "User not authenticated. Please log in.", variant: "destructive" });
+      setIsLoadingBookings(false);
       return;
     }
     const currentUserId = directAuthUser.uid;
-    const currentUserName = directAuthUser.displayName || currentUser?.name || 'User'; // Fallback for name
-
-    console.log(`[handleSaveBooking V8] directAuthUser.uid: ${currentUserId}, currentUserName: ${currentUserName}`);
-
+    // Ensure currentUser from context exists for name, fallback to email or 'User'
+    const currentUserName = currentUser?.name || directAuthUser.displayName || directAuthUser.email || 'User';
+    console.log(`[handleSaveBooking V8] Acting user: ID=${currentUserId}, Name=${currentUserName}`);
 
     if (!formData.resourceId) {
-      toast({ title: "Error", description: "Please select a resource.", variant: "destructive" });
+      toast({ title: "Resource Not Selected", description: "Please select a resource for the booking.", variant: "destructive" });
       return;
     }
-
     const selectedResource = allAvailableResources.find(r => r.id === formData.resourceId);
     if (!selectedResource) {
-      toast({ title: "Error", description: "Selected resource not found or not available.", variant: "destructive" });
+      toast({ title: "Resource Not Found", description: "The selected resource could not be found.", variant: "destructive" });
       return;
     }
 
@@ -480,7 +472,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
 
     const isNewBooking = !formData.id;
 
-    if (isBefore(startOfDay(finalStartTime), startOfToday()) && isNewBooking) {
+    if (isNewBooking && isBefore(startOfDay(finalStartTime), startOfToday())) {
       toast({ title: "Invalid Date", description: "Cannot create new bookings for past dates.", variant: "destructive" });
       return;
     }
@@ -494,13 +486,13 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     const bookingDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][bookingDayIndex];
     const recurringLabBlackout = fetchedRecurringRules.find(rule => rule.daysOfWeek.includes(bookingDayName));
     if (recurringLabBlackout) {
-      toast({ title: "Lab Closed", description: `The lab is regularly closed on ${bookingDayName}s due to: ${recurringLabBlackout.name}${recurringLabBlackout.reason ? ` (${recurringLabBlackout.reason})` : ''}.`, variant: "destructive", duration: 10000 });
+      toast({ title: "Lab Closed", description: `The lab is regularly closed on ${bookingDayName}s. Reason: ${recurringLabBlackout.name}.`, variant: "destructive", duration: 7000 });
       return;
     }
     const proposedDateOnlyStr = format(finalStartTime, 'yyyy-MM-dd');
     const isSpecificBlackout = fetchedBlackoutDates.find(bd => bd.date === proposedDateOnlyStr);
     if (isSpecificBlackout) {
-      toast({ title: "Lab Closed", description: `The lab is closed on ${formatDateSafe(finalStartTime, 'this day', 'PPP')}${isSpecificBlackout.reason ? ` due to: ${isSpecificBlackout.reason}` : '.'}.`, variant: "destructive", duration: 7000 });
+      toast({ title: "Lab Closed", description: `The lab is closed on ${formatDateSafe(finalStartTime, '', 'PPP')}. Reason: ${isSpecificBlackout.reason || 'N/A'}.`, variant: "destructive", duration: 7000 });
       return;
     }
 
@@ -508,36 +500,34 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     if (selectedResource.unavailabilityPeriods && selectedResource.unavailabilityPeriods.length > 0) {
       for (const period of selectedResource.unavailabilityPeriods) {
         if (!period.startDate || !period.endDate) continue;
-        try {
-          const unavailabilityStart = startOfDay(parseISO(period.startDate));
-          const unavailabilityEnd = dateFnsAddDays(startOfDay(parseISO(period.endDate)), 1);
-          if ((finalStartTime >= unavailabilityStart && finalStartTime < unavailabilityEnd) || (finalEndTime > unavailabilityStart && finalEndTime <= unavailabilityEnd) || (finalStartTime <= unavailabilityStart && finalEndTime >= unavailabilityEnd)) {
-            toast({ title: "Resource Unavailable", description: `${selectedResource.name} is unavailable from ${formatDateSafe(unavailabilityStart, '', 'PPP')} to ${formatDateSafe(parseISO(period.endDate), '', 'PPP')}${period.reason ? ` due to: ${period.reason}` : '.'}.`, variant: "destructive", duration: 10000 });
-            return;
-          }
-        } catch (e) { console.warn("[handleSaveBooking V8] Error parsing resource unavailability period for check:", e, period); }
+        const unavailabilityStart = startOfDay(parseISO(period.startDate));
+        const unavailabilityEnd = dateFnsAddDays(startOfDay(parseISO(period.endDate)), 1); // End of day
+        if ((finalStartTime >= unavailabilityStart && finalStartTime < unavailabilityEnd) || (finalEndTime > unavailabilityStart && finalEndTime <= unavailabilityEnd) || (finalStartTime <= unavailabilityStart && finalEndTime >= unavailabilityEnd)) {
+          toast({ title: "Resource Unavailable", description: `${selectedResource.name} is unavailable. Reason: ${period.reason || 'Scheduled Maintenance'}.`, variant: "destructive", duration: 7000 });
+          return;
+        }
       }
     }
-
+    
     if (selectedResource.status !== 'Available' && isNewBooking && formData.status !== 'Waitlisted') {
-      toast({ title: "Resource Not Available", description: `${selectedResource.name} is currently ${selectedResource.status.toLowerCase()} and cannot be booked.`, variant: "destructive", duration: 7000 });
+      toast({ title: "Resource Not Available", description: `${selectedResource.name} is currently ${selectedResource.status.toLowerCase()} and cannot be booked.`, variant: "destructive" });
       return;
     }
-
+    
     let finalStatus: Booking['status'] = isNewBooking ? 'Pending' : (formData.status || 'Pending');
-    let conflictingBookingFound: Booking | undefined = undefined; // To store details if conflict
+    let conflictingBookingFound: Booking | undefined = undefined;
 
+    // Perform conflict check for new bookings OR if editing and times have changed significantly
+    // For simplicity in this iteration, let's always conflict check for new bookings.
+    // For edits, a more complex check would be needed if times/resource change.
     if (isNewBooking) {
-      // Perform conflict check for new bookings
-      setIsLoadingBookings(true); // Indicate loading for conflict check
+      setIsLoadingBookings(true);
       try {
         const bookingsCollectionRef = collection(db, 'bookings');
-        // Firestore Index: bookings (resourceId ASC, status ASC, startTime ASC) and (resourceId ASC, status ASC, endTime ASC) might be needed if not already covered
         const q = query(
           bookingsCollectionRef,
           where('resourceId', '==', formData.resourceId!),
           where('status', 'in', ['Confirmed', 'Pending']),
-          // Overlap conditions: (ExistingStart < ProposedEnd) AND (ExistingEnd > ProposedStart)
           where('startTime', '<', Timestamp.fromDate(finalEndTime)),
           where('endTime', '>', Timestamp.fromDate(finalStartTime))
         );
@@ -545,7 +535,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         const existingBookingsSnapshot = await getDocs(q);
         if (!existingBookingsSnapshot.empty) {
            conflictingBookingFound = existingBookingsSnapshot.docs[0].data() as Booking;
-           conflictingBookingFound.id = existingBookingsSnapshot.docs[0].id;
+           conflictingBookingFound.id = existingBookingsSnapshot.docs[0].id; // Assign ID
         }
         console.log(`[handleSaveBooking V8] Conflict check found ${existingBookingsSnapshot.docs.length} bookings. Conflicting:`, conflictingBookingFound);
       } catch (e: any) {
@@ -554,104 +544,87 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         setIsLoadingBookings(false);
         return;
       }
-      // No need to set isLoadingBookings to false here if it continues to addDoc
+      // isLoadingBookings will be set to false in the final `finally` block
     }
 
-    // Determine final status based on conflict and queueing allowance
-    if (conflictingBookingFound && finalStatus !== 'Waitlisted') { // Ensure we don't re-evaluate if already waitlisted by form
+    if (conflictingBookingFound && finalStatus !== 'Waitlisted') {
       if (selectedResource.allowQueueing) {
         finalStatus = 'Waitlisted';
         toast({ title: "Added to Waitlist", description: `This time slot is currently booked. Your request for ${selectedResource.name} has been added to the waitlist.` });
-        // Add Audit Log for Waitlisted
-        try {
-          await addAuditLog(currentUserId, currentUserName, 'BOOKING_WAITLISTED', { entityType: 'Booking', entityId: `TEMP_WAITLIST_${Date.now()}`, details: `User ${currentUserName} added to waitlist for ${selectedResource.name}.`});
-        } catch (auditError: any) { console.error("[handleSaveBooking V8] Error adding BOOKING_WAITLISTED audit log:", auditError); }
       } else {
         let conflictingUserName = 'another user';
-        if (conflictingBookingFound.userId) {
+         if (conflictingBookingFound?.userId) { // Check if conflictingBookingFound is defined
             try {
                 const userDocSnap = await getDoc(doc(db, "users", conflictingBookingFound.userId));
                 if (userDocSnap.exists()) conflictingUserName = userDocSnap.data()?.name || 'another user';
             } catch (userFetchError) { console.error("[handleSaveBooking V8] Error fetching conflicting user's name:", userFetchError); }
         }
-        toast({ title: "Booking Conflict", description: `${selectedResource.name} is already booked by ${conflictingUserName}. This resource does not allow queueing.`, variant: "destructive", duration: 10000 });
-        setIsLoadingBookings(false); // Reset loading since we are returning
+        toast({ title: "Booking Conflict", description: `${selectedResource.name} is already booked by ${conflictingUserName}. This resource does not allow queueing.`, variant: "destructive", duration: 7000 });
+        setIsLoadingBookings(false);
         return;
       }
     }
-    // Main try-catch for the actual booking save/update operation
-    try {
-      setIsLoadingBookings(true); // Ensure loading is true before Firestore write
 
+    try {
+      setIsLoadingBookings(true);
       let docRefId: string | undefined = formData.id;
 
       if (isNewBooking) {
-        const bookingPayloadForFirestore = {
+        const bookingDataForServerAction = {
           resourceId: formData.resourceId!,
-          userId: currentUserId,
-          startTime: Timestamp.fromDate(finalStartTime),
-          endTime: Timestamp.fromDate(finalEndTime),
+          startTime: finalStartTime, // JS Date
+          endTime: finalEndTime,     // JS Date
           status: finalStatus,
           notes: formData.notes || '',
-          // createdAt is handled by serverTimestamp
         };
-
-        // ---- FRESH LOOK DEBUG V7 START ----
-        console.log("--- FRESH LOOK DEBUG V7: Preparing to call addDoc for NEW Booking ---");
-        console.log("[FRESH LOOK DEBUG V7] directAuthUser.uid from Firebase SDK:", directAuthUser?.uid);
-        const payloadForFirestoreLog = { // Create a clean object for logging
-            resourceId: bookingPayloadForFirestore.resourceId,
-            userId: bookingPayloadForFirestore.userId,
-            startTime: finalStartTime, // Log JS Date for readability
-            endTime: finalEndTime,   // Log JS Date for readability
-            status: bookingPayloadForFirestore.status,
-            notes: bookingPayloadForFirestore.notes,
-        };
-        console.log("[FRESH LOOK DEBUG V7] Actual payload for Firestore (client data, excluding serverTimestamp):", JSON.stringify(payloadForFirestoreLog, null, 2));
-        console.log("[FRESH LOOK DEBUG V7] BEFORE addDoc call for new booking.");
-        // ---- FRESH LOOK DEBUG V7 END ----
-
-        const docRef = await addDoc(collection(db, "bookings"), {
-          ...bookingPayloadForFirestore,
-          createdAt: serverTimestamp(),
-        });
-        docRefId = docRef.id;
-        console.log(`[handleSaveBooking V8] Client-side addDoc successful for new booking. Doc ID: ${docRefId}`);
-        toast({ title: "Success", description: `Booking ${finalStatus === 'Pending' ? 'created and submitted for approval' : 'added to waitlist'}.` });
-
+        
+        if (!currentUser || !currentUser.id || !currentUser.name) {
+          toast({ title: "Error", description: "User details missing for server action.", variant: "destructive" });
+          throw new Error("User details missing for createBooking_SA call.");
+        }
+        
+        console.log("[handleSaveBooking V8] Calling createBooking_SA server action. Payload:", JSON.stringify(bookingDataForServerAction, null, 2), "Acting User:", currentUser);
+        
         try {
-          await addAuditLog(currentUserId, currentUserName, finalStatus === 'Waitlisted' ? 'BOOKING_WAITLISTED' : 'BOOKING_CREATED', { entityType: 'Booking', entityId: docRefId, details: `Booking for '${selectedResource.name}' by ${currentUserName}. Status: ${finalStatus}.` });
-        } catch (auditError: any) {
-          console.error(`[handleSaveBooking V8] Error adding audit log for new booking ${docRefId}:`, auditError);
-          toast({ title: "Audit Log Failed", description: `Booking created, but audit log failed: ${auditError.message}`, variant: "destructive" });
+          docRefId = await createBooking_SA(
+            bookingDataForServerAction,
+            { id: currentUser.id, name: currentUser.name }
+          );
+          toast({ title: "Success", description: `Booking ${finalStatus === 'Pending' ? 'created and submitted for approval' : 'added to waitlist'}.` });
+        } catch (serverActionError: any) {
+            console.error("[handleSaveBooking V8] Server action createBooking_SA failed:", serverActionError.toString(), serverActionError);
+            toast({ title: "Booking Creation Failed", description: `Server action failed: ${serverActionError.message || 'Please try again.'}`, variant: "destructive" });
+            setIsLoadingBookings(false);
+            return; // Stop further execution if server action fails
         }
 
-        // Notifications for new booking
-        if (finalStatus === 'Pending') {
+        // Notifications for new booking (client-side after successful server action)
+        if (finalStatus === 'Pending' && docRefId) {
+           console.log("[handleSaveBooking V8] Preparing to send 'Pending Approval' notifications to Admins/Lab Managers.");
           try {
-            console.log(`[handleSaveBooking V8] Preparing to send 'Pending Approval' notifications to Admins/Lab Managers for booking ${docRefId}.`);
             const adminUsersQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager']), orderBy('name', 'asc'));
             const adminSnapshot = await getDocs(adminUsersQuery);
             const notificationPromises = adminSnapshot.docs.map(adminDoc => {
-              if (adminDoc.id !== currentUserId) {
+              if (adminDoc.id !== currentUserId) { // Don't notify self
                 return addNotification(adminDoc.id, 'New Booking Request', `Booking for ${selectedResource.name} by ${currentUserName} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`, 'booking_pending_approval', `/admin/booking-requests?bookingId=${docRefId}`);
               }
               return Promise.resolve();
             });
             await Promise.all(notificationPromises);
-            console.log(`[handleSaveBooking V8] 'Pending Approval' notifications sent for booking ${docRefId}.`);
+            console.log("[handleSaveBooking V8] 'Pending Approval' notifications sent.");
           } catch (adminNotificationError: any) {
             console.error("[handleSaveBooking V8] Error sending 'Pending Approval' notifications to admins:", adminNotificationError);
-            toast({ title: "Admin Notification Failed", description: `Booking created, but failed to notify admins: ${adminNotificationError.message}`, variant: "destructive" });
+            toast({ title: "Admin Notification Failed", description: "Booking created, but failed to notify admins. Check console.", variant: "destructive" });
           }
         } else if (finalStatus === 'Waitlisted' && docRefId) {
+           console.log("[handleSaveBooking V8] Preparing to send 'Waitlisted' notification to user.");
           try {
-            console.log(`[handleSaveBooking V8] Preparing to send 'Waitlisted' notification to user ${currentUserId} for booking ${docRefId}.`);
             await addNotification(currentUserId, 'Added to Waitlist', `Your booking request for ${selectedResource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`, 'booking_waitlisted', `/bookings?bookingId=${docRefId}`);
-            console.log(`[handleSaveBooking V8] 'Waitlisted' notification sent to user ${currentUserId}.`);
-          } catch (waitlistNotificationError: any) {
+            console.log("[handleSaveBooking V8] 'Waitlisted' notification sent to user.");
+          } catch (waitlistNotificationError: any)
+          {
             console.error("[handleSaveBooking V8] Error sending 'Waitlisted' notification to user:", waitlistNotificationError);
-            toast({ title: "Waitlist Notification Failed", description: `Failed to send waitlist confirmation: ${waitlistNotificationError.message}`, variant: "destructive" });
+            toast({ title: "Waitlist Notification Failed", description: "Failed to send waitlist confirmation. Check console.", variant: "destructive" });
           }
         }
       } else if (formData.id) { // Editing existing booking
@@ -668,44 +641,43 @@ function BookingsPageContent({}: BookingsPageContentProps) {
           bookingDataToUpdate.createdAt = Timestamp.fromDate(currentBooking.createdAt);
         }
         
-        console.log(`[handleSaveBooking V8] Preparing to update existing booking ${formData.id}. Payload:`, JSON.stringify(bookingDataToUpdate, null, 2));
+        console.log("[handleSaveBooking V8] Preparing to update existing booking. Payload:", JSON.stringify(bookingDataToUpdate, null, 2));
         const bookingDocRef = doc(db, "bookings", formData.id);
         await updateDoc(bookingDocRef, bookingDataToUpdate);
         toast({ title: "Success", description: "Booking updated successfully." });
         
-        try {
-          await addAuditLog(currentUserId, currentUserName, 'BOOKING_UPDATED', { entityType: 'Booking', entityId: formData.id, details: `Booking for '${selectedResource.name}' updated by ${currentUserName}. Status: ${bookingDataToUpdate.status}.` });
-        } catch (auditError: any) {
-          console.error(`[handleSaveBooking V8] Error adding audit log for booking update ${formData.id}:`, auditError);
-          toast({ title: "Audit Log Failed", description: `Booking updated, but audit log failed: ${auditError.message}`, variant: "destructive" });
+        if (currentUser && currentUser.id && currentUser.name) {
+           try {
+                await addAuditLog(currentUser.id, currentUser.name, 'BOOKING_UPDATED', { entityType: 'Booking', entityId: formData.id, details: `Booking for '${selectedResource.name}' updated by ${currentUser.name}. Status: ${bookingDataToUpdate.status}.` });
+            } catch (auditError: any) {
+                console.error("[handleSaveBooking V8] Error adding audit log for booking update:", auditError);
+                toast({ title: "Audit Log Failed", description: "Booking updated, but audit log failed. Check console.", variant: "destructive" });
+            }
         }
       }
-
       await fetchAllBookingsForUser();
       handleDialogClose(false);
-    } catch (error: any) { // Outer catch for the main save/update operation logic
-      // The specific addDoc error is caught and logged inside the isNewBooking block.
-      // This outer catch handles other potential errors or if the inner catch re-throws or misses something.
-      console.error("[handleSaveBooking V8] Outer catch block error during save/update:", error);
+    } catch (error: any) {
+      console.error("[handleSaveBooking V8] Outer catch block error:", error.toString(), error);
       toast({
           title: "Operation Failed",
-          description: `An unexpected error occurred while saving the booking: ${error.message || error.toString()}`,
+          description: `An unexpected error occurred: ${error.message || 'Please try again.'}`,
           variant: "destructive",
       });
     } finally {
       setIsLoadingBookings(false);
     }
-  }, [currentUser, allAvailableResources, fetchedBlackoutDates, fetchedRecurringRules, fetchAllBookingsForUser, toast, handleDialogClose, currentBooking]);
+  }, [currentUser, allAvailableResources, fetchedBlackoutDates, fetchedRecurringRules, fetchAllBookingsForUser, toast, handleDialogClose, currentBooking, setIsLoadingBookings]);
 
 
   const handleCancelBookingLocal = useCallback(async (bookingId: string) => {
     const directAuthUser = auth.currentUser;
-    if (!directAuthUser || !directAuthUser.uid || !directAuthUser.displayName) {
-        toast({ title: "Authentication Error", description: "Cannot cancel booking. User not fully authenticated.", variant: "destructive" });
+    if (!directAuthUser || !directAuthUser.uid || !currentUser?.name) { // Check currentUser.name from context for logging
+        toast({ title: "Authentication Error", description: "Cannot cancel booking. User not fully authenticated or name missing.", variant: "destructive" });
         return;
     }
     const currentUserId = directAuthUser.uid;
-    const currentUserName = directAuthUser.displayName;
+    const currentUserName = currentUser.name; // Use name from context
 
 
     const bookingToCancel = allUserBookings.find(b => b.id === bookingId);
@@ -729,14 +701,14 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         await addAuditLog(currentUserId, currentUserName, 'BOOKING_CANCELLED', { entityType: 'Booking', entityId: bookingId, details: `Booking for '${resourceNameForLog}' cancelled by user ${currentUserName}.` });
       } catch (auditError: any) { console.error("Error adding cancellation audit log:", auditError); }
 
-      if (originalStatus === 'Confirmed' && bookingToCancel.resourceId) {
-        console.log(`[BookingsPage/handleCancelBookingLocal] Processing waitlist for resource ${bookingToCancel.resourceId} due to cancellation of confirmed booking ${bookingId}.`);
+      if ((originalStatus === 'Confirmed' || originalStatus === 'Pending') && bookingToCancel.resourceId) {
+        console.log(`[BookingsPage/handleCancelBookingLocal] Processing waitlist for resource ${bookingToCancel.resourceId} due to cancellation of ${originalStatus} booking ${bookingId}.`);
         try {
             await processWaitlistForResource(
                 bookingToCancel.resourceId,
-                new Date(bookingToCancel.startTime),
+                new Date(bookingToCancel.startTime), // Ensure these are Date objects
                 new Date(bookingToCancel.endTime),
-                'user_cancel_confirmed'
+                originalStatus === 'Confirmed' ? 'user_cancel_confirmed' : 'user_cancel_pending' // Differentiate trigger
             );
             console.log(`[BookingsPage/handleCancelBookingLocal] Waitlist processing initiated for resource ${bookingToCancel.resourceId}.`);
         } catch (waitlistError: any) {
@@ -904,72 +876,74 @@ function BookingsPageContent({}: BookingsPageContentProps) {
                             <DialogDescription>Refine your list of bookings.</DialogDescription>
                         </DialogHeader>
                         <Separator className="my-4" />
-                        <div className="space-y-6 py-4 px-1">
-                            <div>
-                                <Label htmlFor="bookingCalendarDialogDate">Filter by Specific Date (Optional)</Label>
-                                <div className="flex justify-center items-center rounded-md border p-2 mt-1">
-                                    <Calendar
-                                        mode="single"
-                                        selected={tempSelectedDateForDialog}
-                                        onSelect={(date) => setTempSelectedDateForDialog(date ? startOfDay(date) : undefined)}
-                                        month={currentCalendarMonthInDialog}
-                                        onMonthChange={setCurrentCalendarMonthInDialog}
-                                        className="rounded-md"
-                                        classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
-                                        footer={tempSelectedDateForDialog &&
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => { setTempSelectedDateForDialog(undefined); setCurrentCalendarMonthInDialog(startOfDay(new Date())); }}
-                                                className="w-full mt-2 text-xs"
-                                            >
-                                                <FilterX className="mr-2 h-4 w-4" /> Clear Date Selection
-                                            </Button>
-                                        }
-                                    />
-                                </div>
-                            </div>
-                            <Separator />
-                            <div>
-                                <Label htmlFor="bookingSearchDialog">Search (Resource/Notes)</Label>
-                                <div className="relative mt-1">
-                                    <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                    <Input
-                                    id="bookingSearchDialog"
-                                    type="search"
-                                    placeholder="Keyword..."
-                                    className="h-9 pl-8"
-                                    value={tempSearchTerm}
-                                    onChange={(e) => setTempSearchTerm(e.target.value)}
-                                    />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <ScrollArea className="max-h-[65vh] pr-2"> {/* Added ScrollArea */}
+                            <div className="space-y-6 py-4 px-1">
                                 <div>
-                                    <Label htmlFor="bookingResourceDialog">Resource</Label>
-                                    <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId} disabled={isLoadingResources}>
-                                    <SelectTrigger id="bookingResourceDialog" className="h-9 mt-1"><SelectValue placeholder={isLoadingResources ? "Loading..." : "Filter by Resource"} /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Resources</SelectItem>
-                                        {allAvailableResources
-                                        .map(resource => (
-                                            <SelectItem key={resource.id} value={resource.id}>{resource.name}</SelectItem>
-                                        ))
-                                        }
-                                    </SelectContent>
-                                    </Select>
+                                    <Label htmlFor="bookingCalendarDialogDate">Filter by Specific Date (Optional)</Label>
+                                    <div className="flex justify-center items-center rounded-md border p-2 mt-1">
+                                        <Calendar
+                                            mode="single"
+                                            selected={tempSelectedDateForDialog}
+                                            onSelect={(date) => setTempSelectedDateForDialog(date ? startOfDay(date) : undefined)}
+                                            month={currentCalendarMonthInDialog}
+                                            onMonthChange={setCurrentCalendarMonthInDialog}
+                                            className="rounded-md"
+                                            classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
+                                            footer={tempSelectedDateForDialog &&
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => { setTempSelectedDateForDialog(undefined); setCurrentCalendarMonthInDialog(startOfDay(new Date())); }}
+                                                    className="w-full mt-2 text-xs"
+                                                >
+                                                    <FilterX className="mr-2 h-4 w-4" /> Clear Date Selection
+                                                </Button>
+                                            }
+                                        />
+                                    </div>
                                 </div>
+                                <Separator />
                                 <div>
-                                    <Label htmlFor="bookingStatusDialog">Status</Label>
-                                    <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as Booking['status'] | 'all')}>
-                                    <SelectTrigger id="bookingStatusDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
-                                    <SelectContent>
-                                        {bookingStatusesForFilter.map(s => <SelectItem key={s} value={s}>{s === 'all' ? 'All Statuses' : s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
-                                    </SelectContent>
-                                    </Select>
+                                    <Label htmlFor="bookingSearchDialog">Search (Resource/Notes)</Label>
+                                    <div className="relative mt-1">
+                                        <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                        <Input
+                                        id="bookingSearchDialog"
+                                        type="search"
+                                        placeholder="Keyword..."
+                                        className="h-9 pl-8"
+                                        value={tempSearchTerm}
+                                        onChange={(e) => setTempSearchTerm(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <Label htmlFor="bookingResourceDialog">Resource</Label>
+                                        <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId} disabled={isLoadingResources}>
+                                        <SelectTrigger id="bookingResourceDialog" className="h-9 mt-1"><SelectValue placeholder={isLoadingResources ? "Loading..." : "Filter by Resource"} /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Resources</SelectItem>
+                                            {allAvailableResources
+                                            .map(resource => (
+                                                <SelectItem key={resource.id} value={resource.id}>{resource.name}</SelectItem>
+                                            ))
+                                            }
+                                        </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="bookingStatusDialog">Status</Label>
+                                        <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as Booking['status'] | 'all')}>
+                                        <SelectTrigger id="bookingStatusDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
+                                        <SelectContent>
+                                            {bookingStatusesForFilter.map(s => <SelectItem key={s} value={s}>{s === 'all' ? 'All Statuses' : s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
+                                        </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        </ScrollArea> {/* End ScrollArea */}
                         <DialogFooter className="pt-6 border-t mt-4">
                             <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                                 <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters

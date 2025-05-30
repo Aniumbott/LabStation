@@ -18,7 +18,7 @@ import { Calendar, Clock, User, Info, Tag, StickyNote, Activity, CheckCircle, Al
 import { cn } from '@/lib/utils';
 import { Separator } from '../ui/separator';
 import { LogUsageFormDialog } from './log-usage-form-dialog';
-
+import { ScrollArea } from '@/components/ui/scroll-area'; // Added ScrollArea
 
 interface BookingDetailsDialogProps {
   booking: Booking | null;
@@ -81,19 +81,10 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
   const isPastBooking = currentBookingDetails.startTime && isPast(new Date(currentBookingDetails.startTime));
   const canLogUsage = isPastBooking && currentBookingDetails.status === 'Confirmed';
   
-  // Note: getWaitlistPosition relies on allBookings which is not available here directly.
-  // If waitlist position display is crucial in this dialog, allBookings needs to be passed down,
-  // or the booking object itself should be augmented with this info before being passed.
-  // For now, we'll omit position from this dialog for simplicity, as it's on the main table.
-
 
   const handleSaveUsage = (usageData: BookingUsageDetails) => {
     if (currentBookingDetails) {
       const updatedBooking = { ...currentBookingDetails, usageDetails: usageData };
-      
-      // The direct manipulation of initialBookings (mock data) is removed.
-      // The parent component will be responsible for updating Firestore based on onBookingUpdate.
-      
       setCurrentBookingDetails(updatedBooking); 
       onBookingUpdate(updatedBooking); 
       setIsLogUsageFormOpen(false);
@@ -114,71 +105,73 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
             </DialogDescription>
           </DialogHeader>
           <Separator />
-          <div className="grid gap-3 py-3 text-sm">
-            <div className="flex items-center">
-              <Info className="mr-3 h-5 w-5 text-muted-foreground" />
-              <span className="font-medium text-muted-foreground w-28">Resource:</span>
-              <span className="text-foreground font-semibold">{currentBookingDetails.resourceName}</span>
-            </div>
-            <div className="flex items-center">
-              <User className="mr-3 h-5 w-5 text-muted-foreground" />
-              <span className="font-medium text-muted-foreground w-28">Booked By:</span>
-              <span className="text-foreground">{currentBookingDetails.userName}</span>
-            </div>
-            <div className="flex items-center">
-              <Calendar className="mr-3 h-5 w-5 text-muted-foreground" />
-              <span className="font-medium text-muted-foreground w-28">Date:</span>
-              <span className="text-foreground">{format(new Date(currentBookingDetails.startTime), 'PPP')}</span>
-            </div>
-            <div className="flex items-center">
-              <Clock className="mr-3 h-5 w-5 text-muted-foreground" />
-              <span className="font-medium text-muted-foreground w-28">Time:</span>
-              <span className="text-foreground">
-                {format(new Date(currentBookingDetails.startTime), 'p')} - {format(new Date(currentBookingDetails.endTime), 'p')}
-              </span>
-            </div>
-             <div className="flex items-center">
-              <Clock className="mr-3 h-5 w-5 text-muted-foreground" />
-              <span className="font-medium text-muted-foreground w-28">Created:</span>
-              <span className="text-foreground">{currentBookingDetails.createdAt ? format(new Date(currentBookingDetails.createdAt), 'PPP, p') : 'N/A'}</span>
-            </div>
-            <div className="flex items-center">
-              <Info className="mr-3 h-5 w-5 text-muted-foreground" /> 
-              <span className="font-medium text-muted-foreground w-28">Status:</span>
-              <Badge className={cn("whitespace-nowrap text-xs px-2 py-0.5 border-transparent", getStatusBadgeClass(currentBookingDetails.status))}>
-                {currentBookingDetails.status}
-              </Badge>
-            </div>
-            {currentBookingDetails.notes && (
-              <DetailItem icon={StickyNote} label="Booking Notes" value={currentBookingDetails.notes} />
-            )}
-          </div>
-
-          {currentBookingDetails.usageDetails && (
-            <>
-              <Separator />
-              <div className="py-3">
-                <h3 className="text-md font-semibold mb-2 flex items-center">
-                  <Activity className="mr-2 h-5 w-5 text-primary" /> Usage Details
-                </h3>
-                <div className="grid gap-3 text-sm pl-2">
-                  <DetailItem icon={Clock} label="Actual Start" value={currentBookingDetails.usageDetails.actualStartTime ? format(parseISO(currentBookingDetails.usageDetails.actualStartTime), 'PPP, p') : 'N/A'} />
-                  <DetailItem icon={Clock} label="Actual End" value={currentBookingDetails.usageDetails.actualEndTime ? format(parseISO(currentBookingDetails.usageDetails.actualEndTime), 'PPP, p') : 'N/A'} />
-                  {currentBookingDetails.usageDetails.outcome && (
-                     <div className="flex items-center">
-                      <div className="mr-3 h-5 w-5 flex items-center justify-center">{getOutcomeIcon(currentBookingDetails.usageDetails.outcome)}</div>
-                        <div>
-                          <span className="font-medium text-muted-foreground">Outcome:</span>
-                          <p className="text-foreground">{currentBookingDetails.usageDetails.outcome}</p>
-                        </div>
-                    </div>
-                  )}
-                  <DetailItem icon={FileText} label="Data Location" value={currentBookingDetails.usageDetails.dataStorageLocation} />
-                  <DetailItem icon={StickyNote} label="Usage Comments" value={currentBookingDetails.usageDetails.usageComments} />
-                </div>
+          <ScrollArea className="max-h-[60vh] pr-3"> {/* Added ScrollArea */}
+            <div className="grid gap-3 py-3 text-sm">
+              <div className="flex items-center">
+                <Info className="mr-3 h-5 w-5 text-muted-foreground" />
+                <span className="font-medium text-muted-foreground w-28">Resource:</span>
+                <span className="text-foreground font-semibold">{currentBookingDetails.resourceName}</span>
               </div>
-            </>
-          )}
+              <div className="flex items-center">
+                <User className="mr-3 h-5 w-5 text-muted-foreground" />
+                <span className="font-medium text-muted-foreground w-28">Booked By:</span>
+                <span className="text-foreground">{currentBookingDetails.userName}</span>
+              </div>
+              <div className="flex items-center">
+                <Calendar className="mr-3 h-5 w-5 text-muted-foreground" />
+                <span className="font-medium text-muted-foreground w-28">Date:</span>
+                <span className="text-foreground">{format(new Date(currentBookingDetails.startTime), 'PPP')}</span>
+              </div>
+              <div className="flex items-center">
+                <Clock className="mr-3 h-5 w-5 text-muted-foreground" />
+                <span className="font-medium text-muted-foreground w-28">Time:</span>
+                <span className="text-foreground">
+                  {format(new Date(currentBookingDetails.startTime), 'p')} - {format(new Date(currentBookingDetails.endTime), 'p')}
+                </span>
+              </div>
+              <div className="flex items-center">
+                <Clock className="mr-3 h-5 w-5 text-muted-foreground" />
+                <span className="font-medium text-muted-foreground w-28">Created:</span>
+                <span className="text-foreground">{currentBookingDetails.createdAt ? format(new Date(currentBookingDetails.createdAt), 'PPP, p') : 'N/A'}</span>
+              </div>
+              <div className="flex items-center">
+                <Info className="mr-3 h-5 w-5 text-muted-foreground" /> 
+                <span className="font-medium text-muted-foreground w-28">Status:</span>
+                <Badge className={cn("whitespace-nowrap text-xs px-2 py-0.5 border-transparent", getStatusBadgeClass(currentBookingDetails.status))}>
+                  {currentBookingDetails.status}
+                </Badge>
+              </div>
+              {currentBookingDetails.notes && (
+                <DetailItem icon={StickyNote} label="Booking Notes" value={currentBookingDetails.notes} />
+              )}
+            </div>
+
+            {currentBookingDetails.usageDetails && (
+              <>
+                <Separator />
+                <div className="py-3">
+                  <h3 className="text-md font-semibold mb-2 flex items-center">
+                    <Activity className="mr-2 h-5 w-5 text-primary" /> Usage Details
+                  </h3>
+                  <div className="grid gap-3 text-sm pl-2">
+                    <DetailItem icon={Clock} label="Actual Start" value={currentBookingDetails.usageDetails.actualStartTime ? format(parseISO(currentBookingDetails.usageDetails.actualStartTime), 'PPP, p') : 'N/A'} />
+                    <DetailItem icon={Clock} label="Actual End" value={currentBookingDetails.usageDetails.actualEndTime ? format(parseISO(currentBookingDetails.usageDetails.actualEndTime), 'PPP, p') : 'N/A'} />
+                    {currentBookingDetails.usageDetails.outcome && (
+                      <div className="flex items-center">
+                        <div className="mr-3 h-5 w-5 flex items-center justify-center">{getOutcomeIcon(currentBookingDetails.usageDetails.outcome)}</div>
+                          <div>
+                            <span className="font-medium text-muted-foreground">Outcome:</span>
+                            <p className="text-foreground">{currentBookingDetails.usageDetails.outcome}</p>
+                          </div>
+                      </div>
+                    )}
+                    <DetailItem icon={FileText} label="Data Location" value={currentBookingDetails.usageDetails.dataStorageLocation} />
+                    <DetailItem icon={StickyNote} label="Usage Comments" value={currentBookingDetails.usageDetails.usageComments} />
+                  </div>
+                </div>
+              </>
+            )}
+          </ScrollArea> {/* End ScrollArea */}
           <Separator />
           <DialogFooter className="pt-4">
             {canLogUsage && (
