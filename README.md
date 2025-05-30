@@ -168,7 +168,7 @@ LabStation is a comprehensive web application designed to streamline the managem
             function isTechnician(userId) {
               return get(/databases/$(database)/documents/users/$(userId)).data.role == 'Technician';
             }
-            
+
             // Helper function to check if the request is from the owner of the document
             function isOwner(userId) {
               return request.auth.uid == userId;
@@ -242,7 +242,7 @@ LabStation is a comprehensive web application designed to streamline the managem
               // Authenticated users can create bookings for themselves, with 'Pending' or 'Waitlisted' status.
               allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
                               && (request.resource.data.status == 'Pending' || request.resource.data.status == 'Waitlisted');
-                              // Removed: && !("createdAt" in request.resource.data); // Client uses serverTimestamp()
+                              // Removed: && !("createdAt" in request.resource.data); Client uses serverTimestamp()
 
               // Users can cancel their own 'Pending', 'Waitlisted', or 'Confirmed' bookings.
               // Users can log usage ('usageDetails') for their own 'Confirmed' bookings if the booking is in the past.
@@ -333,9 +333,8 @@ LabStation is a comprehensive web application designed to streamline the managem
         ```
 
 6.  **Firestore Indexes:**
-    *   As you use the application, Firestore might prompt you in the browser console if specific queries require composite indexes for performance. These errors usually include a direct link to create the needed index in the Firebase console. Create them as needed.
-    *   **Note on Single-Field Indexes:** Firestore automatically creates single-field indexes for every field in your documents (both ascending and descending). You do not need to manually create these. These automatic indexes cover simple queries like filtering on one field or ordering by one field (e.g., `orderBy('name', 'asc')`).
-    *   **Required Composite Indexes:** For more complex queries (e.g., filtering on multiple fields, using range filters on one field while filtering on others, or ordering by multiple fields), you must manually create composite indexes. As you use the application, Firestore might prompt you if a specific query requires a new composite index; these errors usually include a direct link to create it.
+    *   **Note on Single-Field Indexes:** Firestore automatically creates single-field indexes for every field in your documents (both ascending and descending). You do not need to manually create these. These automatic indexes cover simple queries like filtering on one field or ordering by one field.
+    *   **Required Composite Indexes:** For more complex queries (e.g., filtering on multiple fields, using range filters on one field while filtering on others, or ordering by multiple fields), you must manually create composite indexes in the Firebase console. As you use the application, Firestore might prompt you if a specific query requires a new composite index; these errors usually include a direct link to create it.
     *   **Proactively create the following essential COMPOSITE indexes in the Firebase console:**
 
         *   **`users` collection:**
@@ -345,10 +344,12 @@ LabStation is a comprehensive web application designed to streamline the managem
         *   **`bookings` collection:**
             *   Fields: `userId` (Ascending), `startTime` (Ascending)
                 *   *Purpose: For users to view their own bookings, sorted by start time.*
+            *   Fields: `userId` (Ascending), `endTime` (Ascending), `startTime` (Ascending)
+                *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('endTime', '>=', ...).orderBy('startTime', 'asc')`).*
             *   Fields: `resourceId` (Ascending), `status` (Ascending), `startTime` (Ascending)
                 *   *Purpose: For viewing bookings for a specific resource, filtered by status, and ordered by start time (e.g., on admin booking requests page if filtered by resource).*
             *   Fields: `resourceId` (Ascending), `status` (Ascending), `endTime` (Ascending), `startTime` (Ascending)
-                *   *Purpose: Critical for booking conflict checks (queries involving `resourceId`, `status`, and range filters on `startTime` and `endTime`). Firestore will likely suggest this exact index if it's missing for this query.*
+                *   *Purpose: Critical for booking conflict checks (`where('resourceId', ...).where('status', 'in', ...).where('startTime', '<', ...).where('endTime', '>', ...)`).*
             *   Fields: `status` (Ascending), `startTime` (Ascending)
                 *   *Purpose: For admin views of booking requests, filtered by status and sorted by start time.*
             *   Fields: `resourceId` (Ascending), `status` (Ascending), `createdAt` (Ascending)
@@ -361,13 +362,14 @@ LabStation is a comprehensive web application designed to streamline the managem
                 *   *Purpose: For filtering maintenance requests by status and sorting them by report date.*
             *   Fields: `assignedTechnicianId` (Ascending), `dateReported` (Descending)
                 *   *Purpose: For viewing maintenance requests assigned to a specific technician, sorted by report date.*
+            *   *(Note: Simple `orderBy("dateReported", "desc")` for all requests is covered by automatic single-field index.)*
 
         *   **`notifications` collection:**
             *   Fields: `userId` (Ascending), `createdAt` (Descending)
                 *   *Purpose: For users to view their notifications, sorted by creation time.*
 
         *   **`auditLogs` collection:**
-            *   Queries currently only sort by `timestamp` (Descending). This is handled by automatic single-field indexes. No manual composite indexes are typically required for this collection based on current usage unless more complex filtering/sorting is added.
+            *   *(Note: Simple `orderBy("timestamp", "desc")` for all logs is covered by automatic single-field index.)*
 
         *   Other collections like `resourceTypes`, `blackoutDates`, `recurringBlackoutRules` are generally small or queried simply. If Firestore prompts for an index for these due to specific query patterns, create it as suggested.
 
