@@ -162,7 +162,7 @@ LabStation is a comprehensive web application designed to streamline the managem
             function isTechnician(userId) {
               return get(/databases/$(database)/documents/users/$(userId)).data.role == 'Technician';
             }
-
+            
             // Helper function to check if the request is from the owner of the document
             function isOwner(userId) {
               return request.auth.uid == userId;
@@ -233,10 +233,10 @@ LabStation is a comprehensive web application designed to streamline the managem
                              isTechnician(request.auth.uid)             // Technician can also read any booking
                             );
 
-              // Authenticated users can create bookings for themselves, which start in 'Pending' status.
+              // Authenticated users can create bookings for themselves, with 'Pending' or 'Waitlisted' status.
               allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
-                              && request.resource.data.status == 'Pending'
-                              && !("createdAt" in request.resource.data); // Prevent client from setting createdAt
+                              && (request.resource.data.status == 'Pending' || request.resource.data.status == 'Waitlisted');
+                              // Removed: && !("createdAt" in request.resource.data); // Removed to allow serverTimestamp from client SDK
 
               // Users can cancel their own 'Pending' or 'Waitlisted' bookings.
               // Users can log usage ('usageDetails') for their own 'Confirmed' bookings if the booking is in the past.
