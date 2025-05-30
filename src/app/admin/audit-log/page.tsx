@@ -22,7 +22,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'; // Removed DialogTrigger as it's not directly used here
+  DialogTrigger, // Added DialogTrigger back
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -38,6 +39,7 @@ const auditActionTypesForFilter: AuditActionType[] = [
   'USER_CREATED', 'USER_UPDATED', 'USER_DELETED', 'USER_APPROVED', 'USER_REJECTED',
   'RESOURCE_CREATED', 'RESOURCE_UPDATED', 'RESOURCE_DELETED',
   'RESOURCE_TYPE_CREATED', 'RESOURCE_TYPE_UPDATED', 'RESOURCE_TYPE_DELETED',
+  'LAB_CREATED', 'LAB_UPDATED', 'LAB_DELETED', // Added Lab actions
   'BOOKING_CREATED', 'BOOKING_UPDATED', 'BOOKING_APPROVED', 'BOOKING_REJECTED', 'BOOKING_CANCELLED', 'BOOKING_PROMOTED', 'BOOKING_WAITLISTED',
   'MAINTENANCE_CREATED', 'MAINTENANCE_UPDATED',
   'BLACKOUT_DATE_CREATED', 'BLACKOUT_DATE_UPDATED', 'BLACKOUT_DATE_DELETED',
@@ -107,7 +109,7 @@ export default function AuditLogPage() {
         (log.entityType && log.entityType.toLowerCase().includes(lowerSearchTerm)) ||
         (log.entityId && log.entityId.toLowerCase().includes(lowerSearchTerm)) ||
         (log.details && log.details.toLowerCase().includes(lowerSearchTerm));
-      
+
       const actionTypeMatch = activeActionType === 'all' || log.action === activeActionType;
 
       return searchMatch && actionTypeMatch;
@@ -124,12 +126,12 @@ export default function AuditLogPage() {
     setTempSearchTerm('');
     setTempActionType('all');
   }, []);
-  
+
   const resetAllPageFilters = useCallback(() => {
     setActiveSearchTerm('');
     setActiveActionType('all');
-    resetDialogFiltersOnly(); 
-    setIsFilterDialogOpen(false); 
+    resetDialogFiltersOnly();
+    setIsFilterDialogOpen(false);
   }, [resetDialogFiltersOnly]);
 
 
@@ -147,7 +149,7 @@ export default function AuditLogPage() {
       </div>
     );
   }
-  
+
   return (
     <div className="space-y-8">
       <PageHeader
