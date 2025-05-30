@@ -20,18 +20,18 @@ LabStation is a comprehensive web application designed to streamline the managem
     *   Users can create, view, modify, and cancel bookings for available resources.
     *   **Conflict Detection:** Prevents double-bookings by checking against:
         *   Other existing bookings.
-        *   Resource-specific one-off unavailability periods (maintenance, etc.). // Updated
+        *   Resource-specific one-off unavailability periods (maintenance, etc.).
         *   Lab-wide specific blackout dates.
         *   Lab-wide weekly recurring unavailability rules.
     *   **Availability Scheduling:**
-        *   Admins/Lab Managers can define resource-specific unavailability periods (e.g., for maintenance). // Updated
+        *   Admins/Lab Managers can define resource-specific unavailability periods (e.g., for maintenance).
         *   Manage lab-wide **Blackout Dates** (specific holidays or closure days).
         *   Define lab-wide **Recurring Unavailability Rules** (e.g., lab closed on weekends).
     *   **Queue Management (Basic):**
         *   Resources can be configured to allow waitlisting.
         *   If a slot is full, users can join a waitlist.
-        *   Bookings are automatically promoted from the waitlist (to 'Pending' status) when a conflicting confirmed booking is cancelled or rejected.
-        *   Users can see their position in the waitlist.
+        *   Bookings are automatically promoted from the waitlist (to 'Pending' status) when a conflicting confirmed booking is cancelled or rejected by an admin.
+        *   Users can see their position in the waitlist (if this UI is implemented).
     *   **Booking Approval Workflow:** New booking requests enter a 'Pending' state and require approval from an Admin or Lab Manager before being confirmed.
 *   **Maintenance Requests:**
     *   Log service issues for specific resources.
@@ -90,11 +90,8 @@ LabStation is a comprehensive web application designed to streamline the managem
 
 2.  **Install Dependencies:**
     ```bash
-    npm install
-    # or
-    yarn install
-    # or
-    npm install firebase-admin # If not already in package.json or to ensure latest
+    npm install # or yarn install
+    npm install firebase-admin # ensure firebase-admin is installed
     ```
 
 3.  **Set up Firebase:**
@@ -169,7 +166,7 @@ LabStation is a comprehensive web application designed to streamline the managem
 
             // Helper function to check if a user is a Technician
             function isTechnician(userId) {
-              return get(/databases/$(database)/documents/users/$(userId)).data.role;
+              return get(/databases/$(database)/documents/users/$(userId)).data.role == 'Technician';
             }
             
             // Helper function to check if the request is from the owner of the document
@@ -245,7 +242,7 @@ LabStation is a comprehensive web application designed to streamline the managem
               // Authenticated users can create bookings for themselves, with 'Pending' or 'Waitlisted' status.
               allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
                               && (request.resource.data.status == 'Pending' || request.resource.data.status == 'Waitlisted');
-                              // Removed: && !("createdAt" in request.resource.data); // This was causing issues with serverTimestamp
+                              // Removed: && !("createdAt" in request.resource.data); // Client uses serverTimestamp()
 
               // Users can cancel their own 'Pending', 'Waitlisted', or 'Confirmed' bookings.
               // Users can log usage ('usageDetails') for their own 'Confirmed' bookings if the booking is in the past.
@@ -337,34 +334,42 @@ LabStation is a comprehensive web application designed to streamline the managem
 
 6.  **Firestore Indexes:**
     *   As you use the application, Firestore might prompt you in the browser console if specific queries require composite indexes for performance. These errors usually include a direct link to create the needed index in the Firebase console. Create them as needed.
-    *   **Proactively create these essential indexes:**
-        *   `users` collection:
-            *   `role` (ASC), `name` (ASC)
-            *   `name` (ASC)
-        *   `bookings` collection:
-            *   `userId` (ASC), `startTime` (ASC)
-            *   `resourceId` (ASC), `status` (ASC), `startTime` (ASC)
-            *   `resourceId` (ASC), `status` (ASC), `endTime` (ASC), `startTime` (ASC) *(For conflict checks - verify exact fields and order Firestore suggests if error occurs)*
-            *   `status` (ASC), `startTime` (ASC)
-            *   `resourceId` (ASC), `status` (ASC), `createdAt` (ASC) *(For waitlist processing)*
-        *   `maintenanceRequests` collection:
-            *   `dateReported` (DESC)
-            *   `resourceId` (ASC), `dateReported` (DESC)
-            *   `status` (ASC), `dateReported` (DESC)
-            *   `assignedTechnicianId` (ASC), `dateReported` (DESC)
-        *   `auditLogs` collection:
-            *   `timestamp` (DESC)
-        *   `notifications` collection:
-            *   `userId` (ASC), `createdAt` (DESC)
-        *   `resources` collection:
-            *   `name` (ASC)
-        *   `resourceTypes` collection:
-            *   `name` (ASC)
-        *   `blackoutDates` collection:
-            *   `date` (ASC)
-        *   `recurringBlackoutRules` collection:
-            *   `name` (ASC)
+    *   **Note on Single-Field Indexes:** Firestore automatically creates single-field indexes for every field in your documents (both ascending and descending). You do not need to manually create these. These automatic indexes cover simple queries like filtering on one field or ordering by one field (e.g., `orderBy('name', 'asc')`).
+    *   **Required Composite Indexes:** For more complex queries (e.g., filtering on multiple fields, using range filters on one field while filtering on others, or ordering by multiple fields), you must manually create composite indexes. As you use the application, Firestore might prompt you if a specific query requires a new composite index; these errors usually include a direct link to create it.
+    *   **Proactively create the following essential COMPOSITE indexes in the Firebase console:**
 
+        *   **`users` collection:**
+            *   Fields: `role` (Ascending), `name` (Ascending)
+                *   *Purpose: For filtering users by role and sorting them by name (e.g., in admin user lists, technician dropdowns).*
+
+        *   **`bookings` collection:**
+            *   Fields: `userId` (Ascending), `startTime` (Ascending)
+                *   *Purpose: For users to view their own bookings, sorted by start time.*
+            *   Fields: `resourceId` (Ascending), `status` (Ascending), `startTime` (Ascending)
+                *   *Purpose: For viewing bookings for a specific resource, filtered by status, and ordered by start time (e.g., on admin booking requests page if filtered by resource).*
+            *   Fields: `resourceId` (Ascending), `status` (Ascending), `endTime` (Ascending), `startTime` (Ascending)
+                *   *Purpose: Critical for booking conflict checks (queries involving `resourceId`, `status`, and range filters on `startTime` and `endTime`). Firestore will likely suggest this exact index if it's missing for this query.*
+            *   Fields: `status` (Ascending), `startTime` (Ascending)
+                *   *Purpose: For admin views of booking requests, filtered by status and sorted by start time.*
+            *   Fields: `resourceId` (Ascending), `status` (Ascending), `createdAt` (Ascending)
+                *   *Purpose: For processing waitlists in FIFO order for a specific resource.*
+
+        *   **`maintenanceRequests` collection:**
+            *   Fields: `resourceId` (Ascending), `dateReported` (Descending)
+                *   *Purpose: For viewing maintenance requests associated with a specific resource, sorted by report date.*
+            *   Fields: `status` (Ascending), `dateReported` (Descending)
+                *   *Purpose: For filtering maintenance requests by status and sorting them by report date.*
+            *   Fields: `assignedTechnicianId` (Ascending), `dateReported` (Descending)
+                *   *Purpose: For viewing maintenance requests assigned to a specific technician, sorted by report date.*
+
+        *   **`notifications` collection:**
+            *   Fields: `userId` (Ascending), `createdAt` (Descending)
+                *   *Purpose: For users to view their notifications, sorted by creation time.*
+
+        *   **`auditLogs` collection:**
+            *   Queries currently only sort by `timestamp` (Descending). This is handled by automatic single-field indexes. No manual composite indexes are typically required for this collection based on current usage unless more complex filtering/sorting is added.
+
+        *   Other collections like `resourceTypes`, `blackoutDates`, `recurringBlackoutRules` are generally small or queried simply. If Firestore prompts for an index for these due to specific query patterns, create it as suggested.
 
 7.  **Run the Development Server:**
     ```bash
@@ -378,5 +383,3 @@ LabStation is a comprehensive web application designed to streamline the managem
 ## Deployment
 
 This application is configured to be easily deployable on platforms like [Vercel](https://vercel.com/) (which is recommended for Next.js projects). Connect your Git repository (GitHub, GitLab, Bitbucket) to Vercel, and it will typically auto-detect the Next.js settings. Remember to configure your Firebase environment variables (from your `.env.local` file, including the Admin SDK credentials) in Vercel's project settings.
-
-    
