@@ -239,10 +239,11 @@ LabStation is a comprehensive web application designed to streamline the managem
                              isTechnician(request.auth.uid)             // Technician can also read any booking
                             );
 
-              // Authenticated users can create bookings for themselves.
+              // Authenticated users can create bookings for themselves. Status must be 'Pending' or 'Waitlisted'.
+              // Client should not send 'createdAt'.
               allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
                               && (request.resource.data.status == 'Pending' || request.resource.data.status == 'Waitlisted');
-                              // Removed: && !("createdAt" in request.resource.data); // This was causing issues with serverTimestamp()
+                              // Removed: && !("createdAt" in request.resource.data); // This caused issues with serverTimestamp()
 
               // Users can cancel their own 'Pending', 'Waitlisted', or 'Confirmed' bookings.
               // Users can log usage ('usageDetails') for their own 'Confirmed' bookings if the booking is in the past.
@@ -334,7 +335,7 @@ LabStation is a comprehensive web application designed to streamline the managem
 
 6.  **Firestore Indexes:**
     *   **Note on Single-Field Indexes:** Firestore automatically creates single-field indexes for every field in your documents (both ascending and descending). You do not need to manually create these. These automatic indexes cover simple queries like filtering on one field or ordering by one field.
-    *   **Required Composite Indexes:** For more complex queries (e.g., filtering on multiple fields, using range filters on one field while filtering on others, or ordering by multiple fields), you must manually create composite indexes in the Firebase console. As you use the application, Firestore might prompt you if a specific query requires a new composite index; these errors usually include a direct link to create it.
+    *   **Required Composite Indexes:** For more complex queries, you must manually create composite indexes in the Firebase console. As you use the application, Firestore might prompt you if a specific query requires a new composite index; these errors usually include a direct link to create it. Firestore may also add `__name__` (Ascending or Descending) as the last field to its suggested indexes for tie-breaking and consistency; this is normal and you should typically accept it if the console suggests it.
     *   **Proactively create the following essential COMPOSITE indexes in the Firebase console:**
 
         *   **`users` collection:**
@@ -344,16 +345,18 @@ LabStation is a comprehensive web application designed to streamline the managem
         *   **`bookings` collection:**
             *   Fields: `userId` (Ascending), `startTime` (Ascending)
                 *   *Purpose: For users to view their own bookings, sorted by start time.*
-            *   Fields: `userId` (Ascending), `endTime` (Ascending), `startTime` (Ascending)  <!-- THIS IS THE ONE FOR THE DASHBOARD -->
-                *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('endTime', '>=', ...).orderBy('startTime', 'asc')`). Ensure this matches Firestore's suggestion if it differs.*
+            *   Fields: `userId` (Ascending), `startTime` (Ascending), `endTime` (Ascending)
+                *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('endTime', '>=', ...).orderBy('startTime', 'asc')`). Firestore will likely suggest this order.*
             *   Fields: `resourceId` (Ascending), `status` (Ascending), `startTime` (Ascending)
                 *   *Purpose: For viewing bookings for a specific resource, filtered by status, and ordered by start time (e.g., on admin booking requests page if filtered by resource).*
-            *   Fields: `resourceId` (Ascending), `status` (Ascending), `endTime` (Ascending), `startTime` (Ascending) <!-- CONFLICT CHECK -->
+            *   Fields: `resourceId` (Ascending), `status` (Ascending), `endTime` (Ascending), `startTime` (Ascending)
                 *   *Purpose: Critical for booking conflict checks (`where('resourceId', ...).where('status', 'in', ...).where('startTime', '<', ...).where('endTime', '>', ...)`).*
             *   Fields: `status` (Ascending), `startTime` (Ascending)
                 *   *Purpose: For admin views of booking requests, filtered by status and sorted by start time.*
             *   Fields: `resourceId` (Ascending), `status` (Ascending), `createdAt` (Ascending)
                 *   *Purpose: For processing waitlists in FIFO order for a specific resource.*
+            *   Fields: `resourceId` (Ascending), `userId` (Ascending), `startTime` (Descending)
+                *   *Purpose: For `src/app/resources/[resourceId]/page.tsx` to fetch user's past bookings for a specific resource.*
 
         *   **`maintenanceRequests` collection:**
             *   Fields: `resourceId` (Ascending), `dateReported` (Descending)
@@ -362,6 +365,7 @@ LabStation is a comprehensive web application designed to streamline the managem
                 *   *Purpose: For filtering maintenance requests by status and sorting them by report date.*
             *   Fields: `assignedTechnicianId` (Ascending), `dateReported` (Descending)
                 *   *Purpose: For viewing maintenance requests assigned to a specific technician, sorted by report date.*
+            *   *(Note: Simple `orderBy("dateReported", "desc")` for all maintenance requests is covered by automatic single-field index.)*
 
         *   **`notifications` collection:**
             *   Fields: `userId` (Ascending), `createdAt` (Descending)
@@ -384,4 +388,3 @@ LabStation is a comprehensive web application designed to streamline the managem
 ## Deployment
 
 This application is configured to be easily deployable on platforms like [Vercel](https://vercel.com/) (which is recommended for Next.js projects). Connect your Git repository (GitHub, GitLab, Bitbucket) to Vercel, and it will typically auto-detect the Next.js settings. Remember to configure your Firebase environment variables (from your `.env.local` file, including the Admin SDK credentials) in Vercel's project settings.
-
