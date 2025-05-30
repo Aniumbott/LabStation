@@ -4,7 +4,7 @@ import { twMerge } from "tailwind-merge";
 import { format, parseISO, isValid as isValidDateFn } from 'date-fns';
 import React from "react";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, AlertTriangle, Wrench, XCircle } from "lucide-react"; // Replaced Construction with Wrench, Added XCircle
+import { CheckCircle, Wrench, XCircle } from "lucide-react"; // Ensured Wrench and XCircle are imported
 import type { ResourceStatus } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
@@ -69,10 +69,12 @@ export function getResourceStatusBadge(status: ResourceStatus): JSX.Element {
     case 'Working':
       return <Badge className={cn("bg-green-500 hover:bg-green-600 text-white border-transparent")}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     case 'Maintenance':
-      return <Badge className={cn("bg-orange-500 hover:bg-orange-600 text-white border-transparent")}><Wrench className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      return <Badge className={cn("bg-purple-500 hover:bg-purple-600 text-white border-transparent")}><Wrench className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     case 'Broken':
-      return <Badge variant="destructive" className={cn("bg-red-600 hover:bg-red-700 text-white border-transparent")}><XCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      // Using variant="destructive" will apply the theme's destructive colors
+      return <Badge variant="destructive"><XCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     default:
+      // This case should ideally not be reached if status is always one of the defined ResourceStatus types
       const exhaustiveCheck: never = status;
       return <Badge variant="outline">{String(exhaustiveCheck || status || "Unknown")}</Badge>;
   }
