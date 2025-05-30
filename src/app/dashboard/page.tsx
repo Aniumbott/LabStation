@@ -18,8 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format, isValid, isPast, parseISO, compareAsc, startOfToday, startOfDay } from 'date-fns';
-import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils'; // getResourceStatusBadge will use new statuses
+import { format, isValid, isPast, parseISO, compareAsc, startOfToday, startOfDay, Timestamp as FirestoreTimestamp } from 'date-fns';
+import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -88,7 +88,7 @@ export default function DashboardPage() {
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
           lab: data.lab || 'Unknown Lab',
-          status: data.status || 'Working', // Default to 'Working' for new status system
+          status: data.status || 'Working',
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
           features: Array.isArray(data.features) ? data.features : [],
@@ -112,22 +112,20 @@ export default function DashboardPage() {
 
     if (currentUser && currentUser.id) {
       console.log(`[Dashboard V3] Fetching upcoming bookings for user: ${currentUser.id}`);
-      const today = startOfToday(); // Use startOfToday for the query
-      const todayStartTimestamp = Timestamp.fromDate(today);
+      const todayStart = Timestamp.fromDate(startOfToday()); // Use Firestore Timestamp for query
 
       try {
         // Firestore Index Required: bookings (userId ASC, endTime ASC, startTime ASC)
         const bookingsQuery = query(
           collection(db, 'bookings'),
           where('userId', '==', currentUser.id),
-          where('endTime', '>=', todayStartTimestamp), // Query for bookings whose end time is today or later
-          orderBy('endTime', 'asc'), // Order by endTime first to use the index efficiently
+          where('endTime', '>=', todayStart),
           orderBy('startTime', 'asc'),
           limit(5)
         );
         console.log("[Dashboard V3] Upcoming bookings query constructed:", bookingsQuery);
         const bookingsSnapshot = await getDocs(bookingsQuery);
-        console.log(`[Dashboard V3] Fetched upcoming bookings snapshot. Docs count: ${bookingsSnapshot.docs.length}`);
+        console.log(`[Dashboard V3] Firestore returned ${bookingsSnapshot.docs.length} bookings for upcoming query.`);
 
         const fetchedBookingsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
           const bookingData = docSnap.data();
@@ -160,15 +158,16 @@ export default function DashboardPage() {
         });
 
         let resolvedBookings = await Promise.all(fetchedBookingsPromises);
-        console.log("[Dashboard V3] Firestore results (before client filter):", resolvedBookings.length, "bookings");
-        resolvedBookings.forEach(b => console.log(`  - ID: ${b.id}, Start: ${b.startTime?.toISOString()}, End: ${b.endTime?.toISOString()}, Status: ${b.status}`));
+        console.log("[Dashboard V3] Mapped Firestore results (before client filter):", resolvedBookings.length, "bookings");
+        // resolvedBookings.forEach(b => console.log(`  - ID: ${b.id}, Start: ${b.startTime?.toISOString()}, End: ${b.endTime?.toISOString()}, Status: ${b.status}`));
 
-        // Client-side filter to ensure we only show bookings that haven't completely ended today
+        // Client-side filter to ensure we only show bookings whose end time is still in the future (or now)
+        // and are not cancelled.
         const now = new Date();
         const clientFilteredBookings = resolvedBookings.filter(b => b.endTime >= now && b.status !== 'Cancelled');
-        
+
         console.log("[Dashboard V3] Client-side filtered results (endTime >= now && status != Cancelled):", clientFilteredBookings.length, "bookings");
-        clientFilteredBookings.forEach(b => console.log(`  - ID: ${b.id}, Start: ${b.startTime?.toISOString()}, End: ${b.endTime?.toISOString()}, Status: ${b.status}`));
+        // clientFilteredBookings.forEach(b => console.log(`  - ID: ${b.id}, Start: ${b.startTime?.toISOString()}, End: ${b.endTime?.toISOString()}, Status: ${b.status}`));
 
         setUpcomingUserBookings(clientFilteredBookings);
 
@@ -232,7 +231,7 @@ export default function DashboardPage() {
         ) : frequentlyUsedResources.length > 0 ? (
           <div className="w-fit grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2">
             {frequentlyUsedResources.map((resource) => (
-              <Card key={resource.id} className="w-full md:max-w-lg flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300 p-4">
+              <Card key={resource.id} className="w-full md:max-w-md flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300 p-4">
                 <CardHeader className="p-0 pb-3">
                   <div className="flex justify-between items-start">
                     <CardTitle className="text-lg hover:text-primary transition-colors">
