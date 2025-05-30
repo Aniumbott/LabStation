@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -61,8 +62,8 @@ const navItems: NavItem[] = [
     adminOrLabManager: true,
   },
   {
-    href: '/admin/inventory',
-    label: 'Lab Management', // Updated Label
+    href: '/admin/labs', // <-- UPDATED URL HERE
+    label: 'Lab Management',
     icon: Archive,
     adminOrLabManager: true,
   },
@@ -152,7 +153,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <Sidebar>
         <SidebarHeader className="p-4 border-b border-sidebar-border">
           <Link href="/dashboard">
-            <Logo />
+            <span className="inline-flex items-center justify-center gap-2 group-data-[collapsible=icon]:justify-center">
+                <Logo />
+            </span>
           </Link>
         </SidebarHeader>
 
