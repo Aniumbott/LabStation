@@ -3,7 +3,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Construction, Loader2, ThumbsUp, Clock, X } from 'lucide-react';
+import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Construction, Loader2, ThumbsUp, Clock, X, User as UserIconLucide } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,24 +18,29 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format, isValid, isPast, parseISO, compareAsc } from 'date-fns';
+import { format, isValid, isPast, parseISO, compareAsc, startOfToday } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/auth-context';
+import { useToast } from '@/hooks/use-toast'; // Added useToast
 import { db } from '@/lib/firebase';
 import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore';
 
 export default function DashboardPage() {
   const { currentUser } = useAuth();
+  const { toast } = useToast(); // Initialize toast
   const [frequentlyUsedResources, setFrequentlyUsedResources] = useState<Resource[]>([]);
-  const [upcomingUserBookings, setUpcomingUserBookings] = useState<Booking[]>([]);
+  const [upcomingUserBookings, setUpcomingUserBookings] = useState<(Booking & { resourceName?: string })[]>([]);
   const [isLoadingResources, setIsLoadingResources] = useState(true);
   const [isLoadingBookings, setIsLoadingBookings] = useState(true);
 
   const fetchDashboardData = useCallback(async () => {
+    console.log("[Dashboard] fetchDashboardData called. CurrentUser:", currentUser?.id);
     setIsLoadingResources(true);
+    setIsLoadingBookings(true); // Set loading true for bookings at the start
+
     try {
-      const resourcesQuery = query(collection(db, 'resources'), limit(3));
+      const resourcesQuery = query(collection(db, 'resources'), orderBy('name', 'asc'), limit(3)); // Added orderBy for predictability
       const resourcesSnapshot = await getDocs(resourcesQuery);
       const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
         const data = docSnap.data();
@@ -51,60 +56,129 @@ export default function DashboardPage() {
           purchaseDate: data.purchaseDate instanceof Timestamp ? data.purchaseDate.toDate() : undefined,
           lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
-          // No availability field to process
         } as Resource;
       });
       setFrequentlyUsedResources(fetchedResources);
-    } catch (error) {
-      console.error("Error fetching frequently used resources:", error);
+      console.log("[Dashboard] Fetched frequently used resources:", fetchedResources.length);
+    } catch (error: any) {
+      console.error("[Dashboard] Error fetching frequently used resources:", error.toString(), error);
+      toast({
+        title: "Error Loading Resources",
+        description: `Could not fetch frequently used resources: ${error.message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingResources(false);
     }
-    setIsLoadingResources(false);
 
-    if (currentUser) {
-      setIsLoadingBookings(true);
+    if (currentUser && currentUser.id) {
+      console.log(`[Dashboard] Fetching upcoming bookings for user: ${currentUser.id}`);
+      const todayStart = Timestamp.fromDate(startOfToday()); // Use start of today for "upcoming"
       try {
         const bookingsQuery = query(
           collection(db, 'bookings'),
           where('userId', '==', currentUser.id),
-          where('startTime', '>=', Timestamp.fromDate(new Date())),
+          where('endTime', '>=', todayStart), // Changed to endTime >= startOfToday for better "upcoming" logic
           orderBy('startTime', 'asc'),
           limit(5)
         );
+        console.log("[Dashboard] Upcoming bookings query constructed.");
         const bookingsSnapshot = await getDocs(bookingsQuery);
+        console.log(`[Dashboard] Fetched upcoming bookings snapshot. Docs count: ${bookingsSnapshot.docs.length}`);
+
         const fetchedBookingsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
           const bookingData = docSnap.data();
           let resourceNameStr = 'Unknown Resource';
           if (bookingData.resourceId) {
-            const resourceDocRef = doc(db, 'resources', bookingData.resourceId);
-            const resourceDocSnap = await getDoc(resourceDocRef);
-            if (resourceDocSnap.exists()) {
-              resourceNameStr = resourceDocSnap.data()?.name || 'Unknown Resource';
+            try {
+              const resourceDocRef = doc(db, 'resources', bookingData.resourceId);
+              const resourceDocSnap = await getDoc(resourceDocRef);
+              if (resourceDocSnap.exists()) {
+                resourceNameStr = resourceDocSnap.data()?.name || 'Unknown Resource';
+              }
+            } catch (resError) {
+              console.warn(`[Dashboard] Could not fetch resource name for booking ${docSnap.id}:`, resError);
             }
           }
+
+          let startTimeAsDate: Date;
+          if (bookingData.startTime instanceof Timestamp) {
+            startTimeAsDate = bookingData.startTime.toDate();
+          } else if (typeof bookingData.startTime === 'string') {
+            startTimeAsDate = parseISO(bookingData.startTime);
+          } else if (bookingData.startTime && typeof bookingData.startTime.seconds === 'number') {
+            startTimeAsDate = new Timestamp(bookingData.startTime.seconds, bookingData.startTime.nanoseconds || 0).toDate();
+          } else {
+            console.warn(`[Dashboard] Unexpected startTime format for booking ${docSnap.id}:`, bookingData.startTime);
+            startTimeAsDate = new Date(); // Fallback
+          }
+
+          let endTimeAsDate: Date;
+          if (bookingData.endTime instanceof Timestamp) {
+            endTimeAsDate = bookingData.endTime.toDate();
+          } else if (typeof bookingData.endTime === 'string') {
+            endTimeAsDate = parseISO(bookingData.endTime);
+          } else if (bookingData.endTime && typeof bookingData.endTime.seconds === 'number') {
+            endTimeAsDate = new Timestamp(bookingData.endTime.seconds, bookingData.endTime.nanoseconds || 0).toDate();
+          } else {
+            console.warn(`[Dashboard] Unexpected endTime format for booking ${docSnap.id}:`, bookingData.endTime);
+            endTimeAsDate = new Date(); // Fallback
+          }
+          
+          let createdAtAsDate: Date;
+           if (bookingData.createdAt instanceof Timestamp) {
+            createdAtAsDate = bookingData.createdAt.toDate();
+          } else if (typeof bookingData.createdAt === 'string') {
+            createdAtAsDate = parseISO(bookingData.createdAt);
+          } else if (bookingData.createdAt && typeof bookingData.createdAt.seconds === 'number') {
+            createdAtAsDate = new Timestamp(bookingData.createdAt.seconds, bookingData.createdAt.nanoseconds || 0).toDate();
+          } else {
+             console.warn(`[Dashboard] Unexpected createdAt format for booking ${docSnap.id}:`, bookingData.createdAt);
+            createdAtAsDate = new Date(); // Fallback
+          }
+
+
           return {
             id: docSnap.id,
-            ...bookingData,
-            startTime: bookingData.startTime instanceof Timestamp ? bookingData.startTime.toDate() : new Date(),
-            endTime: bookingData.endTime instanceof Timestamp ? bookingData.endTime.toDate() : new Date(),
-            createdAt: bookingData.createdAt instanceof Timestamp ? bookingData.createdAt.toDate() : new Date(),
-          } as Booking;
+            resourceId: bookingData.resourceId,
+            userId: bookingData.userId,
+            startTime: startTimeAsDate,
+            endTime: endTimeAsDate,
+            createdAt: createdAtAsDate,
+            status: bookingData.status,
+            notes: bookingData.notes,
+            usageDetails: bookingData.usageDetails,
+            resourceName: resourceNameStr,
+          } as Booking & { resourceName?: string };
         });
         let resolvedBookings = await Promise.all(fetchedBookingsPromises);
+        // Filter out bookings where startTime might have passed by the time of rendering
+        resolvedBookings = resolvedBookings.filter(b => b.endTime >= new Date());
+        
+        console.log("[Dashboard] Processed upcoming bookings:", resolvedBookings);
         setUpcomingUserBookings(resolvedBookings);
-      } catch (error) {
-        console.error("Error fetching upcoming bookings:", error);
+      } catch (error: any) {
+        console.error("[Dashboard] Error fetching upcoming bookings:", error.toString(), error);
+        toast({
+          title: "Error Loading Your Bookings",
+          description: `Could not fetch your upcoming bookings: ${error.message}`,
+          variant: "destructive",
+        });
+        setUpcomingUserBookings([]); // Clear bookings on error
+      } finally {
+        setIsLoadingBookings(false);
       }
-      setIsLoadingBookings(false);
     } else {
+      console.log("[Dashboard] No current user, clearing upcoming bookings.");
       setUpcomingUserBookings([]);
       setIsLoadingBookings(false);
     }
-  }, [currentUser]);
+  }, [currentUser, toast]);
 
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
-  
+
   const getBookingStatusBadge = (status: Booking['status']) => {
     switch (status) {
       case 'Confirmed':
@@ -114,7 +188,7 @@ export default function DashboardPage() {
       case 'Cancelled':
         return <Badge className={cn("bg-gray-400 text-white hover:bg-gray-500 border-transparent")}><X className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
        case 'Waitlisted':
-         return <Badge className={cn("bg-purple-500 text-white hover:bg-purple-600 border-transparent")}>{status}</Badge>;
+         return <Badge className={cn("bg-purple-500 text-white hover:bg-purple-600 border-transparent")}><UserIconLucide className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -201,9 +275,9 @@ export default function DashboardPage() {
                   </TableHeader>
                   <TableBody>
                     {upcomingUserBookings.map((booking) => {
-                      const resource = frequentlyUsedResources.find(r => r.id === booking.resourceId);
-                      const resourceNameDisplay = resource?.name || 'Loading...'; 
-                      
+                      // Resource name is now part of the booking object from fetchDashboardData
+                      const resourceNameDisplay = booking.resourceName || 'Loading...';
+
                       return (
                         <TableRow key={booking.id}>
                           <TableCell className="font-medium">{resourceNameDisplay}</TableCell>
