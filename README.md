@@ -236,15 +236,21 @@ LabStation is a comprehensive web application designed to streamline the managem
               // Authenticated users can create bookings for themselves, with 'Pending' or 'Waitlisted' status.
               allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
                               && (request.resource.data.status == 'Pending' || request.resource.data.status == 'Waitlisted');
-                              // Removed: && !("createdAt" in request.resource.data); // Removed to allow serverTimestamp from client SDK
+                              // Removed: && !("createdAt" in request.resource.data); // Removed as it was causing issues with serverTimestamp
 
               // Users can cancel their own 'Pending' or 'Waitlisted' bookings.
+              // Users can cancel their own 'Confirmed' bookings.
               // Users can log usage ('usageDetails') for their own 'Confirmed' bookings if the booking is in the past.
               // Admins or Lab Managers can perform other updates (e.g., change status).
               allow update: if request.auth != null && (
                               // User cancelling their own pending/waitlisted booking
                               (resource.data.userId == request.auth.uid &&
                                (resource.data.status == 'Pending' || resource.data.status == 'Waitlisted') &&
+                               request.resource.data.status == 'Cancelled' &&
+                               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
+                              // User cancelling their own confirmed booking
+                              (resource.data.userId == request.auth.uid &&
+                               resource.data.status == 'Confirmed' &&
                                request.resource.data.status == 'Cancelled' &&
                                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])) ||
                               // User logging usage details for their past confirmed booking
@@ -322,19 +328,23 @@ LabStation is a comprehensive web application designed to streamline the managem
         ```
 
 6.  **Firestore Indexes:**
-    *   As you use the application, Firestore might prompt you in the browser console if specific queries require composite indexes for performance. These errors usually include a direct link to create the needed index in the Firebase console. Create them as needed. Common indexes you might need (or have already been prompted for):
-        *   `bookings` collection: `userId` (ASC), `startTime` (ASC)
-        *   `bookings` collection: `resourceId` (ASC), `status` (ASC), `startTime` (ASC) *(for conflict checks and resource-specific views)*
-        *   `bookings` collection: `status` (ASC), `startTime` (ASC) *(for booking request/approval views)*
-        *   `maintenanceRequests` collection: `dateReported` (DESC)
+    *   As you use the application, Firestore might prompt you in the browser console if specific queries require composite indexes for performance. These errors usually include a direct link to create the needed index in the Firebase console. Create them as needed. Common indexes you will likely need:
+        *   `users` collection: `role` (ASC), `name` (ASC) *(For querying users by role and sorting)*
+        *   `users` collection: `name` (ASC) *(For general user listing)*
+        *   `bookings` collection: `userId` (ASC), `startTime` (ASC) *(For user's own bookings list)*
+        *   `bookings` collection: `resourceId` (ASC), `status` (ASC), `startTime` (ASC) *(For conflict checks and resource-specific views)*
+        *   `bookings` collection: `status` (ASC), `startTime` (ASC) *(For booking request/approval views)*
+        *   `bookings` collection: `resourceId` (ASC), `createdAt` (ASC) *(For waitlist processing by resource)*
+        *   `maintenanceRequests` collection: `dateReported` (DESC) *(For general listing)*
         *   `maintenanceRequests` collection: `resourceId` (ASC), `dateReported` (DESC)
         *   `maintenanceRequests` collection: `status` (ASC), `dateReported` (DESC)
         *   `maintenanceRequests` collection: `assignedTechnicianId` (ASC), `dateReported` (DESC)
-        *   `auditLogs` collection: `timestamp` (DESC)
-        *   `users` collection: `role` (ASC), `name` (ASC) *(For querying technicians/admins etc.)*
-        *   `users` collection: `name` (ASC) *(For general user listing by admins/technicians)*
-        *   `notifications` collection: `userId` (ASC), `createdAt` (DESC)
-        *   `resources` collection: `name` (ASC)
+        *   `auditLogs` collection: `timestamp` (DESC) *(For listing audit logs)*
+        *   `notifications` collection: `userId` (ASC), `createdAt` (DESC) *(For user's notification list)*
+        *   `resources` collection: `name` (ASC) *(For general resource listing)*
+        *   `resourceTypes` collection: `name` (ASC) *(For listing resource types)*
+        *   `blackoutDates` collection: `date` (ASC) *(For listing blackout dates)*
+        *   `recurringBlackoutRules` collection: `name` (ASC) *(For listing recurring rules)*
 
 
 7.  **Run the Development Server:**
@@ -348,5 +358,7 @@ LabStation is a comprehensive web application designed to streamline the managem
 ## Deployment
 
 This application is configured to be easily deployable on platforms like [Vercel](https://vercel.com/) (which is recommended for Next.js projects). Connect your Git repository (GitHub, GitLab, Bitbucket) to Vercel, and it will typically auto-detect the Next.js settings. Remember to configure your Firebase environment variables (from your `.env.local` file, including the Admin SDK credentials) in Vercel's project settings.
+
+    
 
     
