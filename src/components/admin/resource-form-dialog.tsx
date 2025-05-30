@@ -22,7 +22,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Save, X, PlusCircle, Network, Info, Loader2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { labsList, resourceStatusesList } from '@/lib/app-constants';
+import { labsList, resourceStatusesList } from '@/lib/app-constants'; // resourceStatusesList now has updated values
 import { parseISO, format, isValid as isValidDateFn } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
@@ -34,7 +34,7 @@ const resourceFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, { message: 'Name cannot exceed 100 characters.' }),
   resourceTypeId: z.string().min(1, { message: 'Please select a resource type.' }),
   lab: z.enum(labsList as [string, ...string[]], { required_error: 'Please select a lab.' }),
-  status: z.enum(resourceStatusesList as [ResourceStatus, ...ResourceStatus[]], { required_error: 'Please select a status.'}),
+  status: z.enum(resourceStatusesList as [ResourceStatus, ...ResourceStatus[]], { required_error: 'Please select a status.'}), // Uses updated list
   description: z.string().max(500, { message: 'Description cannot exceed 500 characters.' }).optional().or(z.literal('')),
   imageUrl: z.string().url({ message: 'Please enter a valid URL for the image.' }).optional().or(z.literal('')),
   manufacturer: z.string().max(100).optional().or(z.literal('')),
@@ -83,11 +83,11 @@ export function ResourceFormDialog({
 
   const form = useForm<ResourceFormValues>({
     resolver: zodResolver(resourceFormSchema),
-    defaultValues: {
+    defaultValues: { // Will be overridden by resetForm
         name: '',
         resourceTypeId: '',
         lab: undefined,
-        status: 'Available',
+        status: 'Working', // Default new status
         description: '',
         imageUrl: '',
         manufacturer: '',
@@ -109,7 +109,7 @@ export function ResourceFormDialog({
         name: initialResource.name,
         resourceTypeId: initialResource.resourceTypeId,
         lab: initialResource.lab,
-        status: initialResource.status,
+        status: initialResource.status, // This will now be 'Working', 'Maintenance', or 'Broken'
         description: initialResource.description || '',
         imageUrl: initialResource.imageUrl || '',
         manufacturer: initialResource.manufacturer || '',
@@ -135,7 +135,7 @@ export function ResourceFormDialog({
         name: '',
         resourceTypeId: resourceTypes.length > 0 ? resourceTypes[0].id : '',
         lab: labsList.length > 0 ? labsList[0] : undefined,
-        status: 'Available',
+        status: 'Working', // Default for new resources
         description: '',
         imageUrl: '',
         manufacturer: '',
@@ -165,13 +165,13 @@ export function ResourceFormDialog({
     try {
         const processedData: ResourceFormValues = {
             ...data,
-            imageUrl: data.imageUrl || '', 
+            imageUrl: data.imageUrl || '',
             remoteAccess: data.remoteAccess ? {
                 ...data.remoteAccess,
                 port: data.remoteAccess.port === null || data.remoteAccess.port === undefined ? undefined : Number(data.remoteAccess.port),
             } : undefined,
         };
-        
+
         if (processedData.remoteAccess) {
             const ra = processedData.remoteAccess;
             const allEmptyOrInvalid = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && (ra.port === undefined || ra.port === null) && !ra.notes;
@@ -179,10 +179,6 @@ export function ResourceFormDialog({
                 processedData.remoteAccess = undefined;
             }
         }
-        
-      // For new resources, availability and unavailabilityPeriods are not set via this form.
-      // Firestore rules or backend logic should initialize them as empty arrays if needed.
-      // The form payload no longer includes availability.
       await onSave(processedData, initialResource?.id);
 
     } catch (error) {
@@ -334,8 +330,8 @@ export function ResourceFormDialog({
                     name="status"
                     render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Status <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || 'Available'} disabled={isSubmitting}>
+                        <FormLabel>Operational Status <span className="text-destructive">*</span></FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || 'Working'} disabled={isSubmitting}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
                             <SelectContent>
                             {resourceStatusesList.map(statusVal => (
@@ -450,15 +446,15 @@ export function ResourceFormDialog({
                              <FormField
                                 control={form.control}
                                 name="remoteAccess.port"
-                                render={({ field }) => ( 
+                                render={({ field }) => (
                                     <FormItem>
                                     <FormLabel>Port (Optional)</FormLabel>
                                     <FormControl><Input
                                         type="text"
                                         placeholder="e.g., 22, 3389"
                                         {...field}
-                                        value={field.value === null || field.value === undefined ? '' : String(field.value)} 
-                                        onChange={e => field.onChange(e.target.value)} 
+                                        value={field.value === null || field.value === undefined ? '' : String(field.value)}
+                                        onChange={e => field.onChange(e.target.value)}
                                         disabled={isSubmitting}
                                      /></FormControl>
                                     <FormMessage />

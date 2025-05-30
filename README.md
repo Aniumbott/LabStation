@@ -13,6 +13,7 @@ LabStation is a comprehensive web application designed to streamline the managem
     *   **Role-Based Access Control (RBAC):** Predefined roles (Admin, Lab Manager, Technician, Researcher) with UI elements and actions conditionally rendered based on user role.
 *   **Resource Catalog & Management:**
     *   Add, edit, view, and delete detailed information for lab resources (e.g., oscilloscopes, power supplies, soldering stations).
+    *   Resource operational status: 'Working', 'Maintenance', 'Broken'.
     *   Categorize resources using customizable **Resource Types**.
     *   Store manufacturer, model, serial number, purchase date, and general notes.
     *   Manage **Remote Host Integration** details (IP/DNS, protocol, credentials) for remotely accessible equipment.
@@ -24,7 +25,7 @@ LabStation is a comprehensive web application designed to streamline the managem
         *   Lab-wide specific blackout dates.
         *   Lab-wide weekly recurring unavailability rules.
     *   **Availability Scheduling:**
-        *   Admins/Lab Managers can define resource-specific unavailability periods (e.g., for maintenance).
+        *   Admins/Lab Managers can define resource-specific unavailability periods (e.g., for maintenance). Resource must be in 'Working' status to be bookable.
         *   Manage lab-wide **Blackout Dates** (specific holidays or closure days).
         *   Define lab-wide **Recurring Unavailability Rules** (e.g., lab closed on weekends).
     *   **Queue Management (Basic):**
@@ -168,7 +169,7 @@ LabStation is a comprehensive web application designed to streamline the managem
             function isTechnician(userId) {
               return get(/databases/$(database)/documents/users/$(userId)).data.role == 'Technician';
             }
-            
+
             // Helper function to check if the request is from the owner of the document
             function isOwner(userId) {
               return request.auth.uid == userId;
@@ -189,7 +190,7 @@ LabStation is a comprehensive web application designed to streamline the managem
                             isOwner(userId) ||
                             isAdmin(request.auth.uid) ||
                             isTechnician(request.auth.uid) ||
-                            isAdminOrLabManager(request.auth.uid) 
+                            isAdminOrLabManager(request.auth.uid)
                           );
 
               // Admins and Technicians can list users (e.g., for admin panels or technician assignment).
@@ -220,6 +221,7 @@ LabStation is a comprehensive web application designed to streamline the managem
             }
 
             // RESOURCES Collection
+            // Resource status can be 'Working', 'Maintenance', 'Broken'
             match /resources/{resourceId} {
               // All authenticated users can read and list resources.
               allow read, list: if request.auth != null;
@@ -239,11 +241,13 @@ LabStation is a comprehensive web application designed to streamline the managem
                              isTechnician(request.auth.uid)             // Technician can also read any booking
                             );
 
-              // Authenticated users can create bookings for themselves. Status must be 'Pending' or 'Waitlisted'.
+              // Authenticated users can create bookings for themselves.
+              // Status must be 'Pending' or 'Waitlisted' on creation.
               // Client should not send 'createdAt'.
               allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
                               && (request.resource.data.status == 'Pending' || request.resource.data.status == 'Waitlisted');
-                              // Removed: && !("createdAt" in request.resource.data); // This caused issues with serverTimestamp()
+                              // Removed: && !("createdAt" in request.resource.data); as serverTimestamp interaction with rules can be tricky.
+                              // Client code now ensures serverTimestamp() is used and client does not send createdAt.
 
               // Users can cancel their own 'Pending', 'Waitlisted', or 'Confirmed' bookings.
               // Users can log usage ('usageDetails') for their own 'Confirmed' bookings if the booking is in the past.
@@ -336,7 +340,7 @@ LabStation is a comprehensive web application designed to streamline the managem
 6.  **Firestore Indexes:**
     *   **Note on Single-Field Indexes:** Firestore automatically creates single-field indexes for every field in your documents (both ascending and descending). You do not need to manually create these. These automatic indexes cover simple queries like filtering on one field or ordering by one field.
     *   **Required Composite Indexes:** For more complex queries, you must manually create composite indexes in the Firebase console. As you use the application, Firestore might prompt you if a specific query requires a new composite index; these errors usually include a direct link to create it. Firestore may also add `__name__` (Ascending or Descending) as the last field to its suggested indexes for tie-breaking and consistency; this is normal and you should typically accept it if the console suggests it.
-    *   **Proactively create the following essential COMPOSITE indexes in the Firebase console:**
+    *   **Proactively create the following essential COMPOSITE indexes in the Firebase console (ensure these match the needs of your application queries):**
 
         *   **`users` collection:**
             *   Fields: `role` (Ascending), `name` (Ascending)
@@ -346,7 +350,7 @@ LabStation is a comprehensive web application designed to streamline the managem
             *   Fields: `userId` (Ascending), `startTime` (Ascending)
                 *   *Purpose: For users to view their own bookings, sorted by start time.*
             *   Fields: `userId` (Ascending), `startTime` (Ascending), `endTime` (Ascending)
-                *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('endTime', '>=', ...).orderBy('startTime', 'asc')`). Firestore will likely suggest this order.*
+                 *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('endTime', '>=', ...).orderBy('startTime', 'asc')`). Firestore's error link will confirm the exact order, often `userId ASC, startTime ASC, endTime ASC` or `userId ASC, endTime ASC, startTime ASC`.*
             *   Fields: `resourceId` (Ascending), `status` (Ascending), `startTime` (Ascending)
                 *   *Purpose: For viewing bookings for a specific resource, filtered by status, and ordered by start time (e.g., on admin booking requests page if filtered by resource).*
             *   Fields: `resourceId` (Ascending), `status` (Ascending), `endTime` (Ascending), `startTime` (Ascending)
@@ -365,7 +369,7 @@ LabStation is a comprehensive web application designed to streamline the managem
                 *   *Purpose: For filtering maintenance requests by status and sorting them by report date.*
             *   Fields: `assignedTechnicianId` (Ascending), `dateReported` (Descending)
                 *   *Purpose: For viewing maintenance requests assigned to a specific technician, sorted by report date.*
-            *   *(Note: Simple `orderBy("dateReported", "desc")` for all maintenance requests is covered by automatic single-field index.)*
+            *   *(Note: Simple `orderBy("dateReported", "desc")` for all maintenance requests is covered by automatic single-field index unless combined with other filters that would necessitate a composite index.)*
 
         *   **`notifications` collection:**
             *   Fields: `userId` (Ascending), `createdAt` (Descending)
@@ -373,8 +377,7 @@ LabStation is a comprehensive web application designed to streamline the managem
 
         *   **`auditLogs` collection:**
             *   *(Note: Simple `orderBy("timestamp", "desc")` for all logs is covered by automatic single-field index.)*
-
-        *   Other collections like `resourceTypes`, `blackoutDates`, `recurringBlackoutRules` are generally small or queried simply. If Firestore prompts for an index for these due to specific query patterns, create it as suggested.
+        *   **A Note on Index Creation Links:** If Firestore errors with "The query requires an index" and provides a link, **use that link**. It will pre-configure the index exactly as Firestore's query planner needs it, including the correct field order and ascending/descending options.
 
 7.  **Run the Development Server:**
     ```bash

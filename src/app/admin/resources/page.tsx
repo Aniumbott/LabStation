@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, X, CalendarPlus, CheckCircle2 } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { labsList } from '@/lib/app-constants';
+import { labsList } from '@/lib/app-constants'; // resourceStatusesList removed as it's for the new statuses
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -42,7 +42,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, Timestamp as FirestoreTimestamp } from 'date-fns';
-import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
+import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils'; // getResourceStatusBadge will use new statuses
 import { db } from '@/lib/firebase';
 import {
   collection,
@@ -93,13 +93,13 @@ export default function AdminResourcesPage() {
       const resourcesSnapshot = await getDocs(resourcesQuery);
       const fetchedResourcesPromises = resourcesSnapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
-        
+
         return {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
           lab: data.lab || (labsList.length > 0 ? labsList[0] : 'Electronics Lab 1'),
-          status: data.status || 'Available',
+          status: data.status || 'Working', // Default to 'Working' for new status system
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
           manufacturer: data.manufacturer,
@@ -113,11 +113,10 @@ export default function AdminResourcesPage() {
             hostname: data.remoteAccess.hostname,
             protocol: data.remoteAccess.protocol || '',
             username: data.remoteAccess.username,
-            port: data.remoteAccess.port ?? undefined, 
+            port: data.remoteAccess.port ?? undefined,
             notes: data.remoteAccess.notes,
           } : undefined,
           allowQueueing: data.allowQueueing ?? false,
-          // availability field removed from here
           unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2,9)), startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [],
           lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
@@ -191,9 +190,8 @@ export default function AdminResourcesPage() {
         if (isUnavailabilityOverlap) {
             dateMatch = false;
         } else {
-            // Resource is considered available if status is 'Available' and not in an unavailability period.
-            // Lab-wide blackouts are not checked here for simplicity of this filter.
-            dateMatch = resource.status === 'Available';
+            // Resource is considered available for booking if its operational status is 'Working' and not in an unavailability period.
+            dateMatch = resource.status === 'Working';
         }
       }
       return searchMatch && typeMatch && labMatch && dateMatch;
@@ -268,7 +266,7 @@ export default function AdminResourcesPage() {
           hostname: data.remoteAccess.hostname || null,
           protocol: data.remoteAccess.protocol || '',
           username: data.remoteAccess.username || null,
-          port: data.remoteAccess.port ?? null, 
+          port: data.remoteAccess.port ?? null,
           notes: data.remoteAccess.notes || null,
         }
       : undefined;
@@ -277,7 +275,7 @@ export default function AdminResourcesPage() {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
       lab: data.lab,
-      status: data.status,
+      status: data.status, // Will be 'Working', 'Maintenance', or 'Broken'
       description: data.description || '',
       imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
       manufacturer: data.manufacturer || null,
@@ -290,7 +288,7 @@ export default function AdminResourcesPage() {
       allowQueueing: data.allowQueueing ?? editingResource?.allowQueueing ?? false,
       lastUpdatedAt: serverTimestamp(),
     };
-    
+
     Object.keys(firestorePayload).forEach(key => {
         if (firestorePayload[key] === undefined && key !== 'remoteAccess' && key !== 'allowQueueing') {
             firestorePayload[key] = null;
@@ -305,13 +303,13 @@ export default function AdminResourcesPage() {
         const ra = firestorePayload.remoteAccess;
         const allRemoteAccessEffectivelyNull = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && ra.port === null && !ra.notes;
         if (allRemoteAccessEffectivelyNull) {
-            firestorePayload.remoteAccess = undefined; 
+            firestorePayload.remoteAccess = undefined;
         }
     }
 
     const isEditing = !!editingResource;
     const auditAction = isEditing ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
-    const auditDetails = `Resource '${data.name}' ${isEditing ? 'updated' : 'created'} by ${currentUser.name}.`;
+    const auditDetails = `Resource '${data.name}' ${isEditing ? 'updated' : 'created'} by ${currentUser.name}. Status set to ${data.status}.`;
 
     setIsLoadingData(true);
     try {
@@ -324,10 +322,9 @@ export default function AdminResourcesPage() {
         const newResourceData = {
             ...firestorePayload,
             createdAt: serverTimestamp(),
-            // availability: [], // Removed
-            unavailabilityPeriods: [], 
+            unavailabilityPeriods: [],
         };
-        if (!isEditing && newResourceData.hasOwnProperty('lastUpdatedAt')) { 
+        if (!isEditing && newResourceData.hasOwnProperty('lastUpdatedAt')) {
           delete newResourceData.lastUpdatedAt;
         }
         const docRef = await addDoc(collection(db, "resources"), newResourceData);
@@ -458,6 +455,7 @@ export default function AdminResourcesPage() {
                               classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
                           />
                         </div>
+                        <p className="text-xs text-muted-foreground mt-1">Filters for resources with operational status 'Working' on the selected date, excluding defined unavailability.</p>
                     </div>
                   </div>
                 </ScrollArea>
@@ -521,7 +519,7 @@ export default function AdminResourcesPage() {
                       asChild
                       size="sm"
                       variant="default"
-                      disabled={resource.status !== 'Available'}
+                      disabled={resource.status !== 'Working'} // Only bookable if 'Working'
                       className="h-8 text-xs"
                     >
                       <Link href={`/bookings?resourceId=${resource.id}${activeSelectedDate ? `&date=${format(activeSelectedDate, 'yyyy-MM-dd')}`: ''}`}>

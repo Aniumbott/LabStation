@@ -22,18 +22,17 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { Booking, Resource, RoleName, BookingUsageDetails } from '@/types'; // Added BookingUsageDetails
-// Removed BookingUsageOutcomes as it's now in types/index.ts
+import type { Booking, Resource, RoleName, BookingUsageDetails, ResourceStatus } from '@/types';
 import { format, parseISO, isValid as isValidDateFn, startOfDay, isSameDay, set, isBefore, getDay, startOfToday, compareAsc, addDays as dateFnsAddDays, isSameMonth } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn, formatDateSafe } from '@/lib/utils';
 import { BookingDetailsDialog } from '@/components/bookings/booking-details-dialog';
-import { Separator } from '@/components/ui/separator';
+import { Separator } from '@/components/ui/separator'; // Corrected import path
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { bookingStatusesForFilter, bookingStatusesForForm } from '@/lib/app-constants';
-import { addNotification, addAuditLog, processWaitlistForResource, createBooking_SA } from '@/lib/firestore-helpers'; // Added createBooking_SA
+import { addNotification, addAuditLog, processWaitlistForResource, createBooking_SA } from '@/lib/firestore-helpers';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -162,7 +161,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         return {
           id: docSnap.id,
           name: data.name,
-          status: data.status,
+          status: data.status as ResourceStatus,
           lab: data.lab,
           resourceTypeId: data.resourceTypeId,
           allowQueueing: data.allowQueueing ?? false,
@@ -436,18 +435,17 @@ function BookingsPageContent({}: BookingsPageContentProps) {
 
 
  const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
-    console.log("[handleSaveBooking V8] Function called. formData:", formData);
-
-    const directAuthUser = auth.currentUser;
-    if (!directAuthUser || !directAuthUser.uid) {
-      toast({ title: "Authentication Error", description: "User not authenticated. Please log in.", variant: "destructive" });
-      setIsLoadingBookings(false);
-      return;
+    console.log("[handleSaveBooking V8] Function called.");
+    const directAuthUserForSave = auth.currentUser; // Get fresh auth state
+    if (!directAuthUserForSave || !directAuthUserForSave.uid) {
+        toast({ title: "Authentication Error", description: "User not authenticated. Please log in.", variant: "destructive" });
+        setIsLoadingBookings(false); // Ensure loading state is released
+        return;
     }
-    const currentUserId = directAuthUser.uid;
-    // Ensure currentUser from context exists for name, fallback to email or 'User'
-    const currentUserName = currentUser?.name || directAuthUser.displayName || directAuthUser.email || 'User';
+    const currentUserId = directAuthUserForSave.uid;
+    const currentUserName = currentUser?.name || directAuthUserForSave.displayName || directAuthUserForSave.email || 'User';
     console.log(`[handleSaveBooking V8] Acting user: ID=${currentUserId}, Name=${currentUserName}`);
+
 
     if (!formData.resourceId) {
       toast({ title: "Resource Not Selected", description: "Please select a resource for the booking.", variant: "destructive" });
@@ -458,6 +456,17 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       toast({ title: "Resource Not Found", description: "The selected resource could not be found.", variant: "destructive" });
       return;
     }
+    // Operational status check
+    if (selectedResource.status !== 'Working') {
+      toast({
+        title: "Resource Not Operational",
+        description: `The resource "${selectedResource.name}" is currently ${selectedResource.status.toLowerCase()} and cannot be booked.`,
+        variant: "destructive",
+        duration: 7000,
+      });
+      return;
+    }
+
 
     const finalStartTime = set(formData.bookingDate, {
       hours: parseInt(formData.startTime.split(':')[0]),
@@ -501,25 +510,17 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       for (const period of selectedResource.unavailabilityPeriods) {
         if (!period.startDate || !period.endDate) continue;
         const unavailabilityStart = startOfDay(parseISO(period.startDate));
-        const unavailabilityEnd = dateFnsAddDays(startOfDay(parseISO(period.endDate)), 1); // End of day
+        const unavailabilityEnd = dateFnsAddDays(startOfDay(parseISO(period.endDate)), 1); // End date is inclusive
         if ((finalStartTime >= unavailabilityStart && finalStartTime < unavailabilityEnd) || (finalEndTime > unavailabilityStart && finalEndTime <= unavailabilityEnd) || (finalStartTime <= unavailabilityStart && finalEndTime >= unavailabilityEnd)) {
-          toast({ title: "Resource Unavailable", description: `${selectedResource.name} is unavailable. Reason: ${period.reason || 'Scheduled Maintenance'}.`, variant: "destructive", duration: 7000 });
+          toast({ title: "Resource Unavailable", description: `${selectedResource.name} is unavailable due to: ${period.reason || 'Scheduled Unavailability'}.`, variant: "destructive", duration: 7000 });
           return;
         }
       }
     }
-    
-    if (selectedResource.status !== 'Available' && isNewBooking && formData.status !== 'Waitlisted') {
-      toast({ title: "Resource Not Available", description: `${selectedResource.name} is currently ${selectedResource.status.toLowerCase()} and cannot be booked.`, variant: "destructive" });
-      return;
-    }
-    
+
     let finalStatus: Booking['status'] = isNewBooking ? 'Pending' : (formData.status || 'Pending');
     let conflictingBookingFound: Booking | undefined = undefined;
 
-    // Perform conflict check for new bookings OR if editing and times have changed significantly
-    // For simplicity in this iteration, let's always conflict check for new bookings.
-    // For edits, a more complex check would be needed if times/resource change.
     if (isNewBooking) {
       setIsLoadingBookings(true);
       try {
@@ -535,7 +536,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         const existingBookingsSnapshot = await getDocs(q);
         if (!existingBookingsSnapshot.empty) {
            conflictingBookingFound = existingBookingsSnapshot.docs[0].data() as Booking;
-           conflictingBookingFound.id = existingBookingsSnapshot.docs[0].id; // Assign ID
+           conflictingBookingFound.id = existingBookingsSnapshot.docs[0].id;
         }
         console.log(`[handleSaveBooking V8] Conflict check found ${existingBookingsSnapshot.docs.length} bookings. Conflicting:`, conflictingBookingFound);
       } catch (e: any) {
@@ -544,7 +545,6 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         setIsLoadingBookings(false);
         return;
       }
-      // isLoadingBookings will be set to false in the final `finally` block
     }
 
     if (conflictingBookingFound && finalStatus !== 'Waitlisted') {
@@ -553,60 +553,56 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         toast({ title: "Added to Waitlist", description: `This time slot is currently booked. Your request for ${selectedResource.name} has been added to the waitlist.` });
       } else {
         let conflictingUserName = 'another user';
-         if (conflictingBookingFound?.userId) { // Check if conflictingBookingFound is defined
+         if (conflictingBookingFound?.userId) {
             try {
                 const userDocSnap = await getDoc(doc(db, "users", conflictingBookingFound.userId));
                 if (userDocSnap.exists()) conflictingUserName = userDocSnap.data()?.name || 'another user';
             } catch (userFetchError) { console.error("[handleSaveBooking V8] Error fetching conflicting user's name:", userFetchError); }
         }
         toast({ title: "Booking Conflict", description: `${selectedResource.name} is already booked by ${conflictingUserName}. This resource does not allow queueing.`, variant: "destructive", duration: 7000 });
-        setIsLoadingBookings(false);
+        setIsLoadingBookings(false); // Release loading state as we are returning
         return;
       }
     }
 
     try {
       setIsLoadingBookings(true);
-      let docRefId: string | undefined = formData.id;
 
       if (isNewBooking) {
-        const bookingDataForServerAction = {
+        const bookingPayloadForServerAction = {
           resourceId: formData.resourceId!,
-          startTime: finalStartTime, // JS Date
-          endTime: finalEndTime,     // JS Date
+          startTime: finalStartTime,
+          endTime: finalEndTime,
           status: finalStatus,
           notes: formData.notes || '',
         };
-        
+
         if (!currentUser || !currentUser.id || !currentUser.name) {
           toast({ title: "Error", description: "User details missing for server action.", variant: "destructive" });
           throw new Error("User details missing for createBooking_SA call.");
         }
-        
-        console.log("[handleSaveBooking V8] Calling createBooking_SA server action. Payload:", JSON.stringify(bookingDataForServerAction, null, 2), "Acting User:", currentUser);
-        
+
+        console.log("[handleSaveBooking V8] Calling createBooking_SA server action. Payload:", JSON.stringify(bookingPayloadForServerAction, null, 2), "Acting User:", currentUser);
+        let newBookingId: string | undefined;
+
         try {
-          docRefId = await createBooking_SA(
-            bookingDataForServerAction,
-            { id: currentUser.id, name: currentUser.name }
-          );
-          toast({ title: "Success", description: `Booking ${finalStatus === 'Pending' ? 'created and submitted for approval' : 'added to waitlist'}.` });
+          newBookingId = await createBooking_SA(bookingPayloadForServerAction, { id: currentUser.id, name: currentUser.name });
+          toast({ title: "Success", description: `Booking request ${finalStatus === 'Pending' ? 'submitted for approval' : 'added to waitlist'}.` });
         } catch (serverActionError: any) {
             console.error("[handleSaveBooking V8] Server action createBooking_SA failed:", serverActionError.toString(), serverActionError);
             toast({ title: "Booking Creation Failed", description: `Server action failed: ${serverActionError.message || 'Please try again.'}`, variant: "destructive" });
             setIsLoadingBookings(false);
-            return; // Stop further execution if server action fails
+            return;
         }
 
-        // Notifications for new booking (client-side after successful server action)
-        if (finalStatus === 'Pending' && docRefId) {
-           console.log("[handleSaveBooking V8] Preparing to send 'Pending Approval' notifications to Admins/Lab Managers.");
+        if (finalStatus === 'Pending' && newBookingId) {
+          console.log("[handleSaveBooking V8] Preparing to send 'Pending Approval' notifications to Admins/Lab Managers.");
           try {
             const adminUsersQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Lab Manager']), orderBy('name', 'asc'));
             const adminSnapshot = await getDocs(adminUsersQuery);
             const notificationPromises = adminSnapshot.docs.map(adminDoc => {
-              if (adminDoc.id !== currentUserId) { // Don't notify self
-                return addNotification(adminDoc.id, 'New Booking Request', `Booking for ${selectedResource.name} by ${currentUserName} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`, 'booking_pending_approval', `/admin/booking-requests?bookingId=${docRefId}`);
+              if (adminDoc.id !== currentUserId) { // currentUserId is from the top of the function
+                return addNotification(adminDoc.id, 'New Booking Request', `Booking for ${selectedResource.name} by ${currentUserName} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`, 'booking_pending_approval', `/admin/booking-requests?bookingId=${newBookingId}`);
               }
               return Promise.resolve();
             });
@@ -616,13 +612,12 @@ function BookingsPageContent({}: BookingsPageContentProps) {
             console.error("[handleSaveBooking V8] Error sending 'Pending Approval' notifications to admins:", adminNotificationError);
             toast({ title: "Admin Notification Failed", description: "Booking created, but failed to notify admins. Check console.", variant: "destructive" });
           }
-        } else if (finalStatus === 'Waitlisted' && docRefId) {
+        } else if (finalStatus === 'Waitlisted' && newBookingId) {
            console.log("[handleSaveBooking V8] Preparing to send 'Waitlisted' notification to user.");
           try {
-            await addNotification(currentUserId, 'Added to Waitlist', `Your booking request for ${selectedResource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`, 'booking_waitlisted', `/bookings?bookingId=${docRefId}`);
+            await addNotification(currentUserId, 'Added to Waitlist', `Your booking request for ${selectedResource.name} on ${format(finalStartTime, 'MMM dd, HH:mm')} has been added to the waitlist.`, 'booking_waitlisted', `/bookings?bookingId=${newBookingId}`);
             console.log("[handleSaveBooking V8] 'Waitlisted' notification sent to user.");
-          } catch (waitlistNotificationError: any)
-          {
+          } catch (waitlistNotificationError: any) {
             console.error("[handleSaveBooking V8] Error sending 'Waitlisted' notification to user:", waitlistNotificationError);
             toast({ title: "Waitlist Notification Failed", description: "Failed to send waitlist confirmation. Check console.", variant: "destructive" });
           }
@@ -632,20 +627,17 @@ function BookingsPageContent({}: BookingsPageContentProps) {
           resourceId: formData.resourceId!,
           startTime: Timestamp.fromDate(finalStartTime),
           endTime: Timestamp.fromDate(finalEndTime),
-          status: formData.status || 'Pending',
+          status: formData.status || 'Pending', // Keep existing status if not changed by form
           notes: formData.notes || '',
+          // Retain createdAt if it exists on the original booking
+          createdAt: currentBooking?.createdAt ? Timestamp.fromDate(currentBooking.createdAt) : serverTimestamp(),
         };
-        if (formData.createdAt && formData.createdAt instanceof Date) {
-          bookingDataToUpdate.createdAt = Timestamp.fromDate(formData.createdAt);
-        } else if (currentBooking?.createdAt && currentBooking.createdAt instanceof Date) {
-          bookingDataToUpdate.createdAt = Timestamp.fromDate(currentBooking.createdAt);
-        }
-        
+
         console.log("[handleSaveBooking V8] Preparing to update existing booking. Payload:", JSON.stringify(bookingDataToUpdate, null, 2));
         const bookingDocRef = doc(db, "bookings", formData.id);
         await updateDoc(bookingDocRef, bookingDataToUpdate);
         toast({ title: "Success", description: "Booking updated successfully." });
-        
+
         if (currentUser && currentUser.id && currentUser.name) {
            try {
                 await addAuditLog(currentUser.id, currentUser.name, 'BOOKING_UPDATED', { entityType: 'Booking', entityId: formData.id, details: `Booking for '${selectedResource.name}' updated by ${currentUser.name}. Status: ${bookingDataToUpdate.status}.` });
@@ -655,9 +647,9 @@ function BookingsPageContent({}: BookingsPageContentProps) {
             }
         }
       }
-      await fetchAllBookingsForUser();
-      handleDialogClose(false);
-    } catch (error: any) {
+    await fetchAllBookingsForUser();
+    handleDialogClose(false);
+  } catch (error: any) { // Catch block for the entire handleSaveBooking function's try
       console.error("[handleSaveBooking V8] Outer catch block error:", error.toString(), error);
       toast({
           title: "Operation Failed",
@@ -672,12 +664,12 @@ function BookingsPageContent({}: BookingsPageContentProps) {
 
   const handleCancelBookingLocal = useCallback(async (bookingId: string) => {
     const directAuthUser = auth.currentUser;
-    if (!directAuthUser || !directAuthUser.uid || !currentUser?.name) { // Check currentUser.name from context for logging
+    if (!directAuthUser || !directAuthUser.uid || !currentUser?.name) {
         toast({ title: "Authentication Error", description: "Cannot cancel booking. User not fully authenticated or name missing.", variant: "destructive" });
         return;
     }
     const currentUserId = directAuthUser.uid;
-    const currentUserName = currentUser.name; // Use name from context
+    const currentUserName = currentUser.name;
 
 
     const bookingToCancel = allUserBookings.find(b => b.id === bookingId);
@@ -701,14 +693,14 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         await addAuditLog(currentUserId, currentUserName, 'BOOKING_CANCELLED', { entityType: 'Booking', entityId: bookingId, details: `Booking for '${resourceNameForLog}' cancelled by user ${currentUserName}.` });
       } catch (auditError: any) { console.error("Error adding cancellation audit log:", auditError); }
 
-      if ((originalStatus === 'Confirmed' || originalStatus === 'Pending') && bookingToCancel.resourceId) {
-        console.log(`[BookingsPage/handleCancelBookingLocal] Processing waitlist for resource ${bookingToCancel.resourceId} due to cancellation of ${originalStatus} booking ${bookingId}.`);
+      if ((originalStatus === 'Confirmed') && bookingToCancel.resourceId) {
+        console.log(`[BookingsPage/handleCancelBookingLocal] Processing waitlist for resource ${bookingToCancel.resourceId} due to CANCELLATION of CONFIRMED booking ${bookingId}.`);
         try {
             await processWaitlistForResource(
                 bookingToCancel.resourceId,
-                new Date(bookingToCancel.startTime), // Ensure these are Date objects
+                new Date(bookingToCancel.startTime),
                 new Date(bookingToCancel.endTime),
-                originalStatus === 'Confirmed' ? 'user_cancel_confirmed' : 'user_cancel_pending' // Differentiate trigger
+                'user_cancel_confirmed'
             );
             console.log(`[BookingsPage/handleCancelBookingLocal] Waitlist processing initiated for resource ${bookingToCancel.resourceId}.`);
         } catch (waitlistError: any) {
@@ -876,7 +868,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
                             <DialogDescription>Refine your list of bookings.</DialogDescription>
                         </DialogHeader>
                         <Separator className="my-4" />
-                        <ScrollArea className="max-h-[65vh] pr-2"> {/* Added ScrollArea */}
+                        <ScrollArea className="max-h-[65vh] pr-2">
                             <div className="space-y-6 py-4 px-1">
                                 <div>
                                     <Label htmlFor="bookingCalendarDialogDate">Filter by Specific Date (Optional)</Label>
@@ -943,7 +935,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
                                     </div>
                                 </div>
                             </div>
-                        </ScrollArea> {/* End ScrollArea */}
+                        </ScrollArea>
                         <DialogFooter className="pt-6 border-t mt-4">
                             <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                                 <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
@@ -1265,7 +1257,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
         const currentEndTimeParts = currentEndTimeStr.split(':');
         const currentEndTimeHours = parseInt(currentEndTimeParts[0]);
         const currentEndTimeMinutes = parseInt(currentEndTimeParts[1]);
-        
+
         if (!isNaN(currentEndTimeHours) && !isNaN(currentEndTimeMinutes)) {
             newEndTimeDt = set(new Date(currentBookingDate), { hours: currentEndTimeHours, minutes: currentEndTimeMinutes });
             if (newEndTimeDt <= newStartTimeDt) {
@@ -1368,8 +1360,8 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
                     </FormControl>
                     <SelectContent>
                       {allAvailableResources.map(resource => (
-                        <SelectItem key={resource.id} value={resource.id} disabled={resource.status !== 'Available' && resource.id !== initialData?.resourceId}>
-                          {resource.name} ({resource.status === 'Available' ? 'Available' : resource.status})
+                        <SelectItem key={resource.id} value={resource.id} disabled={resource.status !== 'Working' && resource.id !== initialData?.resourceId}>
+                          {resource.name} ({resource.status === 'Working' ? 'Working' : resource.status})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1466,6 +1458,8 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
         </DialogFooter>
       </form>
     </Form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1476,3 +1470,5 @@ export default function BookingsPage() {
     </Suspense>
   );
 }
+
+    

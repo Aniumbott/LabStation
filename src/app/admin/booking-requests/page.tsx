@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter, Clock, Info, X, Loader2, User as UserIcon, Package as ResourceIcon, CheckCircle2 } from 'lucide-react';
-import type { Booking, Resource, User } from '@/types';
+import type { Booking, Resource, User, ResourceStatus } from '@/types'; // Added ResourceStatus
 import { addNotification, addAuditLog, processWaitlistForResource } from '@/lib/firestore-helpers';
 import { useAuth } from '@/components/auth-context';
 import {
@@ -41,7 +41,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { cn, formatDateSafe } from '@/lib/utils';
 import { db, auth } from '@/lib/firebase';
-import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy, Timestamp, serverTimestamp } from 'firebase/firestore';
 
 
 const bookingStatusesForApprovalFilter: Array<'all' | 'Pending' | 'Waitlisted'> = ['all', 'Pending', 'Waitlisted'];
@@ -172,11 +172,9 @@ export default function BookingRequestsPage() {
       toast({ title: 'Booking Approved', description: `Booking for "${bookingToUpdate.resourceName || 'Unknown Resource'}" by ${bookingToUpdate.userName || 'Unknown User'} has been confirmed.`});
 
       try {
-        console.log(`[BookingRequestsPage/handleApproveBooking] About to call addAuditLog. Admin: ${loggedInUserFromContext.name} (${loggedInUserFromContext.id})`);
         await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_APPROVED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} approved.`});
-        console.log(`[BookingRequestsPage/handleApproveBooking] Successfully called addAuditLog.`);
       } catch (auditError: any) {
-          console.error("[BookingRequestsPage/handleApproveBooking] Error calling addAuditLog:", auditError.toString());
+          console.error("[BookingRequestsPage/handleApproveBooking] Error adding audit log:", auditError.toString());
           toast({
               title: "Audit Log Failed",
               description: `Booking approved, but audit log failed: ${auditError.message || auditError.toString()}`,
@@ -185,7 +183,6 @@ export default function BookingRequestsPage() {
       }
 
       if (bookingToUpdate.userId && bookingToUpdate.resourceName && bookingToUpdate.startTime) {
-        console.log(`[BookingRequestsPage/handleApproveBooking] Preparing to send 'Booking Confirmed' notification with params:`, {userId:bookingToUpdate.userId, title:'Booking Confirmed', type:'booking_confirmed', linkTo:`/bookings?bookingId=${bookingToUpdate.id}`});
         try {
           await addNotification(
             bookingToUpdate.userId,
@@ -194,7 +191,6 @@ export default function BookingRequestsPage() {
             'booking_confirmed',
             `/bookings?bookingId=${bookingToUpdate.id}`
           );
-          console.log(`[BookingRequestsPage/handleApproveBooking] Successfully called addNotification for userId: ${bookingToUpdate.userId}`);
         } catch (notificationError: any) {
           console.error(`[BookingRequestsPage/handleApproveBooking] Error calling addNotification for userId ${bookingToUpdate.userId}:`, notificationError.toString());
           toast({
@@ -206,6 +202,7 @@ export default function BookingRequestsPage() {
       } else {
         console.warn("[BookingRequestsPage/handleApproveBooking] Skipping notification: Missing userId, resourceName or startTime for the booking being approved.");
       }
+      // Removed automatic resource status update to 'Booked' as per new status model
       await fetchBookingRequestsAndRelatedData();
     } catch (error: any) {
       console.error("Error approving booking (main try-catch):", error.toString());
@@ -233,11 +230,9 @@ export default function BookingRequestsPage() {
       toast({ title: 'Booking Rejected', description: `Booking for "${bookingToUpdate.resourceName || 'Unknown Resource'}" by ${bookingToUpdate.userName || 'Unknown User'} has been cancelled.`, variant: 'destructive'});
 
       try {
-        console.log(`[BookingRequestsPage/handleRejectBooking] About to call addAuditLog. Admin: ${loggedInUserFromContext.name} (${loggedInUserFromContext.id})`);
         await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_REJECTED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} rejected/cancelled.`});
-        console.log(`[BookingRequestsPage/handleRejectBooking] Successfully called addAuditLog.`);
       } catch (auditError: any) {
-          console.error("[BookingRequestsPage/handleRejectBooking] Error calling addAuditLog:", auditError.toString());
+          console.error("[BookingRequestsPage/handleRejectBooking] Error adding audit log:", auditError.toString());
           toast({
               title: "Audit Log Failed",
               description: `Booking rejected, but audit log failed: ${auditError.message || auditError.toString()}`,
@@ -246,7 +241,6 @@ export default function BookingRequestsPage() {
       }
 
       if (bookingToUpdate.userId && bookingToUpdate.resourceName && bookingToUpdate.startTime) {
-         console.log(`[BookingRequestsPage/handleRejectBooking] Preparing to send 'Booking Rejected' notification with params:`, {userId:bookingToUpdate.userId, title:'Booking Rejected', type:'booking_rejected', linkTo:`/bookings?bookingId=${bookingToUpdate.id}`});
         try {
           await addNotification(
             bookingToUpdate.userId,
@@ -255,7 +249,6 @@ export default function BookingRequestsPage() {
             'booking_rejected',
             `/bookings?bookingId=${bookingToUpdate.id}`
           );
-          console.log(`[BookingRequestsPage/handleRejectBooking] Successfully called addNotification for userId: ${bookingToUpdate.userId}`);
         } catch (notificationError: any) {
           console.error(`[BookingRequestsPage/handleRejectBooking] Error calling addNotification for userId ${bookingToUpdate.userId}:`, notificationError.toString());
           toast({
@@ -269,14 +262,14 @@ export default function BookingRequestsPage() {
       }
 
       // Process waitlist
-      if (bookingToUpdate.status === 'Pending' || bookingToUpdate.status === 'Confirmed') { // Only process if a pending/confirmed slot was freed
-        console.log(`[BookingRequestsPage/handleRejectBooking] Processing waitlist for resource ${bookingToUpdate.resourceId} due to rejection/cancellation of booking ${bookingId}.`);
+      if (bookingToUpdate.status === 'Pending') { // Only process if a pending slot was freed by admin
+        console.log(`[BookingRequestsPage/handleRejectBooking] Processing waitlist for resource ${bookingToUpdate.resourceId} due to rejection/cancellation of PENDING booking ${bookingId}.`);
         try {
             await processWaitlistForResource(
                 bookingToUpdate.resourceId,
-                new Date(bookingToUpdate.startTime), // Ensure these are Date objects
+                new Date(bookingToUpdate.startTime),
                 new Date(bookingToUpdate.endTime),
-                'admin_reject'
+                'admin_reject' // Differentiate trigger
             );
             console.log(`[BookingRequestsPage/handleRejectBooking] Waitlist processing initiated for resource ${bookingToUpdate.resourceId}.`);
         } catch (waitlistError: any) {
@@ -523,5 +516,3 @@ export default function BookingRequestsPage() {
     </TooltipProvider>
   );
 }
-
-    

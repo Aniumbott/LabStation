@@ -7,7 +7,7 @@ export interface ResourceType {
   description?: string;
 }
 
-export type ResourceStatus = 'Available' | 'Booked' | 'Maintenance';
+export type ResourceStatus = 'Working' | 'Maintenance' | 'Broken';
 
 export interface RemoteAccessDetails {
   ipAddress?: string;
@@ -110,14 +110,14 @@ export type NotificationType =
   | 'signup_pending_admin';
 
 export interface Notification {
-  id: string; 
+  id: string;
   userId: string;
   title: string;
   message: string;
   type: NotificationType;
   isRead: boolean;
-  createdAt: Date; 
-  linkTo?: string | undefined; 
+  createdAt: Date;
+  linkTo?: string | undefined;
 }
 
 export interface BlackoutDate {
@@ -147,8 +147,8 @@ export type AuditActionType =
   | 'RECURRING_RULE_CREATED' | 'RECURRING_RULE_UPDATED' | 'RECURRING_RULE_DELETED';
 
 export interface AuditLogEntry {
-  id: string; 
-  timestamp: Date; 
+  id: string;
+  timestamp: Date;
   userId: string;
   userName: string;
   action: AuditActionType;
@@ -156,4 +156,3 @@ export interface AuditLogEntry {
   entityId?: string | undefined;
   details: string;
 }
-

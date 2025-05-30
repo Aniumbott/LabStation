@@ -5,7 +5,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, AlertCircle, CheckCircle, Construction, User as UserIconLucide, Calendar as CalendarIcon } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, AlertCircle, CheckCircle, Construction, User as UserIconLucide, Calendar as CalendarIcon, XCircle } from 'lucide-react'; // Added XCircle
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,8 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
 import type { Resource, ResourceType, Booking, UnavailabilityPeriod, RoleName } from '@/types';
-import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay, isBefore, compareAsc, isWithinInterval, isSameDay, addDays as dateFnsAddDays, Timestamp as FirestoreTimestamp } from 'date-fns'; // Renamed Timestamp import
-import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
+import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay, isBefore, compareAsc, isWithinInterval, isSameDay, addDays as dateFnsAddDays, Timestamp as FirestoreTimestamp } from 'date-fns';
+import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils'; // getResourceStatusBadge will use new statuses
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, type ResourceFormValues } from '@/components/admin/resource-form-dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -27,9 +27,9 @@ import {
 } from "@/components/ui/tooltip";
 import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavailability-dialog';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore'; // This is Firestore Timestamp
+import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
 import { addAuditLog } from '@/lib/firestore-helpers';
-import { labsList, resourceStatusesList } from '@/lib/app-constants';
+import { labsList, resourceStatusesList } from '@/lib/app-constants'; // resourceStatusesList for new statuses
 
 
 function ResourceDetailPageSkeleton() {
@@ -115,9 +115,9 @@ const DetailItem = ({ icon: IconElement, label, value, isLink = false, className
         </div>
     );
   }
-  
+
   let displayValue = '';
-  if (value instanceof Date) { 
+  if (value instanceof Date) {
     displayValue = formatDateSafe(value, 'N/A', 'PPP');
   } else {
     displayValue = String(value);
@@ -169,19 +169,19 @@ export default function ResourceDetailPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { currentUser } = useAuth();
-  
+
   const [resource, setResource] = useState<Resource | null>(null);
   const [resourceTypeName, setResourceTypeName] = useState<string>('Loading...');
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
-  const [isAlertOpen, setIsAlertOpen] = useState(false); 
+  const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [resourceToDeleteId, setResourceToDeleteId] = useState<string | null>(null);
 
   const [isUnavailabilityDialogOpen, setIsUnavailabilityDialogOpen] = useState(false);
   const [resourceUserBookings, setResourceUserBookings] = useState<Booking[]>([]);
   const [fetchedResourceTypesForDialog, setFetchedResourceTypesForDialog] = useState<ResourceType[]>([]);
-  
+
   const resourceId = typeof params.resourceId === 'string' ? params.resourceId : null;
 
   const fetchResourceData = useCallback(async () => {
@@ -205,7 +205,7 @@ export default function ResourceDetailPage() {
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
           lab: data.lab || (labsList.length > 0 ? labsList[0] : 'Electronics Lab 1'),
-          status: data.status || 'Available',
+          status: data.status || 'Working', // Default to 'Working' for new status system
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
           manufacturer: data.manufacturer || undefined,
@@ -270,7 +270,7 @@ export default function ResourceDetailPage() {
   }, [fetchResourceData]);
 
   useEffect(() => {
-    if (isFormDialogOpen) { 
+    if (isFormDialogOpen) {
       const fetchTypes = async () => {
         try {
           const typesCollectionRef = collection(db, "resourceTypes");
@@ -298,7 +298,6 @@ export default function ResourceDetailPage() {
         return;
       }
       try {
-        // Firestore Index Required: bookings (resourceId ASC, userId ASC, startTime DESC)
         const bookingsQueryInstance = query(
           collection(db, "bookings"),
           where("resourceId", "==", resourceId),
@@ -332,7 +331,7 @@ export default function ResourceDetailPage() {
       }
     };
 
-    if (resource && currentUser) { 
+    if (resource && currentUser) {
       fetchBookingsForResourceUser();
     }
   }, [resourceId, currentUser, resource, toast]);
@@ -369,19 +368,19 @@ export default function ResourceDetailPage() {
   }, [resource]);
 
   const handleSaveResource = useCallback(async (data: ResourceFormValues) => {
-    if (!currentUser || !canManageResource || !resource?.id) { 
+    if (!currentUser || !canManageResource || !resource?.id) {
         toast({ title: "Permission Denied", description: "Not authorized or resource not found for update.", variant: "destructive" });
         setIsFormDialogOpen(false);
         return;
     }
-    
+
     let purchaseDateForFirestore: Timestamp | null = null;
     if (data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))) {
         purchaseDateForFirestore = Timestamp.fromDate(parseISO(data.purchaseDate));
     } else if (!data.purchaseDate) {
         purchaseDateForFirestore = null;
     }
-    
+
     const remoteAccessDataForFirestore = data.remoteAccess
       ? {
           ipAddress: data.remoteAccess.ipAddress || null,
@@ -397,7 +396,7 @@ export default function ResourceDetailPage() {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
       lab: data.lab,
-      status: data.status,
+      status: data.status, // Will be 'Working', 'Maintenance', or 'Broken'
       description: data.description || '',
       imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
       manufacturer: data.manufacturer || null,
@@ -410,7 +409,7 @@ export default function ResourceDetailPage() {
       allowQueueing: data.allowQueueing ?? resource.allowQueueing ?? false,
       lastUpdatedAt: serverTimestamp(),
     };
-            
+
     Object.keys(firestorePayload).forEach(key => {
       if (firestorePayload[key] === undefined && key !== 'remoteAccess' && key !== 'allowQueueing') {
           firestorePayload[key] = null;
@@ -426,13 +425,13 @@ export default function ResourceDetailPage() {
          const allRemoteAccessEffectivelyNull = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && ra.port === null && !ra.notes;
          if(allRemoteAccessEffectivelyNull) firestorePayload.remoteAccess = undefined;
     }
-    
+
     try {
         const resourceDocRef = doc(db, "resources", resource.id);
         await updateDoc(resourceDocRef, firestorePayload);
-        addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Resource '${data.name}' updated by ${currentUser.name}.`});
+        addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Resource '${data.name}' updated by ${currentUser.name}. Status changed to ${data.status}.`});
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
-        await fetchResourceData(); 
+        await fetchResourceData();
     } catch (error: any) {
         console.error("Error updating resource:", error);
         toast({ title: "Update Failed", description: `Could not update resource: ${error.message}`, variant: "destructive" });
@@ -488,10 +487,10 @@ export default function ResourceDetailPage() {
   if (!resource && !isLoading) {
     return <NotFoundMessage resourceIdParam={resourceId} />;
   }
-  
-  if (!resource) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>; 
 
-  const canBookResource = resource.status === 'Available';
+  if (!resource) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>;
+
+  const canBookResource = resource.status === 'Working'; // Updated logic
 
   return (
     <TooltipProvider>
@@ -699,7 +698,7 @@ export default function ResourceDetailPage() {
                 </Button>
             </CardFooter>
           </Card>
-            {resource && resource.status === 'Available' && (
+            {resource && resource.status === 'Working' && ( // Only show availability card if resource is 'Working'
               <Card className="shadow-lg">
                 <CardHeader>
                   <CardTitle className="text-xl flex items-center gap-2">
@@ -729,7 +728,7 @@ export default function ResourceDetailPage() {
             onOpenChange={(isOpen) => {
                 setIsFormDialogOpen(isOpen);
             }}
-            initialResource={resource} 
+            initialResource={resource}
             onSave={handleSaveResource}
             resourceTypes={fetchedResourceTypesForDialog}
         />
