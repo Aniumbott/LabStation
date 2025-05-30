@@ -22,28 +22,68 @@ import { format, isValid, isPast, parseISO, compareAsc, startOfToday } from 'dat
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/auth-context';
-import { useToast } from '@/hooks/use-toast'; // Added useToast
+import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore';
 
+// Helper function for robust date conversion
+const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Date => {
+  if (value instanceof Timestamp) {
+    return value.toDate();
+  }
+  if (typeof value === 'string') {
+    const parsed = parseISO(value);
+    if (isValid(parsed)) {
+      return parsed;
+    }
+    // Attempt to parse common non-ISO date strings if parseISO fails, though less ideal
+    const directDate = new Date(value);
+    if (isValid(directDate)) {
+        console.warn(`[Dashboard] Parsed non-ISO date string for ${fieldName} in booking ${bookingId}:`, value);
+        return directDate;
+    }
+    console.warn(`[Dashboard] Invalid date string for ${fieldName} in booking ${bookingId} after parseISO and new Date():`, value);
+  }
+  if (typeof value === 'number') { // Assuming it might be a JS timestamp (milliseconds)
+     const dateFromNum = new Date(value);
+     if (isValid(dateFromNum)) {
+         console.warn(`[Dashboard] Converted number to date for ${fieldName} in booking ${bookingId}:`, value);
+         return dateFromNum;
+     }
+  }
+  // Check for Firestore-like object { seconds: number, nanoseconds: number } which might occur if not properly deserialized
+  if (value && typeof value.seconds === 'number' && typeof value.nanoseconds === 'number') {
+    try {
+        console.warn(`[Dashboard] Converting Firestore-like timestamp object for ${fieldName} in booking ${bookingId}:`, value);
+        return new Timestamp(value.seconds, value.nanoseconds).toDate();
+    } catch (e) {
+        console.error(`[Dashboard] Error converting Firestore-like timestamp object for ${fieldName} in booking ${bookingId}:`, value, e);
+    }
+  }
+  console.error(`[Dashboard] CRITICAL: Unexpected data type or invalid date for ${fieldName} in booking ${bookingId}. Using current date as fallback. Value:`, value, `Type: ${typeof value}`);
+  return new Date(); // Fallback - this indicates a data issue
+};
+
+
 export default function DashboardPage() {
   const { currentUser } = useAuth();
-  const { toast } = useToast(); // Initialize toast
+  const { toast } = useToast();
   const [frequentlyUsedResources, setFrequentlyUsedResources] = useState<Resource[]>([]);
   const [upcomingUserBookings, setUpcomingUserBookings] = useState<(Booking & { resourceName?: string })[]>([]);
   const [isLoadingResources, setIsLoadingResources] = useState(true);
   const [isLoadingBookings, setIsLoadingBookings] = useState(true);
 
   const fetchDashboardData = useCallback(async () => {
-    console.log("[Dashboard] fetchDashboardData called. CurrentUser:", currentUser?.id);
+    console.log("[Dashboard V2] fetchDashboardData called. CurrentUser ID:", currentUser?.id);
     setIsLoadingResources(true);
-    setIsLoadingBookings(true); // Set loading true for bookings at the start
+    setIsLoadingBookings(true);
 
     try {
-      const resourcesQuery = query(collection(db, 'resources'), orderBy('name', 'asc'), limit(3)); // Added orderBy for predictability
+      const resourcesQuery = query(collection(db, 'resources'), orderBy('name', 'asc'), limit(3));
       const resourcesSnapshot = await getDocs(resourcesQuery);
       const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
         const data = docSnap.data();
+        const bookingId = docSnap.id; // Use docSnap.id for context if needed in safeConvertToDate
         return {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
@@ -53,15 +93,15 @@ export default function DashboardPage() {
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
           features: Array.isArray(data.features) ? data.features : [],
-          purchaseDate: data.purchaseDate instanceof Timestamp ? data.purchaseDate.toDate() : undefined,
-          lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
+          purchaseDate: data.purchaseDate ? safeConvertToDate(data.purchaseDate, 'purchaseDate', bookingId) : undefined,
+          lastUpdatedAt: data.lastUpdatedAt ? safeConvertToDate(data.lastUpdatedAt, 'lastUpdatedAt', bookingId) : undefined,
+          createdAt: data.createdAt ? safeConvertToDate(data.createdAt, 'createdAt', bookingId) : undefined,
         } as Resource;
       });
       setFrequentlyUsedResources(fetchedResources);
-      console.log("[Dashboard] Fetched frequently used resources:", fetchedResources.length);
+      console.log("[Dashboard V2] Fetched frequently used resources count:", fetchedResources.length);
     } catch (error: any) {
-      console.error("[Dashboard] Error fetching frequently used resources:", error.toString(), error);
+      console.error("[Dashboard V2] Error fetching frequently used resources:", error.toString(), error);
       toast({
         title: "Error Loading Resources",
         description: `Could not fetch frequently used resources: ${error.message}`,
@@ -72,22 +112,23 @@ export default function DashboardPage() {
     }
 
     if (currentUser && currentUser.id) {
-      console.log(`[Dashboard] Fetching upcoming bookings for user: ${currentUser.id}`);
-      const todayStart = Timestamp.fromDate(startOfToday()); // Use start of today for "upcoming"
+      console.log(`[Dashboard V2] Fetching upcoming bookings for user: ${currentUser.id}`);
+      const todayStart = Timestamp.fromDate(startOfToday());
       try {
         const bookingsQuery = query(
           collection(db, 'bookings'),
           where('userId', '==', currentUser.id),
-          where('endTime', '>=', todayStart), // Changed to endTime >= startOfToday for better "upcoming" logic
+          where('endTime', '>=', todayStart),
           orderBy('startTime', 'asc'),
           limit(5)
         );
-        console.log("[Dashboard] Upcoming bookings query constructed.");
+        console.log("[Dashboard V2] Upcoming bookings query constructed. Fetching...");
         const bookingsSnapshot = await getDocs(bookingsQuery);
-        console.log(`[Dashboard] Fetched upcoming bookings snapshot. Docs count: ${bookingsSnapshot.docs.length}`);
+        console.log(`[Dashboard V2] Fetched upcoming bookings snapshot. Docs count: ${bookingsSnapshot.docs.length}`);
 
         const fetchedBookingsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
           const bookingData = docSnap.data();
+          const bookingId = docSnap.id;
           let resourceNameStr = 'Unknown Resource';
           if (bookingData.resourceId) {
             try {
@@ -97,79 +138,59 @@ export default function DashboardPage() {
                 resourceNameStr = resourceDocSnap.data()?.name || 'Unknown Resource';
               }
             } catch (resError) {
-              console.warn(`[Dashboard] Could not fetch resource name for booking ${docSnap.id}:`, resError);
+              console.warn(`[Dashboard V2] Could not fetch resource name for booking ${bookingId}:`, resError);
             }
           }
 
-          let startTimeAsDate: Date;
-          if (bookingData.startTime instanceof Timestamp) {
-            startTimeAsDate = bookingData.startTime.toDate();
-          } else if (typeof bookingData.startTime === 'string') {
-            startTimeAsDate = parseISO(bookingData.startTime);
-          } else if (bookingData.startTime && typeof bookingData.startTime.seconds === 'number') {
-            startTimeAsDate = new Timestamp(bookingData.startTime.seconds, bookingData.startTime.nanoseconds || 0).toDate();
-          } else {
-            console.warn(`[Dashboard] Unexpected startTime format for booking ${docSnap.id}:`, bookingData.startTime);
-            startTimeAsDate = new Date(); // Fallback
-          }
-
-          let endTimeAsDate: Date;
-          if (bookingData.endTime instanceof Timestamp) {
-            endTimeAsDate = bookingData.endTime.toDate();
-          } else if (typeof bookingData.endTime === 'string') {
-            endTimeAsDate = parseISO(bookingData.endTime);
-          } else if (bookingData.endTime && typeof bookingData.endTime.seconds === 'number') {
-            endTimeAsDate = new Timestamp(bookingData.endTime.seconds, bookingData.endTime.nanoseconds || 0).toDate();
-          } else {
-            console.warn(`[Dashboard] Unexpected endTime format for booking ${docSnap.id}:`, bookingData.endTime);
-            endTimeAsDate = new Date(); // Fallback
-          }
-          
-          let createdAtAsDate: Date;
-           if (bookingData.createdAt instanceof Timestamp) {
-            createdAtAsDate = bookingData.createdAt.toDate();
-          } else if (typeof bookingData.createdAt === 'string') {
-            createdAtAsDate = parseISO(bookingData.createdAt);
-          } else if (bookingData.createdAt && typeof bookingData.createdAt.seconds === 'number') {
-            createdAtAsDate = new Timestamp(bookingData.createdAt.seconds, bookingData.createdAt.nanoseconds || 0).toDate();
-          } else {
-             console.warn(`[Dashboard] Unexpected createdAt format for booking ${docSnap.id}:`, bookingData.createdAt);
-            createdAtAsDate = new Date(); // Fallback
-          }
-
+          const startTimeAsDate = safeConvertToDate(bookingData.startTime, 'startTime', bookingId);
+          const endTimeAsDate = safeConvertToDate(bookingData.endTime, 'endTime', bookingId);
+          const createdAtAsDate = safeConvertToDate(bookingData.createdAt, 'createdAt', bookingId);
 
           return {
-            id: docSnap.id,
+            id: bookingId,
             resourceId: bookingData.resourceId,
             userId: bookingData.userId,
             startTime: startTimeAsDate,
             endTime: endTimeAsDate,
             createdAt: createdAtAsDate,
-            status: bookingData.status,
+            status: bookingData.status as Booking['status'],
             notes: bookingData.notes,
-            usageDetails: bookingData.usageDetails,
+            usageDetails: bookingData.usageDetails, // Assuming usageDetails dates are handled if displayed
             resourceName: resourceNameStr,
           } as Booking & { resourceName?: string };
         });
+
         let resolvedBookings = await Promise.all(fetchedBookingsPromises);
-        // Filter out bookings where startTime might have passed by the time of rendering
-        resolvedBookings = resolvedBookings.filter(b => b.endTime >= new Date());
-        
-        console.log("[Dashboard] Processed upcoming bookings:", resolvedBookings);
+        console.log("[Dashboard V2] Upcoming bookings from Firestore (after mapping, before client-filter):", JSON.stringify(resolvedBookings.map(b => ({id: b.id, startTime: b.startTime?.toISOString(), endTime: b.endTime?.toISOString(), status: b.status, resourceName: b.resourceName})), null, 2));
+
+        resolvedBookings = resolvedBookings.filter(b => {
+          const bookingEndTime = b.endTime;
+          if (!isValid(bookingEndTime)) {
+            console.warn(`[Dashboard V2] Client-side filtering out booking ${b.id} due to invalid endTime.`);
+            return false;
+          }
+          const isUpcoming = bookingEndTime >= new Date();
+          if (!isUpcoming) {
+            console.log(`[Dashboard V2] Client-side filtering out booking ${b.id} as its endTime (${bookingEndTime?.toISOString()}) has passed current time (${new Date().toISOString()}).`);
+          }
+          return isUpcoming;
+        });
+        console.log("[Dashboard V2] Upcoming bookings after client-side filter (b.endTime >= new Date()):", JSON.stringify(resolvedBookings.map(b => ({id: b.id, startTime: b.startTime?.toISOString(), endTime: b.endTime?.toISOString(), status: b.status, resourceName: b.resourceName})), null, 2));
         setUpcomingUserBookings(resolvedBookings);
+
       } catch (error: any) {
-        console.error("[Dashboard] Error fetching upcoming bookings:", error.toString(), error);
+        console.error("[Dashboard V2] Error fetching upcoming bookings:", error.toString(), error);
         toast({
           title: "Error Loading Your Bookings",
           description: `Could not fetch your upcoming bookings: ${error.message}`,
           variant: "destructive",
         });
-        setUpcomingUserBookings([]); // Clear bookings on error
+        setUpcomingUserBookings([]);
       } finally {
         setIsLoadingBookings(false);
       }
     } else {
-      console.log("[Dashboard] No current user, clearing upcoming bookings.");
+      console.log("[Dashboard V2] No current user, clearing upcoming bookings and stopping load state.");
       setUpcomingUserBookings([]);
       setIsLoadingBookings(false);
     }
@@ -275,7 +296,6 @@ export default function DashboardPage() {
                   </TableHeader>
                   <TableBody>
                     {upcomingUserBookings.map((booking) => {
-                      // Resource name is now part of the booking object from fetchDashboardData
                       const resourceNameDisplay = booking.resourceName || 'Loading...';
 
                       return (
