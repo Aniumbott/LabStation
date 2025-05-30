@@ -236,19 +236,17 @@ export default function AuditLogPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Timestamp</TableHead>
                 <TableHead>User</TableHead>
                 <TableHead>Action</TableHead>
-                <TableHead>Entity Type</TableHead>
+                <TableHead>Timestamp</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredLogs.map((log) => (
                 <TableRow key={log.id} onClick={() => handleRowClick(log)} className="cursor-pointer hover:bg-muted/50">
-                  <TableCell className="whitespace-nowrap">{formatDateSafe(log.timestamp, 'N/A', 'MMM dd, yyyy, p')}</TableCell>
                   <TableCell>{log.userName || 'N/A'}</TableCell>
                   <TableCell><Badge variant="outline">{log.action.replace(/_/g, ' ')}</Badge></TableCell>
-                  <TableCell>{log.entityType || 'N/A'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{formatDateSafe(log.timestamp, 'N/A', 'MMM dd, yyyy, p')}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
