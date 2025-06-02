@@ -105,15 +105,8 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     setIsClient(true);
   }, []);
 
-  useEffect(() => {
-    if (currentUser) {
-      if (currentUser.role === 'Admin' || currentUser.role === 'Technician') {
-        setDisplayScope('all');
-      } else {
-        setDisplayScope('mine');
-      }
-    }
-  }, [currentUser]);
+  // Removed useEffect that set displayScope based on currentUser.role
+  // useState('mine') now serves as the default for all.
 
   const canViewAllBookings = useMemo(() => currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Technician'), [currentUser]);
 
@@ -701,12 +694,15 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
   const isLoadingAnyData = isLoadingBookings || isLoadingResources || isLoadingAvailabilityRules || authIsLoading || isLoadingUsersForFilter;
   const formKey = currentBooking?.id || `new:${currentBooking?.resourceId || 'empty'}:${currentBooking?.startTime instanceof Date ? currentBooking.startTime.toISOString() : (activeSelectedDate || new Date()).toISOString()}`;
 
+  const pageHeaderDescription = (displayScope === 'all' && canViewAllBookings)
+    ? "View, search, filter, and manage all lab resource bookings."
+    : "View, search, filter, and manage your lab resource bookings.";
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Bookings"
-        description={canViewAllBookings ? "View, search, filter, and manage all lab resource bookings." : "View, search, filter, and manage your lab resource bookings."}
+        description={pageHeaderDescription}
         icon={CalendarDays}
         actions={
           currentUser && (
