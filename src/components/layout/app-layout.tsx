@@ -43,16 +43,14 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   adminOnly?: boolean;
-  // adminOrLabManager prop is no longer needed after Lab Manager role removal
 }
 
 const PUBLIC_ROUTES = ['/login', '/signup'];
 
-// Updated navItems: 'adminOrLabManager' checks are simplified to 'adminOnly' where appropriate
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/resources', label: 'Resources', icon: ClipboardList },
-  { href: '/bookings', label: 'My Bookings', icon: CalendarDays },
+  { href: '/bookings', label: 'Bookings', icon: CalendarDays }, // Changed from "My Bookings"
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/profile', label: 'My Profile', icon: UserCog },
   { href: '/maintenance', label: 'Maintenance', icon: Wrench },
@@ -60,23 +58,23 @@ const navItems: NavItem[] = [
     href: '/admin/booking-requests',
     label: 'Booking Requests',
     icon: CheckSquare,
-    adminOnly: true, // Was adminOrLabManager
+    adminOnly: true,
   },
   {
-    href: '/admin/labs', // Updated URL
-    label: 'Lab Management', // Updated Label
+    href: '/admin/labs',
+    label: 'Lab Management',
     icon: Archive,
-    adminOnly: true, // Was adminOrLabManager
+    adminOnly: true,
   },
   {
     href: '/admin/blackout-dates',
     label: 'Lab Closures',
     icon: CalendarOff,
-    adminOnly: true, // Was adminOrLabManager
+    adminOnly: true,
   },
   {
     href: '/admin/users',
-    label: 'User Management',
+    label: 'Users', // Changed from "User Management"
     icon: UsersIconLucide,
     adminOnly: true,
   },
@@ -84,7 +82,7 @@ const navItems: NavItem[] = [
     href: '/admin/reports',
     label: 'Reports',
     icon: BarChart3,
-    adminOnly: true, // Was adminOrLabManager
+    adminOnly: true,
   },
   {
     href: '/admin/audit-log',
@@ -113,7 +111,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
       if (item.adminOnly) {
         return currentUser.role === 'Admin';
       }
-      // No more adminOrLabManager check needed
       return true;
     });
   }, [currentUser]);
