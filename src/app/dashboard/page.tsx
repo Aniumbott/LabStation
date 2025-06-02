@@ -3,12 +3,12 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Wrench, Loader2, ThumbsUp, Clock, X, User as UserIconLucide, XCircle, Building } from 'lucide-react'; // Added Building
+import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Wrench, Loader2, ThumbsUp, Clock, X, User as UserIconLucide, XCircle, Building, KeyRound, University } from 'lucide-react'; 
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { Resource, Booking, Lab } from '@/types'; // Added Lab
+import type { Resource, Booking, Lab, LabMembership } from '@/types'; 
 import { Separator } from '@/components/ui/separator';
 import {
   Table,
@@ -20,14 +20,13 @@ import {
 } from "@/components/ui/table";
 import { format, isValid, isPast, parseISO, compareAsc, startOfToday, startOfDay, Timestamp as FirestoreTimestamp } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore';
 
 
-// Helper function for robust date conversion
 const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Date => {
   if (value instanceof Timestamp) {
     return value.toDate();
@@ -65,27 +64,53 @@ const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Da
 export default function DashboardPage() {
   const { currentUser } = useAuth();
   const { toast } = useToast();
-  const [frequentlyUsedResources, setFrequentlyUsedResources] = useState<(Resource & { labName?: string })[]>([]); // Add labName
+  const [frequentlyUsedResources, setFrequentlyUsedResources] = useState<(Resource & { labName?: string })[]>([]);
   const [upcomingUserBookings, setUpcomingUserBookings] = useState<(Booking & { resourceName?: string })[]>([]);
+  const [userActiveLabs, setUserActiveLabs] = useState<Lab[]>([]); // State for user's active labs
   const [isLoadingResources, setIsLoadingResources] = useState(true);
   const [isLoadingBookings, setIsLoadingBookings] = useState(true);
-  const [allLabs, setAllLabs] = useState<Lab[]>([]); // State to store all labs
+  const [isLoadingLabs, setIsLoadingLabs] = useState(true); // New loading state for labs
+  const [allLabs, setAllLabs] = useState<Lab[]>([]); 
 
   const fetchDashboardData = useCallback(async () => {
     setIsLoadingResources(true);
     setIsLoadingBookings(true);
+    setIsLoadingLabs(true);
 
-    // Fetch all labs first
     let fetchedLabs: Lab[] = [];
     try {
         const labsSnapshot = await getDocs(query(collection(db, 'labs'), orderBy('name', 'asc')));
         fetchedLabs = labsSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Lab));
         setAllLabs(fetchedLabs);
     } catch (error: any) {
-        console.error("[Dashboard] Error fetching labs:", error);
-        toast({ title: "Error Loading Labs", variant: "destructive" });
+        console.error("[Dashboard] Error fetching all labs:", error);
+        toast({ title: "Error Loading Labs Data", variant: "destructive" });
     }
 
+    // Fetch User's Active Lab Memberships
+    if (currentUser && currentUser.id) {
+        try {
+            const membershipsQuery = query(
+                collection(db, 'labMemberships'),
+                where('userId', '==', currentUser.id),
+                where('status', '==', 'active')
+            );
+            const membershipsSnapshot = await getDocs(membershipsQuery);
+            const activeLabIds = membershipsSnapshot.docs.map(doc => doc.data().labId as string);
+            const activeLabs = fetchedLabs.filter(lab => activeLabIds.includes(lab.id));
+            setUserActiveLabs(activeLabs);
+        } catch (error: any) {
+            console.error("[Dashboard] Error fetching user lab memberships:", error);
+            toast({ title: "Error Loading Your Lab Access", variant: "destructive" });
+            setUserActiveLabs([]);
+        } finally {
+            setIsLoadingLabs(false);
+        }
+    } else {
+        setUserActiveLabs([]);
+        setIsLoadingLabs(false);
+    }
+    
 
     try {
       const resourcesQuery = query(collection(db, 'resources'), orderBy('name', 'asc'), limit(3));
@@ -98,8 +123,8 @@ export default function DashboardPage() {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
-          labId: data.labId || '', // Store labId
-          labName: lab?.name || 'Unknown Lab', // Add labName
+          labId: data.labId || '', 
+          labName: lab?.name || 'Unknown Lab', 
           status: data.status || 'Working',
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
@@ -191,9 +216,54 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <PageHeader
         title="Dashboard"
-        description="Overview of lab resources and your bookings."
+        description="Overview of lab resources, your bookings, and lab access."
         icon={LayoutDashboard}
       />
+
+      <section>
+        <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-semibold">My Labs</h2>
+            {/* Add button to request lab access later if needed */}
+        </div>
+        {isLoadingLabs ? (
+            <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading your lab access...</div>
+        ) : currentUser && userActiveLabs.length > 0 ? (
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                {userActiveLabs.map(lab => (
+                    <Card key={lab.id} className="shadow-md hover:shadow-lg transition-shadow">
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2"><University className="h-5 w-5 text-primary"/>{lab.name}</CardTitle>
+                            {lab.location && <CardDescription>{lab.location}</CardDescription>}
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground line-clamp-2">{lab.description || "No description available for this lab."}</p>
+                        </CardContent>
+                        <CardFooter>
+                            <Button variant="outline" size="sm" asChild className="w-full">
+                                <Link href={`/admin/resources?labId=${lab.id}`}>View Resources in this Lab</Link>
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                ))}
+            </div>
+        ) : (
+             <Card className="p-6 text-center shadow-md border-0 bg-card">
+                <CardContent>
+                <KeyRound className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-60"/>
+                <p className="text-muted-foreground">
+                    {currentUser ? "You currently do not have active access to any labs." : "Please log in to see your lab access."}
+                </p>
+                {currentUser && ( // Placeholder for when user request flow is built
+                    <p className="text-xs text-muted-foreground mt-2">Lab access is managed by administrators. Please contact an admin if you require access to specific labs.</p>
+                    // <Button asChild className="mt-4" variant="secondary"><Link href="/labs/request">Request Lab Access</Link></Button>
+                )}
+                </CardContent>
+            </Card>
+        )}
+      </section>
+      
+      <Separator />
+
       <section>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-semibold">Frequently Used Resources</h2>
@@ -224,7 +294,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="p-0 flex-grow space-y-3">
                   <div className="relative w-full h-40 rounded-md overflow-hidden">
-                    <Image src={resource.imageUrl || 'https://placehold.co/600x400.png'} alt={resource.name} fill style={{objectFit:"cover"}} data-ai-hint="lab equipment" />
+                    <Image src={resource.imageUrl || 'https://placehold.co/600x400.png'} alt={resource.name} fill style={{objectFit:"cover"}} data-ai-hint="lab equipment"/>
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{resource.description}</p>
                 </CardContent>

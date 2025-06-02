@@ -3,8 +3,8 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, ThumbsUp, ThumbsDown, Loader2, X, CheckCircle2 } from 'lucide-react';
-import type { User, RoleName, UserStatus } from '@/types';
+import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, ThumbsUp, ThumbsDown, Loader2, X, CheckCircle2, Settings2 } from 'lucide-react';
+import type { User, RoleName, UserStatus, Lab } from '@/types';
 import {
   Table,
   TableBody,
@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { UserFormDialog, UserFormValues } from '@/components/admin/user-form-dialog';
+import { ManageUserLabAccessDialog } from '@/components/admin/manage-user-lab-access-dialog'; // New Import
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -59,7 +60,7 @@ const userStatusesListForFilter: (UserStatus | 'all')[] = ['all', 'active', 'pen
 
 const roleIcons: Record<User['role'], React.ElementType> = {
   'Admin': ShieldAlert,
-  'Lab Manager': UserCogIcon,
+  'Lab Manager': UserCogIcon, // Will be filtered out by userRolesList if not present
   'Technician': UserCheck,
   'Researcher': UserCheck,
 };
@@ -76,9 +77,9 @@ const getRoleBadgeVariant = (role: RoleName): "default" | "secondary" | "destruc
 
 const getStatusBadgeVariant = (status: UserStatus): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
-      case 'active': return 'default'; // Greenish
-      case 'pending_approval': return 'secondary'; // Yellowish/Amber
-      case 'suspended': return 'destructive'; // Reddish
+      case 'active': return 'default'; 
+      case 'pending_approval': return 'secondary'; 
+      case 'suspended': return 'destructive'; 
       default: return 'outline';
     }
 };
@@ -89,11 +90,16 @@ export default function UsersPage() {
   const { currentUser: loggedInUser } = useAuth();
 
   const [users, setUsers] = useState<User[]>([]);
-  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const [allLabs, setAllLabs] = useState<Lab[]>([]); // New state for labs
+  const [isLoadingData, setIsLoadingData] = useState(true); // Combined loading state
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [userToReject, setUserToReject] = useState<User | null>(null);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  
+  const [isLabAccessDialogOpen, setIsLabAccessDialogOpen] = useState(false); // New state for lab access dialog
+  const [selectedUserForLabAccess, setSelectedUserForLabAccess] = useState<User | null>(null); // New state
+
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState('');
@@ -104,14 +110,15 @@ export default function UsersPage() {
   const [activeFilterRole, setActiveFilterRole] = useState<RoleName | 'all'>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<UserStatus | 'all'>('all');
 
-  const fetchUsers = useCallback(async () => {
-    setIsLoadingUsers(true);
+  const fetchData = useCallback(async () => {
+    setIsLoadingData(true);
     try {
+      // Fetch Users
       const usersCollectionRef = collection(db, "users");
-      const usersQuery = query(usersCollectionRef, orderBy("name", "asc")); // Basic ordering
-      const querySnapshot = await getDocs(usersQuery);
+      const usersQuery = query(usersCollectionRef, orderBy("name", "asc"));
+      const usersSnapshot = await getDocs(usersQuery);
       
-      let fetchedUsers: User[] = querySnapshot.docs.map((docSnap) => {
+      let fetchedUsers: User[] = usersSnapshot.docs.map((docSnap) => {
         const data = docSnap.data();
         return {
             id: docSnap.id,
@@ -123,29 +130,38 @@ export default function UsersPage() {
             createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
         } as User;
       });
-      // Client-side sort to put 'pending_approval' first, then by name
       fetchedUsers.sort((a,b) => {
         if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
         if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
         return (a.name || '').localeCompare(b.name || '');
       });
       setUsers(fetchedUsers);
+
+      // Fetch Labs (needed for the new lab access dialog)
+      const labsCollectionRef = collection(db, "labs");
+      const labsQuery = query(labsCollectionRef, orderBy("name", "asc"));
+      const labsSnapshot = await getDocs(labsQuery);
+      const fetchedLabs: Lab[] = labsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Lab));
+      setAllLabs(fetchedLabs);
+
     } catch (error: any) {
-      console.error("Error fetching users: ", error);
-      toast({ title: "Error Fetching Users", description: error.message || "Failed to load users from database.", variant: "destructive" });
+      console.error("Error fetching users or labs: ", error);
+      toast({ title: "Error Fetching Data", description: error.message || "Failed to load data from database.", variant: "destructive" });
       setUsers([]);
+      setAllLabs([]);
     }
-    setIsLoadingUsers(false);
+    setIsLoadingData(false);
   }, [toast]);
 
   useEffect(() => {
     if (loggedInUser?.role === 'Admin') {
-      fetchUsers();
+      fetchData();
     } else {
       setUsers([]);
-      setIsLoadingUsers(false);
+      setAllLabs([]);
+      setIsLoadingData(false);
     }
-  }, [loggedInUser, fetchUsers]);
+  }, [loggedInUser, fetchData]);
 
   useEffect(() => {
     if (isFilterDialogOpen) {
@@ -197,32 +213,36 @@ export default function UsersPage() {
     setIsFormDialogOpen(true);
   }, []);
 
+  const handleOpenLabAccessDialog = useCallback((user: User) => {
+    setSelectedUserForLabAccess(user);
+    setIsLabAccessDialogOpen(true);
+  }, []);
+
   const handleSaveUser = useCallback(async (data: UserFormValues) => {
     if (!loggedInUser || loggedInUser.role !== 'Admin') {
       toast({ title: "Permission Denied", description: "You are not authorized to perform this action.", variant: "destructive" });
       return;
     }
     
-    setIsLoadingUsers(true);
+    setIsLoadingData(true);
     try {
-      if (editingUser) { // Editing existing user profile
+      if (editingUser) { 
         const userDocRef = doc(db, "users", editingUser.id);
         await updateDoc(userDocRef, {
           name: data.name,
           role: data.role,
-          // Email and status are not edited here directly; status handled by approve/suspend actions
         });
         await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_UPDATED', { entityType: 'User', entityId: editingUser.id, details: `User ${data.name} (ID: ${editingUser.id}) details updated. Role set to ${data.role}.` });
         toast({ title: 'User Updated', description: `User ${data.name} has been updated.` });
-      } else { // Admin creating a new user profile (Firestore only, not Auth)
+      } else { 
         const newUserId = `admin_created_${Date.now()}_${Math.random().toString(36).substring(2,9)}`;
         const userDocRef = doc(db, "users", newUserId);
         await setDoc(userDocRef, {
           name: data.name,
-          email: data.email, // Email provided in form for admin add
+          email: data.email, 
           role: data.role,
           avatarUrl: 'https://placehold.co/100x100.png',
-          status: 'active' as User['status'], // Admin created users are active by default
+          status: 'active' as User['status'], 
           createdAt: serverTimestamp(),
         });
         await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User profile for ${data.name} (${data.email}) created by admin with role ${data.role}. This user cannot log in without a corresponding Auth account.` });
@@ -230,14 +250,14 @@ export default function UsersPage() {
       }
       setIsFormDialogOpen(false);
       setEditingUser(null);
-      await fetchUsers();
+      await fetchData();
     } catch (error: any) {
       console.error(`Error ${editingUser ? 'updating' : 'creating'} user profile:`, error);
       toast({ title: "Operation Failed", description: `Could not ${editingUser ? 'update' : 'create'} user profile: ${error.message}`, variant: "destructive" });
     } finally {
-      setIsLoadingUsers(false); 
+      setIsLoadingData(false); 
     }
-  }, [loggedInUser, editingUser, fetchUsers, toast]);
+  }, [loggedInUser, editingUser, fetchData, toast]);
 
   const handleDeleteUser = useCallback(async (userId: string) => {
     if (!loggedInUser || loggedInUser.role !== 'Admin') {
@@ -250,21 +270,29 @@ export default function UsersPage() {
         return;
     }
 
-    setIsLoadingUsers(true);
+    setIsLoadingData(true);
     try {
       const userDocRef = doc(db, "users", userId);
-      await deleteDoc(userDocRef); // Deletes Firestore profile
-      await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_DELETED', { entityType: 'User', entityId: userId, details: `User profile for ${userToDeleteDetails.name} (ID: ${userId}) deleted. Associated Firebase Auth user may still exist if one was created via signup.` });
-      toast({ title: "User Profile Deleted", description: `User "${userToDeleteDetails.name}" Firestore profile has been removed. Note: Their Firebase Auth account may still exist.`, variant: "destructive" });
+      await deleteDoc(userDocRef); 
+      
+      // Also delete their lab memberships
+      const membershipsQuery = query(collection(db, 'labMemberships'), where('userId', '==', userId));
+      const membershipsSnapshot = await getDocs(membershipsQuery);
+      const batch =_getDocs(db).batch(); // Assuming db is your firestore instance, needs to be firebase.firestore() from client SDK for batch
+      membershipsSnapshot.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+
+      await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_DELETED', { entityType: 'User', entityId: userId, details: `User profile for ${userToDeleteDetails.name} (ID: ${userId}) and all their lab memberships deleted. Associated Firebase Auth user may still exist if one was created via signup.` });
+      toast({ title: "User Profile Deleted", description: `User "${userToDeleteDetails.name}" Firestore profile and lab memberships removed. Note: Their Firebase Auth account may still exist.`, variant: "destructive" });
       setUserToDelete(null);
-      await fetchUsers();
+      await fetchData();
     } catch (error: any) {
-      console.error("Error deleting user profile:", error);
-      toast({ title: "Delete Failed", description: `Could not delete user profile: ${error.message}`, variant: "destructive" });
+      console.error("Error deleting user profile and memberships:", error);
+      toast({ title: "Delete Failed", description: `Could not delete user profile/memberships: ${error.message}`, variant: "destructive" });
     } finally {
-      setIsLoadingUsers(false);
+      setIsLoadingData(false);
     }
-  }, [loggedInUser, users, fetchUsers, toast]);
+  }, [loggedInUser, users, fetchData, toast]);
 
   const handleApproveUser = useCallback(async (userId: string) => {
     if (!loggedInUser || !loggedInUser.id || loggedInUser.role !== 'Admin') {
@@ -277,7 +305,7 @@ export default function UsersPage() {
         return;
     }
 
-    setIsLoadingUsers(true);
+    setIsLoadingData(true);
     try {
         const userDocRef = doc(db, "users", userId);
         await updateDoc(userDocRef, { status: 'active' });
@@ -306,14 +334,14 @@ export default function UsersPage() {
                 variant: "destructive"
             });
         }
-        await fetchUsers();
+        await fetchData();
     } catch (error: any) {
         console.error("Error approving user:", error);
         toast({ title: 'Approval Failed', description: `Could not approve user ${userToApproveDetails.name}: ${error.message}`, variant: 'destructive' });
     } finally {
-        setIsLoadingUsers(false);
+        setIsLoadingData(false);
     }
-  }, [loggedInUser, users, fetchUsers, toast]);
+  }, [loggedInUser, users, fetchData, toast]);
 
   const handleConfirmRejectUser = useCallback(async () => {
     if (!userToReject || !loggedInUser || !loggedInUser.id || loggedInUser.role !== 'Admin') {
@@ -328,7 +356,7 @@ export default function UsersPage() {
         return;
     }
 
-    setIsLoadingUsers(true);
+    setIsLoadingData(true);
     try {
       const userDocRef = doc(db, "users", userToReject.id);
       await deleteDoc(userDocRef);
@@ -339,14 +367,14 @@ export default function UsersPage() {
       await addAuditLog(loggedInUser.id, adminName, 'USER_REJECTED', { entityType: 'User', entityId: userToReject.id, details: `Signup request for ${rejectedUserName} (ID: ${userToReject.id}) rejected by ${adminName} and profile removed. Associated Firebase Auth user may still exist.` });
       toast({ title: 'Signup Request Rejected', description: `Signup request for ${rejectedUserName} has been rejected and profile removed. Note: Their Firebase Auth account may still exist.`, variant: 'destructive' });
       setUserToReject(null);
-      await fetchUsers();
+      await fetchData();
     } catch (error: any) {
       console.error("Error rejecting user:", error);
       toast({ title: 'Rejection Failed', description: `Could not reject user ${userDetails.name}: ${error.message}`, variant: 'destructive' });
     } finally {
-      setIsLoadingUsers(false);
+      setIsLoadingData(false);
     }
-  }, [userToReject, loggedInUser, users, fetchUsers, toast]);
+  }, [userToReject, loggedInUser, users, fetchData, toast]);
 
   const activeFilterCount = useMemo(() => [activeSearchTerm !== '', activeFilterRole !== 'all', activeFilterStatus !== 'all'].filter(Boolean).length, [activeSearchTerm, activeFilterRole, activeFilterStatus]);
   
@@ -359,9 +387,7 @@ export default function UsersPage() {
       <div className="space-y-8">
         <PageHeader title="Users" icon={UsersIconLucide} description="Access Denied." />
         <Card className="text-center py-10 text-muted-foreground">
-          <CardContent>
-            <p>You do not have permission to view this page.</p>
-          </CardContent>
+          <CardContent><p>You do not have permission to view this page.</p></CardContent>
         </Card>
       </div>
     );
@@ -395,7 +421,7 @@ export default function UsersPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <Separator className="my-4" />
-                <div className="flex flex-col gap-4"> {/* Explicit vertical stacking */}
+                <div className="flex flex-col gap-4"> 
                   <div>
                     <Label htmlFor="userSearchDialog">Search (Name/Email)</Label>
                     <div className="relative mt-1">
@@ -455,7 +481,7 @@ export default function UsersPage() {
           </div>
         }
       />
-      {isLoadingUsers ? (
+      {isLoadingData ? (
          <div className="flex justify-center items-center py-10 text-muted-foreground">
            <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
            Loading users...
@@ -471,7 +497,7 @@ export default function UsersPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right w-[120px]">Actions</TableHead>
+                <TableHead className="text-right w-[160px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -481,7 +507,7 @@ export default function UsersPage() {
                   <TableRow key={user.id}>
                     <TableCell>
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={user.avatarUrl} alt={user.name} data-ai-hint="user avatar" />
+                        <AvatarImage src={user.avatarUrl} alt={user.name} data-ai-hint="user avatar"/>
                         <AvatarFallback>{user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'}</AvatarFallback>
                       </Avatar>
                     </TableCell>
@@ -503,7 +529,7 @@ export default function UsersPage() {
                         <>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleApproveUser(user.id)} disabled={isLoadingUsers}>
+                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleApproveUser(user.id)} disabled={isLoadingData}>
                                 <ThumbsUp className="h-4 w-4 text-green-600" />
                                 <span className="sr-only">Approve User</span>
                               </Button>
@@ -513,7 +539,7 @@ export default function UsersPage() {
                           <AlertDialog open={userToReject?.id === user.id} onOpenChange={(isOpen) => !isOpen && setUserToReject(null)}>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToReject(user)} disabled={isLoadingUsers}>
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToReject(user)} disabled={isLoadingData}>
                                     <ThumbsDown className="h-4 w-4" />
                                     <span className="sr-only">Reject User Signup</span>
                                 </Button>
@@ -541,17 +567,26 @@ export default function UsersPage() {
                         <>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditUserDialog(user)} disabled={isLoadingUsers}>
+                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditUserDialog(user)} disabled={isLoadingData}>
                                 <Edit className="h-4 w-4" />
                                 <span className="sr-only">Edit User</span>
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent><p>Edit User</p></TooltipContent>
+                            <TooltipContent><p>Edit User Profile</p></TooltipContent>
+                          </Tooltip>
+                           <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenLabAccessDialog(user)} disabled={isLoadingData || allLabs.length === 0}>
+                                  <Settings2 className="h-4 w-4" />
+                                  <span className="sr-only">Manage Lab Access</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent><p>Manage Lab Access</p></TooltipContent>
                           </Tooltip>
                           <AlertDialog open={userToDelete?.id === user.id} onOpenChange={(isOpen) => !isOpen && setUserToDelete(null)}>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToDelete(user)} disabled={isLoadingUsers}>
+                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToDelete(user)} disabled={isLoadingData}>
                                       <Trash2 className="h-4 w-4" />
                                       <span className="sr-only">Delete User Profile</span>
                                   </Button>
@@ -563,7 +598,7 @@ export default function UsersPage() {
                                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                     <AlertDialogDescription>
                                     This action cannot be undone. This will remove the user
-                                    <span className="font-semibold"> {userToDelete?.name}</span>'s profile from Firestore.
+                                    <span className="font-semibold"> {userToDelete?.name}</span>'s profile from Firestore and all their lab memberships.
                                     The Firebase Auth account may need to be deleted separately.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
@@ -578,7 +613,7 @@ export default function UsersPage() {
                         </>
                       )}
                       {((user.status === 'suspended' || (loggedInUser && user.id === loggedInUser.id)) && user.status !== 'pending_approval') && (
-                        <span className="text-xs italic text-muted-foreground">No actions</span>
+                        <span className="text-xs italic text-muted-foreground">No direct actions</span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -606,7 +641,7 @@ export default function UsersPage() {
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             ) : (
-              !isLoadingUsers && users.length === 0 && canAddUsers && (
+              !isLoadingData && users.length === 0 && canAddUsers && (
                 <Button onClick={handleOpenNewUserDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First User Profile
                 </Button>
@@ -624,6 +659,18 @@ export default function UsersPage() {
             }}
             initialUser={editingUser}
             onSave={handleSaveUser}
+        />
+      )}
+      {selectedUserForLabAccess && allLabs && (
+        <ManageUserLabAccessDialog
+          targetUser={selectedUserForLabAccess}
+          allLabs={allLabs}
+          open={isLabAccessDialogOpen}
+          onOpenChange={(isOpen) => {
+            setIsLabAccessDialogOpen(isOpen);
+            if (!isOpen) setSelectedUserForLabAccess(null);
+          }}
+          onMembershipUpdate={fetchData} 
         />
       )}
     </div>

@@ -25,7 +25,6 @@ export interface UnavailabilityPeriod {
   reason?: string;
 }
 
-// New Lab Interface (already present, ensuring it's the one we use)
 export interface Lab {
   id: string;
   name: string;
@@ -39,7 +38,7 @@ export interface Resource {
   id: string;
   name: string;
   resourceTypeId: string;
-  labId: string; // Changed from lab: string
+  labId: string; 
   status: ResourceStatus;
   description?: string;
   imageUrl?: string;
@@ -57,8 +56,8 @@ export interface Resource {
 }
 
 export interface BookingUsageDetails {
-  actualStartTime?: string | undefined; // Stored as ISO string
-  actualEndTime?: string | undefined;   // Stored as ISO string
+  actualStartTime?: string | undefined; 
+  actualEndTime?: string | undefined;   
   outcome?: 'Success' | 'Failure' | 'Interrupted' | 'Not Applicable';
   dataStorageLocation?: string | undefined;
   usageComments?: string | undefined;
@@ -94,16 +93,17 @@ export interface User {
   createdAt: Date;
 }
 
-// New LabMembership Interface
+export type LabMembershipStatus = 'active' | 'pending_approval' | 'rejected' | 'revoked';
+
 export interface LabMembership {
-  id?: string; // Firestore document ID
+  id?: string; 
   userId: string;
   labId: string;
-  status: 'active' | 'pending_approval' | 'rejected'; // Status of the membership/request
-  roleInLab?: 'Lead' | 'Member'; // Optional: For future lab-specific roles
-  requestedAt?: Date; // Timestamp of request
-  approvedAt?: Date; // Timestamp of approval
-  approverId?: string; // User ID of admin/lead who approved
+  status: LabMembershipStatus; 
+  roleInLab?: 'Lead' | 'Member'; 
+  requestedAt?: Timestamp; 
+  updatedAt?: Timestamp; 
+  actingAdminId?: string; // User ID of admin who last changed status
 }
 
 
@@ -136,9 +136,11 @@ export type NotificationType =
   | 'maintenance_resolved'
   | 'signup_approved'
   | 'signup_pending_admin'
-  | 'lab_access_request_new' // New notification type
-  | 'lab_access_approved'    // New notification type
-  | 'lab_access_rejected';   // New notification type
+  | 'lab_access_request_submitted' // User submitted a request
+  | 'lab_access_request_received' // Admin received a request
+  | 'lab_access_approved'    
+  | 'lab_access_rejected'
+  | 'lab_access_revoked'; // User's access to a lab was revoked by admin
 
 export interface Notification {
   id: string;
@@ -153,8 +155,8 @@ export interface Notification {
 
 export interface BlackoutDate {
   id: string;
-  labId?: string | null; // Optional: null or undefined for global, labId for specific
-  date: string; // YYYY-MM-DD format
+  labId?: string | null; 
+  date: string; 
   reason?: string;
 }
 
@@ -164,7 +166,7 @@ export const daysOfWeekArray: DayOfWeek[] = ['Sunday', 'Monday', 'Tuesday', 'Wed
 
 export interface RecurringBlackoutRule {
   id: string;
-  labId?: string | null; // Optional: null or undefined for global, labId for specific
+  labId?: string | null; 
   name: string;
   daysOfWeek: DayOfWeek[];
   reason?: string;
@@ -179,15 +181,17 @@ export type AuditActionType =
   | 'BLACKOUT_DATE_CREATED' | 'BLACKOUT_DATE_UPDATED' | 'BLACKOUT_DATE_DELETED'
   | 'RECURRING_RULE_CREATED' | 'RECURRING_RULE_UPDATED' | 'RECURRING_RULE_DELETED'
   | 'LAB_CREATED' | 'LAB_UPDATED' | 'LAB_DELETED'
-  | 'LAB_MEMBERSHIP_REQUESTED' | 'LAB_MEMBERSHIP_APPROVED' | 'LAB_MEMBERSHIP_REJECTED' | 'LAB_MEMBERSHIP_REMOVED' | 'LAB_MEMBERSHIP_LEFT'; // New audit actions
+  | 'LAB_MEMBERSHIP_REQUESTED' | 'LAB_MEMBERSHIP_APPROVED' | 'LAB_MEMBERSHIP_REJECTED' | 'LAB_MEMBERSHIP_REVOKED' | 'LAB_MEMBERSHIP_CANCELLED' | 'LAB_MEMBERSHIP_GRANTED';
 
 export interface AuditLogEntry {
   id: string;
   timestamp: Date;
-  userId: string;
+  userId: string; // User who performed the action
   userName: string;
   action: AuditActionType;
-  entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule' | 'Lab' | 'LabMembership' | undefined; // Added LabMembership
-  entityId?: string | undefined;
+  entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule' | 'Lab' | 'LabMembership' | undefined; 
+  entityId?: string | undefined; // ID of the primary entity affected
+  secondaryEntityType?: 'User' | 'Lab'; // For lab membership, User is primary, Lab is secondary or vice versa
+  secondaryEntityId?: string;
   details: string;
 }

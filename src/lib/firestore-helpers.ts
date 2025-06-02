@@ -2,10 +2,10 @@
 'use server';
 
 import { adminDb } from '@/lib/firebase-admin';
-import { FieldValue, Timestamp } from 'firebase-admin/firestore'; // Correct import for Admin SDK Timestamp
-import type { Notification as NotificationAppType, AuditLogEntry, AuditActionType, NotificationType as AppNotificationType, Booking } from '@/types';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore'; 
+import type { Notification as NotificationAppType, AuditLogEntry, AuditActionType, NotificationType as AppNotificationType, Booking, LabMembership, LabMembershipStatus } from '@/types';
 
-// V7 DEBUG (Admin SDK)
+
 export async function addNotification(
   userId: string,
   title: string,
@@ -15,7 +15,7 @@ export async function addNotification(
 ): Promise<void> {
   const functionName = "addNotification V7 DEBUG (Admin SDK)";
   console.log(`--- [${functionName}] ENTERING FUNCTION ---`);
-  console.log(`[${functionName}] typeof window:`, typeof window); // Should be 'undefined'
+  console.log(`[${functionName}] typeof window:`, typeof window); 
 
   const paramsReceived = { userId, title, message, type, linkToParam };
   console.log(`[${functionName}] Parameters received:`, JSON.stringify(paramsReceived, null, 2));
@@ -59,7 +59,7 @@ export async function addNotification(
   }
 }
 
-// V7 DEBUG (Admin SDK)
+
 export async function addAuditLog(
   actingUserId: string,
   actingUserName: string,
@@ -67,12 +67,13 @@ export async function addAuditLog(
   params: {
     entityType?: AuditLogEntry['entityType'] | undefined;
     entityId?: string | undefined;
+    secondaryEntityType?: AuditLogEntry['secondaryEntityType'] | undefined;
+    secondaryEntityId?: string | undefined;
     details: string;
   }
 ): Promise<void> {
-  const functionName = "addAuditLog V7 DEBUG (Admin SDK)";
+  const functionName = "addAuditLog V8 (Admin SDK)";
   console.log(`--- [${functionName}] ENTERING FUNCTION ---`);
-  console.log(`[${functionName}] typeof window:`, typeof window); // Should be 'undefined'
 
   const paramsReceived = { actingUserId, actingUserName, action, params };
   console.log(`[${functionName}] Parameters received:`, JSON.stringify(paramsReceived, null, 2));
@@ -84,7 +85,7 @@ export async function addAuditLog(
     throw new Error(errorMsg);
   }
 
-  const newLogData: Omit<AuditLogEntry, 'id' | 'timestamp'> & { timestamp: FieldValue } & { entityType?: string, entityId?: string } = {
+  const newLogData: Omit<AuditLogEntry, 'id' | 'timestamp'> & { timestamp: FieldValue } & { entityType?: string, entityId?: string, secondaryEntityType?: string, secondaryEntityId?: string } = {
     userId: actingUserId,
     userName: actingUserName,
     action: action,
@@ -94,6 +95,8 @@ export async function addAuditLog(
 
   if (params.entityType !== undefined) newLogData.entityType = params.entityType;
   if (params.entityId !== undefined) newLogData.entityId = params.entityId;
+  if (params.secondaryEntityType !== undefined) newLogData.secondaryEntityType = params.secondaryEntityType;
+  if (params.secondaryEntityId !== undefined) newLogData.secondaryEntityId = params.secondaryEntityId;
   
   console.log(`[${functionName}] Attempting to add audit log to Firestore. Data:`, JSON.stringify(newLogData, null, 2));
 
@@ -126,8 +129,6 @@ export async function processWaitlistForResource(
   console.log(`[${functionName}] Triggered by: ${triggeringAction}`);
 
   try {
-    // 1. Fetch waitlisted bookings for this resource, ordered by creation time (FIFO)
-    // Firestore Index Required: bookings (resourceId ASC, status ASC, createdAt ASC)
     const waitlistQuery = adminDb.collection('bookings')
       .where('resourceId', '==', resourceId)
       .where('status', '==', 'Waitlisted')
@@ -142,7 +143,6 @@ export async function processWaitlistForResource(
 
     console.log(`[${functionName}] Found ${waitlistSnapshot.docs.length} waitlisted bookings for resource ${resourceId}.`);
 
-    // Convert Firestore Timestamps to JS Dates for comparison
     const freedStart = freedSlotStartTime;
     const freedEnd = freedSlotEndTime;
 
@@ -150,20 +150,16 @@ export async function processWaitlistForResource(
       const waitlistedBookingData = docSnap.data();
       const waitlistedBookingId = docSnap.id;
 
-      // Ensure startTime and endTime are JS Dates
       const waitlistedStartTime = (waitlistedBookingData.startTime as Timestamp).toDate();
       const waitlistedEndTime = (waitlistedBookingData.endTime as Timestamp).toDate();
       const waitlistedUserId = waitlistedBookingData.userId;
-      const waitlistedUserName = waitlistedBookingData.userName || 'Waitlisted User'; // userName might not be on booking doc, fetch if needed or use a placeholder
+      const waitlistedUserName = waitlistedBookingData.userName || 'Waitlisted User'; 
 
       console.log(`[${functionName}] Evaluating waitlisted booking ${waitlistedBookingId} for user ${waitlistedUserId}: ${waitlistedStartTime.toISOString()} to ${waitlistedEndTime.toISOString()}`);
 
-      // 2a. Check if the waitlisted booking fits within the freed slot
       if (waitlistedStartTime >= freedStart && waitlistedEndTime <= freedEnd) {
         console.log(`[${functionName}] Booking ${waitlistedBookingId} fits within the freed slot.`);
 
-        // 2b. Perform a new conflict check for this specific waitlisted booking's time
-        // against other 'Confirmed' or 'Pending' bookings
         const conflictQuery = adminDb.collection('bookings')
           .where('resourceId', '==', resourceId)
           .where('status', 'in', ['Confirmed', 'Pending'])
@@ -174,11 +170,9 @@ export async function processWaitlistForResource(
 
         if (conflictSnapshot.empty) {
           console.log(`[${functionName}] No conflicts found for booking ${waitlistedBookingId}. Promoting to 'Pending'.`);
-          // 3. Promote the booking
           const bookingDocRef = adminDb.collection('bookings').doc(waitlistedBookingId);
           await bookingDocRef.update({ status: 'Pending' });
 
-          // 4. Add Audit Log
           await addAuditLog(
             'SYSTEM_WAITLIST_PROMOTION', 
             'System',
@@ -190,7 +184,6 @@ export async function processWaitlistForResource(
             }
           );
 
-          // 5. Send Notifications
           try {
             const resourceDoc = await adminDb.collection('resources').doc(resourceId).get();
             const resourceName = resourceDoc.exists ? resourceDoc.data()?.name || 'the resource' : 'the resource';
@@ -207,7 +200,7 @@ export async function processWaitlistForResource(
           }
 
           try {
-            const adminUsersQuery = adminDb.collection('users').where('role', 'in', ['Admin', 'Technician']); // Updated roles
+            const adminUsersQuery = adminDb.collection('users').where('role', 'in', ['Admin', 'Technician']);
             const adminSnapshot = await adminUsersQuery.get();
             const adminNotificationPromises = adminSnapshot.docs.map(adminDoc => {
               return addNotification(
@@ -244,18 +237,17 @@ export async function processWaitlistForResource(
 }
 
 
-// V3 Server Action for creating a booking using Admin SDK
 export async function createBooking_SA(
   bookingPayload: {
     resourceId: string;
-    userId: string; // ID of the user for whom the booking is made
+    userId: string; 
     startTime: Date;
     endTime: Date;
     status: 'Pending' | 'Waitlisted';
     notes?: string;
   },
-  actingUser: { id: string; name: string } // ID and name of the user performing the action (e.g., the Admin)
-): Promise<string> { // Returns new booking ID
+  actingUser: { id: string; name: string } 
+): Promise<string> { 
   const functionName = "createBooking_SA V3 (Admin SDK)";
   console.log(`--- [${functionName}] ENTERING FUNCTION ---`);
   console.log(`[${functionName}] typeof window:`, typeof window);
@@ -278,7 +270,7 @@ export async function createBooking_SA(
 
   const dataToSave = {
     resourceId: bookingPayload.resourceId,
-    userId: bookingPayload.userId, // Use the userId from the payload
+    userId: bookingPayload.userId, 
     startTime: Timestamp.fromDate(new Date(bookingPayload.startTime)),
     endTime: Timestamp.fromDate(new Date(bookingPayload.endTime)),
     status: bookingPayload.status,
@@ -292,7 +284,6 @@ export async function createBooking_SA(
     const docRef = await adminDb.collection('bookings').add(dataToSave);
     console.log(`!!! SUCCESS !!! [${functionName}] Successfully created booking with Admin SDK. Doc ID: ${docRef.id}`);
 
-    // Add audit log for booking creation
     let auditDetails = `Booking for resource ${bookingPayload.resourceId} (User: ${bookingPayload.userId}) created by ${actingUser.name}. Status: ${bookingPayload.status}.`;
     if (actingUser.id !== bookingPayload.userId) {
         auditDetails = `Booking for resource ${bookingPayload.resourceId} for user ${bookingPayload.userId} created by Admin ${actingUser.name}. Status: ${bookingPayload.status}.`;
@@ -323,5 +314,91 @@ export async function createBooking_SA(
     console.error(`[${functionName}] Full error object:`, e);
     console.error(`[${functionName}] Booking data that failed:`, JSON.stringify(dataToSave, null, 2));
     throw e;
+  }
+}
+
+
+export async function manageLabMembership_SA(
+  adminUserId: string,
+  adminUserName: string,
+  targetUserId: string,
+  targetUserName: string,
+  labId: string,
+  labName: string,
+  action: 'grant' | 'revoke'
+): Promise<{ success: boolean; message: string }> {
+  const functionName = "manageLabMembership_SA";
+  console.log(`--- [${functionName}] ENTERING ---`, { adminUserId, targetUserId, labId, action });
+
+  if (!adminUserId || !adminUserName || !targetUserId || !labId || !labName) {
+    throw new Error("Missing required parameters for managing lab membership.");
+  }
+
+  const membershipQuery = adminDb.collection('labMemberships')
+    .where('userId', '==', targetUserId)
+    .where('labId', '==', labId)
+    .limit(1);
+
+  try {
+    const snapshot = await membershipQuery.get();
+    let existingMembershipDoc: FirebaseFirestore.DocumentSnapshot | undefined = undefined;
+    if (!snapshot.empty) {
+      existingMembershipDoc = snapshot.docs[0];
+    }
+
+    if (action === 'grant') {
+      const membershipData: Omit<LabMembership, 'id'> & {updatedAt: FieldValue} = {
+        userId: targetUserId,
+        labId: labId,
+        status: 'active',
+        roleInLab: 'Member', // Default role
+        updatedAt: FieldValue.serverTimestamp(),
+        actingAdminId: adminUserId,
+      };
+      if (existingMembershipDoc) {
+        await existingMembershipDoc.ref.update({
+          status: 'active',
+          roleInLab: 'Member', // Ensure role is set if re-activating
+          updatedAt: FieldValue.serverTimestamp(),
+          actingAdminId: adminUserId,
+        });
+         console.log(`[${functionName}] Membership for user ${targetUserId} in lab ${labId} updated to active.`);
+      } else {
+        membershipData.requestedAt = FieldValue.serverTimestamp() as Timestamp; // Set requestedAt if new
+        await adminDb.collection('labMemberships').add(membershipData);
+        console.log(`[${functionName}] New active membership created for user ${targetUserId} in lab ${labId}.`);
+      }
+      await addAuditLog(adminUserId, adminUserName, 'LAB_MEMBERSHIP_GRANTED', {
+        entityType: 'LabMembership', 
+        entityId: targetUserId, // User is primary entity
+        secondaryEntityType: 'Lab',
+        secondaryEntityId: labId,
+        details: `Admin ${adminUserName} granted user ${targetUserName} (ID: ${targetUserId}) access to lab ${labName} (ID: ${labId}).`
+      });
+      await addNotification(targetUserId, 'Lab Access Granted', `You have been granted access to ${labName}.`, 'lab_access_approved', '/dashboard');
+      return { success: true, message: `Access to ${labName} granted for ${targetUserName}.` };
+
+    } else if (action === 'revoke') {
+      if (existingMembershipDoc) {
+        await existingMembershipDoc.ref.delete();
+        console.log(`[${functionName}] Membership for user ${targetUserId} in lab ${labId} deleted (revoked).`);
+        await addAuditLog(adminUserId, adminUserName, 'LAB_MEMBERSHIP_REVOKED', {
+          entityType: 'LabMembership',
+          entityId: targetUserId,
+          secondaryEntityType: 'Lab',
+          secondaryEntityId: labId,
+          details: `Admin ${adminUserName} revoked user ${targetUserName}'s (ID: ${targetUserId}) access to lab ${labName} (ID: ${labId}).`
+        });
+        await addNotification(targetUserId, 'Lab Access Revoked', `Your access to ${labName} has been revoked by an administrator.`, 'lab_access_revoked', '/dashboard');
+        return { success: true, message: `Access to ${labName} revoked for ${targetUserName}.` };
+      } else {
+        console.log(`[${functionName}] No existing membership found to revoke for user ${targetUserId} in lab ${labId}.`);
+        return { success: false, message: `${targetUserName} does not have existing access to ${labName} to revoke.` };
+      }
+    }
+    return { success: false, message: "Invalid action." }; // Should not happen
+  } catch (error: any) {
+    console.error(`!!! FIRESTORE ERROR IN ${functionName} !!!`, error.toString());
+    throw error;
   }
 }
