@@ -179,10 +179,8 @@ export async function processWaitlistForResource(
           await bookingDocRef.update({ status: 'Pending' });
 
           // 4. Add Audit Log
-          // For audit log, try to get acting user name (system or admin who triggered indirectly)
-          // For simplicity, we'll log it as a system action for now.
           await addAuditLog(
-            'SYSTEM_WAITLIST_PROMOTION', // Or a specific admin user ID if available
+            'SYSTEM_WAITLIST_PROMOTION', 
             'System',
             'BOOKING_PROMOTED',
             {
@@ -193,7 +191,6 @@ export async function processWaitlistForResource(
           );
 
           // 5. Send Notifications
-          // To promoted user
           try {
             const resourceDoc = await adminDb.collection('resources').doc(resourceId).get();
             const resourceName = resourceDoc.exists ? resourceDoc.data()?.name || 'the resource' : 'the resource';
@@ -209,15 +206,14 @@ export async function processWaitlistForResource(
             console.error(`[${functionName}] Failed to send 'promoted_user' notification to ${waitlistedUserId}:`, userNotifError);
           }
 
-          // To Admins/Lab Managers
           try {
-            const adminUsersQuery = adminDb.collection('users').where('role', 'in', ['Admin', 'Lab Manager']);
+            const adminUsersQuery = adminDb.collection('users').where('role', 'in', ['Admin', 'Technician']); // Updated roles
             const adminSnapshot = await adminUsersQuery.get();
             const adminNotificationPromises = adminSnapshot.docs.map(adminDoc => {
               return addNotification(
                 adminDoc.id,
                 'Booking Promoted - Needs Approval',
-                `A waitlisted booking for ${resourceId} by user ${waitlistedUserId} has been promoted to 'Pending' and requires approval.`,
+                `A waitlisted booking for ${resourceId} by user ${waitlistedUserId} (${waitlistedUserName}) has been promoted to 'Pending' and requires approval.`,
                 'booking_promoted_admin',
                 `/admin/booking-requests?bookingId=${waitlistedBookingId}`
               );
@@ -228,7 +224,7 @@ export async function processWaitlistForResource(
           }
 
           console.log(`[${functionName}] Successfully promoted booking ${waitlistedBookingId}. Exiting waitlist processing for this slot.`);
-          return; // Promoted one, so we're done for this freed slot.
+          return; 
         } else {
           console.log(`[${functionName}] Booking ${waitlistedBookingId} conflicts with another existing Confirmed/Pending booking. Skipping.`);
         }
@@ -244,7 +240,6 @@ export async function processWaitlistForResource(
     if (error.message) console.error(`[${functionName}] Error Message:`, error.message);
     if (error.details) console.error(`[${functionName}] Firestore Error Details:`, error.details);
     console.error(`[${functionName}] Full error object:`, error);
-    // Do not re-throw here to prevent breaking the calling function if waitlist processing fails
   }
 }
 
@@ -253,12 +248,13 @@ export async function processWaitlistForResource(
 export async function createBooking_SA(
   bookingPayload: {
     resourceId: string;
+    userId: string; // ID of the user for whom the booking is made
     startTime: Date;
     endTime: Date;
     status: 'Pending' | 'Waitlisted';
     notes?: string;
   },
-  actingUser: { id: string; name: string }
+  actingUser: { id: string; name: string } // ID and name of the user performing the action (e.g., the Admin)
 ): Promise<string> { // Returns new booking ID
   const functionName = "createBooking_SA V3 (Admin SDK)";
   console.log(`--- [${functionName}] ENTERING FUNCTION ---`);
@@ -274,16 +270,20 @@ export async function createBooking_SA(
 
 
   if (!actingUser || !actingUser.id || !actingUser.name) {
-    throw new Error("User information is missing for creating booking.");
+    throw new Error("Acting user information is missing for creating booking.");
+  }
+  if (!bookingPayload.userId) {
+    throw new Error("User ID for whom the booking is being made is missing.");
   }
 
   const dataToSave = {
-    ...bookingPayload,
-    userId: actingUser.id, // Ensure booking is created for the acting user
-    createdAt: FieldValue.serverTimestamp(),
-    // Ensure startTime and endTime are Firestore Timestamps
+    resourceId: bookingPayload.resourceId,
+    userId: bookingPayload.userId, // Use the userId from the payload
     startTime: Timestamp.fromDate(new Date(bookingPayload.startTime)),
     endTime: Timestamp.fromDate(new Date(bookingPayload.endTime)),
+    status: bookingPayload.status,
+    notes: bookingPayload.notes || '',
+    createdAt: FieldValue.serverTimestamp(),
   };
 
   console.log(`[${functionName}] Attempting to add booking to Firestore. Data:`, JSON.stringify(dataToSave, null, 2));
@@ -293,6 +293,11 @@ export async function createBooking_SA(
     console.log(`!!! SUCCESS !!! [${functionName}] Successfully created booking with Admin SDK. Doc ID: ${docRef.id}`);
 
     // Add audit log for booking creation
+    let auditDetails = `Booking for resource ${bookingPayload.resourceId} (User: ${bookingPayload.userId}) created by ${actingUser.name}. Status: ${bookingPayload.status}.`;
+    if (actingUser.id !== bookingPayload.userId) {
+        auditDetails = `Booking for resource ${bookingPayload.resourceId} for user ${bookingPayload.userId} created by Admin ${actingUser.name}. Status: ${bookingPayload.status}.`;
+    }
+
     try {
       await addAuditLog(
         actingUser.id,
@@ -301,14 +306,13 @@ export async function createBooking_SA(
         {
           entityType: 'Booking',
           entityId: docRef.id,
-          details: `Booking for resource ${bookingPayload.resourceId} created by ${actingUser.name}. Status: ${bookingPayload.status}.`
+          details: auditDetails
         }
       );
     } catch (auditError: any) {
       console.error(`[${functionName}] Failed to add audit log for booking ${docRef.id}:`, auditError.toString());
-      // Non-critical, so don't re-throw, but log it.
     }
-    return docRef.id; // Return the new booking ID
+    return docRef.id;
   } catch (e: any) {
     console.error(`!!! FIRESTORE ERROR IN ${functionName} !!! FirebaseError:`, e.toString());
     console.error(`[${functionName}] Error Code:`, e.code);
@@ -318,8 +322,6 @@ export async function createBooking_SA(
     }
     console.error(`[${functionName}] Full error object:`, e);
     console.error(`[${functionName}] Booking data that failed:`, JSON.stringify(dataToSave, null, 2));
-    throw e; // Re-throw the error so the client can handle it
+    throw e;
   }
 }
-
-    
