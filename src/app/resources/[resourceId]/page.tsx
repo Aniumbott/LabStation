@@ -5,14 +5,14 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, AlertCircle, CheckCircle, Construction, User as UserIconLucide, Calendar as CalendarIcon, XCircle } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, AlertCircle, CheckCircle, Construction, User as UserIconLucide, Calendar as CalendarIcon, XCircle, Building } from 'lucide-react'; // Added Building
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
-import type { Resource, ResourceType, Booking, UnavailabilityPeriod, RoleName } from '@/types';
+import type { Resource, ResourceType, Booking, UnavailabilityPeriod, RoleName, Lab } from '@/types'; // Added Lab
 import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay, isBefore, compareAsc, isWithinInterval, isSameDay, addDays as dateFnsAddDays, Timestamp as FirestoreTimestamp } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,7 +29,7 @@ import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavai
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
 import { addAuditLog } from '@/lib/firestore-helpers';
-import { labsList, resourceStatusesList } from '@/lib/app-constants';
+// import { labsList, resourceStatusesList } from '@/lib/app-constants'; // labsList no longer needed here
 
 
 function ResourceDetailPageSkeleton() {
@@ -172,6 +172,7 @@ export default function ResourceDetailPage() {
 
   const [resource, setResource] = useState<Resource | null>(null);
   const [resourceTypeName, setResourceTypeName] = useState<string>('Loading...');
+  const [labName, setLabName] = useState<string>('Loading...'); // State for lab name
   const [isLoading, setIsLoading] = useState(true);
 
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
@@ -181,6 +182,7 @@ export default function ResourceDetailPage() {
   const [isUnavailabilityDialogOpen, setIsUnavailabilityDialogOpen] = useState(false);
   const [resourceUserBookings, setResourceUserBookings] = useState<Booking[]>([]);
   const [fetchedResourceTypesForDialog, setFetchedResourceTypesForDialog] = useState<ResourceType[]>([]);
+  const [fetchedLabsForDialog, setFetchedLabsForDialog] = useState<Lab[]>([]); // For form dialog
 
   const resourceId = typeof params.resourceId === 'string' ? params.resourceId : null;
 
@@ -191,20 +193,17 @@ export default function ResourceDetailPage() {
       return;
     }
     setIsLoading(true);
-    console.log(`Fetching resource with ID: ${resourceId}`);
     try {
       const resourceDocRef = doc(db, "resources", resourceId);
       const docSnap = await getDoc(resourceDocRef);
-      console.log(`Document snapshot for ID ${resourceId} exists:`, docSnap.exists());
 
       if (docSnap.exists()) {
         const data = docSnap.data();
-        console.log("Raw document data:", data);
         const fetchedResource: Resource = {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
-          lab: data.lab || (labsList.length > 0 ? labsList[0] : 'Electronics Lab 1'),
+          labId: data.labId || '', // Ensure labId is handled
           status: data.status || 'Working',
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
@@ -229,36 +228,29 @@ export default function ResourceDetailPage() {
         };
         setResource(fetchedResource);
 
-        if (fetchedResource.resourceTypeId && typeof fetchedResource.resourceTypeId === 'string') {
-          try {
-            const typeDocRef = doc(db, "resourceTypes", fetchedResource.resourceTypeId);
-            const typeSnap = await getDoc(typeDocRef);
-            if (typeSnap.exists()) {
-              setResourceTypeName(typeSnap.data()?.name || 'Unknown Type');
-            } else {
-              console.warn(`Resource type with ID ${fetchedResource.resourceTypeId} not found.`);
-              setResourceTypeName('N/A (Type Not Found)');
-            }
-          } catch (typeError: any) {
-            console.error("Error fetching resource type:", typeError);
-            toast({ title: "Error", description: `Could not load resource type details: ${typeError.message}`, variant: "destructive"});
-            setResourceTypeName('Error Loading Type');
-          }
+        // Fetch Resource Type Name
+        if (fetchedResource.resourceTypeId) {
+          const typeDocRef = doc(db, "resourceTypes", fetchedResource.resourceTypeId);
+          const typeSnap = await getDoc(typeDocRef);
+          setResourceTypeName(typeSnap.exists() ? typeSnap.data()?.name || 'Unknown Type' : 'N/A (Type Not Found)');
         } else {
-          if (fetchedResource.resourceTypeId) console.warn(`Resource ${resourceId} has invalid resourceTypeId: ${fetchedResource.resourceTypeId}`);
           setResourceTypeName('N/A');
         }
+
+        // Fetch Lab Name
+        if (fetchedResource.labId) {
+          const labDocRef = doc(db, "labs", fetchedResource.labId);
+          const labSnap = await getDoc(labDocRef);
+          setLabName(labSnap.exists() ? labSnap.data()?.name || 'Unknown Lab' : 'N/A (Lab Not Found)');
+        } else {
+          setLabName('N/A');
+        }
+
       } else {
-        console.log(`ResourceDetailPage: No such document with ID: ${resourceId}`);
         setResource(null);
       }
     } catch (error: any) {
-      console.error("ResourceDetailPage: Error fetching resource details:", error);
-      toast({
-        title: "Error Fetching Resource",
-        description: `Could not load resource details. ${error.message}`,
-        variant: "destructive",
-      });
+      toast({ title: "Error Fetching Resource", description: `Could not load resource details. ${error.message}`, variant: "destructive" });
       setResource(null);
     } finally {
       setIsLoading(false);
@@ -270,9 +262,10 @@ export default function ResourceDetailPage() {
   }, [fetchResourceData]);
 
   useEffect(() => {
-    if (isFormDialogOpen) {
-      const fetchTypes = async () => {
+    if (isFormDialogOpen || isUnavailabilityDialogOpen) { // Fetch for both dialogs if needed
+      const fetchSupportData = async () => {
         try {
+          // Fetch Resource Types
           const typesCollectionRef = collection(db, "resourceTypes");
           const typesQueryInstance = query(typesCollectionRef, orderBy("name", "asc"));
           const typesSnapshot = await getDocs(typesQueryInstance);
@@ -281,15 +274,26 @@ export default function ResourceDetailPage() {
             ...(docSnap.data() as Omit<ResourceType, 'id'>),
           }));
           setFetchedResourceTypesForDialog(types);
+
+          // Fetch Labs
+          const labsCollectionRef = collection(db, "labs");
+          const labsQueryInstance = query(labsCollectionRef, orderBy("name", "asc"));
+          const labsSnapshot = await getDocs(labsQueryInstance);
+          const labsData = labsSnapshot.docs.map(docSnap => ({
+            id: docSnap.id,
+            ...(docSnap.data() as Omit<Lab, 'id'>),
+          }));
+          setFetchedLabsForDialog(labsData);
+
         } catch (error: any) {
-          console.error("Error fetching resource types for dialog:", error);
-          toast({ title: "Error Loading Data", description: `Could not load resource types for the edit form: ${error.message}`, variant: "destructive" });
+          toast({ title: "Error Loading Support Data", description: `Could not load types/labs for form: ${error.message}`, variant: "destructive" });
           setFetchedResourceTypesForDialog([]);
+          setFetchedLabsForDialog([]);
         }
       };
-      fetchTypes();
+      fetchSupportData();
     }
-  }, [isFormDialogOpen, toast]);
+  }, [isFormDialogOpen, isUnavailabilityDialogOpen, toast]);
 
   useEffect(() => {
     const fetchBookingsForResourceUser = async () => {
@@ -325,7 +329,6 @@ export default function ResourceDetailPage() {
         });
         setResourceUserBookings(bookingsData);
       } catch (error:any) {
-        console.error("Error fetching user bookings for resource:", error);
         toast({ title: "Error Fetching Bookings", description: `Could not load your past bookings for this resource. ${error.message}`, variant: "destructive" });
         setResourceUserBookings([]);
       }
@@ -339,7 +342,7 @@ export default function ResourceDetailPage() {
 
   const canManageResource = useMemo(() => {
     if (!currentUser) return false;
-    return currentUser.role === 'Admin'; // Only Admin can manage directly
+    return currentUser.role === 'Admin';
   }, [currentUser]);
 
   const userPastBookingsForResource = useMemo(() => {
@@ -395,7 +398,7 @@ export default function ResourceDetailPage() {
     const firestorePayload: any = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
-      lab: data.lab,
+      labId: data.labId, // Save labId
       status: data.status,
       description: data.description || '',
       imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
@@ -429,15 +432,15 @@ export default function ResourceDetailPage() {
     try {
         const resourceDocRef = doc(db, "resources", resource.id);
         await updateDoc(resourceDocRef, firestorePayload);
-        addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Resource '${data.name}' updated by ${currentUser.name}. Status changed to ${data.status}.`});
+        const updatedLabName = fetchedLabsForDialog.find(l => l.id === data.labId)?.name || 'Unknown Lab';
+        addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Resource '${data.name}' updated by ${currentUser.name}. Status: ${data.status}, Lab: ${updatedLabName}.`});
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
         await fetchResourceData();
     } catch (error: any) {
-        console.error("Error updating resource:", error);
         toast({ title: "Update Failed", description: `Could not update resource: ${error.message}`, variant: "destructive" });
     }
     setIsFormDialogOpen(false);
-  }, [currentUser, canManageResource, resource, fetchResourceData, toast]);
+  }, [currentUser, canManageResource, resource, fetchResourceData, toast, fetchedLabsForDialog]);
 
    const handleConfirmDelete = useCallback(async () => {
     if (!resourceToDeleteId || !currentUser || !canManageResource || !resource) {
@@ -453,7 +456,6 @@ export default function ResourceDetailPage() {
         toast({ title: "Resource Deleted", description: `Resource "${resource.name}" has been removed.`, variant: "destructive" });
         router.push('/admin/resources');
     } catch (error: any) {
-        console.error("Error deleting resource:", error);
         toast({ title: "Delete Failed", description: `Could not delete resource: ${error.message}`, variant: "destructive" });
     } finally {
       setIsAlertOpen(false);
@@ -474,7 +476,6 @@ export default function ResourceDetailPage() {
       toast({ title: 'Unavailability Updated', description: `Unavailability periods for ${resource.name} have been updated.` });
       setResource(prev => prev ? ({ ...prev, unavailabilityPeriods: periodsToSave, lastUpdatedAt: new Date() }) : null);
     } catch (error: any) {
-      console.error("Error updating unavailability:", error);
       toast({ title: "Update Failed", description: `Could not save unavailability periods: ${error.message}`, variant: "destructive" });
     }
   }, [resource, currentUser, canManageResource, toast]);
@@ -501,7 +502,7 @@ export default function ResourceDetailPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 text-sm">
                 <span>Type: {resourceTypeName}</span>
                 <span className="hidden sm:inline">|</span>
-                <span>Lab: {resource.lab}</span>
+                <span className="flex items-center gap-1"><Building className="h-4 w-4 text-muted-foreground"/>Lab: {labName}</span>
             </div>
         }
         icon={Archive}
@@ -646,8 +647,8 @@ export default function ResourceDetailPage() {
                     <CardTitle className="text-2xl">{resource.name}</CardTitle>
                     {getResourceStatusBadge(resource.status)}
                 </div>
-                 <CardDescription>
-                    Type: {resourceTypeName} | Lab: {resource.lab}
+                 <CardDescription className="flex items-center gap-1">
+                    Type: {resourceTypeName} <span className="mx-1">|</span> <Building className="h-3.5 w-3.5 text-muted-foreground inline-block mr-1"/> Lab: {labName}
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -731,6 +732,7 @@ export default function ResourceDetailPage() {
             initialResource={resource}
             onSave={handleSaveResource}
             resourceTypes={fetchedResourceTypesForDialog}
+            labs={fetchedLabsForDialog} // Pass labs to dialog
         />
       )}
       {resource && (

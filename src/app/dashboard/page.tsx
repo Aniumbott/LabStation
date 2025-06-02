@@ -3,12 +3,12 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Wrench, Loader2, ThumbsUp, Clock, X, User as UserIconLucide, XCircle } from 'lucide-react'; // Updated icons
+import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Wrench, Loader2, ThumbsUp, Clock, X, User as UserIconLucide, XCircle, Building } from 'lucide-react'; // Added Building
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { Resource, Booking } from '@/types';
+import type { Resource, Booking, Lab } from '@/types'; // Added Lab
 import { Separator } from '@/components/ui/separator';
 import {
   Table,
@@ -42,7 +42,6 @@ const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Da
         console.warn(`[Dashboard] Parsed non-ISO date string for ${fieldName} in booking ${bookingId}:`, value);
         return directDate;
     }
-    console.warn(`[Dashboard] Invalid date string for ${fieldName} in booking ${bookingId} after parseISO and new Date():`, value);
   }
   if (typeof value === 'number') {
      const dateFromNum = new Date(value);
@@ -53,10 +52,9 @@ const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Da
   }
   if (value && typeof value.seconds === 'number' && typeof value.nanoseconds === 'number') {
     try {
-        console.warn(`[Dashboard] Converting Firestore-like timestamp object for ${fieldName} in booking ${bookingId}:`, value);
         return new Timestamp(value.seconds, value.nanoseconds).toDate();
     } catch (e) {
-        console.error(`[Dashboard] Error converting Firestore-like timestamp object for ${fieldName} in booking ${bookingId}:`, value, e);
+        // Fall through
     }
   }
   console.error(`[Dashboard] CRITICAL: Unexpected data type or invalid date for ${fieldName} in booking ${bookingId}. Using current date as fallback. Value:`, value, `Type: ${typeof value}`);
@@ -67,27 +65,41 @@ const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Da
 export default function DashboardPage() {
   const { currentUser } = useAuth();
   const { toast } = useToast();
-  const [frequentlyUsedResources, setFrequentlyUsedResources] = useState<Resource[]>([]);
+  const [frequentlyUsedResources, setFrequentlyUsedResources] = useState<(Resource & { labName?: string })[]>([]); // Add labName
   const [upcomingUserBookings, setUpcomingUserBookings] = useState<(Booking & { resourceName?: string })[]>([]);
   const [isLoadingResources, setIsLoadingResources] = useState(true);
   const [isLoadingBookings, setIsLoadingBookings] = useState(true);
+  const [allLabs, setAllLabs] = useState<Lab[]>([]); // State to store all labs
 
   const fetchDashboardData = useCallback(async () => {
-    console.log("[Dashboard V3] fetchDashboardData called. CurrentUser ID:", currentUser?.id);
     setIsLoadingResources(true);
     setIsLoadingBookings(true);
+
+    // Fetch all labs first
+    let fetchedLabs: Lab[] = [];
+    try {
+        const labsSnapshot = await getDocs(query(collection(db, 'labs'), orderBy('name', 'asc')));
+        fetchedLabs = labsSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Lab));
+        setAllLabs(fetchedLabs);
+    } catch (error: any) {
+        console.error("[Dashboard] Error fetching labs:", error);
+        toast({ title: "Error Loading Labs", variant: "destructive" });
+    }
+
 
     try {
       const resourcesQuery = query(collection(db, 'resources'), orderBy('name', 'asc'), limit(3));
       const resourcesSnapshot = await getDocs(resourcesQuery);
-      const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => {
+      const fetchedResourcesWithLab: (Resource & { labName?: string })[] = resourcesSnapshot.docs.map(docSnap => {
         const data = docSnap.data();
         const resourceIdForLog = docSnap.id;
+        const lab = fetchedLabs.find(l => l.id === data.labId);
         return {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
-          lab: data.lab || 'Unknown Lab',
+          labId: data.labId || '', // Store labId
+          labName: lab?.name || 'Unknown Lab', // Add labName
           status: data.status || 'Working',
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
@@ -95,27 +107,18 @@ export default function DashboardPage() {
           purchaseDate: data.purchaseDate ? safeConvertToDate(data.purchaseDate, 'purchaseDate', resourceIdForLog) : undefined,
           lastUpdatedAt: data.lastUpdatedAt ? safeConvertToDate(data.lastUpdatedAt, 'lastUpdatedAt', resourceIdForLog) : undefined,
           createdAt: data.createdAt ? safeConvertToDate(data.createdAt, 'createdAt', resourceIdForLog) : undefined,
-        } as Resource;
+        } as Resource & { labName?: string };
       });
-      setFrequentlyUsedResources(fetchedResources);
-      console.log("[Dashboard V3] Fetched frequently used resources count:", fetchedResources.length);
+      setFrequentlyUsedResources(fetchedResourcesWithLab);
     } catch (error: any) {
-      console.error("[Dashboard V3] Error fetching frequently used resources:", error.toString(), error);
-      toast({
-        title: "Error Loading Resources",
-        description: `Could not fetch frequently used resources: ${error.message}`,
-        variant: "destructive",
-      });
+      toast({ title: "Error Loading Resources", description: `Could not fetch frequently used resources: ${error.message}`, variant: "destructive"});
     } finally {
       setIsLoadingResources(false);
     }
 
     if (currentUser && currentUser.id) {
-      console.log(`[Dashboard V3] Fetching upcoming bookings for user: ${currentUser.id}`);
-      const todayStart = Timestamp.fromDate(startOfToday()); // Use Firestore Timestamp for query
-
+      const todayStart = Timestamp.fromDate(startOfToday());
       try {
-        // Firestore Index Required: bookings (userId ASC, endTime ASC, startTime ASC)
         const bookingsQuery = query(
           collection(db, 'bookings'),
           where('userId', '==', currentUser.id),
@@ -123,26 +126,18 @@ export default function DashboardPage() {
           orderBy('startTime', 'asc'),
           limit(5)
         );
-        console.log("[Dashboard V3] Upcoming bookings query constructed:", bookingsQuery);
         const bookingsSnapshot = await getDocs(bookingsQuery);
-        console.log(`[Dashboard V3] Firestore returned ${bookingsSnapshot.docs.length} bookings for upcoming query.`);
-
         const fetchedBookingsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
           const bookingData = docSnap.data();
           const bookingId = docSnap.id;
           let resourceNameStr = 'Unknown Resource';
           if (bookingData.resourceId) {
-            try {
-              const resourceDocRef = doc(db, 'resources', bookingData.resourceId);
-              const resourceDocSnap = await getDoc(resourceDocRef);
-              if (resourceDocSnap.exists()) {
-                resourceNameStr = resourceDocSnap.data()?.name || 'Unknown Resource';
-              }
-            } catch (resError) {
-              console.warn(`[Dashboard V3] Could not fetch resource name for booking ${bookingId}:`, resError);
+            const resourceDocRef = doc(db, 'resources', bookingData.resourceId);
+            const resourceDocSnap = await getDoc(resourceDocRef);
+            if (resourceDocSnap.exists()) {
+              resourceNameStr = resourceDocSnap.data()?.name || 'Unknown Resource';
             }
           }
-
           return {
             id: bookingId,
             resourceId: bookingData.resourceId,
@@ -156,35 +151,17 @@ export default function DashboardPage() {
             resourceName: resourceNameStr,
           } as Booking & { resourceName?: string };
         });
-
         let resolvedBookings = await Promise.all(fetchedBookingsPromises);
-        console.log("[Dashboard V3] Mapped Firestore results (before client filter):", resolvedBookings.length, "bookings");
-        // resolvedBookings.forEach(b => console.log(`  - ID: ${b.id}, Start: ${b.startTime?.toISOString()}, End: ${b.endTime?.toISOString()}, Status: ${b.status}`));
-
-        // Client-side filter to ensure we only show bookings whose end time is still in the future (or now)
-        // and are not cancelled.
         const now = new Date();
         const clientFilteredBookings = resolvedBookings.filter(b => b.endTime >= now && b.status !== 'Cancelled');
-
-        console.log("[Dashboard V3] Client-side filtered results (endTime >= now && status != Cancelled):", clientFilteredBookings.length, "bookings");
-        // clientFilteredBookings.forEach(b => console.log(`  - ID: ${b.id}, Start: ${b.startTime?.toISOString()}, End: ${b.endTime?.toISOString()}, Status: ${b.status}`));
-
         setUpcomingUserBookings(clientFilteredBookings);
-
       } catch (error: any) {
-        console.error("[Dashboard V3] Full FirebaseError object:", error);
-        console.error("[Dashboard V3] Error fetching upcoming bookings:", error.toString());
-        toast({
-          title: "Error Loading Your Bookings",
-          description: `Could not fetch your upcoming bookings: ${error.message}`,
-          variant: "destructive",
-        });
+        toast({ title: "Error Loading Your Bookings", description: `Could not fetch your upcoming bookings: ${error.message}`, variant: "destructive"});
         setUpcomingUserBookings([]);
       } finally {
         setIsLoadingBookings(false);
       }
     } else {
-      console.log("[Dashboard V3] No current user, clearing upcoming bookings and stopping load state.");
       setUpcomingUserBookings([]);
       setIsLoadingBookings(false);
     }
@@ -241,7 +218,9 @@ export default function DashboardPage() {
                     </CardTitle>
                     {getResourceStatusBadge(resource.status)}
                   </div>
-                  <CardDescription>{resource.lab}</CardDescription>
+                  <CardDescription className="flex items-center gap-1">
+                     <Building className="h-3.5 w-3.5 text-muted-foreground"/> {resource.labName || 'N/A'}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0 flex-grow space-y-3">
                   <div className="relative w-full h-40 rounded-md overflow-hidden">

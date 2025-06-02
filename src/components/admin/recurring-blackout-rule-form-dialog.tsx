@@ -16,13 +16,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Added Select
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
-import type { RecurringBlackoutRule, DayOfWeek } from '@/types';
+import type { RecurringBlackoutRule, DayOfWeek, Lab } from '@/types'; // Added Lab
 import { daysOfWeekArray } from '@/types';
 
 
 const recurringBlackoutRuleFormSchema = z.object({
+  labId: z.string().optional().nullable(), // Added labId field
   name: z.string().min(2, { message: 'Rule name must be at least 2 characters.' }).max(100, { message: 'Rule name cannot exceed 100 characters.' }),
   daysOfWeek: z.array(z.enum(daysOfWeekArray)).min(1, { message: "Please select at least one day of the week." }),
   reason: z.string().max(100, { message: 'Reason cannot exceed 100 characters.' }).optional().or(z.literal('')),
@@ -35,12 +37,16 @@ interface RecurringBlackoutRuleFormDialogProps {
   onOpenChange: (open: boolean) => void;
   initialRule: RecurringBlackoutRule | null;
   onSave: (data: RecurringBlackoutRuleFormValues) => Promise<void>;
+  labs: Lab[]; // Added labs prop
 }
 
-export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRule, onSave }: RecurringBlackoutRuleFormDialogProps) {
+const GLOBAL_CLOSURE_VALUE = "--global--";
+
+export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRule, onSave, labs }: RecurringBlackoutRuleFormDialogProps) {
   const form = useForm<RecurringBlackoutRuleFormValues>({
     resolver: zodResolver(recurringBlackoutRuleFormSchema),
     defaultValues: {
+      labId: GLOBAL_CLOSURE_VALUE, // Default to Global
       name: '',
       daysOfWeek: [],
       reason: '',
@@ -51,12 +57,14 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
   const resetForm = useCallback(() => {
     if (initialRule) {
         form.reset({
+          labId: initialRule.labId || GLOBAL_CLOSURE_VALUE,
           name: initialRule.name,
           daysOfWeek: initialRule.daysOfWeek || [],
           reason: initialRule.reason || '',
         });
       } else {
         form.reset({
+          labId: GLOBAL_CLOSURE_VALUE,
           name: '',
           daysOfWeek: [],
           reason: '',
@@ -69,12 +77,16 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
       setIsSubmitting(false);
       resetForm();
     }
-  }, [open, initialRule, form.reset, resetForm]); // Added resetForm to dependency array
+  }, [open, initialRule, form.reset, resetForm]); 
 
   async function onSubmit(data: RecurringBlackoutRuleFormValues) {
     setIsSubmitting(true);
+    const dataToSave = {
+        ...data,
+        labId: data.labId === GLOBAL_CLOSURE_VALUE ? null : data.labId,
+    };
     try {
-        await onSave(data);
+        await onSave(dataToSave);
     } catch (error) {
         console.error("Error in RecurringBlackoutRuleFormDialog onSubmit:", error);
     } finally {
@@ -88,11 +100,34 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
         <DialogHeader>
           <DialogTitle>{initialRule ? 'Edit Recurring Lab Closure Rule' : 'Add New Recurring Lab Closure Rule'}</DialogTitle>
           <DialogDescription>
-            {initialRule ? `Modify the rule "${initialRule.name}".` : 'Define a new weekly recurring closure for the lab.'}
+            {initialRule ? `Modify the rule "${initialRule.name}". Applies to: ${initialRule.labId ? labs.find(l=>l.id === initialRule.labId)?.name || 'Specific Lab' : 'All Labs'}.` : 'Define a new weekly recurring closure for the lab.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-2 pb-4">
+            <FormField
+              control={form.control}
+              name="labId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Applies To</FormLabel>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    value={field.value || GLOBAL_CLOSURE_VALUE} 
+                    disabled={isSubmitting}
+                  >
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value={GLOBAL_CLOSURE_VALUE}>Global (All Labs)</SelectItem>
+                      {labs.map(lab => (
+                        <SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="name"

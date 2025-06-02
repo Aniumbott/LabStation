@@ -21,8 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Save, X, PlusCircle, Network, Info, Loader2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { labsList, resourceStatusesList } from '@/lib/app-constants'; // resourceStatusesList now has updated values
+import type { Resource, ResourceStatus, ResourceType, Lab } from '@/types';
+import { resourceStatusesList } from '@/lib/app-constants';
 import { parseISO, format, isValid as isValidDateFn } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
@@ -33,8 +33,8 @@ const NONE_PROTOCOL_VALUE = "--none-protocol--";
 const resourceFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, { message: 'Name cannot exceed 100 characters.' }),
   resourceTypeId: z.string().min(1, { message: 'Please select a resource type.' }),
-  lab: z.enum(labsList as [string, ...string[]], { required_error: 'Please select a lab.' }),
-  status: z.enum(resourceStatusesList as [ResourceStatus, ...ResourceStatus[]], { required_error: 'Please select a status.'}), // Uses updated list
+  labId: z.string().min(1, { message: 'Please select a lab.' }), // Changed from lab to labId
+  status: z.enum(resourceStatusesList as [ResourceStatus, ...ResourceStatus[]], { required_error: 'Please select a status.'}),
   description: z.string().max(500, { message: 'Description cannot exceed 500 characters.' }).optional().or(z.literal('')),
   imageUrl: z.string().url({ message: 'Please enter a valid URL for the image.' }).optional().or(z.literal('')),
   manufacturer: z.string().max(100).optional().or(z.literal('')),
@@ -74,20 +74,21 @@ interface ResourceFormDialogProps {
   initialResource: Resource | null;
   onSave: (data: ResourceFormValues, resourceIdToUpdate?: string) => Promise<void>;
   resourceTypes: ResourceType[];
+  labs: Lab[]; // Added labs prop
 }
 
 export function ResourceFormDialog({
-    open, onOpenChange, initialResource, onSave, resourceTypes
+    open, onOpenChange, initialResource, onSave, resourceTypes, labs // Added labs
 }: ResourceFormDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<ResourceFormValues>({
     resolver: zodResolver(resourceFormSchema),
-    defaultValues: { // Will be overridden by resetForm
+    defaultValues: {
         name: '',
         resourceTypeId: '',
-        lab: undefined,
-        status: 'Working', // Default new status
+        labId: '', // Changed from lab to labId
+        status: 'Working',
         description: '',
         imageUrl: '',
         manufacturer: '',
@@ -108,8 +109,8 @@ export function ResourceFormDialog({
       form.reset({
         name: initialResource.name,
         resourceTypeId: initialResource.resourceTypeId,
-        lab: initialResource.lab,
-        status: initialResource.status, // This will now be 'Working', 'Maintenance', or 'Broken'
+        labId: initialResource.labId, // Changed from lab to labId
+        status: initialResource.status,
         description: initialResource.description || '',
         imageUrl: initialResource.imageUrl || '',
         manufacturer: initialResource.manufacturer || '',
@@ -134,8 +135,8 @@ export function ResourceFormDialog({
       form.reset({
         name: '',
         resourceTypeId: resourceTypes.length > 0 ? resourceTypes[0].id : '',
-        lab: labsList.length > 0 ? labsList[0] : undefined,
-        status: 'Working', // Default for new resources
+        labId: labs.length > 0 ? labs[0].id : '', // Default to first labId
+        status: 'Working',
         description: '',
         imageUrl: '',
         manufacturer: '',
@@ -150,14 +151,14 @@ export function ResourceFormDialog({
         allowQueueing: false,
       });
     }
-  }, [initialResource, resourceTypes, form.reset]);
+  }, [initialResource, resourceTypes, labs, form.reset]); // Added labs
 
   useEffect(() => {
     if (open) {
       setIsSubmitting(false);
       resetForm();
     }
-  }, [open, initialResource, resourceTypes, form.reset, resetForm]);
+  }, [open, initialResource, resourceTypes, labs, form.reset, resetForm]); // Added labs
 
 
   async function onSubmit(data: ResourceFormValues) {
@@ -226,28 +227,29 @@ export function ResourceFormDialog({
                               <SelectContent>
                               {resourceTypes.length > 0 ? resourceTypes.map(type => (
                                   <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-                              )) : <SelectItem value="disabled_placeholder_no_types" disabled>No resource types available. Please add types first.</SelectItem>}
+                              )) : <SelectItem value="disabled_placeholder_no_types" disabled>No resource types available. Add types in Lab Management.</SelectItem>}
                               </SelectContent>
                           </Select>
-                          {resourceTypes.length === 0 && <FormDescription className="text-destructive">Please define resource types in Admin &gt; Resource Types before adding resources.</FormDescription>}
+                          {resourceTypes.length === 0 && <FormDescription className="text-destructive">Please define resource types in Admin &gt; Lab Management.</FormDescription>}
                           <FormMessage />
                           </FormItem>
                       )}
                     />
                     <FormField
                       control={form.control}
-                      name="lab"
+                      name="labId" // Changed from lab to labId
                       render={({ field }) => (
                           <FormItem>
                           <FormLabel>Lab <span className="text-destructive">*</span></FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ''} disabled={isSubmitting}>
-                              <FormControl><SelectTrigger><SelectValue placeholder="Select a lab" /></SelectTrigger></FormControl>
+                          <Select onValueChange={field.onChange} value={field.value || ''} disabled={labs.length === 0 || isSubmitting}>
+                              <FormControl><SelectTrigger><SelectValue placeholder={labs.length > 0 ? "Select a lab" : "No labs defined"} /></SelectTrigger></FormControl>
                               <SelectContent>
-                              {labsList.map(labName => (
-                                  <SelectItem key={labName} value={labName}>{labName}</SelectItem>
-                              ))}
+                              {labs.length > 0 ? labs.map(lab => ( // Use dynamic labs list
+                                  <SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>
+                              )) : <SelectItem value="disabled_placeholder_no_labs" disabled>No labs available. Add labs in Lab Management.</SelectItem>}
                               </SelectContent>
                           </Select>
+                           {labs.length === 0 && <FormDescription className="text-destructive">Please define labs in Admin &gt; Lab Management.</FormDescription>}
                           <FormMessage />
                           </FormItem>
                       )}
@@ -492,7 +494,7 @@ export function ResourceFormDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                     <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting || (resourceTypes.length === 0 && !initialResource) }>
+              <Button type="submit" disabled={isSubmitting || (resourceTypes.length === 0 && !initialResource) || (labs.length === 0 && !initialResource) }>
                 {isSubmitting
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   : (initialResource ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)

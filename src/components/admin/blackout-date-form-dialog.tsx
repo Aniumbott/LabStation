@@ -16,14 +16,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Calendar } from '@/components/ui/calendar';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Added Select
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Save, X, PlusCircle, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
-import type { BlackoutDate } from '@/types';
+import type { BlackoutDate, Lab } from '@/types'; // Added Lab
 import { format, parseISO, isValid as isValidDateFn, startOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 const blackoutDateFormSchema = z.object({
+  labId: z.string().optional().nullable(), // Added labId field
   date: z.date({ 
     required_error: "A date is required.",
     invalid_type_error: "That's not a valid date!",
@@ -38,12 +40,16 @@ interface BlackoutDateFormDialogProps {
   onOpenChange: (open: boolean) => void;
   initialBlackoutDate: BlackoutDate | null;
   onSave: (data: BlackoutDateFormValues) => Promise<void>;
+  labs: Lab[]; // Added labs prop
 }
 
-export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate, onSave }: BlackoutDateFormDialogProps) {
+const GLOBAL_CLOSURE_VALUE = "--global--";
+
+export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate, onSave, labs }: BlackoutDateFormDialogProps) {
   const form = useForm<BlackoutDateFormValues>({
     resolver: zodResolver(blackoutDateFormSchema),
     defaultValues: {
+      labId: GLOBAL_CLOSURE_VALUE, // Default to Global
       date: startOfDay(new Date()),
       reason: '',
     },
@@ -52,17 +58,18 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const resetForm = useCallback(() => {
-    if (initialBlackoutDate && initialBlackoutDate.date) {
-      // initialBlackoutDate.date is 'YYYY-MM-DD' string from Firestore
-      const dateToSet = isValidDateFn(parseISO(initialBlackoutDate.date)) 
+    if (initialBlackoutDate) {
+      const dateToSet = initialBlackoutDate.date && isValidDateFn(parseISO(initialBlackoutDate.date)) 
                         ? parseISO(initialBlackoutDate.date) 
                         : startOfDay(new Date());
       form.reset({
+        labId: initialBlackoutDate.labId || GLOBAL_CLOSURE_VALUE,
         date: dateToSet,
         reason: initialBlackoutDate.reason || '',
       });
     } else {
       form.reset({
+        labId: GLOBAL_CLOSURE_VALUE,
         date: startOfDay(new Date()),
         reason: '',
       });
@@ -79,8 +86,12 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
 
   async function onSubmit(data: BlackoutDateFormValues) {
     setIsSubmitting(true);
+    const dataToSave = {
+      ...data,
+      labId: data.labId === GLOBAL_CLOSURE_VALUE ? null : data.labId,
+    };
     try {
-      await onSave(data); 
+      await onSave(dataToSave); 
     } catch (error) {
       console.error("Error in BlackoutDateFormDialog onSubmit:", error);
     } finally {
@@ -94,11 +105,34 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
         <DialogHeader>
           <DialogTitle>{initialBlackoutDate ? 'Edit Blackout Date' : 'Add New Blackout Date'}</DialogTitle>
           <DialogDescription>
-            {initialBlackoutDate && initialBlackoutDate.date ? `Modify the blackout date for ${format(parseISO(initialBlackoutDate.date), 'PPP')}.` : 'Select a date and optionally provide a reason for lab closure.'}
+            {initialBlackoutDate && initialBlackoutDate.date ? `Modify the blackout. Applies to: ${initialBlackoutDate.labId ? labs.find(l=>l.id === initialBlackoutDate.labId)?.name || 'Specific Lab' : 'All Labs'}.` : 'Select a date and optionally provide a reason for lab closure.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-2 pb-4">
+            <FormField
+              control={form.control}
+              name="labId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Applies To</FormLabel>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    value={field.value || GLOBAL_CLOSURE_VALUE} 
+                    disabled={isSubmitting}
+                  >
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value={GLOBAL_CLOSURE_VALUE}>Global (All Labs)</SelectItem>
+                      {labs.map(lab => (
+                        <SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="date"

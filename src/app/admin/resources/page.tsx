@@ -11,8 +11,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, X, CalendarPlus, CheckCircle2 } from 'lucide-react';
-import type { Resource, ResourceStatus, ResourceType } from '@/types';
-import { labsList, resourceStatusesList } from '@/lib/app-constants';
+import type { Resource, ResourceStatus, ResourceType, Lab } from '@/types'; // Added Lab
+import { resourceStatusesList } from '@/lib/app-constants'; // labsList removed as we fetch dynamically
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -69,6 +69,7 @@ export default function AdminResourcesPage() {
 
   const [resources, setResources] = useState<Resource[]>([]);
   const [fetchedResourceTypes, setFetchedResourceTypes] = useState<ResourceType[]>([]);
+  const [fetchedLabs, setFetchedLabs] = useState<Lab[]>([]); // State for labs
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
@@ -77,30 +78,30 @@ export default function AdminResourcesPage() {
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState('');
   const [tempFilterTypeId, setTempFilterTypeId] = useState<string>('all');
-  const [tempFilterLab, setTempFilterLab] = useState<string>('all');
+  const [tempFilterLabId, setTempFilterLabId] = useState<string>('all'); // Changed from tempFilterLab to tempFilterLabId
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(undefined);
   const [currentMonthInDialog, setCurrentMonthInDialog] = useState<Date>(startOfDay(new Date()));
 
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [activeFilterTypeId, setActiveFilterTypeId] = useState<string>('all');
-  const [activeFilterLab, setActiveFilterLab] = useState<string>('all');
+  const [activeFilterLabId, setActiveFilterLabId] = useState<string>('all'); // Changed from activeFilterLab to activeFilterLabId
   const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
 
   const canManageResources = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
 
-  const fetchResourcesAndTypes = useCallback(async () => {
+  const fetchInitialData = useCallback(async () => { // Renamed from fetchResourcesAndTypes
     setIsLoadingData(true);
     try {
+      // Fetch Resources
       const resourcesQuery = query(collection(db, "resources"), orderBy("name", "asc"));
       const resourcesSnapshot = await getDocs(resourcesQuery);
       const fetchedResourcesPromises = resourcesSnapshot.docs.map(async (docSnap) => {
         const data = docSnap.data();
-
         return {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
-          lab: data.lab || (labsList.length > 0 ? labsList[0] : 'Electronics Lab 1'),
+          labId: data.labId || '', // Ensure labId is handled
           status: data.status || 'Working',
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
@@ -127,6 +128,7 @@ export default function AdminResourcesPage() {
       const fetchedResources = await Promise.all(fetchedResourcesPromises);
       setResources(fetchedResources);
 
+      // Fetch Resource Types
       const typesQueryInstance = query(collection(db, "resourceTypes"), orderBy("name", "asc"));
       const typesSnapshot = await getDocs(typesQueryInstance);
       const rTypes: ResourceType[] = typesSnapshot.docs.map(docSnap => ({
@@ -136,34 +138,47 @@ export default function AdminResourcesPage() {
       }));
       setFetchedResourceTypes(rTypes);
 
+      // Fetch Labs
+      const labsQueryInstance = query(collection(db, "labs"), orderBy("name", "asc"));
+      const labsSnapshot = await getDocs(labsQueryInstance);
+      const rLabs: Lab[] = labsSnapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        name: docSnap.data().name || 'Unnamed Lab',
+        location: docSnap.data().location,
+        description: docSnap.data().description,
+      }));
+      setFetchedLabs(rLabs);
+
     } catch (error: any) {
-      console.error("Error fetching resources or types: ", error);
+      console.error("Error fetching initial data: ", error);
       toast({ title: "Database Error", description: `Failed to fetch data: ${error.message}`, variant: "destructive" });
       setResources([]);
       setFetchedResourceTypes([]);
+      setFetchedLabs([]);
     }
     setIsLoadingData(false);
   }, [toast]);
 
 
   useEffect(() => {
-    fetchResourcesAndTypes();
-  }, [fetchResourcesAndTypes]);
+    fetchInitialData();
+  }, [fetchInitialData]);
 
   useEffect(() => {
     if (isFilterDialogOpen) {
       setTempSearchTerm(activeSearchTerm);
       setTempFilterTypeId(activeFilterTypeId);
-      setTempFilterLab(activeFilterLab);
+      setTempFilterLabId(activeFilterLabId); // Use labId state
       setTempSelectedDate(activeSelectedDate);
       setCurrentMonthInDialog(activeSelectedDate || startOfDay(new Date()));
     }
-  }, [isFilterDialogOpen, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
+  }, [isFilterDialogOpen, activeSearchTerm, activeFilterTypeId, activeFilterLabId, activeSelectedDate]); // Use labId state
 
   const filteredResources = useMemo(() => {
     return resources.map(resource => {
       const type = fetchedResourceTypes.find(rt => rt.id === resource.resourceTypeId);
-      return { ...resource, resourceTypeName: type?.name || 'N/A' };
+      const lab = fetchedLabs.find(l => l.id === resource.labId); // Find lab by labId
+      return { ...resource, resourceTypeName: type?.name || 'N/A', labName: lab?.name || 'N/A' }; // Add labName
     }).filter(resource => {
       const lowerSearchTerm = activeSearchTerm.toLowerCase();
       const searchMatch = !activeSearchTerm ||
@@ -171,10 +186,11 @@ export default function AdminResourcesPage() {
         (resource.description && resource.description.toLowerCase().includes(lowerSearchTerm)) ||
         (resource.manufacturer && resource.manufacturer.toLowerCase().includes(lowerSearchTerm)) ||
         (resource.model && resource.model.toLowerCase().includes(lowerSearchTerm)) ||
-        (resource.resourceTypeName && resource.resourceTypeName.toLowerCase().includes(lowerSearchTerm));
+        (resource.resourceTypeName && resource.resourceTypeName.toLowerCase().includes(lowerSearchTerm)) ||
+        (resource.labName && resource.labName.toLowerCase().includes(lowerSearchTerm)); // Search by labName
 
       const typeMatch = activeFilterTypeId === 'all' || resource.resourceTypeId === activeFilterTypeId;
-      const labMatch = activeFilterLab === 'all' || resource.lab === activeFilterLab;
+      const labMatch = activeFilterLabId === 'all' || resource.labId === activeFilterLabId; // Filter by labId
 
       let dateMatch = true;
       if (activeSelectedDate) {
@@ -197,21 +213,21 @@ export default function AdminResourcesPage() {
       }
       return searchMatch && typeMatch && labMatch && dateMatch;
     });
-  }, [resources, fetchedResourceTypes, activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
+  }, [resources, fetchedResourceTypes, fetchedLabs, activeSearchTerm, activeFilterTypeId, activeFilterLabId, activeSelectedDate]); // Added fetchedLabs, use labId
 
 
   const handleApplyDialogFilters = useCallback(() => {
     setActiveSearchTerm(tempSearchTerm);
     setActiveFilterTypeId(tempFilterTypeId);
-    setActiveFilterLab(tempFilterLab);
+    setActiveFilterLabId(tempFilterLabId); // Use labId state
     setActiveSelectedDate(tempSelectedDate);
     setIsFilterDialogOpen(false);
-  }, [tempSearchTerm, tempFilterTypeId, tempFilterLab, tempSelectedDate]);
+  }, [tempSearchTerm, tempFilterTypeId, tempFilterLabId, tempSelectedDate]); // Use labId state
 
   const resetDialogFiltersOnly = useCallback(() => {
     setTempSearchTerm('');
     setTempFilterTypeId('all');
-    setTempFilterLab('all');
+    setTempFilterLabId('all'); // Use labId state
     setTempSelectedDate(undefined);
     setCurrentMonthInDialog(startOfDay(new Date()));
   }, []);
@@ -219,7 +235,7 @@ export default function AdminResourcesPage() {
   const resetAllActivePageFilters = useCallback(() => {
     setActiveSearchTerm('');
     setActiveFilterTypeId('all');
-    setActiveFilterLab('all');
+    setActiveFilterLabId('all'); // Use labId state
     setActiveSelectedDate(undefined);
     resetDialogFiltersOnly();
     setIsFilterDialogOpen(false);
@@ -227,32 +243,36 @@ export default function AdminResourcesPage() {
 
   const handleOpenNewDialog = useCallback(() => {
     if (fetchedResourceTypes.length === 0) {
-        toast({
-            title: "No Resource Types Defined",
-            description: "Please add resource types first before adding resources.",
-            variant: "destructive",
-        });
-        router.push('/admin/labs'); // Updated to point to labs (inventory) page
+        toast({ title: "No Resource Types Defined", description: "Please add resource types in Lab Management.", variant: "destructive" });
+        router.push('/admin/inventory');
+        return;
+    }
+    if (fetchedLabs.length === 0) {
+        toast({ title: "No Labs Defined", description: "Please add labs in Lab Management.", variant: "destructive" });
+        router.push('/admin/inventory');
         return;
     }
     setEditingResource(null);
     setIsFormDialogOpen(true);
-  }, [fetchedResourceTypes, toast, router]);
+  }, [fetchedResourceTypes, fetchedLabs, toast, router]);
 
 
   const handleSaveResource = useCallback(async (data: ResourceFormValues) => {
     if (!currentUser || !canManageResources) {
-      toast({ title: "Permission Denied", description: "You are not authorized to perform this action.", variant: "destructive" });
+      toast({ title: "Permission Denied", description: "You are not authorized.", variant: "destructive" });
       setIsFormDialogOpen(false);
       return;
     }
 
     const resourceType = fetchedResourceTypes.find(rt => rt.id === data.resourceTypeId);
     if (!resourceType) {
-      toast({ title: "Invalid Resource Type", description: "Selected resource type is not valid.", variant: "destructive" });
-      setIsFormDialogOpen(false);
-      return;
+      toast({ title: "Invalid Resource Type", variant: "destructive" }); return;
     }
+    const lab = fetchedLabs.find(l => l.id === data.labId); // Validate labId
+    if (!lab) {
+      toast({ title: "Invalid Lab", variant: "destructive" }); return;
+    }
+
 
     let purchaseDateForFirestore: Timestamp | null = null;
     if (data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))) {
@@ -275,7 +295,7 @@ export default function AdminResourcesPage() {
     const firestorePayload: any = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
-      lab: data.lab,
+      labId: data.labId, // Save labId
       status: data.status,
       description: data.description || '',
       imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
@@ -310,7 +330,7 @@ export default function AdminResourcesPage() {
 
     const isEditing = !!editingResource;
     const auditAction = isEditing ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
-    const auditDetails = `Resource '${data.name}' ${isEditing ? 'updated' : 'created'} by ${currentUser.name}. Status set to ${data.status}.`;
+    const auditDetails = `Resource '${data.name}' ${isEditing ? 'updated' : 'created'} by ${currentUser.name}. Status: ${data.status}, Lab: ${lab.name}.`;
 
     setIsLoadingData(true);
     try {
@@ -334,22 +354,22 @@ export default function AdminResourcesPage() {
       }
       setIsFormDialogOpen(false);
       setEditingResource(null);
-      await fetchResourcesAndTypes();
+      await fetchInitialData(); // Use renamed function
     } catch (error: any) {
         console.error(`Error ${isEditing ? 'updating' : 'creating'} resource:`, error);
         toast({ title: "Database Error", description: `Failed to ${isEditing ? 'update' : 'create'} resource: ${error.message}`, variant: "destructive" });
     } finally {
       setIsLoadingData(false);
     }
-  }, [currentUser, canManageResources, editingResource, fetchedResourceTypes, fetchResourcesAndTypes, toast]);
+  }, [currentUser, canManageResources, editingResource, fetchedResourceTypes, fetchedLabs, fetchInitialData, toast]); // Added fetchedLabs, use renamed function
 
 
   const activeFilterCount = useMemo(() => [
     activeSearchTerm !== '',
     activeFilterTypeId !== 'all',
-    activeFilterLab !== 'all',
+    activeFilterLabId !== 'all', // Use labId state
     activeSelectedDate !== undefined
-  ].filter(Boolean).length, [activeSearchTerm, activeFilterTypeId, activeFilterLab, activeSelectedDate]);
+  ].filter(Boolean).length, [activeSearchTerm, activeFilterTypeId, activeFilterLabId, activeSelectedDate]); // Use labId state
 
 
   const handleOpenEditDialog = (resource: Resource) => {
@@ -395,7 +415,7 @@ export default function AdminResourcesPage() {
                           <Input
                           id="resourceSearchDialog"
                           type="search"
-                          placeholder="Name, manufacturer, model, type..."
+                          placeholder="Name, manufacturer, model, type, lab..."
                           value={tempSearchTerm}
                           onChange={(e) => setTempSearchTerm(e.target.value)}
                           className="h-9 pl-8"
@@ -415,19 +435,20 @@ export default function AdminResourcesPage() {
                             ))}
                           </SelectContent>
                         </Select>
-                         {fetchedResourceTypes.length === 0 && <p className="text-xs text-muted-foreground mt-1">No resource types found. Add types in Admin &gt; Lab Management.</p>}
+                         {fetchedResourceTypes.length === 0 && <p className="text-xs text-muted-foreground mt-1">No resource types found. Add types in Lab Management.</p>}
                       </div>
                       <div>
                         <Label htmlFor="resourceLabFilterDialog">Lab</Label>
-                        <Select value={tempFilterLab} onValueChange={setTempFilterLab}>
-                          <SelectTrigger id="resourceLabFilterDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Lab" /></SelectTrigger>
+                        <Select value={tempFilterLabId} onValueChange={setTempFilterLabId} disabled={fetchedLabs.length === 0}> {/* Use labId state */}
+                          <SelectTrigger id="resourceLabFilterDialog" className="h-9 mt-1"><SelectValue placeholder={fetchedLabs.length > 0 ? "Filter by Lab" : "No labs available"} /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">All Labs</SelectItem>
-                            {labsList.map(lab => (
-                              <SelectItem key={lab} value={lab}>{lab}</SelectItem>
+                            {fetchedLabs.map(lab => ( // Use dynamic labs
+                              <SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                        {fetchedLabs.length === 0 && <p className="text-xs text-muted-foreground mt-1">No labs found. Add labs in Lab Management.</p>}
                       </div>
                     </div>
                     <Separator />
@@ -454,7 +475,7 @@ export default function AdminResourcesPage() {
                               classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
                           />
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">Filters for resources with operational status 'Working' on the selected date, excluding defined unavailability.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Filters for resources with status 'Working' on selected date, excluding unavailability.</p>
                     </div>
                   </div>
                 </ScrollArea>
@@ -486,7 +507,7 @@ export default function AdminResourcesPage() {
                 <TableHead className="w-[60px]">Image</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead>Lab</TableHead>
+                <TableHead>Lab</TableHead> {/* Changed column header */}
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right w-[100px]">Actions</TableHead>
               </TableRow>
@@ -511,7 +532,7 @@ export default function AdminResourcesPage() {
                      </Link>
                   </TableCell>
                   <TableCell>{resource.resourceTypeName || 'N/A'}</TableCell>
-                  <TableCell>{resource.lab}</TableCell>
+                  <TableCell>{resource.labName || 'N/A'}</TableCell> {/* Display labName */}
                   <TableCell>{getResourceStatusBadge(resource.status)}</TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -569,6 +590,7 @@ export default function AdminResourcesPage() {
             initialResource={editingResource}
             onSave={handleSaveResource}
             resourceTypes={fetchedResourceTypes}
+            labs={fetchedLabs} // Pass labs to dialog
         />
       )}
     </div>

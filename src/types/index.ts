@@ -25,11 +25,21 @@ export interface UnavailabilityPeriod {
   reason?: string;
 }
 
+// New Lab Interface (already present, ensuring it's the one we use)
+export interface Lab {
+  id: string;
+  name: string;
+  location?: string;
+  description?: string;
+  createdAt?: Date;
+  lastUpdatedAt?: Date;
+}
+
 export interface Resource {
   id: string;
   name: string;
   resourceTypeId: string;
-  lab: string;
+  labId: string; // Changed from lab: string
   status: ResourceStatus;
   description?: string;
   imageUrl?: string;
@@ -66,12 +76,11 @@ export interface Booking {
   status: 'Confirmed' | 'Pending' | 'Cancelled' | 'Waitlisted';
   notes?: string;
   usageDetails?: BookingUsageDetails | null;
-  // Denormalized fields for display - populated client-side
   resourceName?: string;
   userName?: string;
 }
 
-export type RoleName = 'Admin' | 'Technician' | 'Researcher'; // Removed 'Lab Manager'
+export type RoleName = 'Admin' | 'Technician' | 'Researcher';
 
 export type UserStatus = 'active' | 'pending_approval' | 'suspended';
 
@@ -85,6 +94,19 @@ export interface User {
   createdAt: Date;
 }
 
+// New LabMembership Interface
+export interface LabMembership {
+  id?: string; // Firestore document ID
+  userId: string;
+  labId: string;
+  status: 'active' | 'pending_approval' | 'rejected'; // Status of the membership/request
+  roleInLab?: 'Lead' | 'Member'; // Optional: For future lab-specific roles
+  requestedAt?: Date; // Timestamp of request
+  approvedAt?: Date; // Timestamp of approval
+  approverId?: string; // User ID of admin/lead who approved
+}
+
+
 export type MaintenanceRequestStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed';
 
 export interface MaintenanceRequest {
@@ -97,7 +119,6 @@ export interface MaintenanceRequest {
   dateReported: Date;
   dateResolved?: Date | null;
   resolutionNotes?: string | null;
-  // Denormalized fields for display - populated client-side
   resourceName?: string;
   reportedByUserName?: string;
   assignedTechnicianName?: string;
@@ -114,7 +135,10 @@ export type NotificationType =
   | 'maintenance_assigned'
   | 'maintenance_resolved'
   | 'signup_approved'
-  | 'signup_pending_admin';
+  | 'signup_pending_admin'
+  | 'lab_access_request_new' // New notification type
+  | 'lab_access_approved'    // New notification type
+  | 'lab_access_rejected';   // New notification type
 
 export interface Notification {
   id: string;
@@ -129,6 +153,7 @@ export interface Notification {
 
 export interface BlackoutDate {
   id: string;
+  labId?: string | null; // Optional: null or undefined for global, labId for specific
   date: string; // YYYY-MM-DD format
   reason?: string;
 }
@@ -139,6 +164,7 @@ export const daysOfWeekArray: DayOfWeek[] = ['Sunday', 'Monday', 'Tuesday', 'Wed
 
 export interface RecurringBlackoutRule {
   id: string;
+  labId?: string | null; // Optional: null or undefined for global, labId for specific
   name: string;
   daysOfWeek: DayOfWeek[];
   reason?: string;
@@ -152,7 +178,8 @@ export type AuditActionType =
   | 'MAINTENANCE_CREATED' | 'MAINTENANCE_UPDATED'
   | 'BLACKOUT_DATE_CREATED' | 'BLACKOUT_DATE_UPDATED' | 'BLACKOUT_DATE_DELETED'
   | 'RECURRING_RULE_CREATED' | 'RECURRING_RULE_UPDATED' | 'RECURRING_RULE_DELETED'
-  | 'LAB_CREATED' | 'LAB_UPDATED' | 'LAB_DELETED';
+  | 'LAB_CREATED' | 'LAB_UPDATED' | 'LAB_DELETED'
+  | 'LAB_MEMBERSHIP_REQUESTED' | 'LAB_MEMBERSHIP_APPROVED' | 'LAB_MEMBERSHIP_REJECTED' | 'LAB_MEMBERSHIP_REMOVED' | 'LAB_MEMBERSHIP_LEFT'; // New audit actions
 
 export interface AuditLogEntry {
   id: string;
@@ -160,17 +187,7 @@ export interface AuditLogEntry {
   userId: string;
   userName: string;
   action: AuditActionType;
-  entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule' | 'Lab' | undefined;
+  entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule' | 'Lab' | 'LabMembership' | undefined; // Added LabMembership
   entityId?: string | undefined;
   details: string;
-}
-
-// New Lab Interface
-export interface Lab {
-  id: string;
-  name: string;
-  location?: string;
-  description?: string;
-  createdAt?: Date;
-  lastUpdatedAt?: Date;
 }
