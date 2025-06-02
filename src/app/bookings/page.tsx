@@ -105,9 +105,6 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     setIsClient(true);
   }, []);
 
-  // Removed useEffect that set displayScope based on currentUser.role
-  // useState('mine') now serves as the default for all.
-
   const canViewAllBookings = useMemo(() => currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Technician'), [currentUser]);
 
 
@@ -122,7 +119,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       let bookingsQueryInstance;
       if (displayScope === 'all' && canViewAllBookings) {
         bookingsQueryInstance = query(collection(db, 'bookings'), orderBy('startTime', 'asc'));
-      } else { // 'mine' scope or Researcher role
+      } else { 
         bookingsQueryInstance = query(
           collection(db, 'bookings'),
           where('userId', '==', currentUser.id),
@@ -234,9 +231,8 @@ function BookingsPageContent({}: BookingsPageContentProps) {
 
   useEffect(() => {
     if (isClient && currentUser) {
-      fetchSupportData(); // Fetch support data first
+      fetchSupportData(); 
     } else if (isClient && !currentUser) {
-      // Reset states if user logs out
       setAllBookingsDataSource([]); setIsLoadingBookings(false);
       setAllAvailableResources([]); setIsLoadingResources(false);
       setAllUsersForFilter([]); setIsLoadingUsersForFilter(false);
@@ -244,7 +240,6 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     }
   }, [isClient, currentUser, fetchSupportData]);
 
-  // Fetch bookings data after support data (especially users and resources) is available
   useEffect(() => {
     if (currentUser && !isLoadingResources && !isLoadingUsersForFilter) {
         fetchBookingsData();
@@ -289,7 +284,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       const initialResourceId = resourceIdForNew || (allAvailableResources.length > 0 ? allAvailableResources[0].id : '');
       bookingData = {
         startTime: defaultStartTime,
-        endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000), // Default 2 hours
+        endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000), 
         createdAt: new Date(),
         userId: currentUser.id,
         resourceId: initialResourceId,
@@ -342,13 +337,13 @@ function BookingsPageContent({}: BookingsPageContentProps) {
   const bookingsToDisplay = useMemo(() => {
     if (!currentUser || isLoadingBookings || isLoadingResources || isLoadingUsersForFilter) return [];
 
-    let filteredBookings = [...allBookingsDataSource]; // Use the fetched source
+    let filteredBookings = [...allBookingsDataSource]; 
 
     if (activeSearchTerm) {
       const lowerSearchTerm = activeSearchTerm.toLowerCase();
       filteredBookings = filteredBookings.filter(b =>
         (b.resourceName && b.resourceName.toLowerCase().includes(lowerSearchTerm)) ||
-        (b.userName && b.userName.toLowerCase().includes(lowerSearchTerm)) || // Search by user name if viewing all
+        (b.userName && b.userName.toLowerCase().includes(lowerSearchTerm)) || 
         (b.notes && b.notes.toLowerCase().includes(lowerSearchTerm))
       );
     }
@@ -367,7 +362,6 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     if (activeSelectedDate) {
       return filteredBookings.filter(b => b.startTime && isValidDateFn(b.startTime) && isSameDay(b.startTime, activeSelectedDate));
     } else {
-      // Default view: upcoming non-cancelled bookings
       return filteredBookings.filter(b =>
         b.startTime &&
         !isBefore(startOfDay(b.startTime), startOfToday()) &&
@@ -583,7 +577,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
             } catch (waitlistNotificationError: any) { toast({ title: "Waitlist Notification Failed", variant: "destructive" }); }
           }
         }
-      } else if (formData.id) { // Editing
+      } else if (formData.id) { 
         const bookingDataToUpdate: any = { resourceId: formData.resourceId!, startTime: Timestamp.fromDate(finalStartTime), endTime: Timestamp.fromDate(finalEndTime), status: formData.status || 'Pending', notes: formData.notes || '' };
         const bookingDocRef = doc(db, "bookings", formData.id);
         await updateDoc(bookingDocRef, bookingDataToUpdate);
@@ -642,7 +636,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
         const resourceDocSnap = await getDoc(doc(db, 'resources', bookingFromState.resourceId));
         detailedBooking.resourceName = resourceDocSnap.exists() ? resourceDocSnap.data()?.name || "Unknown Resource" : "Resource Not Found";
       }
-      if (bookingFromState.userId) { // User name should already be on booking from fetchBookingsData
+      if (bookingFromState.userId) { 
           detailedBooking.userName = bookingFromState.userName || "Unknown User";
       }
     } catch (error: any) { toast({ title: "Error", description: `Could not load full booking details. ${error.message}`, variant: "destructive" });
@@ -694,9 +688,8 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
   const isLoadingAnyData = isLoadingBookings || isLoadingResources || isLoadingAvailabilityRules || authIsLoading || isLoadingUsersForFilter;
   const formKey = currentBooking?.id || `new:${currentBooking?.resourceId || 'empty'}:${currentBooking?.startTime instanceof Date ? currentBooking.startTime.toISOString() : (activeSelectedDate || new Date()).toISOString()}`;
 
-  const pageHeaderDescription = (displayScope === 'all' && canViewAllBookings)
-    ? "View, search, filter, and manage all lab resource bookings."
-    : "View, search, filter, and manage your lab resource bookings.";
+  const pageHeaderDescription = 
+    `View, search, filter, and manage ${displayScope === 'all' && canViewAllBookings ? 'all' : 'your'} lab resource bookings.`;
 
   return (
     <div className="space-y-8">
@@ -783,8 +776,8 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                 <Table>
                     <TableHeader>
                     <TableRow>
-                        {canViewAllBookings && displayScope === 'all' && <TableHead><Users className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Requester</TableHead>}
                         <TableHead><ResourceIcon className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Resource</TableHead>
+                        {canViewAllBookings && displayScope === 'all' && <TableHead><Users className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Requester</TableHead>}
                         {!activeSelectedDate && <TableHead><CalendarIconLucide className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Date</TableHead>}
                         <TableHead><Clock className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Time</TableHead>
                         <TableHead><Info className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Status</TableHead>
@@ -795,8 +788,8 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                     {bookingsToDisplay.map((booking) => {
                         return (
                         <TableRow key={booking.id} className={cn(booking.status === 'Cancelled' && 'opacity-60')}>
-                            {canViewAllBookings && displayScope === 'all' && <TableCell>{booking.userName || 'N/A'}</TableCell>}
                             <TableCell className="font-medium cursor-pointer hover:underline hover:text-primary" onClick={() => handleOpenDetailsDialog(booking.id)}>{booking.resourceName || 'Loading...'}</TableCell>
+                            {canViewAllBookings && displayScope === 'all' && <TableCell>{booking.userName || 'N/A'}</TableCell>}
                             {!activeSelectedDate && <TableCell>{formatDateSafe(booking.startTime, 'Invalid Date', 'MMM dd, yyyy')}</TableCell>}
                             <TableCell>{isValidDateFn(booking.startTime) ? format(booking.startTime, 'p') : ''} - {isValidDateFn(booking.endTime) ? format(booking.endTime, 'p') : ''}</TableCell>
                             <TableCell>{getBookingStatusBadgeElement(booking.status)}</TableCell>
