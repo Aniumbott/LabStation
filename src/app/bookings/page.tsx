@@ -3,7 +3,7 @@
 
 import React, { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams }from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, X, Search as SearchIcon, FilterX, Eye, Loader2, ListFilter, Info, Clock, Calendar as CalendarIconLucide, User as UserIcon, Package as ResourceIcon, CheckCircle2, Save, CheckCircle, AlertCircle, Users } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, X, Search as SearchIcon, FilterX, Eye, Loader2, ListFilter, Info, Clock, Calendar as CalendarIconLucide, User as UserIcon, Package as ResourceIcon, CheckCircle2, Save, CheckCircle, AlertCircle, Users, ToggleLeft, ToggleRight } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -655,13 +655,12 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
 
 
   const getBookingStatusBadgeElement = (status: Booking['status']) => {
-    let badgeText = status;
     switch (status) {
-      case 'Confirmed': return <Badge className={cn("bg-green-500 text-white hover:bg-green-600 border-transparent")}><CheckCircle className="mr-1 h-3.5 w-3.5" />{badgeText}</Badge>;
-      case 'Pending': return <Badge className={cn("bg-yellow-500 text-yellow-950 hover:bg-yellow-600 border-transparent")}><Clock className="mr-1 h-3.5 w-3.5" />{badgeText}</Badge>;
-      case 'Cancelled': return <Badge className={cn("bg-gray-400 text-white hover:bg-gray-500 border-transparent")}><X className="mr-1 h-3.5 w-3.5" />{badgeText}</Badge>;
-      case 'Waitlisted': return <Badge className={cn("bg-purple-500 text-white hover:bg-purple-600 border-transparent")}><UserIcon className="mr-1 h-3.5 w-3.5" />{badgeText}</Badge>;
-      default: return <Badge variant="outline">{badgeText}</Badge>;
+      case 'Confirmed': return <Badge className={cn("bg-green-500 text-white hover:bg-green-600 border-transparent")}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      case 'Pending': return <Badge className={cn("bg-yellow-500 text-yellow-950 hover:bg-yellow-600 border-transparent")}><Clock className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      case 'Cancelled': return <Badge className={cn("bg-gray-400 text-white hover:bg-gray-500 border-transparent")}><X className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      case 'Waitlisted': return <Badge className={cn("bg-purple-500 text-white hover:bg-purple-600 border-transparent")}><UserIcon className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      default: return <Badge variant="outline">{status}</Badge>;
     }
   };
 
@@ -688,8 +687,10 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
   const isLoadingAnyData = isLoadingBookings || isLoadingResources || isLoadingAvailabilityRules || authIsLoading || isLoadingUsersForFilter;
   const formKey = currentBooking?.id || `new:${currentBooking?.resourceId || 'empty'}:${currentBooking?.startTime instanceof Date ? currentBooking.startTime.toISOString() : (activeSelectedDate || new Date()).toISOString()}`;
 
-  const pageHeaderDescription = 
-    `View, search, filter, and manage ${displayScope === 'all' && canViewAllBookings ? 'all' : 'your'} lab resource bookings.`;
+  const pageHeaderDescription = displayScope === 'all' && canViewAllBookings 
+    ? `View, search, filter, and manage all lab resource bookings.`
+    : `View, search, filter, and manage your lab resource bookings.`;
+
 
   return (
     <div className="space-y-8">
@@ -701,15 +702,17 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
           currentUser && (
             <div className="flex items-center gap-2 flex-wrap">
               {canViewAllBookings && (
-                <div className="flex items-center space-x-2">
-                  <Switch
+                <div className="flex items-center space-x-2 p-1.5 border rounded-md bg-muted">
+                  <Label htmlFor="displayScopeToggle" className="text-sm text-muted-foreground pl-1 pr-0.5 whitespace-nowrap cursor-pointer">
+                     {displayScope === 'all' ? 'All Bookings' : 'My Bookings'}
+                  </Label>
+                   <Switch
                     id="displayScopeToggle"
                     checked={displayScope === 'all'}
                     onCheckedChange={(checked) => setDisplayScope(checked ? 'all' : 'mine')}
+                    className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-primary"
+                    thumbIcon={displayScope === 'all' ? <ToggleRight className="h-3.5 w-3.5 text-primary-foreground" /> : <ToggleLeft className="h-3.5 w-3.5 text-primary-foreground" />}
                   />
-                  <Label htmlFor="displayScopeToggle" className="text-sm whitespace-nowrap">
-                    {displayScope === 'all' ? 'Show All Bookings' : 'Show My Bookings'}
-                  </Label>
                 </div>
               )}
                <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
@@ -742,7 +745,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                                         {allUsersForFilter.map(user => (<SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>))}
                                       </SelectContent>
                                     </Select>
-                                    {displayScope === 'mine' && <p className="text-xs text-muted-foreground mt-1">Requester filter is disabled when 'Show My Bookings' is active.</p>}
+                                    {displayScope === 'mine' && <p className="text-xs text-muted-foreground mt-1">Requester filter is disabled when 'My Bookings' is selected.</p>}
                                   </div>
                                 )}
                             </div>
@@ -786,6 +789,8 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                     </TableHeader>
                     <TableBody>
                     {bookingsToDisplay.map((booking) => {
+                       const canEditThisBooking = currentUser?.role === 'Admin' || (currentUser?.id === booking.userId && (booking.status === 'Pending' || booking.status === 'Waitlisted' || booking.status === 'Confirmed'));
+                       const canCancelThisBooking = currentUser?.role === 'Admin' || currentUser?.id === booking.userId;
                         return (
                         <TableRow key={booking.id} className={cn(booking.status === 'Cancelled' && 'opacity-60')}>
                             <TableCell className="font-medium cursor-pointer hover:underline hover:text-primary" onClick={() => handleOpenDetailsDialog(booking.id)}>{booking.resourceName || 'Loading...'}</TableCell>
@@ -795,8 +800,8 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                             <TableCell>{getBookingStatusBadgeElement(booking.status)}</TableCell>
                             <TableCell className="text-right space-x-1">
                                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenDetailsDialog(booking.id)}><Eye className="h-4 w-4" /> <span className="sr-only">View Details</span></Button>
-                            {booking.status !== 'Cancelled' && (booking.status === 'Pending' || booking.status === 'Waitlisted' || booking.status === 'Confirmed') && (currentUser?.id === booking.userId || canViewAllBookings) && (<Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenForm(booking)}><Edit3 className="h-4 w-4" /> <span className="sr-only">Edit Booking</span></Button>)}
-                            {booking.status !== 'Cancelled' && (currentUser?.id === booking.userId || canViewAllBookings) && (<Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8" onClick={() => handleCancelBookingLocal(booking.id)}><X className="h-4 w-4" /> <span className="sr-only">Cancel Booking</span></Button>)}
+                            {booking.status !== 'Cancelled' && canEditThisBooking && (<Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenForm(booking)}><Edit3 className="h-4 w-4" /> <span className="sr-only">Edit Booking</span></Button>)}
+                            {booking.status !== 'Cancelled' && canCancelThisBooking && (<Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8" onClick={() => handleCancelBookingLocal(booking.id)}><X className="h-4 w-4" /> <span className="sr-only">Cancel Booking</span></Button>)}
                             {(booking.status === 'Cancelled') && (<span className="text-xs text-muted-foreground italic">{booking.status}</span>)}
                             </TableCell>
                         </TableRow>
@@ -960,13 +965,13 @@ function BookingForm({ initialData, onSave, onCancel, currentUserFullName, curre
       <form onSubmit={form.handleSubmit(handleRHFSubmit)}>
         <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
           <div className="space-y-4 py-4 px-1">
-            <FormField control={form.control} name="resourceId" render={({ field }) => (<FormItem><FormLabel>Resource <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} value={field.value || ''} disabled={!isNewBookingForm || allAvailableResources.length === 0 || form.formState.isSubmitting}><FormControl><SelectTrigger id="bookingFormDialogResource"><SelectValue placeholder={allAvailableResources.length > 0 ? "Select a resource" : "No resources available"} /></SelectTrigger></FormControl><SelectContent>{allAvailableResources.map(resource => (<SelectItem key={resource.id} value={resource.id} disabled={resource.status !== 'Working' && resource.id !== initialData?.resourceId}>{resource.name} ({resource.status})</SelectItem>))}</SelectContent></Select>{!isNewBookingForm && <FormMessage className="text-xs text-muted-foreground !mt-0.5">Resource cannot be changed for existing bookings.</FormMessage>}{selectedResource && selectedResource.status !== 'Working' && isNewBookingForm && (<FormMessage className="text-xs text-destructive !mt-0.5">This resource is currently {selectedResource.status.toLowerCase()} and cannot be booked.</FormMessage>)}<FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="bookingDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Date <span className="text-destructive">*</span></FormLabel><Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal h-10", !field.value && "text-muted-foreground")} disabled={!isNewBookingForm || form.formState.isSubmitting}><CalendarIconLucide className="mr-2 h-4 w-4" />{field.value && isValidDateFn(field.value) ? (format(field.value, "PPP")) : (<span>Pick a date</span>)}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={(date) => { if (date) field.onChange(startOfDay(date)); setIsCalendarOpen(false);}} disabled={(date) => date < startOfToday() && !initialData?.id} initialFocus /></PopoverContent></Popover>{!isNewBookingForm && <FormMessage className="text-xs text-muted-foreground !mt-0.5">Date cannot be changed for existing bookings.</FormMessage>}<FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="resourceId" render={({ field }) => (<FormItem><FormLabel>Resource <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} value={field.value || ''} disabled={!isNewBookingForm || allAvailableResources.length === 0 || form.formState.isSubmitting}><FormControl><SelectTrigger id="bookingFormDialogResource"><SelectValue placeholder={allAvailableResources.length > 0 ? "Select a resource" : "No resources available"} /></SelectTrigger></FormControl><SelectContent>{allAvailableResources.map(resource => (<SelectItem key={resource.id} value={resource.id} disabled={resource.status !== 'Working' && resource.id !== initialData?.resourceId}>{resource.name} ({resource.status})</SelectItem>))}</SelectContent></Select>{!isNewBookingForm && <p className="text-xs text-muted-foreground !mt-0.5">Resource cannot be changed for existing bookings.</p>}{selectedResource && selectedResource.status !== 'Working' && isNewBookingForm && (<FormMessage className="text-xs text-destructive !mt-0.5">This resource is currently {selectedResource.status.toLowerCase()} and cannot be booked.</FormMessage>)}<FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="bookingDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Date <span className="text-destructive">*</span></FormLabel><Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal h-10", !field.value && "text-muted-foreground")} disabled={!isNewBookingForm || form.formState.isSubmitting}><CalendarIconLucide className="mr-2 h-4 w-4" />{field.value && isValidDateFn(field.value) ? (format(field.value, "PPP")) : (<span>Pick a date</span>)}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={(date) => { if (date) field.onChange(startOfDay(date)); setIsCalendarOpen(false);}} disabled={(date) => date < startOfToday() && !initialData?.id} initialFocus /></PopoverContent></Popover>{!isNewBookingForm && <p className="text-xs text-muted-foreground !mt-0.5">Date cannot be changed for existing bookings.</p>}<FormMessage /></FormItem>)} />
             <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="startTime" render={({ field }) => (<FormItem><FormLabel>Start Time <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isNewBookingForm || form.formState.isSubmitting}><FormControl><SelectTrigger id="bookingFormDialogStartTime"><SelectValue placeholder="Select start time" /></SelectTrigger></FormControl><SelectContent>{timeSlots.map(slot => <SelectItem key={`start-${slot}`} value={slot}>{slot}</SelectItem>)}</SelectContent></Select>{!isNewBookingForm && <FormMessage className="text-xs text-muted-foreground !mt-0.5">Start time cannot be changed.</FormMessage>}<FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="endTime" render={({ field }) => (<FormItem><FormLabel>End Time <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isNewBookingForm || form.formState.isSubmitting}><FormControl><SelectTrigger id="bookingFormDialogEndTime"><SelectValue placeholder="Select end time" /></SelectTrigger></FormControl><SelectContent>{timeSlots.map(slot => <SelectItem key={`end-${slot}`} value={slot}>{slot}</SelectItem>)}</SelectContent></Select>{!isNewBookingForm && <FormMessage className="text-xs text-muted-foreground !mt-0.5">End time cannot be changed.</FormMessage>}<FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="startTime" render={({ field }) => (<FormItem><FormLabel>Start Time <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isNewBookingForm || form.formState.isSubmitting}><FormControl><SelectTrigger id="bookingFormDialogStartTime"><SelectValue placeholder="Select start time" /></SelectTrigger></FormControl><SelectContent>{timeSlots.map(slot => <SelectItem key={`start-${slot}`} value={slot}>{slot}</SelectItem>)}</SelectContent></Select>{!isNewBookingForm && <p className="text-xs text-muted-foreground !mt-0.5">Start time cannot be changed.</p>}<FormMessage /></FormItem>)} />
+              <FormField control={form.control} name="endTime" render={({ field }) => (<FormItem><FormLabel>End Time <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isNewBookingForm || form.formState.isSubmitting}><FormControl><SelectTrigger id="bookingFormDialogEndTime"><SelectValue placeholder="Select end time" /></SelectTrigger></FormControl><SelectContent>{timeSlots.map(slot => <SelectItem key={`end-${slot}`} value={slot}>{slot}</SelectItem>)}</SelectContent></Select>{!isNewBookingForm && <p className="text-xs text-muted-foreground !mt-0.5">End time cannot be changed.</p>}<FormMessage /></FormItem>)} />
             </div>
-            {!isNewBookingForm && (<FormField control={form.control} name="status" render={({ field }) => (<FormItem><FormLabel>Status</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!canEditStatus || form.formState.isSubmitting}><FormControl><SelectTrigger id="bookingFormDialogStatus"><SelectValue placeholder="Select status" /></SelectTrigger></FormControl><SelectContent>{bookingStatusesForForm.map(status => (<SelectItem key={status} value={status} disabled={status === 'Waitlisted' && isNewBookingForm}>{status}</SelectItem>))}</SelectContent></Select>{!canEditStatus && <FormMessage className="text-xs text-muted-foreground !mt-0.5">Status can only be changed by Admins/Technicians.</FormMessage>}<FormMessage /></FormItem>)} />)}
+            {!isNewBookingForm && (<FormField control={form.control} name="status" render={({ field }) => (<FormItem><FormLabel>Status</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!canEditStatus || form.formState.isSubmitting}><FormControl><SelectTrigger id="bookingFormDialogStatus"><SelectValue placeholder="Select status" /></SelectTrigger></FormControl><SelectContent>{bookingStatusesForForm.map(status => (<SelectItem key={status} value={status} disabled={status === 'Waitlisted' && isNewBookingForm}>{status}</SelectItem>))}</SelectContent></Select>{!canEditStatus && <p className="text-xs text-muted-foreground !mt-0.5">Status can only be changed by Admins/Technicians.</p>}<FormMessage /></FormItem>)} />)}
             <FormField control={form.control} name="notes" render={({ field }) => (<FormItem><FormLabel>Notes (Optional)</FormLabel><FormControl><Textarea placeholder="Any specific requirements or notes for this booking..." {...field} value={field.value || ''} rows={3} disabled={form.formState.isSubmitting}/></FormControl><FormMessage /></FormItem>)} />
           </div>
         </ScrollArea>
