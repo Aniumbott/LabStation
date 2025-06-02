@@ -753,7 +753,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                                         {allUsersForFilter.map(user => (<SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>))}
                                       </SelectContent>
                                     </Select>
-                                    {displayScope === 'mine' && <FormMessage className="text-xs text-muted-foreground !mt-0.5">Requester filter is disabled when 'Show My Bookings' is active.</FormMessage>}
+                                    {displayScope === 'mine' && <p className="text-xs text-muted-foreground mt-1">Requester filter is disabled when 'Show My Bookings' is active.</p>}
                                   </div>
                                 )}
                             </div>
