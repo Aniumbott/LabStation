@@ -5,14 +5,14 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, AlertCircle, CheckCircle, Construction, User as UserIconLucide, Calendar as CalendarIcon, XCircle, Building } from 'lucide-react'; // Added Building
+import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, AlertCircle, CheckCircle, Construction, User as UserIconLucide, Calendar as CalendarIcon, XCircle, Building, ShieldAlert } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
-import type { Resource, ResourceType, Booking, UnavailabilityPeriod, RoleName, Lab } from '@/types'; // Added Lab
+import type { Resource, ResourceType, Booking, UnavailabilityPeriod, RoleName, Lab, LabMembership } from '@/types';
 import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay, isBefore, compareAsc, isWithinInterval, isSameDay, addDays as dateFnsAddDays, Timestamp as FirestoreTimestamp } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,7 +29,6 @@ import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavai
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
 import { addAuditLog } from '@/lib/firestore-helpers';
-// import { labsList, resourceStatusesList } from '@/lib/app-constants'; // labsList no longer needed here
 
 
 function ResourceDetailPageSkeleton() {
@@ -138,11 +137,16 @@ const DetailItem = ({ icon: IconElement, label, value, isLink = false, className
   );
 };
 
-function NotFoundMessage({ resourceIdParam }: { resourceIdParam: string | null }) {
+function NotFoundMessage({ resourceIdParam, reason }: { resourceIdParam: string | null, reason?: 'not_found' | 'access_denied' }) {
   const router = useRouter();
+  const title = reason === 'access_denied' ? "Access Denied" : "Resource Not Found";
+  const message = reason === 'access_denied'
+    ? `You do not have permission to view details for the resource in this lab (ID: "${resourceIdParam || 'unknown'}"). Please request access to the lab via your dashboard.`
+    : `The resource with ID "${resourceIdParam || 'unknown'}" could not be found.`;
+
   return (
     <div className="space-y-8">
-      <PageHeader title="Resource Not Found" icon={PackageSearch}
+      <PageHeader title={title} icon={reason === 'access_denied' ? ShieldAlert : PackageSearch}
           actions={
             <Button variant="outline" asChild onClick={() => router.push('/admin/resources')}>
               <Link href="/admin/resources">
@@ -153,11 +157,11 @@ function NotFoundMessage({ resourceIdParam }: { resourceIdParam: string | null }
       />
       <Card className="max-w-2xl mx-auto shadow-lg border-destructive">
         <CardHeader className="items-center">
-          <CardTitle className="text-destructive">Error 404</CardTitle>
+          <CardTitle className="text-destructive">{reason === 'access_denied' ? 'Access Denied' : 'Error 404'}</CardTitle>
         </CardHeader>
         <CardContent className="text-center">
-          <p className="text-muted-foreground">The resource with ID "{resourceIdParam || 'unknown'}" could not be found in Firestore.</p>
-          <p className="text-muted-foreground text-xs mt-1">Please check the ID or ensure the resource exists in the database.</p>
+          <p className="text-muted-foreground">{message}</p>
+           {reason !== 'access_denied' && <p className="text-muted-foreground text-xs mt-1">Please check the ID or ensure the resource exists in the database.</p>}
         </CardContent>
       </Card>
     </div>
@@ -172,8 +176,9 @@ export default function ResourceDetailPage() {
 
   const [resource, setResource] = useState<Resource | null>(null);
   const [resourceTypeName, setResourceTypeName] = useState<string>('Loading...');
-  const [labName, setLabName] = useState<string>('Loading...'); // State for lab name
+  const [labName, setLabName] = useState<string>('Loading...');
   const [isLoading, setIsLoading] = useState(true);
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null); // null: loading, true: access, false: no access
 
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
@@ -182,7 +187,7 @@ export default function ResourceDetailPage() {
   const [isUnavailabilityDialogOpen, setIsUnavailabilityDialogOpen] = useState(false);
   const [resourceUserBookings, setResourceUserBookings] = useState<Booking[]>([]);
   const [fetchedResourceTypesForDialog, setFetchedResourceTypesForDialog] = useState<ResourceType[]>([]);
-  const [fetchedLabsForDialog, setFetchedLabsForDialog] = useState<Lab[]>([]); // For form dialog
+  const [fetchedLabsForDialog, setFetchedLabsForDialog] = useState<Lab[]>([]);
 
   const resourceId = typeof params.resourceId === 'string' ? params.resourceId : null;
 
@@ -190,9 +195,11 @@ export default function ResourceDetailPage() {
     if (!resourceId) {
       setIsLoading(false);
       setResource(null);
+      setHasAccess(false); // No resource ID, no access
       return;
     }
     setIsLoading(true);
+    setHasAccess(null); // Reset access status on new fetch
     try {
       const resourceDocRef = doc(db, "resources", resourceId);
       const docSnap = await getDoc(resourceDocRef);
@@ -203,7 +210,7 @@ export default function ResourceDetailPage() {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
-          labId: data.labId || '', // Ensure labId is handled
+          labId: data.labId || '',
           status: data.status || 'Working',
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
@@ -226,46 +233,65 @@ export default function ResourceDetailPage() {
           lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
         };
+
+        // Check Lab Access
+        if (currentUser?.role !== 'Admin' && fetchedResource.labId) {
+          const membershipQuery = query(collection(db, 'labMemberships'),
+            where('userId', '==', currentUser?.id),
+            where('labId', '==', fetchedResource.labId),
+            where('status', '==', 'active'),
+            limit(1));
+          const membershipSnapshot = await getDocs(membershipQuery);
+          if (membershipSnapshot.empty) {
+            setHasAccess(false);
+            setResource(fetchedResource); // Still set resource for admins if they somehow landed here without perms
+            setIsLoading(false);
+            return;
+          }
+        }
+        setHasAccess(true);
         setResource(fetchedResource);
 
-        // Fetch Resource Type Name
         if (fetchedResource.resourceTypeId) {
           const typeDocRef = doc(db, "resourceTypes", fetchedResource.resourceTypeId);
           const typeSnap = await getDoc(typeDocRef);
           setResourceTypeName(typeSnap.exists() ? typeSnap.data()?.name || 'Unknown Type' : 'N/A (Type Not Found)');
-        } else {
-          setResourceTypeName('N/A');
-        }
+        } else { setResourceTypeName('N/A'); }
 
-        // Fetch Lab Name
         if (fetchedResource.labId) {
           const labDocRef = doc(db, "labs", fetchedResource.labId);
           const labSnap = await getDoc(labDocRef);
           setLabName(labSnap.exists() ? labSnap.data()?.name || 'Unknown Lab' : 'N/A (Lab Not Found)');
-        } else {
-          setLabName('N/A');
-        }
+        } else { setLabName('N/A'); }
 
       } else {
         setResource(null);
+        setHasAccess(false); // Resource not found, so no access
       }
     } catch (error: any) {
       toast({ title: "Error Fetching Resource", description: `Could not load resource details. ${error.message}`, variant: "destructive" });
       setResource(null);
+      setHasAccess(false);
     } finally {
       setIsLoading(false);
     }
-  }, [resourceId, toast]);
+  }, [resourceId, toast, currentUser]);
 
   useEffect(() => {
-    fetchResourceData();
-  }, [fetchResourceData]);
+    if(currentUser) { // Only fetch if currentUser is available
+      fetchResourceData();
+    } else if (currentUser === null && resourceId) { // User explicitly logged out or not logged in
+        setIsLoading(false);
+        setHasAccess(false); // No user, no access
+        setResource(null); // No resource details if not logged in
+    }
+  }, [fetchResourceData, currentUser, resourceId]);
+
 
   useEffect(() => {
-    if (isFormDialogOpen || isUnavailabilityDialogOpen) { // Fetch for both dialogs if needed
+    if (isFormDialogOpen || isUnavailabilityDialogOpen) {
       const fetchSupportData = async () => {
         try {
-          // Fetch Resource Types
           const typesCollectionRef = collection(db, "resourceTypes");
           const typesQueryInstance = query(typesCollectionRef, orderBy("name", "asc"));
           const typesSnapshot = await getDocs(typesQueryInstance);
@@ -275,7 +301,6 @@ export default function ResourceDetailPage() {
           }));
           setFetchedResourceTypesForDialog(types);
 
-          // Fetch Labs
           const labsCollectionRef = collection(db, "labs");
           const labsQueryInstance = query(labsCollectionRef, orderBy("name", "asc"));
           const labsSnapshot = await getDocs(labsQueryInstance);
@@ -297,7 +322,7 @@ export default function ResourceDetailPage() {
 
   useEffect(() => {
     const fetchBookingsForResourceUser = async () => {
-      if (!resourceId || !currentUser?.id) {
+      if (!resourceId || !currentUser?.id || !hasAccess) { // Also check hasAccess
         setResourceUserBookings([]);
         return;
       }
@@ -334,10 +359,10 @@ export default function ResourceDetailPage() {
       }
     };
 
-    if (resource && currentUser) {
+    if (resource && currentUser && hasAccess) {
       fetchBookingsForResourceUser();
     }
-  }, [resourceId, currentUser, resource, toast]);
+  }, [resourceId, currentUser, resource, toast, hasAccess]);
 
 
   const canManageResource = useMemo(() => {
@@ -346,7 +371,7 @@ export default function ResourceDetailPage() {
   }, [currentUser]);
 
   const userPastBookingsForResource = useMemo(() => {
-    if (!resource || !currentUser || !resourceUserBookings || resourceUserBookings.length === 0) return [];
+    if (!resource || !currentUser || !resourceUserBookings || resourceUserBookings.length === 0 || !hasAccess) return [];
     return resourceUserBookings
       .filter(
         (booking: Booking) =>
@@ -354,7 +379,7 @@ export default function ResourceDetailPage() {
           booking.status !== 'Cancelled'
       )
       .sort((a, b) => compareAsc(b.startTime, a.startTime));
-  }, [resource, currentUser, resourceUserBookings]);
+  }, [resource, currentUser, resourceUserBookings, hasAccess]);
 
   const sortedUnavailabilityPeriods = useMemo(() => {
     if (!resource || !Array.isArray(resource.unavailabilityPeriods)) return [];
@@ -398,7 +423,7 @@ export default function ResourceDetailPage() {
     const firestorePayload: any = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
-      labId: data.labId, // Save labId
+      labId: data.labId,
       status: data.status,
       description: data.description || '',
       imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
@@ -481,13 +506,18 @@ export default function ResourceDetailPage() {
   }, [resource, currentUser, canManageResource, toast]);
 
 
-  if (isLoading) {
+  if (isLoading || hasAccess === null) {
     return <ResourceDetailPageSkeleton />;
   }
 
   if (!resource && !isLoading) {
-    return <NotFoundMessage resourceIdParam={resourceId} />;
+    return <NotFoundMessage resourceIdParam={resourceId} reason="not_found"/>;
   }
+
+  if (resource && !hasAccess && !isLoading) {
+    return <NotFoundMessage resourceIdParam={resourceId} reason="access_denied" />;
+  }
+
 
   if (!resource) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>;
 
@@ -732,7 +762,7 @@ export default function ResourceDetailPage() {
             initialResource={resource}
             onSave={handleSaveResource}
             resourceTypes={fetchedResourceTypesForDialog}
-            labs={fetchedLabsForDialog} // Pass labs to dialog
+            labs={fetchedLabsForDialog}
         />
       )}
       {resource && (

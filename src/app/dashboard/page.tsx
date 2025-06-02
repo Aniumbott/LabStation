@@ -3,12 +3,12 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Wrench, Loader2, ThumbsUp, Clock, X, User as UserIconLucide, XCircle, Building, KeyRound, University } from 'lucide-react'; 
+import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Wrench, Loader2, ThumbsUp, Clock, X, User as UserIconLucide, XCircle, Building, KeyRound, University, PlusCircle, LogOut, Ban } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { Resource, Booking, Lab, LabMembership } from '@/types'; 
+import type { Resource, Booking, Lab, LabMembership, LabMembershipStatus } from '@/types';
 import { Separator } from '@/components/ui/separator';
 import {
   Table,
@@ -25,6 +25,7 @@ import { useAuth } from '@/components/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore';
+import { requestLabAccess_SA, cancelLabAccessRequest_SA, leaveLab_SA } from '@/lib/firestore-helpers';
 
 
 const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Date => {
@@ -38,14 +39,14 @@ const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Da
     }
     const directDate = new Date(value);
     if (isValid(directDate)) {
-        console.warn(`[Dashboard] Parsed non-ISO date string for ${fieldName} in booking ${bookingId}:`, value);
+        // console.warn(`[Dashboard] Parsed non-ISO date string for ${fieldName} in booking ${bookingId}:`, value);
         return directDate;
     }
   }
   if (typeof value === 'number') {
      const dateFromNum = new Date(value);
      if (isValid(dateFromNum)) {
-         console.warn(`[Dashboard] Converted number to date for ${fieldName} in booking ${bookingId}:`, value);
+        //  console.warn(`[Dashboard] Converted number to date for ${fieldName} in booking ${bookingId}:`, value);
          return dateFromNum;
      }
   }
@@ -66,16 +67,20 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const [frequentlyUsedResources, setFrequentlyUsedResources] = useState<(Resource & { labName?: string })[]>([]);
   const [upcomingUserBookings, setUpcomingUserBookings] = useState<(Booking & { resourceName?: string })[]>([]);
-  const [userActiveLabs, setUserActiveLabs] = useState<Lab[]>([]); // State for user's active labs
+  
+  const [allLabs, setAllLabs] = useState<Lab[]>([]);
+  const [userMemberships, setUserMemberships] = useState<LabMembership[]>([]);
+
   const [isLoadingResources, setIsLoadingResources] = useState(true);
   const [isLoadingBookings, setIsLoadingBookings] = useState(true);
-  const [isLoadingLabs, setIsLoadingLabs] = useState(true); // New loading state for labs
-  const [allLabs, setAllLabs] = useState<Lab[]>([]); 
+  const [isLoadingLabsAndMemberships, setIsLoadingLabsAndMemberships] = useState(true);
+  const [isMembershipActionLoading, setIsMembershipActionLoading] = useState<Record<string, boolean>>({});
+
 
   const fetchDashboardData = useCallback(async () => {
     setIsLoadingResources(true);
     setIsLoadingBookings(true);
-    setIsLoadingLabs(true);
+    setIsLoadingLabsAndMemberships(true);
 
     let fetchedLabs: Lab[] = [];
     try {
@@ -87,30 +92,21 @@ export default function DashboardPage() {
         toast({ title: "Error Loading Labs Data", variant: "destructive" });
     }
 
-    // Fetch User's Active Lab Memberships
     if (currentUser && currentUser.id) {
         try {
-            const membershipsQuery = query(
-                collection(db, 'labMemberships'),
-                where('userId', '==', currentUser.id),
-                where('status', '==', 'active')
-            );
+            const membershipsQuery = query(collection(db, 'labMemberships'), where('userId', '==', currentUser.id));
             const membershipsSnapshot = await getDocs(membershipsQuery);
-            const activeLabIds = membershipsSnapshot.docs.map(doc => doc.data().labId as string);
-            const activeLabs = fetchedLabs.filter(lab => activeLabIds.includes(lab.id));
-            setUserActiveLabs(activeLabs);
+            setUserMemberships(membershipsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as LabMembership)));
         } catch (error: any) {
             console.error("[Dashboard] Error fetching user lab memberships:", error);
-            toast({ title: "Error Loading Your Lab Access", variant: "destructive" });
-            setUserActiveLabs([]);
-        } finally {
-            setIsLoadingLabs(false);
+            toast({ title: "Error Loading Your Lab Memberships", variant: "destructive" });
+            setUserMemberships([]);
         }
     } else {
-        setUserActiveLabs([]);
-        setIsLoadingLabs(false);
+        setUserMemberships([]);
     }
-    
+    setIsLoadingLabsAndMemberships(false);
+
 
     try {
       const resourcesQuery = query(collection(db, 'resources'), orderBy('name', 'asc'), limit(3));
@@ -123,8 +119,8 @@ export default function DashboardPage() {
           id: docSnap.id,
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
-          labId: data.labId || '', 
-          labName: lab?.name || 'Unknown Lab', 
+          labId: data.labId || '',
+          labName: lab?.name || 'Unknown Lab',
           status: data.status || 'Working',
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
@@ -196,6 +192,64 @@ export default function DashboardPage() {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
+  const userActiveLabs = useMemo(() => {
+    if (!currentUser || currentUser.role === 'Admin') return [];
+    return allLabs.filter(lab => userMemberships.some(m => m.labId === lab.id && m.status === 'active'));
+  }, [currentUser, allLabs, userMemberships]);
+
+  const userPendingLabRequests = useMemo(() => {
+    if (!currentUser || currentUser.role === 'Admin') return [];
+    return userMemberships.filter(m => m.status === 'pending_approval')
+      .map(m => ({ ...m, labName: allLabs.find(l => l.id === m.labId)?.name || 'Unknown Lab' }));
+  }, [currentUser, userMemberships, allLabs]);
+
+  const availableLabsForRequest = useMemo(() => {
+    if (!currentUser || currentUser.role === 'Admin') return [];
+    return allLabs.filter(lab =>
+      !userMemberships.some(m => m.labId === lab.id && (m.status === 'active' || m.status === 'pending_approval'))
+    );
+  }, [currentUser, allLabs, userMemberships]);
+
+  const handleRequestAccess = async (labId: string, labName: string) => {
+    if (!currentUser) return;
+    setIsMembershipActionLoading(prev => ({ ...prev, [labId]: true }));
+    const result = await requestLabAccess_SA(currentUser.id, currentUser.name, labId, labName);
+    if (result.success) {
+      toast({ title: "Request Submitted", description: result.message });
+      fetchDashboardData(); // Refresh memberships
+    } else {
+      toast({ title: "Request Failed", description: result.message, variant: "destructive" });
+    }
+    setIsMembershipActionLoading(prev => ({ ...prev, [labId]: false }));
+  };
+
+  const handleCancelRequest = async (membershipId: string, labName: string) => {
+    if (!currentUser || !membershipId) return;
+    setIsMembershipActionLoading(prev => ({ ...prev, [membershipId]: true }));
+    const result = await cancelLabAccessRequest_SA(currentUser.id, currentUser.name, membershipId, labName);
+    if (result.success) {
+      toast({ title: "Request Cancelled", description: result.message });
+      fetchDashboardData(); // Refresh memberships
+    } else {
+      toast({ title: "Cancellation Failed", description: result.message, variant: "destructive" });
+    }
+    setIsMembershipActionLoading(prev => ({ ...prev, [membershipId]: false }));
+  };
+
+  const handleLeaveLab = async (membershipId: string, labName: string) => {
+    if (!currentUser || !membershipId) return;
+    setIsMembershipActionLoading(prev => ({ ...prev, [membershipId]: true }));
+    const result = await leaveLab_SA(currentUser.id, currentUser.name, membershipId, labName);
+    if (result.success) {
+      toast({ title: "Left Lab", description: result.message });
+      fetchDashboardData(); // Refresh memberships
+    } else {
+      toast({ title: "Failed to Leave Lab", description: result.message, variant: "destructive" });
+    }
+    setIsMembershipActionLoading(prev => ({ ...prev, [membershipId]: false }));
+  };
+
+
   const getBookingStatusBadge = (status: Booking['status']) => {
     switch (status) {
       case 'Confirmed':
@@ -219,50 +273,6 @@ export default function DashboardPage() {
         description="Overview of lab resources, your bookings, and lab access."
         icon={LayoutDashboard}
       />
-
-      <section>
-        <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-semibold">My Labs</h2>
-            {/* Add button to request lab access later if needed */}
-        </div>
-        {isLoadingLabs ? (
-            <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading your lab access...</div>
-        ) : currentUser && userActiveLabs.length > 0 ? (
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                {userActiveLabs.map(lab => (
-                    <Card key={lab.id} className="shadow-md hover:shadow-lg transition-shadow">
-                        <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2"><University className="h-5 w-5 text-primary"/>{lab.name}</CardTitle>
-                            {lab.location && <CardDescription>{lab.location}</CardDescription>}
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-sm text-muted-foreground line-clamp-2">{lab.description || "No description available for this lab."}</p>
-                        </CardContent>
-                        <CardFooter>
-                            <Button variant="outline" size="sm" asChild className="w-full">
-                                <Link href={`/admin/resources?labId=${lab.id}`}>View Resources in this Lab</Link>
-                            </Button>
-                        </CardFooter>
-                    </Card>
-                ))}
-            </div>
-        ) : (
-             <Card className="p-6 text-center shadow-md border-0 bg-card">
-                <CardContent>
-                <KeyRound className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-60"/>
-                <p className="text-muted-foreground">
-                    {currentUser ? "You currently do not have active access to any labs." : "Please log in to see your lab access."}
-                </p>
-                {currentUser && ( // Placeholder for when user request flow is built
-                    <p className="text-xs text-muted-foreground mt-2">Lab access is managed by administrators. Please contact an admin if you require access to specific labs.</p>
-                    // <Button asChild className="mt-4" variant="secondary"><Link href="/labs/request">Request Lab Access</Link></Button>
-                )}
-                </CardContent>
-            </Card>
-        )}
-      </section>
-      
-      <Separator />
 
       <section>
         <div className="flex justify-between items-center mb-4">
@@ -388,6 +398,111 @@ export default function DashboardPage() {
           </Card>
         )}
       </section>
+      
+      {currentUser && currentUser.role !== 'Admin' && (
+        <>
+          <Separator />
+          <section>
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-semibold">My Labs</h2>
+            </div>
+            {isLoadingLabsAndMemberships ? (
+                <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading your lab access...</div>
+            ) : userActiveLabs.length > 0 ? (
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                    {userActiveLabs.map(lab => {
+                        const membership = userMemberships.find(m => m.labId === lab.id && m.status === 'active');
+                        return (
+                            <Card key={lab.id} className="shadow-md hover:shadow-lg transition-shadow">
+                                <CardHeader>
+                                    <CardTitle className="text-lg flex items-center gap-2"><University className="h-5 w-5 text-primary"/>{lab.name}</CardTitle>
+                                    {lab.location && <CardDescription>{lab.location}</CardDescription>}
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-sm text-muted-foreground line-clamp-2">{lab.description || "No description available for this lab."}</p>
+                                </CardContent>
+                                <CardFooter className="flex flex-col gap-2">
+                                    <Button variant="outline" size="sm" asChild className="w-full">
+                                        <Link href={`/admin/resources?labId=${lab.id}`}>View Resources</Link>
+                                    </Button>
+                                    {membership?.id && (
+                                        <Button variant="destructive" size="sm" className="w-full" onClick={() => handleLeaveLab(membership.id!, lab.name)} disabled={isMembershipActionLoading[membership.id!]}>
+                                            {isMembershipActionLoading[membership.id!] ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <LogOut className="mr-2 h-4 w-4"/>}
+                                            Leave Lab
+                                        </Button>
+                                    )}
+                                </CardFooter>
+                            </Card>
+                        );
+                    })}
+                </div>
+            ) : (
+                 <Card className="p-6 text-center shadow-md border-0 bg-card">
+                    <CardContent>
+                    <KeyRound className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-60"/>
+                    <p className="text-muted-foreground">
+                        You currently do not have active access to any labs.
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">You can request access to available labs below.</p>
+                    </CardContent>
+                </Card>
+            )}
+          </section>
+
+          {userPendingLabRequests.length > 0 && (
+            <>
+              <Separator />
+              <section>
+                <h2 className="text-2xl font-semibold mb-4">Pending Lab Access Requests</h2>
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                  {userPendingLabRequests.map(req => (
+                    <Card key={req.id} className="shadow-sm border-dashed">
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-yellow-500"/>{req.labName}</CardTitle>
+                        <CardDescription>Status: Pending Approval</CardDescription>
+                      </CardHeader>
+                      <CardFooter>
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => handleCancelRequest(req.id!, req.labName)} disabled={isMembershipActionLoading[req.id!]}>
+                           {isMembershipActionLoading[req.id!] ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <XCircle className="mr-2 h-4 w-4"/>}
+                          Cancel Request
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+
+          {availableLabsForRequest.length > 0 && (
+            <>
+              <Separator />
+              <section>
+                <h2 className="text-2xl font-semibold mb-4">Available Labs</h2>
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                  {availableLabsForRequest.map(lab => (
+                    <Card key={lab.id} className="shadow-sm">
+                      <CardHeader>
+                        <CardTitle className="text-lg">{lab.name}</CardTitle>
+                        {lab.location && <CardDescription>{lab.location}</CardDescription>}
+                      </CardHeader>
+                       <CardContent>
+                         <p className="text-sm text-muted-foreground line-clamp-2">{lab.description || "No description."}</p>
+                       </CardContent>
+                      <CardFooter>
+                        <Button variant="default" size="sm" className="w-full" onClick={() => handleRequestAccess(lab.id, lab.name)} disabled={isMembershipActionLoading[lab.id]}>
+                          {isMembershipActionLoading[lab.id] ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <PlusCircle className="mr-2 h-4 w-4"/>}
+                          Request Access
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }

@@ -38,7 +38,7 @@ export interface Resource {
   id: string;
   name: string;
   resourceTypeId: string;
-  labId: string; 
+  labId: string;
   status: ResourceStatus;
   description?: string;
   imageUrl?: string;
@@ -56,8 +56,8 @@ export interface Resource {
 }
 
 export interface BookingUsageDetails {
-  actualStartTime?: string | undefined; 
-  actualEndTime?: string | undefined;   
+  actualStartTime?: string | undefined;
+  actualEndTime?: string | undefined;
   outcome?: 'Success' | 'Failure' | 'Interrupted' | 'Not Applicable';
   dataStorageLocation?: string | undefined;
   usageComments?: string | undefined;
@@ -96,13 +96,13 @@ export interface User {
 export type LabMembershipStatus = 'active' | 'pending_approval' | 'rejected' | 'revoked';
 
 export interface LabMembership {
-  id?: string; 
+  id?: string;
   userId: string;
   labId: string;
-  status: LabMembershipStatus; 
-  roleInLab?: 'Lead' | 'Member'; 
-  requestedAt?: Timestamp; 
-  updatedAt?: Timestamp; 
+  status: LabMembershipStatus;
+  roleInLab?: 'Lead' | 'Member';
+  requestedAt?: Timestamp; // Timestamp for when the request was made
+  updatedAt?: Timestamp; // Timestamp for last status change (approval, rejection, revocation)
   actingAdminId?: string; // User ID of admin who last changed status
 }
 
@@ -136,11 +136,12 @@ export type NotificationType =
   | 'maintenance_resolved'
   | 'signup_approved'
   | 'signup_pending_admin'
-  | 'lab_access_request_submitted' // User submitted a request
-  | 'lab_access_request_received' // Admin received a request
-  | 'lab_access_approved'    
-  | 'lab_access_rejected'
-  | 'lab_access_revoked'; // User's access to a lab was revoked by admin
+  | 'lab_access_request_submitted' // User submitted a request for a lab
+  | 'lab_access_request_received'  // Admin received a request for lab access
+  | 'lab_access_approved'          // User's lab access request was approved
+  | 'lab_access_rejected'          // User's lab access request was rejected
+  | 'lab_access_revoked'           // User's lab access was revoked by admin
+  | 'lab_access_left';             // User voluntarily left a lab
 
 export interface Notification {
   id: string;
@@ -155,8 +156,8 @@ export interface Notification {
 
 export interface BlackoutDate {
   id: string;
-  labId?: string | null; 
-  date: string; 
+  labId?: string | null;
+  date: string;
   reason?: string;
 }
 
@@ -166,7 +167,7 @@ export const daysOfWeekArray: DayOfWeek[] = ['Sunday', 'Monday', 'Tuesday', 'Wed
 
 export interface RecurringBlackoutRule {
   id: string;
-  labId?: string | null; 
+  labId?: string | null;
   name: string;
   daysOfWeek: DayOfWeek[];
   reason?: string;
@@ -181,17 +182,17 @@ export type AuditActionType =
   | 'BLACKOUT_DATE_CREATED' | 'BLACKOUT_DATE_UPDATED' | 'BLACKOUT_DATE_DELETED'
   | 'RECURRING_RULE_CREATED' | 'RECURRING_RULE_UPDATED' | 'RECURRING_RULE_DELETED'
   | 'LAB_CREATED' | 'LAB_UPDATED' | 'LAB_DELETED'
-  | 'LAB_MEMBERSHIP_REQUESTED' | 'LAB_MEMBERSHIP_APPROVED' | 'LAB_MEMBERSHIP_REJECTED' | 'LAB_MEMBERSHIP_REVOKED' | 'LAB_MEMBERSHIP_CANCELLED' | 'LAB_MEMBERSHIP_GRANTED';
+  | 'LAB_MEMBERSHIP_REQUESTED' | 'LAB_MEMBERSHIP_APPROVED' | 'LAB_MEMBERSHIP_REJECTED' | 'LAB_MEMBERSHIP_REVOKED' | 'LAB_MEMBERSHIP_CANCELLED' | 'LAB_MEMBERSHIP_GRANTED' | 'LAB_MEMBERSHIP_LEFT';
 
 export interface AuditLogEntry {
   id: string;
   timestamp: Date;
-  userId: string; // User who performed the action
-  userName: string;
+  userId: string; // User who performed the action OR system if automated
+  userName: string; // Name of user or "System"
   action: AuditActionType;
-  entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule' | 'Lab' | 'LabMembership' | undefined; 
+  entityType?: 'User' | 'Resource' | 'Booking' | 'MaintenanceRequest' | 'ResourceType' | 'BlackoutDate' | 'RecurringBlackoutRule' | 'Lab' | 'LabMembership' | undefined;
   entityId?: string | undefined; // ID of the primary entity affected
-  secondaryEntityType?: 'User' | 'Lab'; // For lab membership, User is primary, Lab is secondary or vice versa
+  secondaryEntityType?: 'User' | 'Lab'; // For lab membership, e.g., User is primary, Lab is secondary or vice versa
   secondaryEntityId?: string;
   details: string;
 }

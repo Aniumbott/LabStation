@@ -22,7 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { Booking, Resource, RoleName, BookingUsageDetails, ResourceStatus, User } from '@/types';
+import type { Booking, Resource, RoleName, BookingUsageDetails, ResourceStatus, User, LabMembership } from '@/types';
 import { format, parseISO, isValid as isValidDateFn, startOfDay, isSameDay, set, isBefore, getDay, startOfToday, compareAsc, addDays as dateFnsAddDays, Timestamp as FirestoreTimestamp } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -65,19 +65,20 @@ function BookingsPageContent({}: BookingsPageContentProps) {
 
   const [allBookingsDataSource, setAllBookingsDataSource] = useState<(Booking & { resourceName?: string, userName?: string })[]>([]);
   const [allAvailableResources, setAllAvailableResources] = useState<Resource[]>([]);
+  const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]);
   const [allUsersForFilter, setAllUsersForFilter] = useState<User[]>([]);
   const [fetchedBlackoutDates, setFetchedBlackoutDates] = useState<any[]>([]);
   const [fetchedRecurringRules, setFetchedRecurringRules] = useState<any[]>([]);
 
   const [isLoadingBookings, setIsLoadingBookings] = useState(true);
-  const [isLoadingResources, setIsLoadingResources] = useState(true);
+  const [isLoadingResourcesAndLabs, setIsLoadingResourcesAndLabs] = useState(true);
   const [isLoadingAvailabilityRules, setIsLoadingAvailabilityRules] = useState(true);
   const [isLoadingUsersForFilter, setIsLoadingUsersForFilter] = useState(true);
 
   const [displayScope, setDisplayScope] = useState<'mine' | 'all'>('mine');
 
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [currentBooking, setCurrentBooking] = useState<Partial<Booking> & { resourceId?: string } | null>(null);
+  const [currentBooking, setCurrentBooking] = useState<Partial<Booking> & { resourceId?: string, userId?: string } | null>(null);
   const [selectedBookingForDetails, setSelectedBookingForDetails] = useState<(Booking & { resourceName?: string, userName?: string }) | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
@@ -119,7 +120,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       let bookingsQueryInstance;
       if (displayScope === 'all' && canViewAllBookings) {
         bookingsQueryInstance = query(collection(db, 'bookings'), orderBy('startTime', 'asc'));
-      } else { 
+      } else {
         bookingsQueryInstance = query(
           collection(db, 'bookings'),
           where('userId', '==', currentUser.id),
@@ -138,11 +139,10 @@ function BookingsPageContent({}: BookingsPageContentProps) {
           resourceName = resource?.name || resourceName;
         }
         if (data.userId) {
-          // Prefer user from allUsersForFilter if available (more up-to-date)
           const userFromList = allUsersForFilter.find(u => u.id === data.userId);
           if (userFromList) {
             userName = userFromList.name || userName;
-          } else { // Fallback to fetching directly if not in list (e.g., list still loading)
+          } else {
             const userDoc = await getDoc(doc(db, 'users', data.userId));
             if (userDoc.exists()) userName = userDoc.data()?.name || userName;
           }
@@ -179,30 +179,51 @@ function BookingsPageContent({}: BookingsPageContentProps) {
 
 
   const fetchSupportData = useCallback(async () => {
-    setIsLoadingResources(true);
+    setIsLoadingResourcesAndLabs(true);
     setIsLoadingAvailabilityRules(true);
     setIsLoadingUsersForFilter(true);
     try {
+      // Fetch User's Lab Memberships
+      let activeUserLabIds: string[] = [];
+      if (currentUser && currentUser.id && currentUser.role !== 'Admin') {
+          const membershipsQuery = query(collection(db, 'labMemberships'), where('userId', '==', currentUser.id), where('status', '==', 'active'));
+          const membershipsSnapshot = await getDocs(membershipsQuery);
+          const memberships = membershipsSnapshot.docs.map(mDoc => mDoc.data() as LabMembership);
+          setUserLabMemberships(memberships);
+          activeUserLabIds = memberships.map(m => m.labId);
+      } else if (currentUser && currentUser.role === 'Admin') {
+        // Admins have access to all labs implicitly for resource listing
+        const allLabsSnapshot = await getDocs(query(collection(db, 'labs')));
+        activeUserLabIds = allLabsSnapshot.docs.map(lDoc => lDoc.id);
+      }
+
+
+      // Fetch Resources, filtered by lab access if not Admin
       const resourcesQueryInstance = query(collection(db, 'resources'), orderBy('name', 'asc'));
       const resourcesSnapshot = await getDocs(resourcesQueryInstance);
-      const resourcesData = resourcesSnapshot.docs.map(docSnap => {
+      let resourcesData = resourcesSnapshot.docs.map(docSnap => {
         const data = docSnap.data();
         return {
           id: docSnap.id,
           name: data.name,
           status: data.status as ResourceStatus,
-          lab: data.lab,
+          labId: data.labId,
           resourceTypeId: data.resourceTypeId,
           allowQueueing: data.allowQueueing ?? false,
           unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({ ...p, id: p.id || `unavail-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`, startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [],
         } as Resource;
       });
+      if (currentUser && currentUser.role !== 'Admin') {
+        resourcesData = resourcesData.filter(r => activeUserLabIds.includes(r.labId));
+      }
       setAllAvailableResources(resourcesData);
+
     } catch (error: any) {
-      console.error("Error fetching resources:", error);
+      console.error("Error fetching resources/memberships:", error);
       setAllAvailableResources([]);
+      setUserLabMemberships([]);
     } finally {
-      setIsLoadingResources(false);
+      setIsLoadingResourcesAndLabs(false);
     }
 
     try {
@@ -232,25 +253,25 @@ function BookingsPageContent({}: BookingsPageContentProps) {
      setIsLoadingAvailabilityRules(false);
     }
 
-  }, []);
+  }, [currentUser]);
 
 
   useEffect(() => {
     if (isClient && currentUser) {
-      fetchSupportData(); 
+      fetchSupportData();
     } else if (isClient && !currentUser) {
       setAllBookingsDataSource([]); setIsLoadingBookings(false);
-      setAllAvailableResources([]); setIsLoadingResources(false);
+      setAllAvailableResources([]); setUserLabMemberships([]); setIsLoadingResourcesAndLabs(false);
       setAllUsersForFilter([]); setIsLoadingUsersForFilter(false);
       setFetchedBlackoutDates([]); setFetchedRecurringRules([]); setIsLoadingAvailabilityRules(false);
     }
   }, [isClient, currentUser, fetchSupportData]);
 
   useEffect(() => {
-    if (currentUser && !isLoadingResources && !isLoadingUsersForFilter) {
+    if (currentUser && !isLoadingResourcesAndLabs && !isLoadingUsersForFilter) {
         fetchBookingsData();
     }
-  }, [currentUser, displayScope, fetchBookingsData, isLoadingResources, isLoadingUsersForFilter]);
+  }, [currentUser, displayScope, fetchBookingsData, isLoadingResourcesAndLabs, isLoadingUsersForFilter]);
 
 
   const handleOpenForm = useCallback((
@@ -262,6 +283,16 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       toast({ title: "Login Required", description: "You need to be logged in to create or edit bookings.", variant: "destructive" });
       return;
     }
+     if (!bookingToEdit && allAvailableResources.length === 0 && currentUser.role !== 'Admin') {
+      toast({ title: "No Resources Available", description: "You currently don't have access to any resources for booking. Please request lab access via your dashboard or contact an admin.", variant: "destructive", duration: 7000 });
+      return;
+    }
+     if (!bookingToEdit && allAvailableResources.length === 0 && currentUser.role === 'Admin') {
+      toast({ title: "No Resources in System", description: "There are no resources configured in the system. Please add resources first.", variant: "destructive", duration: 7000 });
+      router.push('/admin/resources');
+      return;
+    }
+
 
     let baseDateForNewBooking: Date;
     if (dateForNew && isValidDateFn(dateForNew)) {
@@ -280,17 +311,18 @@ function BookingsPageContent({}: BookingsPageContentProps) {
 
     const defaultStartTime = set(baseDateForNewBooking, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 });
 
-    let bookingData: Partial<Booking> & { resourceId?: string };
+    let bookingData: Partial<Booking> & { resourceId?: string, userId?: string };
 
     if (bookingToEdit) {
       bookingData = {
-        ...bookingToEdit, // Includes userId
+        ...bookingToEdit,
+        userId: bookingToEdit.userId, // Ensure userId is passed for existing bookings
       };
     } else {
       const initialResourceId = resourceIdForNew || (allAvailableResources.length > 0 ? allAvailableResources[0].id : '');
       bookingData = {
         startTime: defaultStartTime,
-        endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000), 
+        endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000),
         createdAt: new Date(),
         userId: currentUser.id, // For new bookings, default requester is current user
         resourceId: initialResourceId,
@@ -300,7 +332,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     }
     setCurrentBooking(bookingData);
     setIsFormOpen(true);
-  }, [currentUser, allAvailableResources, activeSelectedDate, toast]);
+  }, [currentUser, allAvailableResources, activeSelectedDate, toast, router]);
 
 
  useEffect(() => {
@@ -309,7 +341,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       return;
     }
 
-    if (!isClient || !currentUser || isLoadingBookings || isLoadingResources || isLoadingAvailabilityRules || authIsLoading) {
+    if (!isClient || !currentUser || isLoadingBookings || isLoadingResourcesAndLabs || isLoadingAvailabilityRules || authIsLoading) {
       return;
     }
 
@@ -337,19 +369,19 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         if (isFormOpen && currentBooking?.id) return;
         handleOpenForm(undefined, resourceIdParam, targetDateForNewBooking);
     }
-  }, [searchParams, isClient, currentUser, allBookingsDataSource, handleOpenForm, isLoadingBookings, isLoadingResources, isLoadingAvailabilityRules, authIsLoading, activeSelectedDate, isFormOpen, currentBooking, canViewAllBookings]);
+  }, [searchParams, isClient, currentUser, allBookingsDataSource, handleOpenForm, isLoadingBookings, isLoadingResourcesAndLabs, isLoadingAvailabilityRules, authIsLoading, activeSelectedDate, isFormOpen, currentBooking, canViewAllBookings]);
 
 
   const bookingsToDisplay = useMemo(() => {
-    if (!currentUser || isLoadingBookings || isLoadingResources || isLoadingUsersForFilter) return [];
+    if (!currentUser || isLoadingBookings || isLoadingResourcesAndLabs || isLoadingUsersForFilter) return [];
 
-    let filteredBookings = [...allBookingsDataSource]; 
+    let filteredBookings = [...allBookingsDataSource];
 
     if (activeSearchTerm) {
       const lowerSearchTerm = activeSearchTerm.toLowerCase();
       filteredBookings = filteredBookings.filter(b =>
         (b.resourceName && b.resourceName.toLowerCase().includes(lowerSearchTerm)) ||
-        (b.userName && b.userName.toLowerCase().includes(lowerSearchTerm)) || 
+        (b.userName && b.userName.toLowerCase().includes(lowerSearchTerm)) ||
         (b.notes && b.notes.toLowerCase().includes(lowerSearchTerm))
       );
     }
@@ -374,7 +406,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         (b.status !== 'Cancelled')
       ).sort((a, b) => compareAsc(a.startTime, b.startTime));
     }
-  }, [allBookingsDataSource, activeSelectedDate, activeSearchTerm, activeFilterResourceId, activeFilterStatus, activeFilterRequesterId, displayScope, canViewAllBookings, currentUser, isLoadingBookings, isLoadingResources, isLoadingUsersForFilter]);
+  }, [allBookingsDataSource, activeSelectedDate, activeSearchTerm, activeFilterResourceId, activeFilterStatus, activeFilterRequesterId, displayScope, canViewAllBookings, currentUser, isLoadingBookings, isLoadingResourcesAndLabs, isLoadingUsersForFilter]);
 
 
   useEffect(() => {
@@ -487,8 +519,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
     const actingUserId = currentFirebaseUser.uid;
     const actingUserName = currentUser?.name || currentFirebaseUser.displayName || currentFirebaseUser.email || 'User';
 
-    // The userId for whom the booking is made comes from the form
-    const bookingForUserId = formData.userId || actingUserId; // Default to acting user if somehow not set
+    const bookingForUserId = formData.userId || actingUserId;
 
 
     if (!formData.resourceId) {
@@ -498,9 +529,9 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
     if (!selectedResource) {
       toast({ title: "Resource Not Found", variant: "destructive" }); return;
     }
-    if (selectedResource.status !== 'Working') {
-      toast({ title: "Resource Not Operational", description: `"${selectedResource.name}" is ${selectedResource.status.toLowerCase()}.`, variant: "destructive", duration: 7000 }); return;
-    }
+    // if (selectedResource.status !== 'Working') { // This check will be done by server action too
+    //   toast({ title: "Resource Not Operational", description: `"${selectedResource.name}" is ${selectedResource.status.toLowerCase()}.`, variant: "destructive", duration: 7000 }); return;
+    // }
 
     let finalStartTime: Date; let finalEndTime: Date;
     try {
@@ -512,19 +543,29 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
     if (isNewBooking && isBefore(startOfDay(finalStartTime), startOfToday())) { toast({ title: "Invalid Date", description: "Cannot book past dates.", variant: "destructive" }); return; }
     if (finalEndTime <= finalStartTime) { toast({ title: "Invalid Time", description: "End time must be after start time.", variant: "destructive" }); return; }
 
+    // Lab closure check
+    const resourceLabId = selectedResource.labId;
     const bookingDayIndex = getDay(finalStartTime);
     const bookingDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][bookingDayIndex];
-    const recurringLabBlackout = fetchedRecurringRules.find(rule => rule.daysOfWeek.includes(bookingDayName));
-    if (recurringLabBlackout) { toast({ title: "Lab Closed", description: `Lab closed on ${bookingDayName}s (${recurringLabBlackout.name}).`, variant: "destructive", duration: 7000 }); return; }
+    const labSpecificRecurringBlackout = fetchedRecurringRules.find(rule => rule.labId === resourceLabId && rule.daysOfWeek.includes(bookingDayName));
+    const globalRecurringBlackout = fetchedRecurringRules.find(rule => !rule.labId && rule.daysOfWeek.includes(bookingDayName));
+
+    if (labSpecificRecurringBlackout) { toast({ title: "Lab Closed", description: `Lab for ${selectedResource.name} closed on ${bookingDayName}s (${labSpecificRecurringBlackout.name}).`, variant: "destructive", duration: 7000 }); return; }
+    if (!labSpecificRecurringBlackout && globalRecurringBlackout) { toast({ title: "Lab Closed (Global)", description: `All labs closed on ${bookingDayName}s (${globalRecurringBlackout.name}).`, variant: "destructive", duration: 7000 }); return; }
+
     const proposedDateOnlyStr = format(finalStartTime, 'yyyy-MM-dd');
-    const isSpecificBlackout = fetchedBlackoutDates.find(bd => bd.date === proposedDateOnlyStr);
-    if (isSpecificBlackout) { toast({ title: "Lab Closed", description: `Lab closed on ${formatDateSafe(finalStartTime, '', 'PPP')} (${isSpecificBlackout.reason || 'N/A'}).`, variant: "destructive", duration: 7000 }); return; }
+    const labSpecificBlackoutDate = fetchedBlackoutDates.find(bd => bd.labId === resourceLabId && bd.date === proposedDateOnlyStr);
+    const globalBlackoutDate = fetchedBlackoutDates.find(bd => !bd.labId && bd.date === proposedDateOnlyStr);
+
+    if (labSpecificBlackoutDate) { toast({ title: "Lab Closed", description: `Lab for ${selectedResource.name} closed on ${formatDateSafe(finalStartTime, '', 'PPP')} (${labSpecificBlackoutDate.reason || 'N/A'}).`, variant: "destructive", duration: 7000 }); return; }
+    if (!labSpecificBlackoutDate && globalBlackoutDate) { toast({ title: "Lab Closed (Global)", description: `All labs closed on ${formatDateSafe(finalStartTime, '', 'PPP')} (${globalBlackoutDate.reason || 'N/A'}).`, variant: "destructive", duration: 7000 }); return; }
+
 
     if (selectedResource.unavailabilityPeriods && selectedResource.unavailabilityPeriods.length > 0) {
       for (const period of selectedResource.unavailabilityPeriods) {
         if (!period.startDate || !period.endDate) continue;
         const unavailabilityStart = startOfDay(parseISO(period.startDate));
-        const unavailabilityEnd = dateFnsAddDays(startOfDay(parseISO(period.endDate)), 1);
+        const unavailabilityEnd = dateFnsAddDays(startOfDay(parseISO(period.endDate)), 1); // end is exclusive
         if ((finalStartTime >= unavailabilityStart && finalStartTime < unavailabilityEnd) || (finalEndTime > unavailabilityStart && finalEndTime <= unavailabilityEnd) || (finalStartTime <= unavailabilityStart && finalEndTime >= unavailabilityEnd)) {
           toast({ title: "Resource Unavailable", description: `${selectedResource.name} unavailable: ${period.reason || 'Scheduled Unavailability'}.`, variant: "destructive", duration: 7000 }); return;
         }
@@ -534,8 +575,9 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
     let finalStatus: Booking['status'] = isNewBooking ? 'Pending' : (formData.status || 'Pending');
     let conflictingBookingFound: (Booking & { id: string }) | undefined = undefined;
 
-    if (isNewBooking) {
+    if (isNewBooking) { // Conflict check only for new bookings server-side
       setIsLoadingBookings(true);
+      // This client-side check is indicative; server-side is definitive.
       const bookingsCollectionRef = collection(db, 'bookings');
       const q = query( bookingsCollectionRef, where('resourceId', '==', formData.resourceId!), where('status', 'in', ['Confirmed', 'Pending']), where('startTime', '<', Timestamp.fromDate(finalEndTime)), where('endTime', '>', Timestamp.fromDate(finalStartTime)));
       try {
@@ -546,6 +588,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
         }
       } catch (e: any) { toast({ title: "Conflict Check Failed", description: `Could not verify existing bookings. ${e.message || 'Please try again.'}`, variant: "destructive" }); setIsLoadingBookings(false); return; }
     }
+
 
     if (conflictingBookingFound && finalStatus !== 'Waitlisted') {
       if (selectedResource.allowQueueing) {
@@ -560,13 +603,13 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
     try {
       setIsLoadingBookings(true);
       if (isNewBooking) {
-        const bookingPayloadForServerAction = { 
-            resourceId: formData.resourceId!, 
-            startTime: finalStartTime, 
-            endTime: finalEndTime, 
-            status: finalStatus, 
+        const bookingPayloadForServerAction = {
+            resourceId: formData.resourceId!,
+            startTime: finalStartTime,
+            endTime: finalEndTime,
+            status: finalStatus,
             notes: formData.notes || '',
-            userId: bookingForUserId // Use the ID from the form
+            userId: bookingForUserId
         };
         const actingUserForSA = { id: actingUserId, name: actingUserName };
         let newBookingId: string | undefined;
@@ -577,21 +620,18 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
 
         if (newBookingId && currentUser && currentUser.id && currentUser.name) {
           const selectedResourceNameForNotif = selectedResource.name;
-          // Notify user for whom booking was made, if different from acting user or if it's their own booking
           const targetUserForNotification = allUsersForFilter.find(u => u.id === bookingForUserId);
           const targetUserName = targetUserForNotification?.name || 'User';
 
           if (finalStatus === 'Pending') {
-            // Notify target user if Admin booked for them and it's pending their (Admin's) approval.
             if (actingUserId !== bookingForUserId && currentUser.role === 'Admin') {
                  try { await addNotification(bookingForUserId, 'Booking Submitted For You', `A booking for ${selectedResourceNameForNotif} on ${format(finalStartTime, 'MMM dd, HH:mm')} was submitted for you by ${actingUserName} and is pending approval.`, 'booking_pending_approval', `/bookings?bookingId=${newBookingId}`); } catch (e) { /* ignore */ }
             }
-            // Notify Admins/Technicians (excluding the acting user if they are one)
             try {
               const adminUsersQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Technician']), orderBy('name', 'asc'));
               const adminSnapshot = await getDocs(adminUsersQuery);
               const notificationPromises = adminSnapshot.docs.map(adminDoc => {
-                if (adminDoc.id !== actingUserId) { // Don't notify self
+                if (adminDoc.id !== actingUserId) {
                   return addNotification(adminDoc.id, 'New Booking Request', `Booking for ${selectedResourceNameForNotif} by ${targetUserName} on ${format(finalStartTime, 'MMM dd, HH:mm')} needs approval.`, 'booking_pending_approval', `/admin/booking-requests?bookingId=${newBookingId}`);
                 } return Promise.resolve();
               });
@@ -602,14 +642,13 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
             } catch (waitlistNotificationError: any) { toast({ title: "Waitlist Notification Failed", variant: "destructive" }); }
           }
         }
-      } else if (formData.id) { 
-        // Editing existing booking - userId cannot be changed in the form for existing bookings.
-        const bookingDataToUpdate: any = { 
-            resourceId: formData.resourceId!, 
-            startTime: Timestamp.fromDate(finalStartTime), 
-            endTime: Timestamp.fromDate(finalEndTime), 
-            status: formData.status || 'Pending', 
-            notes: formData.notes || '' 
+      } else if (formData.id) {
+        const bookingDataToUpdate: any = {
+            resourceId: formData.resourceId!,
+            startTime: Timestamp.fromDate(finalStartTime),
+            endTime: Timestamp.fromDate(finalEndTime),
+            status: formData.status || 'Pending',
+            notes: formData.notes || ''
         };
         const bookingDocRef = doc(db, "bookings", formData.id);
         await updateDoc(bookingDocRef, bookingDataToUpdate);
@@ -673,7 +712,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
         const resourceDocSnap = await getDoc(doc(db, 'resources', bookingFromState.resourceId));
         detailedBooking.resourceName = resourceDocSnap.exists() ? resourceDocSnap.data()?.name || "Unknown Resource" : "Resource Not Found";
       }
-      if (bookingFromState.userId) { 
+      if (bookingFromState.userId) {
           const userFromList = allUsersForFilter.find(u => u.id === bookingFromState.userId);
           detailedBooking.userName = userFromList?.name || bookingFromState.userName || "Unknown User";
       }
@@ -722,10 +761,10 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
     );
   }
 
-  const isLoadingAnyData = isLoadingBookings || isLoadingResources || isLoadingAvailabilityRules || authIsLoading || isLoadingUsersForFilter;
+  const isLoadingAnyData = isLoadingBookings || isLoadingResourcesAndLabs || isLoadingAvailabilityRules || authIsLoading || isLoadingUsersForFilter;
   const formKey = currentBooking?.id || `new:${currentBooking?.resourceId || 'empty'}:${currentBooking?.startTime instanceof Date ? currentBooking.startTime.toISOString() : (activeSelectedDate || new Date()).toISOString()}`;
 
-  const pageHeaderDescription = displayScope === 'all' && canViewAllBookings 
+  const pageHeaderDescription = displayScope === 'all' && canViewAllBookings
     ? `View, search, filter, and manage all lab resource bookings.`
     : `View, search, filter, and manage your lab resource bookings.`;
 
@@ -770,7 +809,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                                     <div className="relative mt-1"><SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input id="bookingSearchDialog" type="search" placeholder="Keyword..." className="h-9 pl-8" value={tempSearchTerm} onChange={(e) => setTempSearchTerm(e.target.value)} /></div>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div><Label htmlFor="bookingResourceDialog">Resource</Label><Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId} disabled={isLoadingResources}><SelectTrigger id="bookingResourceDialog" className="h-9 mt-1"><SelectValue placeholder={isLoadingResources ? "Loading..." : "Filter by Resource"} /></SelectTrigger><SelectContent><SelectItem value="all">All Resources</SelectItem>{allAvailableResources.map(resource => (<SelectItem key={resource.id} value={resource.id}>{resource.name}</SelectItem>))}</SelectContent></Select></div>
+                                    <div><Label htmlFor="bookingResourceDialog">Resource</Label><Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId} disabled={isLoadingResourcesAndLabs}><SelectTrigger id="bookingResourceDialog" className="h-9 mt-1"><SelectValue placeholder={isLoadingResourcesAndLabs ? "Loading..." : "Filter by Resource"} /></SelectTrigger><SelectContent><SelectItem value="all">All Resources</SelectItem>{allAvailableResources.map(resource => (<SelectItem key={resource.id} value={resource.id}>{resource.name}</SelectItem>))}</SelectContent></Select></div>
                                     <div><Label htmlFor="bookingStatusDialog">Status</Label><Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as Booking['status'] | 'all')}><SelectTrigger id="bookingStatusDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Status" /></SelectTrigger><SelectContent>{bookingStatusesForFilter.map(s => <SelectItem key={s} value={s}>{s === 'all' ? 'All Statuses' : s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}</SelectContent></Select></div>
                                 </div>
                                 {canViewAllBookings && (
@@ -783,7 +822,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                                         {allUsersForFilter.map(user => (<SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>))}
                                       </SelectContent>
                                     </Select>
-                                    {displayScope === 'mine' && <p className="text-xs text-muted-foreground mt-1">Requester filter is disabled when 'Show My Bookings' is active.</p>}
+                                    {displayScope === 'mine' && <p className="text-xs text-muted-foreground !mt-0.5">Requester filter is disabled when 'Show My Bookings' is active.</p>}
                                   </div>
                                 )}
                             </div>
@@ -800,7 +839,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
             <CardHeader className="border-b flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-2">
                 <div>
                     <CardTitle>
-                    {activeSelectedDate ? `Bookings for ${formatDateSafe(activeSelectedDate, 'this day', 'PPP')}` : 
+                    {activeSelectedDate ? `Bookings for ${formatDateSafe(activeSelectedDate, 'this day', 'PPP')}` :
                      (displayScope === 'all' && canViewAllBookings ? 'All Upcoming Bookings' : 'Your Upcoming Bookings')}
                     </CardTitle>
                     <CardDescription className="mt-1">
@@ -829,9 +868,9 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                     {bookingsToDisplay.map((booking) => {
                        const isCurrentUserBooking = booking.userId === currentUser?.id;
                        const canAdministerBooking = currentUser?.role === 'Admin';
-                       
+
                        const canEditThisBooking = canAdministerBooking || (isCurrentUserBooking && (booking.status === 'Pending' || booking.status === 'Waitlisted' || booking.status === 'Confirmed'));
-                       const canCancelThisBooking = canAdministerBooking || isCurrentUserBooking;
+                       const canCancelThisBooking = canAdministerBooking || isCurrentUserBooking; // Includes admins cancelling any, others cancelling their own
 
                         return (
                         <TableRow key={booking.id} className={cn(booking.status === 'Cancelled' && 'opacity-60')}>
@@ -887,18 +926,18 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
       <Dialog open={isFormOpen} onOpenChange={handleDialogClose} key={formKey}>
         <DialogContent className="sm:max-w-[525px]">
           <DialogHeader><DialogTitle>{currentBooking?.id ? 'Edit Booking' : 'Create New Booking'}</DialogTitle><DialogDescription>Fill in the details below to {currentBooking?.id ? 'update your' : 'schedule a new'} booking.{dialogHeaderDateString && ` For date: ${dialogHeaderDateString}`}</DialogDescription></DialogHeader>
-          {(isLoadingResources || isLoadingAvailabilityRules || isLoadingUsersForFilter) && isFormOpen ? (<div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading form data...</div>
+          {(isLoadingResourcesAndLabs || isLoadingAvailabilityRules || isLoadingUsersForFilter) && isFormOpen ? (<div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading form data...</div>
           ) : allAvailableResources.length > 0 && currentUser && currentUser.name && currentUser.role ? (
-            <BookingForm 
-                initialData={currentBooking} 
-                onSave={handleSaveBooking} 
-                onCancel={() => handleDialogClose(false)} 
-                currentUser={currentUser} 
-                allAvailableResources={allAvailableResources} 
+            <BookingForm
+                initialData={currentBooking}
+                onSave={handleSaveBooking}
+                onCancel={() => handleDialogClose(false)}
+                currentUser={currentUser}
+                allAvailableResources={allAvailableResources}
                 allUsers={allUsersForFilter}
-                selectedDateProp={currentBooking?.startTime ? startOfDay(new Date(currentBooking.startTime)) : (activeSelectedDate || startOfToday())} 
+                selectedDateProp={currentBooking?.startTime ? startOfDay(new Date(currentBooking.startTime)) : (activeSelectedDate || startOfToday())}
             />
-          ) : ( isFormOpen && (<div className="text-center py-6 text-muted-foreground"><Info className="mx-auto h-8 w-8 mb-2" /><p>No resources are currently available for booking, or user data is missing.</p><p className="text-xs">Please check back later or contact an administrator.</p></div>))}
+          ) : ( isFormOpen && (<div className="text-center py-6 text-muted-foreground"><Info className="mx-auto h-8 w-8 mb-2" /><p>No resources are currently available for booking, or user data is missing.</p><p className="text-xs">{ currentUser?.role !== 'Admin' ? "Please ensure you have access to labs via your dashboard." : "Please configure resources and labs in Admin section."}</p></div>))}
         </DialogContent>
       </Dialog>
 
@@ -909,7 +948,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
 
 const bookingFormSchema = z.object({
   id: z.string().optional(),
-  userId: z.string().min(1, "Requester ID is required."), // Added userId
+  userId: z.string().min(1, "Requester ID is required."),
   resourceId: z.string().min(1, "Please select a resource."),
   bookingDate: z.date({ required_error: "Please select a date." }),
   startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid start time format. Use HH:mm."),
@@ -928,12 +967,12 @@ const bookingFormSchema = z.object({
 export type BookingFormValues = z.infer<typeof bookingFormSchema>;
 
 interface BookingFormProps {
-  initialData?: Partial<Booking> & { resourceId?: string, userId?: string }; // Added userId to initialData
+  initialData?: Partial<Booking> & { resourceId?: string, userId?: string };
   onSave: (data: BookingFormValues) => void;
   onCancel: () => void;
-  currentUser: User; // Pass full currentUser object
+  currentUser: User;
   allAvailableResources: Resource[];
-  allUsers: User[]; // Pass all users for Admin selection
+  allUsers: User[];
   selectedDateProp?: Date;
 }
 
@@ -986,7 +1025,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUser, allAvailableR
       bookingDate: defaultDate, startTime: defaultStartTimeStr, endTime: defaultEndTimeStr,
       status: initialData?.status || 'Pending', notes: initialData?.notes || '',
     });
-  }, [initialData, selectedDateProp, allAvailableResources, form, currentUser.id]); // Added currentUser.id to dependency array
+  }, [initialData, selectedDateProp, allAvailableResources, form, currentUser.id]);
 
   useEffect(() => {
     const currentBookingDate = form.getValues('bookingDate');
@@ -1021,7 +1060,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUser, allAvailableR
       <form onSubmit={form.handleSubmit(handleRHFSubmit)}>
         <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
           <div className="space-y-4 py-4 px-1">
-            
+
             <FormField
               control={form.control}
               name="userId"
@@ -1038,9 +1077,9 @@ function BookingForm({ initialData, onSave, onCancel, currentUser, allAvailableR
                       </SelectContent>
                     </Select>
                   ) : (
-                    <Input 
-                      value={allUsers.find(u => u.id === field.value)?.name || currentUser.name} 
-                      disabled 
+                    <Input
+                      value={allUsers.find(u => u.id === field.value)?.name || currentUser.name}
+                      disabled
                     />
                   )}
                   <FormMessage />
@@ -1048,7 +1087,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUser, allAvailableR
               )}
             />
 
-            <FormField control={form.control} name="resourceId" render={({ field }) => (<FormItem><FormLabel>Resource <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} value={field.value || ''} disabled={!isNewBookingForm || allAvailableResources.length === 0 || form.formState.isSubmitting}><FormControl><SelectTrigger id="bookingFormDialogResource"><SelectValue placeholder={allAvailableResources.length > 0 ? "Select a resource" : "No resources available"} /></SelectTrigger></FormControl><SelectContent>{allAvailableResources.map(resource => (<SelectItem key={resource.id} value={resource.id} disabled={resource.status !== 'Working' && resource.id !== initialData?.resourceId}>{resource.name} ({resource.status})</SelectItem>))}</SelectContent></Select>{!isNewBookingForm && <p className="text-xs text-muted-foreground !mt-0.5">Resource cannot be changed for existing bookings.</p>}{selectedResource && selectedResource.status !== 'Working' && isNewBookingForm && (<FormMessage className="text-xs text-destructive !mt-0.5">This resource is currently {selectedResource.status.toLowerCase()} and cannot be booked.</FormMessage>)}<FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="resourceId" render={({ field }) => (<FormItem><FormLabel>Resource <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} value={field.value || ''} disabled={!isNewBookingForm || allAvailableResources.length === 0 || form.formState.isSubmitting}><FormControl><SelectTrigger id="bookingFormDialogResource"><SelectValue placeholder={allAvailableResources.length > 0 ? "Select a resource" : "No resources available"} /></SelectTrigger></FormControl><SelectContent>{allAvailableResources.map(resource => (<SelectItem key={resource.id} value={resource.id} disabled={resource.status !== 'Working' && resource.id !== initialData?.resourceId}>{resource.name} ({resource.status})</SelectItem>))}</SelectContent></Select>{!isNewBookingForm && <p className="text-xs text-muted-foreground !mt-0.5">Resource cannot be changed for existing bookings.</p>}{selectedResource && selectedResource.status !== 'Working' && isNewBookingForm && (<FormMessage className="text-xs text-destructive !mt-0.5">This resource is currently {selectedResource.status.toLowerCase()} and cannot be booked.</FormMessage>)}{allAvailableResources.length === 0 && <p className="text-xs text-muted-foreground mt-1">No resources accessible. Please check your lab memberships or contact an admin.</p>}<FormMessage /></FormItem>)} />
             <FormField control={form.control} name="bookingDate" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Date <span className="text-destructive">*</span></FormLabel><Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal h-10", !field.value && "text-muted-foreground")} disabled={!isNewBookingForm || form.formState.isSubmitting}><CalendarIconLucide className="mr-2 h-4 w-4" />{field.value && isValidDateFn(field.value) ? (format(field.value, "PPP")) : (<span>Pick a date</span>)}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={(date) => { if (date) field.onChange(startOfDay(date)); setIsCalendarOpen(false);}} disabled={(date) => date < startOfToday() && !initialData?.id} initialFocus /></PopoverContent></Popover>{!isNewBookingForm && <p className="text-xs text-muted-foreground !mt-0.5">Date cannot be changed for existing bookings.</p>}<FormMessage /></FormItem>)} />
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="startTime" render={({ field }) => (<FormItem><FormLabel>Start Time <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isNewBookingForm || form.formState.isSubmitting}><FormControl><SelectTrigger id="bookingFormDialogStartTime"><SelectValue placeholder="Select start time" /></SelectTrigger></FormControl><SelectContent>{timeSlots.map(slot => <SelectItem key={`start-${slot}`} value={slot}>{slot}</SelectItem>)}</SelectContent></Select>{!isNewBookingForm && <p className="text-xs text-muted-foreground !mt-0.5">Start time cannot be changed.</p>}<FormMessage /></FormItem>)} />
@@ -1060,7 +1099,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUser, allAvailableR
         </ScrollArea>
         <DialogFooter className="pt-6 border-t mt-4">
           <Button type="button" variant="outline" onClick={onCancel} disabled={form.formState.isSubmitting}><X className="mr-2 h-4 w-4" /> Cancel</Button>
-          <Button type="submit" disabled={form.formState.isSubmitting || (selectedResource && selectedResource.status !== 'Working' && isNewBookingForm)}>{form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{form.formState.isSubmitting ? "Saving..." : (initialData?.id ? "Save Changes" : "Request Booking")}</Button>
+          <Button type="submit" disabled={form.formState.isSubmitting || (selectedResource && selectedResource.status !== 'Working' && isNewBookingForm) || (allAvailableResources.length === 0 && isNewBookingForm)}>{form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{form.formState.isSubmitting ? "Saving..." : (initialData?.id ? "Save Changes" : "Request Booking")}</Button>
         </DialogFooter>
       </form>
     </Form>
@@ -1074,4 +1113,3 @@ export default function BookingsPage() {
     </Suspense>
   );
 }
-
