@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Archive, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle } from 'lucide-react'; // Added PlusCircle
-import type { ResourceType, Resource, Lab, RoleName } from '@/types';
+import { Archive, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon } from 'lucide-react';
+import type { ResourceType, Resource, Lab, RoleName, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import {
   Table,
@@ -32,7 +33,7 @@ import {
   AlertDialogTrigger,
 }from "@/components/ui/alert-dialog";
 import {
-  Dialog as FilterSortDialog,
+  Dialog as FilterSortDialog, // Aliased for clarity
   DialogContent as FilterSortDialogContent,
   DialogDescription as FilterSortDialogDescription,
   DialogFooter as FilterSortDialogFooter,
@@ -43,7 +44,10 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { ResourceTypeFormDialog, ResourceTypeFormValues } from '@/components/admin/resource-type-form-dialog';
 import { LabFormDialog, LabFormValues } from '@/components/admin/lab-form-dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BlackoutDateFormDialog, BlackoutDateFormValues as BlackoutDateDialogFormValues } from '@/components/admin/blackout-date-form-dialog'; // Renamed type import for clarity
+import { RecurringBlackoutRuleFormDialog, RecurringBlackoutRuleFormValues as RecurringRuleDialogFormValues } from '@/components/admin/recurring-blackout-rule-form-dialog'; // Renamed type import for clarity
+import { MaintenanceRequestFormDialog, MaintenanceRequestFormValues as MaintenanceDialogFormValues } from '@/components/maintenance/maintenance-request-form-dialog'; // Renamed type import for clarity
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -51,35 +55,48 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp, writeBatch, where } from 'firebase/firestore';
 import { addAuditLog } from '@/lib/firestore-helpers';
+import { daysOfWeekArray, maintenanceRequestStatuses } from '@/lib/app-constants';
+import { format, parseISO, isValid as isValidDateFn } from 'date-fns';
+import { cn, formatDateSafe } from '@/lib/utils';
 
+
+// --- Sorting options (remains the same) ---
 type ResourceTypeSortableColumn = 'name' | 'resourceCount' | 'description';
 const resourceTypeSortOptions: { value: string; label: string }[] = [
-  { value: 'name-asc', label: 'Name (A-Z)' },
-  { value: 'name-desc', label: 'Name (Z-A)' },
-  { value: 'resourceCount-asc', label: 'Resources (Low to High)' },
-  { value: 'resourceCount-desc', label: 'Resources (High to Low)' },
-  { value: 'description-asc', label: 'Description (A-Z)' },
-  { value: 'description-desc', label: 'Description (Z-A)' },
+  { value: 'name-asc', label: 'Name (A-Z)' }, { value: 'name-desc', label: 'Name (Z-A)' },
+  { value: 'resourceCount-asc', label: 'Resources (Low-High)' }, { value: 'resourceCount-desc', label: 'Resources (High-Low)' },
+  { value: 'description-asc', label: 'Description (A-Z)' }, { value: 'description-desc', label: 'Description (Z-A)' },
 ];
-
 type LabSortableColumn = 'name' | 'location';
 const labSortOptions: { value: string; label: string }[] = [
-  { value: 'name-asc', label: 'Name (A-Z)' },
-  { value: 'name-desc', label: 'Name (Z-A)' },
-  { value: 'location-asc', label: 'Location (A-Z)' },
-  { value: 'location-desc', label: 'Location (Z-A)' },
+  { value: 'name-asc', label: 'Name (A-Z)' }, { value: 'name-desc', label: 'Name (Z-A)' },
+  { value: 'location-asc', label: 'Location (A-Z)' }, { value: 'location-desc', label: 'Location (Z-A)' },
 ];
 
-export default function InventoryManagementPage() {
+// --- Helper: Maintenance Status Badge ---
+const getMaintenanceStatusBadge = (status: MaintenanceRequestStatus) => {
+  switch (status) {
+    case 'Open': return <Badge variant="destructive" className="bg-red-500 text-white border-transparent"><AlertCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+    case 'In Progress': return <Badge variant="secondary" className="bg-yellow-500 text-yellow-950 border-transparent"><PenToolIcon className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+    case 'Resolved': return <Badge className="bg-blue-500 text-white border-transparent"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+    case 'Closed': return <Badge className="bg-green-500 text-white border-transparent"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+    default: return <Badge variant="outline">{status}</Badge>;
+  }
+};
+
+
+export default function LabManagementPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
 
-  // Resource Types State
+  // --- Universal State ---
+  const [isLoadingData, setIsLoadingData] = useState(true); // Combined loading state
+
+  // --- Resource Types State ---
   const [resourceTypes, setResourceTypes] = useState<ResourceType[]>([]);
-  const [allResources, setAllResources] = useState<Resource[]>([]); // Used to count resources per type
-  const [isLoadingResourceTypes, setIsLoadingResourceTypes] = useState(true);
+  const [allResourcesForTypeCount, setAllResourcesForTypeCount] = useState<Resource[]>([]); // Used to count resources per type
   const [typeToDelete, setTypeToDelete] = useState<ResourceType | null>(null);
   const [isResourceTypeFormDialogOpen, setIsResourceTypeFormDialogOpen] = useState(false);
   const [editingType, setEditingType] = useState<ResourceType | null>(null);
@@ -89,9 +106,8 @@ export default function InventoryManagementPage() {
   const [tempResourceTypeSortBy, setTempResourceTypeSortBy] = useState<string>('name-asc');
   const [activeResourceTypeSortBy, setActiveResourceTypeSortBy] = useState<string>('name-asc');
 
-  // Labs State
+  // --- Labs State ---
   const [labs, setLabs] = useState<Lab[]>([]);
-  const [isLoadingLabs, setIsLoadingLabs] = useState(true);
   const [labToDelete, setLabToDelete] = useState<Lab | null>(null);
   const [isLabFormDialogOpen, setIsLabFormDialogOpen] = useState(false);
   const [editingLab, setEditingLab] = useState<Lab | null>(null);
@@ -101,241 +117,179 @@ export default function InventoryManagementPage() {
   const [tempLabSortBy, setTempLabSortBy] = useState<string>('name-asc');
   const [activeLabSortBy, setActiveLabSortBy] = useState<string>('name-asc');
 
+  // --- Blackout Dates & Recurring Rules State ---
+  const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
+  const [recurringRules, setRecurringRules] = useState<RecurringBlackoutRule[]>([]);
+  const [isDateFormDialogOpen, setIsDateFormDialogOpen] = useState(false);
+  const [editingBlackoutDate, setEditingBlackoutDate] = useState<BlackoutDate | null>(null);
+  const [dateToDelete, setDateToDelete] = useState<BlackoutDate | null>(null);
+  const [isRecurringFormDialogOpen, setIsRecurringFormDialogOpen] = useState(false);
+  const [editingRecurringRule, setEditingRecurringRule] = useState<RecurringBlackoutRule | null>(null);
+  const [ruleToDelete, setRuleToDelete] = useState<RecurringBlackoutRule | null>(null);
+  const [isDateFilterDialogOpen, setIsDateFilterDialogOpen] = useState(false);
+  const [tempDateSearchTerm, setTempDateSearchTerm] = useState('');
+  const [activeDateSearchTerm, setActiveDateSearchTerm] = useState('');
 
-  const canManageInventory = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Lab Manager');
+  // --- Maintenance Requests State ---
+  const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
+  const [allResourcesForMaintenance, setAllResourcesForMaintenance] = useState<Resource[]>([]);
+  const [allTechniciansForMaintenance, setAllTechniciansForMaintenance] = useState<User[]>([]);
+  const [allUsersForMaintenance, setAllUsersForMaintenance] = useState<User[]>([]);
+  const [isMaintenanceFormDialogOpen, setIsMaintenanceFormDialogOpen] = useState(false);
+  const [editingMaintenanceRequest, setEditingMaintenanceRequest] = useState<MaintenanceRequest | null>(null);
+  const [isMaintenanceFilterDialogOpen, setIsMaintenanceFilterDialogOpen] = useState(false);
+  const [tempMaintenanceSearchTerm, setTempMaintenanceSearchTerm] = useState('');
+  const [tempMaintenanceFilterStatus, setTempMaintenanceFilterStatus] = useState<MaintenanceRequestStatus | 'all'>('all');
+  const [tempMaintenanceFilterResourceId, setTempMaintenanceFilterResourceId] = useState<string>('all');
+  const [tempMaintenanceFilterTechnicianId, setTempMaintenanceFilterTechnicianId] = useState<string>('all');
+  const [activeMaintenanceSearchTerm, setActiveMaintenanceSearchTerm] = useState('');
+  const [activeMaintenanceFilterStatus, setActiveMaintenanceFilterStatus] = useState<MaintenanceRequestStatus | 'all'>('all');
+  const [activeMaintenanceFilterResourceId, setActiveMaintenanceFilterResourceId] = useState<string>('all');
+  const [activeMaintenanceFilterTechnicianId, setActiveMaintenanceFilterTechnicianId] = useState<string>('all');
 
-  // --- Resource Types Logic ---
-  const fetchResourceTypesData = useCallback(async () => {
-    if (!canManageInventory) {
-      setIsLoadingResourceTypes(false); setResourceTypes([]); setAllResources([]); return;
+
+  const canManageAny = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
+
+  // --- Data Fetching ---
+  const fetchAllAdminData = useCallback(async () => {
+    if (!canManageAny) {
+      setIsLoadingData(false);
+      setResourceTypes([]); setAllResourcesForTypeCount([]); setLabs([]);
+      setBlackoutDates([]); setRecurringRules([]);
+      setMaintenanceRequests([]); setAllResourcesForMaintenance([]); setAllTechniciansForMaintenance([]); setAllUsersForMaintenance([]);
+      return;
     }
-    setIsLoadingResourceTypes(true);
+    setIsLoadingData(true);
     try {
+      // Labs & Resource Types data
       const typesQuery = query(collection(db, "resourceTypes"), orderBy("name", "asc"));
       const typesSnapshot = await getDocs(typesQuery);
-      const fetchedTypes: ResourceType[] = typesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as ResourceType));
-      setResourceTypes(fetchedTypes);
-
-      const resourcesQuery = query(collection(db, "resources")); // Fetch all resources to count them per type
+      setResourceTypes(typesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as ResourceType)));
+      const resourcesQuery = query(collection(db, "resources"));
       const resourcesSnapshot = await getDocs(resourcesQuery);
-      const fetchedResources: Resource[] = resourcesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Pick<Resource, 'id' | 'resourceTypeId'>) as Resource);
-      setAllResources(fetchedResources);
+      const fetchedResourcesAll = resourcesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Resource));
+      setAllResourcesForTypeCount(fetchedResourcesAll);
+      setAllResourcesForMaintenance(fetchedResourcesAll); // Re-use for maintenance tab
+
+      const labsQuery = query(collection(db, "labs"), orderBy("name", "asc"));
+      const labsSnapshot = await getDocs(labsQuery);
+      setLabs(labsSnapshot.docs.map(docSnap => ({id: docSnap.id, ...docSnap.data(), createdAt: (docSnap.data().createdAt as Timestamp)?.toDate(), lastUpdatedAt: (docSnap.data().lastUpdatedAt as Timestamp)?.toDate()} as Lab)));
+
+      // Blackout Dates & Recurring Rules data
+      const boQuery = query(collection(db, "blackoutDates"), orderBy("date", "asc"));
+      const boSnapshot = await getDocs(boQuery);
+      setBlackoutDates(boSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate)));
+      const rrQuery = query(collection(db, "recurringBlackoutRules"), orderBy("name", "asc"));
+      const rrSnapshot = await getDocs(rrQuery);
+      setRecurringRules(rrSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as RecurringBlackoutRule)));
+
+      // Maintenance Requests data
+      const usersSnapshot = await getDocs(query(collection(db, "users"), orderBy("name", "asc")));
+      const fetchedUsersAll = usersSnapshot.docs.map(d => ({id: d.id, ...d.data(), createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date()} as User));
+      setAllUsersForMaintenance(fetchedUsersAll);
+      const techniciansQuery = query(collection(db, "users"), where("role", "==", "Technician"), orderBy("name", "asc"));
+      const techniciansSnapshot = await getDocs(techniciansQuery);
+      setAllTechniciansForMaintenance(techniciansSnapshot.docs.map(d => ({id: d.id, ...d.data(), createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date()} as User)));
+
+      const requestsQueryInstance = query(collection(db, "maintenanceRequests"), orderBy("dateReported", "desc"));
+      const requestsSnapshot = await getDocs(requestsQueryInstance);
+      const fetchedRequests = requestsSnapshot.docs.map(docSnap => {
+          const data = docSnap.data();
+          return { id: docSnap.id, ...data, dateReported: (data.dateReported as Timestamp)?.toDate() || new Date(), dateResolved: (data.dateResolved as Timestamp)?.toDate() } as MaintenanceRequest;
+      });
+      setMaintenanceRequests(fetchedRequests);
+
     } catch (error: any) {
-      console.error("Error fetching resource types data:", error);
-      toast({ title: "Error", description: `Failed to load resource types: ${error.message}`, variant: "destructive" });
+      console.error("Error fetching admin data:", error);
+      toast({ title: "Error", description: `Failed to load data: ${error.message}`, variant: "destructive" });
     }
-    setIsLoadingResourceTypes(false);
-  }, [toast, canManageInventory]);
+    setIsLoadingData(false);
+  }, [toast, canManageAny]);
 
-  useEffect(() => { fetchResourceTypesData(); }, [fetchResourceTypesData]);
-  useEffect(() => {
-    if (isResourceTypeFilterDialogOpen) {
-      setTempResourceTypeSearchTerm(activeResourceTypeSearchTerm);
-      setTempResourceTypeSortBy(activeResourceTypeSortBy);
-    }
-  }, [isResourceTypeFilterDialogOpen, activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
+  useEffect(() => { fetchAllAdminData(); }, [fetchAllAdminData]);
 
-  const filteredResourceTypesWithCount = useMemo(() => {
-    let currentTypes = [...resourceTypes];
-    const lowerSearchTerm = activeResourceTypeSearchTerm.toLowerCase();
-    if (activeResourceTypeSearchTerm) {
-      currentTypes = currentTypes.filter(type => type.name.toLowerCase().includes(lowerSearchTerm) || (type.description && type.description.toLowerCase().includes(lowerSearchTerm)));
-    }
-    const [column, direction] = activeResourceTypeSortBy.split('-') as [ResourceTypeSortableColumn, 'asc' | 'desc'];
-    let typesWithCount = currentTypes.map(type => ({ ...type, resourceCount: allResources.filter(res => res.resourceTypeId === type.id).length, }));
-    typesWithCount.sort((a, b) => {
-      let comparison = 0;
-      const valA = a[column]; const valB = b[column];
-      if (column === 'resourceCount') comparison = (valA as number) - (valB as number);
-      else if (column === 'name') comparison = (valA as string).toLowerCase().localeCompare((valB as string).toLowerCase());
-      else if (column === 'description') comparison = (a.description || '').toLowerCase().localeCompare((b.description || '').toLowerCase());
-      return direction === 'asc' ? comparison : -comparison;
-    });
-    return typesWithCount;
-  }, [resourceTypes, allResources, activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
-
-  const handleApplyResourceTypeDialogFilters = useCallback(() => {
-    setActiveResourceTypeSearchTerm(tempResourceTypeSearchTerm);
-    setActiveResourceTypeSortBy(tempResourceTypeSortBy);
-    setIsResourceTypeFilterDialogOpen(false);
-  }, [tempResourceTypeSearchTerm, tempResourceTypeSortBy]);
-
+  // --- Resource Types Logic (Copied and adapted) ---
+  useEffect(() => { if (isResourceTypeFilterDialogOpen) { setTempResourceTypeSearchTerm(activeResourceTypeSearchTerm); setTempResourceTypeSortBy(activeResourceTypeSortBy);}}, [isResourceTypeFilterDialogOpen, activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
+  const filteredResourceTypesWithCount = useMemo(() => { /* ... same as original ... */
+    let currentTypes = [...resourceTypes]; const lowerSearchTerm = activeResourceTypeSearchTerm.toLowerCase(); if (activeResourceTypeSearchTerm) { currentTypes = currentTypes.filter(type => type.name.toLowerCase().includes(lowerSearchTerm) || (type.description && type.description.toLowerCase().includes(lowerSearchTerm)));} const [column, direction] = activeResourceTypeSortBy.split('-') as [ResourceTypeSortableColumn, 'asc' | 'desc']; let typesWithCount = currentTypes.map(type => ({ ...type, resourceCount: allResourcesForTypeCount.filter(res => res.resourceTypeId === type.id).length, })); typesWithCount.sort((a, b) => { let comparison = 0; const valA = a[column]; const valB = b[column]; if (column === 'resourceCount') comparison = (valA as number) - (valB as number); else if (column === 'name') comparison = (valA as string).toLowerCase().localeCompare((valB as string).toLowerCase()); else if (column === 'description') comparison = (a.description || '').toLowerCase().localeCompare((b.description || '').toLowerCase()); return direction === 'asc' ? comparison : -comparison; }); return typesWithCount;
+  }, [resourceTypes, allResourcesForTypeCount, activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
+  const handleApplyResourceTypeDialogFilters = useCallback(() => { setActiveResourceTypeSearchTerm(tempResourceTypeSearchTerm); setActiveResourceTypeSortBy(tempResourceTypeSortBy); setIsResourceTypeFilterDialogOpen(false);}, [tempResourceTypeSearchTerm, tempResourceTypeSortBy]);
   const resetResourceTypeDialogFiltersOnly = useCallback(() => { setTempResourceTypeSearchTerm(''); setTempResourceTypeSortBy('name-asc'); }, []);
-  const resetAllActiveResourceTypePageFilters = useCallback(() => {
-    setActiveResourceTypeSearchTerm(''); setActiveResourceTypeSortBy('name-asc');
-    resetResourceTypeDialogFiltersOnly(); setIsResourceTypeFilterDialogOpen(false);
-  }, [resetResourceTypeDialogFiltersOnly]);
-
+  const resetAllActiveResourceTypePageFilters = useCallback(() => { setActiveResourceTypeSearchTerm(''); setActiveResourceTypeSortBy('name-asc'); resetResourceTypeDialogFiltersOnly(); setIsResourceTypeFilterDialogOpen(false);}, [resetResourceTypeDialogFiltersOnly]);
   const handleOpenNewResourceTypeDialog = () => { setEditingType(null); setIsResourceTypeFormDialogOpen(true); };
   const handleOpenEditResourceTypeDialog = (type: ResourceType) => { setEditingType(type); setIsResourceTypeFormDialogOpen(true); };
-
-  const handleSaveResourceType = async (data: ResourceTypeFormValues) => {
-    if (!currentUser || !currentUser.name || !canManageInventory) {
-      toast({ title: "Permission Denied", variant: "destructive" }); return;
-    }
-    setIsLoadingResourceTypes(true);
-    try {
-      const typeDataToSave = { name: data.name, description: data.description || null };
-      const auditAction = editingType ? 'RESOURCE_TYPE_UPDATED' : 'RESOURCE_TYPE_CREATED';
-      let entityId = editingType ? editingType.id : '';
-
-      if (editingType) {
-        await updateDoc(doc(db, "resourceTypes", entityId), typeDataToSave);
-      } else {
-        const docRef = await addDoc(collection(db, "resourceTypes"), typeDataToSave);
-        entityId = docRef.id;
-      }
-      addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'ResourceType', entityId, details: `Resource Type '${data.name}' ${editingType ? 'updated' : 'created'}.` });
-      toast({ title: `Resource Type ${editingType ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingType ? 'updated' : 'created'}.` });
-      setIsResourceTypeFormDialogOpen(false); setEditingType(null); await fetchResourceTypesData();
-    } catch (error: any) {
-      toast({ title: "Save Error", description: `Could not save resource type: ${error.message}`, variant: "destructive" });
-    } finally { setIsLoadingResourceTypes(false); }
+  const handleSaveResourceType = async (data: ResourceTypeFormValues) => { /* ... same as original ... */
+    if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } setIsLoadingData(true); try { const typeDataToSave = { name: data.name, description: data.description || null }; const auditAction = editingType ? 'RESOURCE_TYPE_UPDATED' : 'RESOURCE_TYPE_CREATED'; let entityId = editingType ? editingType.id : ''; if (editingType) { await updateDoc(doc(db, "resourceTypes", entityId), typeDataToSave); } else { const docRef = await addDoc(collection(db, "resourceTypes"), typeDataToSave); entityId = docRef.id; } addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'ResourceType', entityId, details: `Resource Type '${data.name}' ${editingType ? 'updated' : 'created'}.` }); toast({ title: `Resource Type ${editingType ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingType ? 'updated' : 'created'}.` }); setIsResourceTypeFormDialogOpen(false); setEditingType(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Error", description: `Could not save resource type: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
   };
-
-  const handleDeleteResourceType = async (typeId: string) => {
-    if (!currentUser || !currentUser.name || !canManageInventory) {
-      toast({ title: "Permission Denied", variant: "destructive" }); return;
-    }
-    const deletedType = resourceTypes.find(rt => rt.id === typeId);
-    if (!deletedType) { toast({ title: "Error", description: "Resource type not found.", variant: "destructive" }); return; }
-    const resourcesOfThisType = allResources.filter(res => res.resourceTypeId === typeId).length;
-    if (resourcesOfThisType > 0) {
-      toast({ title: "Deletion Blocked", description: `Cannot delete "${deletedType.name}" as ${resourcesOfThisType} resource(s) are assigned. Reassign them first.`, variant: "destructive", duration: 7000 });
-      setTypeToDelete(null); return;
-    }
-    setIsLoadingResourceTypes(true);
-    try {
-      await deleteDoc(doc(db, "resourceTypes", typeId));
-      addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_DELETED', { entityType: 'ResourceType', entityId: typeId, details: `Resource Type '${deletedType.name}' deleted.` });
-      toast({ title: "Resource Type Deleted", description: `"${deletedType.name}" removed.`, variant: "destructive" });
-      setTypeToDelete(null); await fetchResourceTypesData();
-    } catch (error: any) {
-      toast({ title: "Delete Error", description: `Could not delete resource type: ${error.message}`, variant: "destructive" });
-    } finally { setIsLoadingResourceTypes(false); }
+  const handleDeleteResourceType = async (typeId: string) => { /* ... same as original ... */
+    if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } const deletedType = resourceTypes.find(rt => rt.id === typeId); if (!deletedType) { toast({ title: "Error", description: "Resource type not found.", variant: "destructive" }); return; } const resourcesOfThisType = allResourcesForTypeCount.filter(res => res.resourceTypeId === typeId).length; if (resourcesOfThisType > 0) { toast({ title: "Deletion Blocked", description: `Cannot delete "${deletedType.name}" as ${resourcesOfThisType} resource(s) are assigned. Reassign them first.`, variant: "destructive", duration: 7000 }); setTypeToDelete(null); return; } setIsLoadingData(true); try { await deleteDoc(doc(db, "resourceTypes", typeId)); addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_DELETED', { entityType: 'ResourceType', entityId: typeId, details: `Resource Type '${deletedType.name}' deleted.` }); toast({ title: "Resource Type Deleted", description: `"${deletedType.name}" removed.`, variant: "destructive" }); setTypeToDelete(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Delete Error", description: `Could not delete resource type: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
   };
   const activeResourceTypeFilterCount = [activeResourceTypeSearchTerm !== '', activeResourceTypeSortBy !== 'name-asc'].filter(Boolean).length;
 
-  // --- Labs Logic ---
-  const fetchLabsData = useCallback(async () => {
-    if (!canManageInventory) { setIsLoadingLabs(false); setLabs([]); return; }
-    setIsLoadingLabs(true);
-    try {
-      const labsQuery = query(collection(db, "labs"), orderBy("name", "asc"));
-      const labsSnapshot = await getDocs(labsQuery);
-      const fetchedLabs: Lab[] = labsSnapshot.docs.map(docSnap => ({
-        id: docSnap.id, ...docSnap.data(),
-        createdAt: (docSnap.data().createdAt as Timestamp)?.toDate(),
-        lastUpdatedAt: (docSnap.data().lastUpdatedAt as Timestamp)?.toDate(),
-      } as Lab));
-      setLabs(fetchedLabs);
-    } catch (error: any) {
-      console.error("Error fetching labs data:", error);
-      toast({ title: "Error", description: `Failed to load labs: ${error.message}`, variant: "destructive" });
-    }
-    setIsLoadingLabs(false);
-  }, [toast, canManageInventory]);
-
-  useEffect(() => { fetchLabsData(); }, [fetchLabsData]);
-  useEffect(() => {
-    if (isLabFilterDialogOpen) {
-      setTempLabSearchTerm(activeLabSearchTerm);
-      setTempLabSortBy(activeLabSortBy);
-    }
-  }, [isLabFilterDialogOpen, activeLabSearchTerm, activeLabSortBy]);
-
-  const filteredLabs = useMemo(() => {
-    let currentLabs = [...labs];
-    const lowerSearchTerm = activeLabSearchTerm.toLowerCase();
-    if (activeLabSearchTerm) {
-      currentLabs = currentLabs.filter(lab => lab.name.toLowerCase().includes(lowerSearchTerm) || (lab.location && lab.location.toLowerCase().includes(lowerSearchTerm)) || (lab.description && lab.description.toLowerCase().includes(lowerSearchTerm)));
-    }
-    const [column, direction] = activeLabSortBy.split('-') as [LabSortableColumn, 'asc' | 'desc'];
-    currentLabs.sort((a, b) => {
-      let comparison = 0;
-      if (column === 'name') comparison = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
-      else if (column === 'location') comparison = (a.location || '').toLowerCase().localeCompare((b.location || '').toLowerCase());
-      return direction === 'asc' ? comparison : -comparison;
-    });
-    return currentLabs;
+  // --- Labs Logic (Copied and adapted) ---
+  useEffect(() => { if (isLabFilterDialogOpen) { setTempLabSearchTerm(activeLabSearchTerm); setTempLabSortBy(activeLabSortBy);}}, [isLabFilterDialogOpen, activeLabSearchTerm, activeLabSortBy]);
+  const filteredLabs = useMemo(() => { /* ... same as original ... */
+    let currentLabs = [...labs]; const lowerSearchTerm = activeLabSearchTerm.toLowerCase(); if (activeLabSearchTerm) { currentLabs = currentLabs.filter(lab => lab.name.toLowerCase().includes(lowerSearchTerm) || (lab.location && lab.location.toLowerCase().includes(lowerSearchTerm)) || (lab.description && lab.description.toLowerCase().includes(lowerSearchTerm)));} const [column, direction] = activeLabSortBy.split('-') as [LabSortableColumn, 'asc' | 'desc']; currentLabs.sort((a, b) => { let comparison = 0; if (column === 'name') comparison = a.name.toLowerCase().localeCompare(b.name.toLowerCase()); else if (column === 'location') comparison = (a.location || '').toLowerCase().localeCompare((b.location || '').toLowerCase()); return direction === 'asc' ? comparison : -comparison; }); return currentLabs;
   }, [labs, activeLabSearchTerm, activeLabSortBy]);
-
-  const handleApplyLabDialogFilters = useCallback(() => {
-    setActiveLabSearchTerm(tempLabSearchTerm); setActiveLabSortBy(tempLabSortBy);
-    setIsLabFilterDialogOpen(false);
-  }, [tempLabSearchTerm, tempLabSortBy]);
-
+  const handleApplyLabDialogFilters = useCallback(() => { setActiveLabSearchTerm(tempLabSearchTerm); setActiveLabSortBy(tempLabSortBy); setIsLabFilterDialogOpen(false);}, [tempLabSearchTerm, tempLabSortBy]);
   const resetLabDialogFiltersOnly = useCallback(() => { setTempLabSearchTerm(''); setTempLabSortBy('name-asc'); }, []);
-  const resetAllActiveLabPageFilters = useCallback(() => {
-    setActiveLabSearchTerm(''); setActiveLabSortBy('name-asc');
-    resetLabDialogFiltersOnly(); setIsLabFilterDialogOpen(false);
-  }, [resetLabDialogFiltersOnly]);
-
+  const resetAllActiveLabPageFilters = useCallback(() => { setActiveLabSearchTerm(''); setActiveLabSortBy('name-asc'); resetLabDialogFiltersOnly(); setIsLabFilterDialogOpen(false);}, [resetLabDialogFiltersOnly]);
   const handleOpenNewLabDialog = () => { setEditingLab(null); setIsLabFormDialogOpen(true); };
   const handleOpenEditLabDialog = (lab: Lab) => { setEditingLab(lab); setIsLabFormDialogOpen(true); };
-
-  const handleSaveLab = async (data: LabFormValues) => {
-    if (!currentUser || !currentUser.name || !canManageInventory) {
-      toast({ title: "Permission Denied", variant: "destructive" }); return;
-    }
-    setIsLoadingLabs(true);
-    try {
-      const labDataToSave: Partial<Omit<Lab, 'id' | 'createdAt' | 'lastUpdatedAt'>> & { lastUpdatedAt?: any, createdAt?: any } = {
-        name: data.name,
-        location: data.location || null,
-        description: data.description || null,
-      };
-      const auditAction = editingLab ? 'LAB_UPDATED' : 'LAB_CREATED';
-      let entityId = editingLab ? editingLab.id : '';
-
-      if (editingLab) {
-        labDataToSave.lastUpdatedAt = serverTimestamp();
-        await updateDoc(doc(db, "labs", entityId), labDataToSave as any);
-      } else {
-        labDataToSave.createdAt = serverTimestamp();
-        const docRef = await addDoc(collection(db, "labs"), labDataToSave as any);
-        entityId = docRef.id;
-      }
-      addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'Lab', entityId, details: `Lab '${data.name}' ${editingLab ? 'updated' : 'created'}.` });
-      toast({ title: `Lab ${editingLab ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingLab ? 'updated' : 'created'}.` });
-      setIsLabFormDialogOpen(false); setEditingLab(null); await fetchLabsData();
-    } catch (error: any) {
-      toast({ title: "Save Error", description: `Could not save lab: ${error.message}`, variant: "destructive" });
-    } finally { setIsLoadingLabs(false); }
+  const handleSaveLab = async (data: LabFormValues) => { /* ... same as original ... */
+    if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } setIsLoadingData(true); try { const labDataToSave: Partial<Omit<Lab, 'id' | 'createdAt' | 'lastUpdatedAt'>> & { lastUpdatedAt?: any, createdAt?: any } = { name: data.name, location: data.location || null, description: data.description || null, }; const auditAction = editingLab ? 'LAB_UPDATED' : 'LAB_CREATED'; let entityId = editingLab ? editingLab.id : ''; if (editingLab) { labDataToSave.lastUpdatedAt = serverTimestamp(); await updateDoc(doc(db, "labs", entityId), labDataToSave as any); } else { labDataToSave.createdAt = serverTimestamp(); const docRef = await addDoc(collection(db, "labs"), labDataToSave as any); entityId = docRef.id; } addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'Lab', entityId, details: `Lab '${data.name}' ${editingLab ? 'updated' : 'created'}.` }); toast({ title: `Lab ${editingLab ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingLab ? 'updated' : 'created'}.` }); setIsLabFormDialogOpen(false); setEditingLab(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Error", description: `Could not save lab: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
   };
-
-  const handleDeleteLab = async (labId: string) => {
-    if (!currentUser || !currentUser.name || !canManageInventory) {
-      toast({ title: "Permission Denied", variant: "destructive" }); return;
-    }
-    const deletedLab = labs.find(lab => lab.id === labId);
-    if (!deletedLab) { toast({ title: "Error", description: "Lab not found.", variant: "destructive" }); return; }
-
-    const resourcesInThisLab = allResources.filter(res => res.lab === deletedLab.name).length;
-    if (resourcesInThisLab > 0) {
-      toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as ${resourcesInThisLab} resource(s) are currently assigned to it. Please reassign them first.`, variant: "destructive", duration: 7000 });
-      setLabToDelete(null); return;
-    }
-
-    setIsLoadingLabs(true);
-    try {
-      await deleteDoc(doc(db, "labs", labId));
-      addAuditLog(currentUser.id, currentUser.name, 'LAB_DELETED', { entityType: 'Lab', entityId: labId, details: `Lab '${deletedLab.name}' deleted.` });
-      toast({ title: "Lab Deleted", description: `Lab "${deletedLab.name}" removed.`, variant: "destructive" });
-      setLabToDelete(null); await fetchLabsData();
-    } catch (error: any) {
-      toast({ title: "Delete Error", description: `Could not delete lab: ${error.message}`, variant: "destructive" });
-    } finally { setIsLoadingLabs(false); }
+  const handleDeleteLab = async (labId: string) => { /* ... same as original, but check against allResourcesForTypeCount ... */
+    if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } const deletedLab = labs.find(lab => lab.id === labId); if (!deletedLab) { toast({ title: "Error", description: "Lab not found.", variant: "destructive" }); return; } const resourcesInThisLab = allResourcesForTypeCount.filter(res => res.lab === deletedLab.name).length; if (resourcesInThisLab > 0) { toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as ${resourcesInThisLab} resource(s) are assigned. Reassign them first.`, variant: "destructive", duration: 7000 }); setLabToDelete(null); return; } setIsLoadingData(true); try { await deleteDoc(doc(db, "labs", labId)); addAuditLog(currentUser.id, currentUser.name, 'LAB_DELETED', { entityType: 'Lab', entityId: labId, details: `Lab '${deletedLab.name}' deleted.` }); toast({ title: "Lab Deleted", description: `Lab "${deletedLab.name}" removed.`, variant: "destructive" }); setLabToDelete(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Delete Error", description: `Could not delete lab: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
   };
   const activeLabFilterCount = [activeLabSearchTerm !== '', activeLabSortBy !== 'name-asc'].filter(Boolean).length;
 
-  if (!currentUser || !canManageInventory) {
+
+  // --- Blackout Dates & Recurring Rules Logic (Copied from blackout-dates/page.tsx and adapted) ---
+  useEffect(() => { if (isDateFilterDialogOpen) { setTempDateSearchTerm(activeDateSearchTerm); }}, [isDateFilterDialogOpen, activeDateSearchTerm]);
+  const filteredBlackoutDates = useMemo(() => { return blackoutDates.filter(bd => { const lowerSearchTerm = activeDateSearchTerm.toLowerCase(); const reasonMatch = bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm); const dateMatch = bd.date && isValidDateFn(parseISO(bd.date)) && format(parseISO(bd.date), 'PPP').toLowerCase().includes(lowerSearchTerm); return !activeDateSearchTerm || reasonMatch || dateMatch; });}, [blackoutDates, activeDateSearchTerm]);
+  const handleOpenNewDateDialog = useCallback(() => { setEditingBlackoutDate(null); setIsDateFormDialogOpen(true); }, []);
+  const handleOpenEditDateDialog = useCallback((bd: BlackoutDate) => { setEditingBlackoutDate(bd); setIsDateFormDialogOpen(true); }, []);
+  const handleSaveBlackoutDate = useCallback(async (data: BlackoutDateDialogFormValues) => { /* ... same logic as original ... */
+    if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", description: "User not logged in.", variant: "destructive" }); return; } const formattedDateOnly = format(data.date, 'yyyy-MM-dd'); const displayDate = format(data.date, 'PPP'); const blackoutDataToSave: Omit<BlackoutDate, 'id'> = { date: formattedDateOnly, reason: data.reason || undefined, }; setIsLoadingData(true); try { if (editingBlackoutDate) { const docRef = doc(db, "blackoutDates", editingBlackoutDate.id); await updateDoc(docRef, blackoutDataToSave); addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_UPDATED', { entityType: 'BlackoutDate', entityId: editingBlackoutDate.id, details: `Blackout Date for ${displayDate} updated. Reason: ${data.reason || 'N/A'}`}); toast({ title: 'Blackout Date Updated', description: `Blackout date for ${displayDate} has been updated.` }); } else { const docRef = await addDoc(collection(db, "blackoutDates"), blackoutDataToSave); addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_CREATED', { entityType: 'BlackoutDate', entityId: docRef.id, details: `Blackout Date for ${displayDate} created. Reason: ${data.reason || 'N/A'}`}); toast({ title: 'Blackout Date Added', description: `Blackout date for ${displayDate} has been added.` }); } setIsDateFormDialogOpen(false); setEditingBlackoutDate(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Failed", description: `Could not save: ${error.message}`, variant: "destructive"});} finally { setIsLoadingData(false); }
+  }, [currentUser, editingBlackoutDate, fetchAllAdminData, toast]);
+  const handleDeleteBlackoutDate = useCallback(async (blackoutDateId: string) => { /* ... same logic as original ... */
+    if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", description: "User not logged in.", variant: "destructive" }); return; } const deletedDateObj = blackoutDates.find(bd => bd.id === blackoutDateId); if (!deletedDateObj) return; setIsLoadingData(true); try { const docRef = doc(db, "blackoutDates", blackoutDateId); await deleteDoc(docRef); addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Blackout Date for ${format(parseISO(deletedDateObj.date), 'PPP')} (Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`}); toast({ title: "Blackout Date Removed", description: `Blackout date for "${format(parseISO(deletedDateObj.date), 'PPP')}" removed.`, variant: "destructive" }); setDateToDelete(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Delete Failed", description: `Could not remove: ${error.message}`, variant: "destructive"});} finally { setIsLoadingData(false); }
+  }, [currentUser, blackoutDates, fetchAllAdminData, toast]);
+  const handleApplyDateDialogFilters = useCallback(() => { setActiveDateSearchTerm(tempDateSearchTerm); setIsDateFilterDialogOpen(false); }, [tempDateSearchTerm]);
+  const resetDateDialogFiltersOnly = useCallback(() => { setTempDateSearchTerm(''); }, []);
+  const resetAllActiveDatePageFilters = useCallback(() => { setActiveDateSearchTerm(''); resetDateDialogFiltersOnly(); setIsDateFilterDialogOpen(false); }, [resetDateDialogFiltersOnly]);
+  const activeDateFilterCount = useMemo(() => [activeDateSearchTerm !== ''].filter(Boolean).length, [activeDateSearchTerm]);
+  const handleOpenNewRecurringDialog = useCallback(() => { setEditingRecurringRule(null); setIsRecurringFormDialogOpen(true); }, []);
+  const handleOpenEditRecurringDialog = useCallback((rule: RecurringBlackoutRule) => { setEditingRecurringRule(rule); setIsRecurringFormDialogOpen(true); }, []);
+  const handleSaveRecurringRule = useCallback(async (data: RecurringRuleDialogFormValues) => { /* ... same logic as original ... */
+    if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", description: "User not logged in.", variant: "destructive" }); return; } const ruleDataToSave: Omit<RecurringBlackoutRule, 'id'> = { name: data.name, daysOfWeek: data.daysOfWeek, reason: data.reason || undefined, }; setIsLoadingData(true); try { if (editingRecurringRule) { const docRef = doc(db, "recurringBlackoutRules", editingRecurringRule.id); await updateDoc(docRef, ruleDataToSave); addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_UPDATED', { entityType: 'RecurringBlackoutRule', entityId: editingRecurringRule.id, details: `Recurring rule '${data.name}' updated.`}); toast({ title: 'Recurring Rule Updated', description: `Rule "${data.name}" updated.` }); } else { const docRef = await addDoc(collection(db, "recurringBlackoutRules"), ruleDataToSave); addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_CREATED', { entityType: 'RecurringBlackoutRule', entityId: docRef.id, details: `Recurring rule '${data.name}' created.`}); toast({ title: 'Recurring Rule Added', description: `Rule "${data.name}" added.` }); } setIsRecurringFormDialogOpen(false); setEditingRecurringRule(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Failed", description: `Could not save rule: ${error.message}`, variant: "destructive"});} finally { setIsLoadingData(false); }
+  }, [currentUser, editingRecurringRule, fetchAllAdminData, toast]);
+  const handleDeleteRecurringRule = useCallback(async (ruleId: string) => { /* ... same logic as original ... */
+    if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", description: "User not logged in.", variant: "destructive" }); return; } const deletedRuleObj = recurringRules.find(r => r.id === ruleId); if (!deletedRuleObj) return; setIsLoadingData(true); try { const docRef = doc(db, "recurringBlackoutRules", ruleId); await deleteDoc(docRef); addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Recurring rule '${deletedRuleObj.name}' deleted.`}); toast({ title: "Recurring Rule Removed", description: `Rule "${deletedRuleObj.name}" removed.`, variant: "destructive" }); setRuleToDelete(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Delete Failed", description: `Could not remove rule: ${error.message}`, variant: "destructive"});} finally { setIsLoadingData(false); }
+  }, [currentUser, recurringRules, fetchAllAdminData, toast]);
+
+
+  // --- Maintenance Requests Logic (Copied from maintenance/page.tsx and adapted) ---
+  useEffect(() => { if (isMaintenanceFilterDialogOpen) { setTempMaintenanceSearchTerm(activeMaintenanceSearchTerm); setTempMaintenanceFilterStatus(activeMaintenanceFilterStatus); setTempMaintenanceFilterResourceId(activeMaintenanceFilterResourceId); setTempMaintenanceFilterTechnicianId(activeMaintenanceFilterTechnicianId); }}, [isMaintenanceFilterDialogOpen, activeMaintenanceSearchTerm, activeMaintenanceFilterStatus, activeMaintenanceFilterResourceId, activeMaintenanceFilterTechnicianId]);
+  const filteredMaintenanceRequests = useMemo(() => { return maintenanceRequests.map(req => { const resource = allResourcesForMaintenance.find(r => r.id === req.resourceId); const reporter = allUsersForMaintenance.find(u => u.id === req.reportedByUserId); const technician = allTechniciansForMaintenance.find(t => t.id === req.assignedTechnicianId); return { ...req, resourceName: resource?.name || 'Unknown Resource', reportedByUserName: reporter?.name || 'Unknown User', assignedTechnicianName: technician?.name, }; }).filter(req => { const lowerSearchTerm = activeMaintenanceSearchTerm.toLowerCase(); const searchMatch = !activeMaintenanceSearchTerm || (req.resourceName && req.resourceName.toLowerCase().includes(lowerSearchTerm)) || (req.reportedByUserName && req.reportedByUserName.toLowerCase().includes(lowerSearchTerm)) || (req.issueDescription && req.issueDescription.toLowerCase().includes(lowerSearchTerm)) || (req.assignedTechnicianName && req.assignedTechnicianName.toLowerCase().includes(lowerSearchTerm)); const statusMatch = activeMaintenanceFilterStatus === 'all' || req.status === activeMaintenanceFilterStatus; const resourceMatch = activeMaintenanceFilterResourceId === 'all' || req.resourceId === activeMaintenanceFilterResourceId; let technicianMatch = true; if (activeMaintenanceFilterTechnicianId !== 'all') { if (activeMaintenanceFilterTechnicianId === '--unassigned--') { technicianMatch = !req.assignedTechnicianId; } else { technicianMatch = req.assignedTechnicianId === activeMaintenanceFilterTechnicianId; } } return searchMatch && statusMatch && resourceMatch && technicianMatch; });}, [maintenanceRequests, allResourcesForMaintenance, allTechniciansForMaintenance, allUsersForMaintenance, activeMaintenanceSearchTerm, activeMaintenanceFilterStatus, activeMaintenanceFilterResourceId, activeMaintenanceFilterTechnicianId]);
+  const handleApplyMaintenanceDialogFilters = useCallback(() => { setActiveMaintenanceSearchTerm(tempMaintenanceSearchTerm.toLowerCase()); setActiveMaintenanceFilterStatus(tempMaintenanceFilterStatus); setActiveMaintenanceFilterResourceId(tempMaintenanceFilterResourceId); setActiveMaintenanceFilterTechnicianId(tempMaintenanceFilterTechnicianId); setIsMaintenanceFilterDialogOpen(false); }, [tempMaintenanceSearchTerm, tempMaintenanceFilterStatus, tempMaintenanceFilterResourceId, tempMaintenanceFilterTechnicianId]);
+  const resetMaintenanceDialogFiltersOnly = useCallback(() => { setTempMaintenanceSearchTerm(''); setTempMaintenanceFilterStatus('all'); setTempMaintenanceFilterResourceId('all'); setTempMaintenanceFilterTechnicianId('all'); }, []);
+  const resetAllActiveMaintenancePageFilters = useCallback(() => { setActiveMaintenanceSearchTerm(''); setActiveMaintenanceFilterStatus('all'); setActiveMaintenanceFilterResourceId('all'); setActiveMaintenanceFilterTechnicianId('all'); resetMaintenanceDialogFiltersOnly(); setIsMaintenanceFilterDialogOpen(false); }, [resetMaintenanceDialogFiltersOnly]);
+  const handleOpenNewMaintenanceDialog = useCallback(() => { if (!currentUser) return; setEditingMaintenanceRequest(null); setIsMaintenanceFormDialogOpen(true); }, [currentUser]);
+  const handleOpenEditMaintenanceDialog = useCallback((request: MaintenanceRequest) => { setEditingMaintenanceRequest(request); setIsMaintenanceFormDialogOpen(true); }, []);
+  const handleSaveMaintenanceRequest = useCallback(async (data: MaintenanceDialogFormValues) => { /* ... same logic as original from maintenance/page.tsx ... */
+    if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Error", description: "User not logged in.", variant: "destructive"}); return;} const resource = allResourcesForMaintenance.find(r => r.id === data.resourceId); if (!resource) { toast({ title: "Error", description: "Resource not found.", variant: "destructive" }); return;} let dateResolvedForFirestore: Timestamp | null = null; if ((data.status === 'Resolved' || data.status === 'Closed') && data.dateResolved && isValidDateFn(new Date(data.dateResolved))) { dateResolvedForFirestore = Timestamp.fromDate(new Date(data.dateResolved)); } else if ((data.status === 'Resolved' || data.status === 'Closed') && !editingMaintenanceRequest?.dateResolved) { dateResolvedForFirestore = serverTimestamp() as Timestamp; } else if (editingMaintenanceRequest?.dateResolved && (data.status === 'Resolved' || data.status === 'Closed')) { dateResolvedForFirestore = Timestamp.fromDate(editingMaintenanceRequest.dateResolved); } const requestDataToSave: any = { resourceId: data.resourceId, issueDescription: data.issueDescription, status: data.status, assignedTechnicianId: data.assignedTechnicianId === '--unassigned--' || !data.assignedTechnicianId ? null : data.assignedTechnicianId, resolutionNotes: data.resolutionNotes || null, dateResolved: dateResolvedForFirestore, }; setIsLoadingData(true); try { if (editingMaintenanceRequest) { const requestDocRef = doc(db, "maintenanceRequests", editingMaintenanceRequest.id); await updateDoc(requestDocRef, requestDataToSave); await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingMaintenanceRequest.id, details: `Maintenance request for '${resource.name}' updated. Status: ${data.status}.`}); toast({ title: 'Request Updated', description: `Request for "${resource.name}" updated.` }); if ((data.status === 'Resolved' && editingMaintenanceRequest.status !== 'Resolved') && editingMaintenanceRequest.reportedByUserId !== currentUser.id && editingMaintenanceRequest.reportedByUserId) { await addNotification( editingMaintenanceRequest.reportedByUserId, 'Maintenance Resolved', `Issue for ${resource.name} resolved.`, 'maintenance_resolved', '/maintenance');} if (data.assignedTechnicianId && data.assignedTechnicianId !== editingMaintenanceRequest.assignedTechnicianId && data.assignedTechnicianId !== '--unassigned--') { await addNotification( data.assignedTechnicianId, 'Maintenance Task Assigned', `Task for ${resource.name}: ${data.issueDescription.substring(0,50)}...`, 'maintenance_assigned', '/maintenance');} } else { const newRequestPayload = { ...requestDataToSave, reportedByUserId: currentUser.id, dateReported: serverTimestamp(), }; const docRef = await addDoc(collection(db, "maintenanceRequests"), newRequestPayload); await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New request for '${resource.name}' by ${currentUser.name}.`}); toast({ title: 'Request Logged', description: `New request for "${resource.name}" logged.` }); const techIdForNotification = requestDataToSave.assignedTechnicianId; if(techIdForNotification && techIdForNotification !== '--unassigned--'){ await addNotification( techIdForNotification, 'New Maintenance Request Assigned', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... assigned.`, 'maintenance_assigned', '/maintenance');} else { const usersToNotifyQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Technician']), orderBy('name', 'asc')); const usersToNotifySnapshot = await getDocs(usersToNotifyQuery); const notificationPromises = usersToNotifySnapshot.docs.map(userDoc => { if(userDoc.id !== currentUser?.id) { return addNotification( userDoc.id, 'New Unassigned Maintenance Request', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`, 'maintenance_new', '/maintenance');} return Promise.resolve(); }); await Promise.all(notificationPromises);}} setIsMaintenanceFormDialogOpen(false); setEditingMaintenanceRequest(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: `${editingMaintenanceRequest ? "Update" : "Logging"} Failed`, description: `Could not save: ${error.message}`, variant: "destructive" });} finally { setIsLoadingData(false); }
+  }, [currentUser, editingMaintenanceRequest, allResourcesForMaintenance, fetchAllAdminData, toast]);
+  const activeMaintenanceFilterCount = useMemo(() => [activeMaintenanceSearchTerm !== '', activeMaintenanceFilterStatus !== 'all', activeMaintenanceFilterResourceId !== 'all', activeMaintenanceFilterTechnicianId !== 'all'].filter(Boolean).length, [activeMaintenanceSearchTerm, activeMaintenanceFilterStatus, activeMaintenanceFilterResourceId, activeMaintenanceFilterTechnicianId]);
+  const canEditAnyMaintenanceRequest = useMemo(() => currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Technician'), [currentUser]);
+
+  // --- Permissions ---
+  if (!currentUser || !canManageAny) {
     return (
       <div className="space-y-8">
         <PageHeader title="Lab Management" icon={Archive} description="Access Denied." />
-        <Card className="text-center py-10 text-muted-foreground">
-          <CardContent><p>You do not have permission to manage lab setup and resource types.</p></CardContent>
-        </Card>
+        <Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission to manage lab setup and operations.</p></CardContent></Card>
       </div>
     );
   }
@@ -345,108 +299,72 @@ export default function InventoryManagementPage() {
       <div className="space-y-8">
         <PageHeader
           title="Lab Management"
-          description="Define and manage labs, resource types, and other core lab configurations."
+          description="Define and manage labs, resource types, lab closures, and maintenance requests."
           icon={Archive}
         />
         <Tabs defaultValue="labs" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:max-w-md">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
             <TabsTrigger value="labs">Manage Labs</TabsTrigger>
-            <TabsTrigger value="resource-types">Manage Resource Types</TabsTrigger>
+            <TabsTrigger value="resource-types">Resource Types</TabsTrigger>
+            <TabsTrigger value="lab-closures">Lab Closures</TabsTrigger>
+            <TabsTrigger value="maintenance-requests">Maintenance</TabsTrigger>
           </TabsList>
 
+          {/* Labs Tab Content */}
           <TabsContent value="labs" className="mt-6">
             <Card>
               <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div><CardTitle className="text-xl">Labs</CardTitle><p className="text-sm text-muted-foreground mt-1">Define and manage laboratory locations.</p></div>
                 <div className="flex gap-2 flex-wrap">
-                  <FilterSortDialog open={isLabFilterDialogOpen} onOpenChange={setIsLabFilterDialogOpen}>
-                    <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter &amp; Sort</Button></FilterSortDialogTrigger>
-                    <FilterSortDialogContent className="sm:max-w-md">
-                      <FilterSortDialogHeader><FilterSortDialogTitle>Filter &amp; Sort Labs</FilterSortDialogTitle></FilterSortDialogHeader>
-                      <Separator className="my-3" />
-                      <div className="space-y-3">
-                        <div className="relative">
-                          <Label htmlFor="labSearchDialog">Search (Name/Loc/Desc)</Label>
-                          <SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" />
-                          <Input id="labSearchDialog" value={tempLabSearchTerm} onChange={e => setTempLabSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/>
-                        </div>
-                        <div><Label htmlFor="labSortDialog">Sort by</Label><Select value={tempLabSortBy} onValueChange={setTempLabSortBy}><SelectTrigger id="labSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{labSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
-                      </div>
-                      <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsLabFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyLabDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
-                    </FilterSortDialogContent>
-                  </FilterSortDialog>
-                  {canManageInventory && <Button onClick={handleOpenNewLabDialog} size="sm"><PackagePlus className="mr-2 h-4 w-4"/>Add Lab</Button>}
+                  <FilterSortDialog open={isLabFilterDialogOpen} onOpenChange={setIsLabFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter &amp; Sort</Button></FilterSortDialogTrigger><FilterSortDialogContent className="sm:max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter &amp; Sort Labs</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="labSearchDialog">Search (Name/Loc/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="labSearchDialog" value={tempLabSearchTerm} onChange={e => setTempLabSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div><div><Label htmlFor="labSortDialog">Sort by</Label><Select value={tempLabSortBy} onValueChange={setTempLabSortBy}><SelectTrigger id="labSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{labSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsLabFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyLabDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
+                  {canManageAny && <Button onClick={handleOpenNewLabDialog} size="sm"><PackagePlus className="mr-2 h-4 w-4"/>Add Lab</Button>}
                 </div>
               </CardHeader>
-              <CardContent className="p-0">
-                {isLoadingLabs && filteredLabs.length === 0 && !activeLabSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
-                ) : filteredLabs.length > 0 ? (
-                  <div className="overflow-x-auto rounded-md border shadow-sm"><Table>
-                    <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead>Description</TableHead>{canManageInventory && <TableHead className="text-right w-[100px]">Actions</TableHead>}</TableRow></TableHeader>
-                    <TableBody>{filteredLabs.map(lab => (<TableRow key={lab.id}><TableCell className="font-medium">{lab.name}</TableCell><TableCell>{lab.location || 'N/A'}</TableCell><TableCell className="text-sm text-muted-foreground max-w-xs truncate" title={lab.description || undefined}>{lab.description || 'N/A'}</TableCell>
-                      {canManageInventory && <TableCell className="text-right space-x-1">
-                        <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditLabDialog(lab)} disabled={isLoadingLabs}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Lab</TooltipContent></Tooltip>
-                        <AlertDialog open={labToDelete?.id === lab.id} onOpenChange={(isOpen) => !isOpen && setLabToDelete(null)}>
-                          <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabToDelete(lab)} disabled={isLoadingLabs}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Lab</TooltipContent></Tooltip>
-                          <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete "{labToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources are assigned to this lab.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => labToDelete && handleDeleteLab(labToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>}
-                    </TableRow>))}
-                    </TableBody></Table></div>
-                ) : ( <div className="text-center py-10 text-muted-foreground"><Building className="h-12 w-12 mx-auto mb-3 opacity-50"/><p className="font-medium">{activeLabFilterCount > 0 ? "No labs match criteria." : "No labs defined yet."}</p>{activeLabFilterCount > 0 && <Button variant="link" onClick={resetAllActiveLabPageFilters} className="mt-2 text-xs"><FilterX className="mr-1.5 h-3.5 w-3.5"/>Reset Filters</Button>}</div>)}
-              </CardContent>
+              <CardContent className="p-0">{isLoadingData && filteredLabs.length === 0 && !activeLabSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>) : filteredLabs.length > 0 ? (<div className="overflow-x-auto rounded-md border shadow-sm"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead>Description</TableHead>{canManageAny && <TableHead className="text-right w-[100px]">Actions</TableHead>}</TableRow></TableHeader><TableBody>{filteredLabs.map(lab => (<TableRow key={lab.id}><TableCell className="font-medium">{lab.name}</TableCell><TableCell>{lab.location || 'N/A'}</TableCell><TableCell className="text-sm text-muted-foreground max-w-xs truncate" title={lab.description || undefined}>{lab.description || 'N/A'}</TableCell>{canManageAny && <TableCell className="text-right space-x-1"><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditLabDialog(lab)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Lab</TooltipContent></Tooltip><AlertDialog open={labToDelete?.id === lab.id} onOpenChange={(isOpen) => !isOpen && setLabToDelete(null)}><Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabToDelete(lab)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Lab</TooltipContent></Tooltip><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete "{labToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources are assigned.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => labToDelete && handleDeleteLab(labToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell>}</TableRow>))}</TableBody></Table></div>) : ( <div className="text-center py-10 text-muted-foreground"><Building className="h-12 w-12 mx-auto mb-3 opacity-50"/><p className="font-medium">{activeLabFilterCount > 0 ? "No labs match criteria." : "No labs defined."}</p>{activeLabFilterCount > 0 && <Button variant="link" onClick={resetAllActiveLabPageFilters} className="mt-2 text-xs"><FilterX className="mr-1.5 h-3.5 w-3.5"/>Reset Filters</Button>}</div>)}</CardContent>
             </Card>
           </TabsContent>
 
+          {/* Resource Types Tab Content */}
           <TabsContent value="resource-types" className="mt-6">
             <Card>
-                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                    <div><CardTitle className="text-xl">Resource Types</CardTitle><p className="text-sm text-muted-foreground mt-1">Define and manage categories for lab resources.</p></div>
-                    <div className="flex gap-2 flex-wrap">
-                    <FilterSortDialog open={isResourceTypeFilterDialogOpen} onOpenChange={setIsResourceTypeFilterDialogOpen}>
-                        <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter &amp; Sort</Button></FilterSortDialogTrigger>
-                        <FilterSortDialogContent className="sm:max-w-md">
-                        <FilterSortDialogHeader><FilterSortDialogTitle>Filter &amp; Sort Resource Types</FilterSortDialogTitle></FilterSortDialogHeader>
-                        <Separator className="my-3" />
-                        <div className="space-y-3">
-                            <div className="relative"><Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="typeSearchDialog" value={tempResourceTypeSearchTerm} onChange={e => setTempResourceTypeSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>
-                            <div><Label htmlFor="typeSortDialog">Sort by</Label><Select value={tempResourceTypeSortBy} onValueChange={setTempResourceTypeSortBy}><SelectTrigger id="typeSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{resourceTypeSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
-                        </div>
-                        <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetResourceTypeDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsResourceTypeFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyResourceTypeDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
-                        </FilterSortDialogContent>
-                    </FilterSortDialog>
-                    {canManageInventory && <Button onClick={handleOpenNewResourceTypeDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Type</Button>}
-                    </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                    {isLoadingResourceTypes && filteredResourceTypesWithCount.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
-                    ) : filteredResourceTypesWithCount.length > 0 ? (
-                    <div className="overflow-x-auto border rounded-md shadow-sm">
-                        <Table>
-                        <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead>{canManageInventory && <TableHead className="text-right w-[100px]">Actions</TableHead>}</TableRow></TableHeader>
-                        <TableBody>{filteredResourceTypesWithCount.map(type => (<TableRow key={type.id}><TableCell className="font-medium">{type.name}</TableCell><TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell><TableCell className="text-center">{type.resourceCount}</TableCell>
-                        {canManageInventory && <TableCell className="text-right space-x-1">
-                            <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingResourceTypes}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip>
-                            <AlertDialog open={typeToDelete?.id === type.id} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}>
-                            <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingResourceTypes}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Type</TooltipContent></Tooltip>
-                            <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete "{typeToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
-                            </AlertDialog>
-                        </TableCell>}
-                        </TableRow>))}
-                        </TableBody></Table></div>
-                    ) : ( <div className="text-center py-10 text-muted-foreground"><ListChecks className="h-12 w-12 mx-auto mb-3 opacity-50"/><p className="font-medium">{activeResourceTypeFilterCount > 0 ? "No types match criteria." : "No resource types defined."}</p>{activeResourceTypeFilterCount > 0 && <Button variant="link" onClick={resetAllActiveResourceTypePageFilters} className="mt-2 text-xs"><FilterX className="mr-1.5 h-3.5 w-3.5"/>Reset Filters</Button>}</div>)}
-                </CardContent>
+              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2"><div><CardTitle className="text-xl">Resource Types</CardTitle><p className="text-sm text-muted-foreground mt-1">Define and manage categories for lab resources.</p></div><div className="flex gap-2 flex-wrap"><FilterSortDialog open={isResourceTypeFilterDialogOpen} onOpenChange={setIsResourceTypeFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter &amp; Sort</Button></FilterSortDialogTrigger><FilterSortDialogContent className="sm:max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter &amp; Sort Resource Types</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="typeSearchDialog" value={tempResourceTypeSearchTerm} onChange={e => setTempResourceTypeSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div><div><Label htmlFor="typeSortDialog">Sort by</Label><Select value={tempResourceTypeSortBy} onValueChange={setTempResourceTypeSortBy}><SelectTrigger id="typeSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{resourceTypeSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetResourceTypeDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsResourceTypeFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyResourceTypeDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>{canManageAny && <Button onClick={handleOpenNewResourceTypeDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Type</Button>}</div></CardHeader>
+              <CardContent className="p-0">{isLoadingData && filteredResourceTypesWithCount.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>) : filteredResourceTypesWithCount.length > 0 ? (<div className="overflow-x-auto border rounded-md shadow-sm"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead>{canManageAny && <TableHead className="text-right w-[100px]">Actions</TableHead>}</TableRow></TableHeader><TableBody>{filteredResourceTypesWithCount.map(type => (<TableRow key={type.id}><TableCell className="font-medium">{type.name}</TableCell><TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell><TableCell className="text-center">{type.resourceCount}</TableCell>{canManageAny && <TableCell className="text-right space-x-1"><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip><AlertDialog open={typeToDelete?.id === type.id} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}><Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Type</TooltipContent></Tooltip><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete "{typeToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell>}</TableRow>))}</TableBody></Table></div>) : ( <div className="text-center py-10 text-muted-foreground"><ListChecks className="h-12 w-12 mx-auto mb-3 opacity-50"/><p className="font-medium">{activeResourceTypeFilterCount > 0 ? "No types match criteria." : "No resource types defined."}</p>{activeResourceTypeFilterCount > 0 && <Button variant="link" onClick={resetAllActiveResourceTypePageFilters} className="mt-2 text-xs"><FilterX className="mr-1.5 h-3.5 w-3.5"/>Reset Filters</Button>}</div>)}</CardContent>
             </Card>
           </TabsContent>
+
+          {/* Lab Closures Tab Content */}
+          <TabsContent value="lab-closures" className="mt-6">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-2"><div><CardTitle>Specific Blackout Dates</CardTitle><p className="text-sm text-muted-foreground mt-1">Manage individual lab closure dates.</p></div><div className="flex gap-2 flex-wrap"><FilterSortDialog open={isDateFilterDialogOpen} onOpenChange={setIsDateFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter Dates{activeDateFilterCount > 0 && (<Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeDateFilterCount}</Badge>)}</Button></FilterSortDialogTrigger><FilterSortDialogContent className="w-full max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter Blackout Dates</FilterSortDialogTitle><FilterSortDialogDescription>Refine by keyword (reason or date).</FilterSortDialogDescription></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="blackoutSearchDialog">Search (Reason/Date)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="blackoutSearchDialog" value={tempDateSearchTerm} onChange={(e) => setTempDateSearchTerm(e.target.value)} placeholder="e.g., Holiday, May 20..." className="mt-1 h-9 pl-8"/></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetDateDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsDateFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyDateDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>{canManageAny && <Button onClick={handleOpenNewDateDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Blackout Date</Button>}</div></CardHeader>
+                <CardContent className="p-0">{isLoadingData && filteredBlackoutDates.length === 0 && !activeDateSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2"/>Fetching dates...</div>) : filteredBlackoutDates.length > 0 ? (<div className="overflow-x-auto border rounded-md"><Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Reason</TableHead>{canManageAny && <TableHead className="text-right w-[100px]">Actions</TableHead>}</TableRow></TableHeader><TableBody>{filteredBlackoutDates.map((bd) => (<TableRow key={bd.id}><TableCell className="font-medium">{isValidDateFn(parseISO(bd.date)) ? format(parseISO(bd.date), 'PPP') : 'Invalid Date'}</TableCell><TableCell className="text-sm text-muted-foreground">{bd.reason || 'N/A'}</TableCell>{canManageAny && (<TableCell className="text-right space-x-1"><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDateDialog(bd)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip><AlertDialog open={dateToDelete?.id === bd.id} onOpenChange={(isOpen) => !isOpen && setDateToDelete(null)}><Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setDateToDelete(bd)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete "{dateToDelete && isValidDateFn(parseISO(dateToDelete.date)) ? format(parseISO(dateToDelete.date), 'PPP') : ''}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => dateToDelete && handleDeleteBlackoutDate(dateToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell>)}</TableRow>))}</TableBody></Table></div>) : (<div className="text-center py-10 text-muted-foreground"><CalendarOff className="h-10 w-10 mx-auto mb-3 opacity-50"/><p className="font-medium">{activeDateFilterCount > 0 ? "No dates match filter." : "No specific blackout dates."}</p>{activeDateFilterCount > 0 ? (<Button variant="outline" size="sm" onClick={resetAllActiveDatePageFilters}><FilterX className="mr-2 h-4 w-4"/>Reset Filters</Button>) : (!isLoadingData && blackoutDates.length === 0 && canManageAny && (<Button onClick={handleOpenNewDateDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add First Blackout Date</Button>))}</div>)}</CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-2"><div><CardTitle>Recurring Lab Closures</CardTitle><p className="text-sm text-muted-foreground mt-1">Manage weekly or other recurring unavailability rules.</p></div>{canManageAny && <Button onClick={handleOpenNewRecurringDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Recurring Rule</Button>}</CardHeader>
+                <CardContent className="p-0">{isLoadingData && recurringRules.length === 0 ? ( <div className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2"/>Fetching rules...</div>) : recurringRules.length > 0 ? (<div className="overflow-x-auto border rounded-md"><Table><TableHeader><TableRow><TableHead>Rule Name</TableHead><TableHead>Days of Week</TableHead><TableHead>Reason</TableHead>{canManageAny && <TableHead className="text-right w-[100px]">Actions</TableHead>}</TableRow></TableHeader><TableBody>{recurringRules.map((rule) => (<TableRow key={rule.id}><TableCell className="font-medium">{rule.name}</TableCell><TableCell className="text-sm text-muted-foreground">{rule.daysOfWeek.join(', ')}</TableCell><TableCell className="text-sm text-muted-foreground">{rule.reason || 'N/A'}</TableCell>{canManageAny && (<TableCell className="text-right space-x-1"><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditRecurringDialog(rule)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Rule</TooltipContent></Tooltip><AlertDialog open={ruleToDelete?.id === rule.id} onOpenChange={(isOpen) => !isOpen && setRuleToDelete(null)}><Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setRuleToDelete(rule)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Rule</TooltipContent></Tooltip><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete "{ruleToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => ruleToDelete && handleDeleteRecurringRule(ruleToDelete.id)}>Delete Rule</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell>)}</TableRow>))}</TableBody></Table></div>) : (<div className="text-center py-10 text-muted-foreground"><Repeat className="h-10 w-10 mx-auto mb-3 opacity-50"/><p className="font-medium">No recurring closure rules.</p>{!isLoadingData && recurringRules.length === 0 && canManageAny && (<Button onClick={handleOpenNewRecurringDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add First Recurring Rule</Button>)}</div>)}</CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Maintenance Requests Tab Content */}
+          <TabsContent value="maintenance-requests" className="mt-6">
+             <Card>
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2"><div><CardTitle>Maintenance Log</CardTitle><p className="text-sm text-muted-foreground mt-1">Admin view of all maintenance requests.</p></div><div className="flex gap-2 flex-wrap"><FilterSortDialog open={isMaintenanceFilterDialogOpen} onOpenChange={setIsMaintenanceFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><ListFilter className="mr-2 h-4 w-4" />Filters {activeMaintenanceFilterCount > 0 && (<Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeMaintenanceFilterCount}</Badge>)}</Button></FilterSortDialogTrigger><FilterSortDialogContent className="w-full max-w-lg"><FilterSortDialogHeader><FilterSortDialogTitle>Filter Maintenance Requests</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="maintenanceSearchDialog">Search (Resource/Reporter/Issue/Tech)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="maintenanceSearchDialog" value={tempMaintenanceSearchTerm} onChange={e => setTempMaintenanceSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><Label htmlFor="maintenanceStatusDialog">Status</Label><Select value={tempMaintenanceFilterStatus} onValueChange={(v) => setTempMaintenanceFilterStatus(v as MaintenanceRequestStatus | 'all')}><SelectTrigger id="maintenanceStatusDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Status" /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{maintenanceRequestStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div><div><Label htmlFor="maintenanceResourceDialog">Resource</Label><Select value={tempMaintenanceFilterResourceId} onValueChange={setTempMaintenanceFilterResourceId} disabled={allResourcesForMaintenance.length === 0}><SelectTrigger id="maintenanceResourceDialog" className="h-9 mt-1"><SelectValue placeholder={allResourcesForMaintenance.length > 0 ? "Filter by Resource" : "No resources"} /></SelectTrigger><SelectContent><SelectItem value="all">All Resources</SelectItem>{allResourcesForMaintenance.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent></Select></div></div><div><Label htmlFor="maintenanceTechnicianDialog">Assigned Technician</Label><Select value={tempMaintenanceFilterTechnicianId} onValueChange={setTempMaintenanceFilterTechnicianId} disabled={allTechniciansForMaintenance.length === 0}><SelectTrigger id="maintenanceTechnicianDialog" className="h-9 mt-1"><SelectValue placeholder={allTechniciansForMaintenance.length > 0 ? "Filter by Technician" : "No technicians"} /></SelectTrigger><SelectContent><SelectItem value="all">All/Any</SelectItem><SelectItem value="--unassigned--">Unassigned</SelectItem>{allTechniciansForMaintenance.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetMaintenanceDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsMaintenanceFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyMaintenanceDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>{canManageAny && <Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Log Request</Button>}</div></CardHeader>
+                <CardContent className="p-0">{isLoadingData && filteredMaintenanceRequests.length === 0 ? ( <div className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2"/>Fetching requests...</div>) : filteredMaintenanceRequests.length > 0 ? (<div className="overflow-x-auto border rounded-md"><Table><TableHeader><TableRow><TableHead>Resource</TableHead><TableHead className="min-w-[200px]">Issue</TableHead><TableHead>Reported By</TableHead><TableHead>Date Reported</TableHead><TableHead>Status</TableHead><TableHead>Assigned To</TableHead>{canEditAnyMaintenanceRequest && <TableHead className="text-right w-[100px]">Actions</TableHead>}</TableRow></TableHeader><TableBody>{filteredMaintenanceRequests.map((request) => { const reporter = allUsersForMaintenance.find(u => u.id === request.reportedByUserId); const technician = allUsersForMaintenance.find(u => u.id === request.assignedTechnicianId); const resource = allResourcesForMaintenance.find(r => r.id === request.resourceId); return (<TableRow key={request.id}><TableCell className="font-medium">{resource?.name || 'Unknown Resource'}</TableCell><TableCell className="text-sm text-muted-foreground max-w-xs truncate" title={request.issueDescription}>{request.issueDescription}</TableCell><TableCell>{reporter?.name || 'Unknown User'}</TableCell><TableCell>{formatDateSafe(request.dateReported, 'N/A', 'MMM dd, yyyy')}</TableCell><TableCell>{getMaintenanceStatusBadge(request.status)}</TableCell><TableCell>{technician?.name || <span className="text-xs italic text-muted-foreground">Unassigned</span>}</TableCell>{canEditAnyMaintenanceRequest && (<TableCell className="text-right space-x-1"><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditMaintenanceDialog(request)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Request</TooltipContent></Tooltip></TableCell>)}</TableRow>);})}</TableBody></Table></div>) : (<div className="text-center py-10 text-muted-foreground"><Wrench className="h-12 w-12 mx-auto mb-3 opacity-50"/><p className="font-medium">{activeMaintenanceFilterCount > 0 ? "No requests match filters." : "No maintenance requests."}</p>{activeMaintenanceFilterCount > 0 ? (<Button variant="outline" size="sm" onClick={resetAllActiveMaintenancePageFilters}><FilterX className="mr-2 h-4 w-4"/>Reset Filters</Button>) : (canManageAny && (<Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Log First Request</Button>))}</div>)}</CardContent>
+            </Card>
+          </TabsContent>
+
         </Tabs>
       </div>
 
-      {isResourceTypeFormDialogOpen && currentUser && (
-        <ResourceTypeFormDialog open={isResourceTypeFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceTypeFormDialogOpen(isOpen); if (!isOpen) setEditingType(null); }} initialType={editingType} onSave={handleSaveResourceType} />
-      )}
-      {isLabFormDialogOpen && currentUser && (
-        <LabFormDialog open={isLabFormDialogOpen} onOpenChange={(isOpen) => { setIsLabFormDialogOpen(isOpen); if (!isOpen) setEditingLab(null); }} initialLab={editingLab} onSave={handleSaveLab} />
-      )}
+      {/* Dialogs (outside TabsContent for proper modal behavior) */}
+      {isResourceTypeFormDialogOpen && currentUser && (<ResourceTypeFormDialog open={isResourceTypeFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceTypeFormDialogOpen(isOpen); if (!isOpen) setEditingType(null); }} initialType={editingType} onSave={handleSaveResourceType} />)}
+      {isLabFormDialogOpen && currentUser && (<LabFormDialog open={isLabFormDialogOpen} onOpenChange={(isOpen) => { setIsLabFormDialogOpen(isOpen); if (!isOpen) setEditingLab(null); }} initialLab={editingLab} onSave={handleSaveLab} />)}
+      {isDateFormDialogOpen && currentUser && (<BlackoutDateFormDialog open={isDateFormDialogOpen} onOpenChange={setIsDateFormDialogOpen} initialBlackoutDate={editingBlackoutDate} onSave={handleSaveBlackoutDate}/>)}
+      {isRecurringFormDialogOpen && currentUser && (<RecurringBlackoutRuleFormDialog open={isRecurringFormDialogOpen} onOpenChange={setIsRecurringFormDialogOpen} initialRule={editingRecurringRule} onSave={handleSaveRecurringRule}/>)}
+      {isMaintenanceFormDialogOpen && currentUser && (<MaintenanceRequestFormDialog open={isMaintenanceFormDialogOpen} onOpenChange={(isOpen) => { setIsMaintenanceFormDialogOpen(isOpen); if (!isOpen) setEditingMaintenanceRequest(null);}} initialRequest={editingMaintenanceRequest} onSave={handleSaveMaintenanceRequest} technicians={allTechniciansForMaintenance} resources={allResourcesForMaintenance} currentUserRole={currentUser?.role}/> )}
     </TooltipProvider>
   );
 }
+
+    

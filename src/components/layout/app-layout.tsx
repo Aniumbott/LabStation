@@ -14,7 +14,7 @@ import {
   CheckSquare,
   Wrench,
   Bell,
-  CalendarOff,
+  // CalendarOff, // Icon for Lab Closures, now managed under Lab Management
   Loader2,
   BarChart3,
   History
@@ -50,10 +50,10 @@ const PUBLIC_ROUTES = ['/login', '/signup'];
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/resources', label: 'Resources', icon: ClipboardList },
-  { href: '/bookings', label: 'Bookings', icon: CalendarDays }, // Changed from "My Bookings"
+  { href: '/bookings', label: 'Bookings', icon: CalendarDays },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/profile', label: 'My Profile', icon: UserCog },
-  { href: '/maintenance', label: 'Maintenance', icon: Wrench },
+  { href: '/maintenance', label: 'Maintenance', icon: Wrench }, // Stays for general users
   {
     href: '/admin/booking-requests',
     label: 'Booking Requests',
@@ -61,20 +61,20 @@ const navItems: NavItem[] = [
     adminOnly: true,
   },
   {
-    href: '/admin/labs',
+    href: '/admin/inventory', // Consolidated page for Labs, Resource Types, Closures, Admin Maintenance
     label: 'Lab Management',
     icon: Archive,
     adminOnly: true,
   },
-  {
-    href: '/admin/blackout-dates',
-    label: 'Lab Closures',
-    icon: CalendarOff,
-    adminOnly: true,
-  },
+  // { // Lab Closures is now a tab under Lab Management
+  //   href: '/admin/blackout-dates',
+  //   label: 'Lab Closures',
+  //   icon: CalendarOff,
+  //   adminOnly: true,
+  // },
   {
     href: '/admin/users',
-    label: 'Users', // Changed from "User Management"
+    label: 'Users',
     icon: UsersIconLucide,
     adminOnly: true,
   },
@@ -190,3 +190,4 @@ export function AppLayout({ children }: { children: ReactNode }) {
     </SidebarProvider>
   );
 }
+    
