@@ -10,14 +10,13 @@ import {
   CalendarDays,
   UserCog,
   Users as UsersIconLucide,
-  Archive, // Old icon for Lab Management
   CheckSquare,
   Wrench,
   Bell,
   Loader2,
   BarChart3,
   History,
-  Cog, // New icon for Lab Operations Center
+  Cog, 
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
@@ -43,17 +42,18 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   adminOnly?: boolean;
+  technicianOrAdmin?: boolean; // New property
 }
 
 const PUBLIC_ROUTES = ['/login', '/signup'];
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/admin/resources', label: 'Resources', icon: ClipboardList },
+  { href: '/admin/resources', label: 'Resources', icon: ClipboardList }, // Accessible to all logged in users
   { href: '/bookings', label: 'Bookings', icon: CalendarDays },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/profile', label: 'My Profile', icon: UserCog },
-  { href: '/maintenance', label: 'Maintenance', icon: Wrench },
+  { href: '/maintenance', label: 'Maintenance', icon: Wrench, technicianOrAdmin: true }, // Technicians and Admins
   {
     href: '/admin/booking-requests',
     label: 'Booking Requests',
@@ -61,15 +61,9 @@ const navItems: NavItem[] = [
     adminOnly: true,
   },
   {
-    href: '/admin/inventory', // Kept for now, as per user instruction
-    label: 'Old Lab Mgmt (Inv)', // Renamed to differentiate
-    icon: Archive,
-    adminOnly: true,
-  },
-  {
-    href: '/admin/lab-management-v2', // New page
+    href: '/admin/lab-management-v2', 
     label: 'Lab Operations',
-    icon: Cog, // Using Cog icon
+    icon: Cog, 
     adminOnly: true,
   },
   {
@@ -108,9 +102,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
       return [];
     }
     return navItems.filter(item => {
-      if (item.adminOnly) {
-        return currentUser.role === 'Admin';
-      }
+      if (item.adminOnly) return currentUser.role === 'Admin';
+      if (item.technicianOrAdmin) return currentUser.role === 'Admin' || currentUser.role === 'Technician';
+      // For /admin/resources, if not adminOnly and not technicianOrAdmin, it's visible to all logged-in users.
+      // The /admin/resources route itself should handle authorization if non-admins need restricted views.
+      if (item.href === '/admin/resources') return true; 
       return true;
     });
   }, [currentUser]);
@@ -190,5 +186,3 @@ export function AppLayout({ children }: { children: ReactNode }) {
     </SidebarProvider>
   );
 }
-    
-        
