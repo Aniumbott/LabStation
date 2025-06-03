@@ -20,16 +20,25 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { useAuth } from '@/components/auth-context';
-import { manageLabMembership_SA } from '@/lib/firestore-helpers';
-import { Input } from '@/components/ui/input'; // For user search
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+
 
 interface ManageUserLabAccessDialogProps {
-  targetUser: User | null; // Null when in "Add Member Manually" mode
+  targetUser: User | null;
   allLabs: Lab[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onMembershipUpdate: () => void;
-  preselectedLabId?: string; // Used in "Add Member Manually" mode
+  onMembershipUpdate: () => void; // For general refresh after ANY action
+  performMembershipAction: (
+    targetUserId: string,
+    targetUserName: string,
+    labId: string,
+    labName: string,
+    action: 'grant' | 'revoke' | 'approve_request' | 'reject_request',
+    membershipDocIdToUpdate?: string
+  ) => Promise<void>;
+  preselectedLabId?: string;
 }
 
 type MembershipDisplayInfo = {
@@ -39,29 +48,38 @@ type MembershipDisplayInfo = {
   membershipDocId?: string;
 };
 
-export function ManageUserLabAccessDialog({ targetUser: initialTargetUser, allLabs, open, onOpenChange, onMembershipUpdate, preselectedLabId }: ManageUserLabAccessDialogProps) {
+export function ManageUserLabAccessDialog({
+  targetUser: initialTargetUser,
+  allLabs,
+  open,
+  onOpenChange,
+  onMembershipUpdate,
+  performMembershipAction,
+  preselectedLabId
+}: ManageUserLabAccessDialogProps) {
   const [currentMembershipsInfo, setCurrentMembershipsInfo] = useState<MembershipDisplayInfo[]>([]);
   const [isLoadingMemberships, setIsLoadingMemberships] = useState(false);
-  const [isProcessingAction, setIsProcessingAction] = useState<Record<string, boolean>>({});
+  const [isProcessingLabRowAction, setIsProcessingLabRowAction] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
   const { currentUser: adminUser } = useAuth();
 
-  // For "Add Member Manually" mode
   const [isAddManuallyMode, setIsAddManuallyMode] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState('');
   const [allUsersForSearch, setAllUsersForSearch] = useState<User[]>([]);
   const [filteredUsersForSearch, setFilteredUsersForSearch] = useState<User[]>([]);
   const [selectedUserForManualAdd, setSelectedUserForManualAdd] = useState<User | null>(null);
+  const [isProcessingManualGrant, setIsProcessingManualGrant] = useState(false);
 
 
   const fetchInitialData = useCallback(async () => {
     if (!open) return;
 
     setIsAddManuallyMode(!initialTargetUser && !!preselectedLabId);
-    setSelectedUserForManualAdd(null); // Reset selected user if mode changes
-    setUserSearchTerm(''); // Reset search term
+    setSelectedUserForManualAdd(null);
+    setUserSearchTerm('');
+    setIsProcessingManualGrant(false);
 
-    if (initialTargetUser) { // Existing user management mode
+    if (initialTargetUser) {
       setIsLoadingMemberships(true);
       try {
         const q = query(collection(db, 'labMemberships'), where('userId', '==', initialTargetUser.id));
@@ -83,15 +101,14 @@ export function ManageUserLabAccessDialog({ targetUser: initialTargetUser, allLa
         setCurrentMembershipsInfo(allLabs.map(lab => ({ labId: lab.id, labName: lab.name, status: 'not_member' })));
       }
       setIsLoadingMemberships(false);
-    } else if (preselectedLabId) { // "Add Member Manually" mode
-        // Fetch all users for search dropdown
-        setIsLoadingMemberships(true); // Re-use loading state for fetching users
+    } else if (preselectedLabId) {
+        setIsLoadingMemberships(true);
         try {
             const usersSnapshot = await getDocs(query(collection(db, "users"), orderBy("name")));
             const users = usersSnapshot.docs.map(d => ({id: d.id, ...d.data()} as User))
-                                         .filter(u => u.status === 'active'); // Only show active users
+                                         .filter(u => u.status === 'active');
             setAllUsersForSearch(users);
-            setFilteredUsersForSearch(users); // Initially show all active users
+            setFilteredUsersForSearch(users);
         } catch (error: any) {
             toast({ title: "Error", description: `Failed to load users for search: ${error.message}`, variant: "destructive" });
             setAllUsersForSearch([]);
@@ -121,56 +138,56 @@ export function ManageUserLabAccessDialog({ targetUser: initialTargetUser, allLa
   }, [userSearchTerm, allUsersForSearch, isAddManuallyMode]);
 
 
-  const handleMembershipAction = async (
+  const handleLabRowAction = async (
     labId: string,
     labName: string,
     currentStatus: MembershipDisplayInfo['status'],
-    targetUserForAction: User // Can be initialTargetUser or selectedUserForManualAdd
+    membershipDocId?: string
   ) => {
-    if (!adminUser || !targetUserForAction) {
+    if (!adminUser || !initialTargetUser) {
       toast({ title: "Error", description: "Admin or target user not defined.", variant: "destructive" });
       return;
     }
 
-    const actionKey = `${labId}-${targetUserForAction.id}`;
-    setIsProcessingAction(prev => ({ ...prev, [actionKey]: true }));
+    const actionKey = `${labId}-${initialTargetUser.id}`;
+    setIsProcessingLabRowAction(prev => ({ ...prev, [actionKey]: true }));
     
     const actionType = (currentStatus === 'active' || currentStatus === 'pending_approval' || currentStatus === 'revoked') ? 'revoke' : 'grant';
     
     try {
-      const result = await manageLabMembership_SA(
-        adminUser.id, adminUser.name,
-        targetUserForAction.id, targetUserForAction.name,
+      await performMembershipAction(
+        initialTargetUser.id, initialTargetUser.name,
         labId, labName, actionType,
-        currentMembershipsInfo.find(info => info.labId === labId && info.status !== 'not_member')?.membershipDocId
+        membershipDocId 
       );
-
-      if (result.success) {
-        toast({ title: "Success", description: result.message });
-        if (!isAddManuallyMode) { // If managing existing user, refresh their specific memberships
-            await fetchInitialData(); 
-        }
-        onMembershipUpdate();
-        if (isAddManuallyMode) { // If successfully added manually, close dialog
-            onOpenChange(false);
-        }
-      } else {
-        toast({ title: "Failed", description: result.message || "Could not update membership.", variant: "destructive" });
-      }
     } catch (error: any) {
       toast({ title: "Error", description: `Operation failed: ${error.message}`, variant: "destructive" });
     } finally {
-      setIsProcessingAction(prev => ({ ...prev, [actionKey]: false }));
+      setIsProcessingLabRowAction(prev => ({ ...prev, [actionKey]: false }));
     }
   };
-
-  const handleGrantAccessToSelectedUser = () => {
+  
+  const handleGrantAccessToSelectedUserLocal = async () => {
     if (selectedUserForManualAdd && preselectedLabId) {
         const lab = allLabs.find(l => l.id === preselectedLabId);
-        if (lab) {
-            handleMembershipAction(preselectedLabId, lab.name, 'not_member', selectedUserForManualAdd);
+        if (lab && adminUser) {
+            setIsProcessingManualGrant(true);
+            try {
+              await performMembershipAction(
+                  selectedUserForManualAdd.id,
+                  selectedUserForManualAdd.name,
+                  preselectedLabId,
+                  lab.name,
+                  'grant'
+              );
+              onOpenChange(false);
+            } catch (error: any) {
+                toast({title: "Error", description: `Failed to grant access: ${error.message}`, variant: "destructive"});
+            } finally {
+                setIsProcessingManualGrant(false);
+            }
         } else {
-            toast({title: "Error", description: "Target lab not found.", variant: "destructive"});
+            toast({title: "Error", description: "Target lab or admin user context not found.", variant: "destructive"});
         }
     } else {
         toast({title: "Error", description: "No user selected or lab context missing.", variant: "destructive"});
@@ -193,8 +210,8 @@ export function ManageUserLabAccessDialog({ targetUser: initialTargetUser, allLa
     : `Manage Lab Access for ${initialTargetUser?.name || ''}`;
   
   const dialogDescription = isAddManuallyMode
-    ? "Search for a user and grant them access to the selected lab."
-    : "Grant or revoke access to labs for this user.";
+    ? "Search for an active user and grant them access to the selected lab."
+    : "Grant or revoke access to labs for this user. Revoking access for 'pending' or 'rejected' requests will delete the request.";
 
 
   return (
@@ -212,7 +229,7 @@ export function ManageUserLabAccessDialog({ targetUser: initialTargetUser, allLa
                 <div className="relative">
                      <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input 
-                        placeholder="Search users by name or email..."
+                        placeholder="Search active users by name or email..."
                         value={userSearchTerm}
                         onChange={(e) => setUserSearchTerm(e.target.value)}
                         className="pl-8 h-9"
@@ -248,7 +265,7 @@ export function ManageUserLabAccessDialog({ targetUser: initialTargetUser, allLa
                         </Table>
                     </ScrollArea>
                 ) : (
-                    <p className="text-center text-muted-foreground py-4">No users found matching "{userSearchTerm}".</p>
+                    <p className="text-center text-muted-foreground py-4">No active users found matching "{userSearchTerm}".</p>
                 )}
             </div>
         ) : (
@@ -262,12 +279,12 @@ export function ManageUserLabAccessDialog({ targetUser: initialTargetUser, allLa
                     <TableCell>{getStatusBadge(info.status)}</TableCell>
                     <TableCell className="text-right">
                       {info.status === 'active' || info.status === 'pending_approval' || info.status === 'revoked' ? (
-                        <Button variant="destructive" size="sm" className="h-8" onClick={() => handleMembershipAction(info.labId, info.labName, info.status, initialTargetUser!)} disabled={isProcessingAction[`${info.labId}-${initialTargetUser!.id}`]}>
-                          {isProcessingAction[`${info.labId}-${initialTargetUser!.id}`] ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ShieldOff className="mr-2 h-4 w-4"/>}Revoke
+                        <Button variant="destructive" size="sm" className="h-8" onClick={() => handleLabRowAction(info.labId, info.labName, info.status, info.membershipDocId)} disabled={isProcessingLabRowAction[`${info.labId}-${initialTargetUser!.id}`]}>
+                          {isProcessingLabRowAction[`${info.labId}-${initialTargetUser!.id}`] ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ShieldOff className="mr-2 h-4 w-4"/>}Revoke
                         </Button>
                       ) : (
-                        <Button variant="default" size="sm" className="h-8" onClick={() => handleMembershipAction(info.labId, info.labName, info.status, initialTargetUser!)} disabled={isProcessingAction[`${info.labId}-${initialTargetUser!.id}`]}>
-                          {isProcessingAction[`${info.labId}-${initialTargetUser!.id}`] ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <PlusCircle className="mr-2 h-4 w-4"/>}Grant Access
+                        <Button variant="default" size="sm" className="h-8" onClick={() => handleLabRowAction(info.labId, info.labName, info.status, info.membershipDocId)} disabled={isProcessingLabRowAction[`${info.labId}-${initialTargetUser!.id}`]}>
+                          {isProcessingLabRowAction[`${info.labId}-${initialTargetUser!.id}`] ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <PlusCircle className="mr-2 h-4 w-4"/>}Grant Access
                         </Button>
                       )}
                     </TableCell>
@@ -284,10 +301,10 @@ export function ManageUserLabAccessDialog({ targetUser: initialTargetUser, allLa
           </Button>
           {isAddManuallyMode && (
             <Button 
-                onClick={handleGrantAccessToSelectedUser}
-                disabled={!selectedUserForManualAdd || isProcessingAction[`${preselectedLabId}-${selectedUserForManualAdd?.id}`]}
+                onClick={handleGrantAccessToSelectedUserLocal}
+                disabled={!selectedUserForManualAdd || isProcessingManualGrant}
             >
-                {isProcessingAction[`${preselectedLabId}-${selectedUserForManualAdd?.id}`] ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <CheckCircle className="mr-2 h-4 w-4"/>}
+                {isProcessingManualGrant ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <CheckCircle className="mr-2 h-4 w-4"/>}
                 Grant Access to Selected User
             </Button>
           )}
@@ -296,3 +313,4 @@ export function ManageUserLabAccessDialog({ targetUser: initialTargetUser, allLa
     </Dialog>
   );
 }
+

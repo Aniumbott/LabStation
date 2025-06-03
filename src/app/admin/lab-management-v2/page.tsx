@@ -8,8 +8,7 @@ import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, 
 import { useAuth } from '@/components/auth-context';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
-// TooltipProvider import removed for now as part of diagnosis.
-// import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+// import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // TooltipProvider still commented out
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import {
   Dialog as FilterSortDialog,
@@ -123,10 +122,10 @@ export default function LabOperationsCenterPage() {
   const [activeMaintenanceFilterResourceId, setActiveMaintenanceFilterResourceId] = useState<string>('all');
   const [activeMaintenanceFilterTechnicianId, setActiveMaintenanceFilterTechnicianId] = useState<string>('all');
   const [activeMaintenanceFilterLabId, setActiveMaintenanceFilterLabId] = useState<string>('all');
-  
-  const [allLabAccessRequests, setAllLabAccessRequests] = useState<LabMembershipRequest[]>([]); 
+
+  const [allLabAccessRequests, setAllLabAccessRequests] = useState<LabMembershipRequest[]>([]);
   const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]);
-  const [isProcessingLabAccessRequest, setIsProcessingLabAccessRequest] = useState<Record<string, {action: 'grant' | 'revoke' | 'approve_request' | 'reject_request', loading: boolean}>>({});
+  const [isProcessingAction, setIsProcessingAction] = useState<Record<string, {action: 'grant' | 'revoke' | 'approve_request' | 'reject_request', loading: boolean}>>({});
   const [isManualAddMemberDialogOpen, setIsManualAddMemberDialogOpen] = useState(false);
   const [isSystemWideAccessRequestsFilterOpen, setIsSystemWideAccessRequestsFilterOpen] = useState(false);
   const [tempSystemWideAccessRequestsFilterLabId, setTempSystemWideAccessRequestsFilterLabId] = useState('all');
@@ -138,12 +137,12 @@ export default function LabOperationsCenterPage() {
   const canManageAny = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
 
   const fetchAllAdminData = useCallback(async () => {
-    if (!canManageAny) { 
-      setIsLoadingData(false); 
+    if (!canManageAny) {
+      setIsLoadingData(false);
       setIsLoadingLabAccessRequestLoading(false);
-      return; 
+      return;
     }
-    setIsLoadingData(true); 
+    setIsLoadingData(true);
     setIsLoadingLabAccessRequestLoading(true);
     try {
       const [labsSnapshot, typesSnapshot, resourcesSnapshot, usersSnapshot, techniciansSnapshot, maintenanceSnapshot, boSnapshot, rrSnapshot, membershipsSnapshot] = await Promise.all([
@@ -155,7 +154,7 @@ export default function LabOperationsCenterPage() {
         getDocs(query(collection(db, "maintenanceRequests"), orderBy("dateReported", "desc"))),
         getDocs(query(collection(db, "blackoutDates"), orderBy("date", "asc"))),
         getDocs(query(collection(db, "recurringBlackoutRules"), orderBy("name", "asc"))),
-        getDocs(query(collection(db, 'labMemberships'))), 
+        getDocs(query(collection(db, 'labMemberships'))),
       ]);
 
       const fetchedLabs = labsSnapshot.docs.map(docSnap => ({id: docSnap.id, ...docSnap.data(), createdAt: (docSnap.data().createdAt as Timestamp)?.toDate(), lastUpdatedAt: (docSnap.data().lastUpdatedAt as Timestamp)?.toDate()} as Lab));
@@ -169,9 +168,9 @@ export default function LabOperationsCenterPage() {
       setMaintenanceRequests(maintenanceSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data(), dateReported: (docSnap.data().dateReported as Timestamp)?.toDate() || new Date(), dateResolved: (docSnap.data().dateResolved as Timestamp)?.toDate() } as MaintenanceRequest)));
       setBlackoutDates(boSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate)));
       setRecurringRules(rrSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as RecurringBlackoutRule)));
-      
+
       const allFetchedMemberships = membershipsSnapshot.docs.map(mDoc => ({ id: mDoc.id, ...mDoc.data() } as LabMembership));
-      setUserLabMemberships(allFetchedMemberships); 
+      setUserLabMemberships(allFetchedMemberships);
 
       const pendingRequestsPromises = allFetchedMemberships.filter(m => m.status === 'pending_approval').map(async (membershipData) => {
           const user = fetchedUsersAll.find(u => u.id === membershipData.userId);
@@ -185,23 +184,23 @@ export default function LabOperationsCenterPage() {
       toast({ title: "Error", description: `Failed to load data: ${error.message}`, variant: "destructive" });
       setIsLoadingLabAccessRequestLoading(false);
     } finally {
-      setIsLoadingData(false); 
+      setIsLoadingData(false);
       setIsLoadingLabAccessRequestLoading(false);
     }
   }, [toast, canManageAny]);
 
   useEffect(() => { fetchAllAdminData(); }, [fetchAllAdminData]);
-  
+
   const selectedLabDetails = useMemo(() => labs.find(lab => lab.id === activeContextId), [labs, activeContextId]);
-  
+
   const pageHeaderActionsContent = (
     <div className="flex items-center gap-2">
       <Select value={activeContextId} onValueChange={setActiveContextId}>
-          <SelectTrigger 
-              id="labContextSelectPageHeader" 
+          <SelectTrigger
+              id="labContextSelectPageHeader"
               className={cn(
                   "w-auto min-w-[200px] sm:min-w-[240px] h-9 text-sm",
-                  activeContextId === GLOBAL_CONTEXT_VALUE ? "bg-primary/10 border-primary/30 font-semibold" : "" 
+                  activeContextId === GLOBAL_CONTEXT_VALUE ? "bg-primary/10 border-primary/30 font-semibold" : ""
               )}
           >
               <SelectValue placeholder="Select Context..." />
@@ -221,21 +220,20 @@ export default function LabOperationsCenterPage() {
     </div>
   );
 
-
-  const handleMembershipAction = async (
+  const handleMembershipAction = useCallback(async (
     targetUserId: string, targetUserName: string, labId: string, labName: string,
     action: 'grant' | 'revoke' | 'approve_request' | 'reject_request', membershipDocIdToUpdate?: string
   ) => {
     if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Authentication Error", variant: "destructive" }); return; }
     const uniqueActionId = membershipDocIdToUpdate || `${labId}-${targetUserId}`;
-    setIsProcessingLabAccessRequest(prev => ({...prev, [uniqueActionId]: {action, loading: true}}));
+    setIsProcessingAction(prev => ({...prev, [uniqueActionId]: {action, loading: true}}));
     try {
       const result = await manageLabMembership_SA( currentUser.id, currentUser.name, targetUserId, targetUserName, labId, labName, action, membershipDocIdToUpdate );
-      if (result.success) { toast({ title: "Success", description: result.message }); fetchAllAdminData(); } 
+      if (result.success) { toast({ title: "Success", description: result.message }); fetchAllAdminData(); }
       else { toast({ title: "Action Failed", description: result.message, variant: "destructive" }); }
     } catch (error: any) { toast({ title: "Error", description: `Failed to process request: ${error.message}`, variant: "destructive" }); }
-    finally { setIsProcessingLabAccessRequest(prev => ({...prev, [uniqueActionId]: {action, loading: false}})); }
-  };
+    finally { setIsProcessingAction(prev => ({...prev, [uniqueActionId]: {action, loading: false}})); }
+  }, [currentUser, fetchAllAdminData, toast]);
 
   // Resource Types Logic
   useEffect(() => { if (isResourceTypeFilterDialogOpen) { setTempResourceTypeSearchTerm(activeResourceTypeSearchTerm); setTempResourceTypeSortBy(activeResourceTypeSortBy);}}, [isResourceTypeFilterDialogOpen, activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
@@ -248,10 +246,60 @@ export default function LabOperationsCenterPage() {
   const handleOpenNewResourceTypeDialog = () => { setEditingType(null); setIsResourceTypeFormDialogOpen(true); };
   const handleOpenEditResourceTypeDialog = (type: ResourceType) => { setEditingType(type); setIsResourceTypeFormDialogOpen(true); };
   const handleSaveResourceType = async (data: ResourceTypeFormValues) => {
-    if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } setIsLoadingData(true); try { const typeDataToSave = { name: data.name, description: data.description || null }; const auditAction = editingType ? 'RESOURCE_TYPE_UPDATED' : 'RESOURCE_TYPE_CREATED'; let entityId = editingType ? editingType.id : ''; if (editingType) { await updateDoc(doc(db, "resourceTypes", entityId), typeDataToSave); } else { const docRef = await addDoc(collection(db, "resourceTypes"), typeDataToSave); entityId = docRef.id; } addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'ResourceType', entityId, details: `Resource Type '${data.name}' ${editingType ? 'updated' : 'created'}.` }); toast({ title: `Resource Type ${editingType ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingType ? 'updated' : 'created'}.` }); setIsResourceTypeFormDialogOpen(false); setEditingType(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Error", description: `Could not save resource type: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
+    if (!currentUser || !currentUser.name || !canManageAny) {
+      toast({ title: "Permission Denied", variant: "destructive" });
+      return;
+    }
+    setIsLoadingData(true);
+    try {
+      const typeDataToSave = { name: data.name, description: data.description || null };
+      const auditAction = editingType ? 'RESOURCE_TYPE_UPDATED' : 'RESOURCE_TYPE_CREATED';
+      let entityId = editingType ? editingType.id : '';
+      if (editingType) {
+        await updateDoc(doc(db, "resourceTypes", entityId), typeDataToSave);
+      } else {
+        const docRef = await addDoc(collection(db, "resourceTypes"), typeDataToSave);
+        entityId = docRef.id;
+      }
+      await addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'ResourceType', entityId, details: `Resource Type '${data.name}' ${editingType ? 'updated' : 'created'}.` });
+      toast({ title: `Resource Type ${editingType ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingType ? 'updated' : 'created'}.` });
+      setIsResourceTypeFormDialogOpen(false);
+      setEditingType(null);
+      await fetchAllAdminData();
+    } catch (error: any) {
+      toast({ title: "Save Error", description: `Could not save resource type: ${error.message}`, variant: "destructive" });
+    } finally {
+      setIsLoadingData(false);
+    }
   };
   const handleDeleteResourceType = async (typeId: string) => {
-    if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } const deletedType = resourceTypes.find(rt => rt.id === typeId); if (!deletedType) { toast({ title: "Error", description: "Resource type not found.", variant: "destructive" }); return; } const resourcesOfThisType = allResourcesForCountsAndChecks.filter(res => res.resourceTypeId === typeId).length; if (resourcesOfThisType > 0) { toast({ title: "Deletion Blocked", description: `Cannot delete "${deletedType.name}" as ${resourcesOfThisType} resource(s) are assigned. Reassign them first.`, variant: "destructive", duration: 7000 }); setTypeToDelete(null); return; } setIsLoadingData(true); try { await deleteDoc(doc(db, "resourceTypes", typeId)); addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_DELETED', { entityType: 'ResourceType', entityId: typeId, details: `Resource Type '${deletedType.name}' deleted.` }); toast({ title: "Resource Type Deleted", description: `"${deletedType.name}" removed.`, variant: "destructive" }); setTypeToDelete(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Delete Error", description: `Could not delete resource type: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
+    if (!currentUser || !currentUser.name || !canManageAny) {
+      toast({ title: "Permission Denied", variant: "destructive" });
+      return;
+    }
+    const deletedType = resourceTypes.find(rt => rt.id === typeId);
+    if (!deletedType) {
+      toast({ title: "Error", description: "Resource type not found.", variant: "destructive" });
+      return;
+    }
+    const resourcesOfThisType = allResourcesForCountsAndChecks.filter(res => res.resourceTypeId === typeId).length;
+    if (resourcesOfThisType > 0) {
+      toast({ title: "Deletion Blocked", description: `Cannot delete "${deletedType.name}" as ${resourcesOfThisType} resource(s) are assigned. Reassign them first.`, variant: "destructive", duration: 7000 });
+      setTypeToDelete(null);
+      return;
+    }
+    setIsLoadingData(true);
+    try {
+      await deleteDoc(doc(db, "resourceTypes", typeId));
+      await addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_DELETED', { entityType: 'ResourceType', entityId: typeId, details: `Resource Type '${deletedType.name}' deleted.` });
+      toast({ title: "Resource Type Deleted", description: `"${deletedType.name}" removed.`, variant: "destructive" });
+      setTypeToDelete(null);
+      await fetchAllAdminData();
+    } catch (error: any) {
+      toast({ title: "Delete Error", description: `Could not delete resource type: ${error.message}`, variant: "destructive" });
+    } finally {
+      setIsLoadingData(false);
+    }
   };
   const activeResourceTypeFilterCount = useMemo(() => [activeResourceTypeSearchTerm !== '', activeResourceTypeSortBy !== 'name-asc'].filter(Boolean).length, [activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
 
@@ -266,10 +314,62 @@ export default function LabOperationsCenterPage() {
   const handleOpenNewLabDialog = () => { setEditingLab(null); setIsLabFormDialogOpen(true); };
   const handleOpenEditLabDialog = (lab: Lab) => { setEditingLab(lab); setIsLabFormDialogOpen(true); };
   const handleSaveLab = async (data: LabFormValues) => {
-    if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } setIsLoadingData(true); try { const labDataToSave: Partial<Omit<Lab, 'id' | 'createdAt' | 'lastUpdatedAt'>> & { lastUpdatedAt?: any, createdAt?: any } = { name: data.name, location: data.location || null, description: data.description || null, }; const auditAction = editingLab ? 'LAB_UPDATED' : 'LAB_CREATED'; let entityId = editingLab ? editingLab.id : ''; if (editingLab) { labDataToSave.lastUpdatedAt = serverTimestamp(); await updateDoc(doc(db, "labs", entityId), labDataToSave as any); } else { labDataToSave.createdAt = serverTimestamp(); const docRef = await addDoc(collection(db, "labs"), labDataToSave as any); entityId = docRef.id; } addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'Lab', entityId, details: `Lab '${data.name}' ${editingLab ? 'updated' : 'created'}.` }); toast({ title: `Lab ${editingLab ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingLab ? 'updated' : 'created'}.` }); setIsLabFormDialogOpen(false); setEditingLab(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Error", description: `Could not save lab: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
+    if (!currentUser || !currentUser.name || !canManageAny) {
+      toast({ title: "Permission Denied", variant: "destructive" });
+      return;
+    }
+    setIsLoadingData(true);
+    try {
+      const labDataToSave: Partial<Omit<Lab, 'id' | 'createdAt' | 'lastUpdatedAt'>> & { lastUpdatedAt?: any, createdAt?: any } = { name: data.name, location: data.location || null, description: data.description || null, };
+      const auditAction = editingLab ? 'LAB_UPDATED' : 'LAB_CREATED'; let entityId = editingLab ? editingLab.id : '';
+      if (editingLab) {
+        labDataToSave.lastUpdatedAt = serverTimestamp();
+        await updateDoc(doc(db, "labs", entityId), labDataToSave as any);
+      } else {
+        labDataToSave.createdAt = serverTimestamp();
+        const docRef = await addDoc(collection(db, "labs"), labDataToSave as any); entityId = docRef.id;
+      }
+      await addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'Lab', entityId, details: `Lab '${data.name}' ${editingLab ? 'updated' : 'created'}.` });
+      toast({ title: `Lab ${editingLab ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingLab ? 'updated' : 'created'}.` });
+      setIsLabFormDialogOpen(false); setEditingLab(null); await fetchAllAdminData();
+    } catch (error: any) {
+      toast({ title: "Save Error", description: `Could not save lab: ${error.message}`, variant: "destructive" });
+    } finally {
+      setIsLoadingData(false);
+    }
   };
   const handleDeleteLab = async (labId: string) => {
-    if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } const deletedLab = labs.find(lab => lab.id === labId); if (!deletedLab) { toast({ title: "Error", description: "Lab not found.", variant: "destructive" }); return; } const resourcesInThisLab = allResourcesForCountsAndChecks.filter(res => res.labId === labId).length; if (resourcesInThisLab > 0) { toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as ${resourcesInThisLab} resource(s) are assigned. Reassign them first.`, variant: "destructive", duration: 7000 }); setLabToDelete(null); return; } const activeMemberships = userLabMemberships.filter(m => m.labId === labId && m.status === 'active').length; if (activeMemberships > 0) { toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as it has ${activeMemberships} active member(s). Revoke their access first.`, variant: "destructive", duration: 7000 }); setLabToDelete(null); return; } setIsLoadingData(true); try { await deleteDoc(doc(db, "labs", labId)); addAuditLog(currentUser.id, currentUser.name, 'LAB_DELETED', { entityType: 'Lab', entityId: labId, details: `Lab '${deletedLab.name}' deleted.` }); toast({ title: "Lab Deleted", description: `Lab "${deletedLab.name}" removed.`, variant: "destructive" }); setLabToDelete(null); await fetchAllAdminData(); if(activeContextId === labId) setActiveContextId(GLOBAL_CONTEXT_VALUE); } catch (error: any) { toast({ title: "Delete Error", description: `Could not delete lab: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
+    if (!currentUser || !currentUser.name || !canManageAny) {
+      toast({ title: "Permission Denied", variant: "destructive" });
+      return;
+    }
+    const deletedLab = labs.find(lab => lab.id === labId);
+    if (!deletedLab) {
+      toast({ title: "Error", description: "Lab not found.", variant: "destructive" });
+      return;
+    }
+    const resourcesInThisLab = allResourcesForCountsAndChecks.filter(res => res.labId === labId).length;
+    if (resourcesInThisLab > 0) {
+      toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as ${resourcesInThisLab} resource(s) are assigned. Reassign them first.`, variant: "destructive", duration: 7000 });
+      setLabToDelete(null);
+      return;
+    }
+    const activeMemberships = userLabMemberships.filter(m => m.labId === labId && m.status === 'active').length;
+    if (activeMemberships > 0) {
+      toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as it has ${activeMemberships} active member(s). Revoke their access first.`, variant: "destructive", duration: 7000 });
+      setLabToDelete(null); return;
+    }
+    setIsLoadingData(true);
+    try {
+      await deleteDoc(doc(db, "labs", labId));
+      await addAuditLog(currentUser.id, currentUser.name, 'LAB_DELETED', { entityType: 'Lab', entityId: labId, details: `Lab '${deletedLab.name}' deleted.` });
+      toast({ title: "Lab Deleted", description: `Lab "${deletedLab.name}" removed.`, variant: "destructive" });
+      setLabToDelete(null); await fetchAllAdminData(); if(activeContextId === labId) setActiveContextId(GLOBAL_CONTEXT_VALUE);
+    } catch (error: any) {
+      toast({ title: "Delete Error", description: `Could not delete lab: ${error.message}`, variant: "destructive" });
+    } finally {
+      setIsLoadingData(false);
+    }
   };
   const activeLabFilterCount = useMemo(() => [activeLabSearchTerm !== '', activeLabSortBy !== 'name-asc'].filter(Boolean).length, [activeLabSearchTerm, activeLabSortBy]);
 
@@ -296,10 +396,10 @@ export default function LabOperationsCenterPage() {
   const handleOpenNewDateDialog = useCallback(() => { setEditingBlackoutDate(null); setIsDateFormDialogOpen(true); }, []);
   const handleOpenEditDateDialog = useCallback((bd: BlackoutDate) => { setEditingBlackoutDate(bd); setIsDateFormDialogOpen(true); }, []);
   const handleSaveBlackoutDate = useCallback(async (data: BlackoutDateDialogFormValues) => {
-    if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; } const formattedDateOnly = format(data.date, 'yyyy-MM-dd'); const displayDate = format(data.date, 'PPP'); const blackoutDataToSave: Omit<BlackoutDate, 'id'> = { labId: data.labId === GLOBAL_CONTEXT_VALUE ? null : data.labId, date: formattedDateOnly, reason: data.reason || undefined, }; setIsLoadingData(true); try { if (editingBlackoutDate) { await updateDoc(doc(db, "blackoutDates", editingBlackoutDate.id), blackoutDataToSave as any); addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_UPDATED', { entityType: 'BlackoutDate', entityId: editingBlackoutDate.id, details: `Blackout Date for ${displayDate} updated. Lab: ${blackoutDataToSave.labId || 'Global'}. Reason: ${data.reason || 'N/A'}`}); toast({ title: 'Blackout Date Updated'}); } else { const docRef = await addDoc(collection(db, "blackoutDates"), blackoutDataToSave); addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_CREATED', { entityType: 'BlackoutDate', entityId: docRef.id, details: `Blackout Date for ${displayDate} created. Lab: ${blackoutDataToSave.labId || 'Global'}. Reason: ${data.reason || 'N/A'}`}); toast({ title: 'Blackout Date Added'}); } setIsDateFormDialogOpen(false); setEditingBlackoutDate(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Failed", variant: "destructive"});} finally { setIsLoadingData(false); }
+    if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; } const formattedDateOnly = format(data.date, 'yyyy-MM-dd'); const displayDate = format(data.date, 'PPP'); const blackoutDataToSave: Omit<BlackoutDate, 'id'> = { labId: data.labId === GLOBAL_CONTEXT_VALUE ? null : data.labId, date: formattedDateOnly, reason: data.reason || undefined, }; setIsLoadingData(true); try { if (editingBlackoutDate) { await updateDoc(doc(db, "blackoutDates", editingBlackoutDate.id), blackoutDataToSave as any); await addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_UPDATED', { entityType: 'BlackoutDate', entityId: editingBlackoutDate.id, details: `Blackout Date for ${displayDate} updated. Lab: ${blackoutDataToSave.labId || 'Global'}. Reason: ${data.reason || 'N/A'}`}); toast({ title: 'Blackout Date Updated'}); } else { const docRef = await addDoc(collection(db, "blackoutDates"), blackoutDataToSave); await addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_CREATED', { entityType: 'BlackoutDate', entityId: docRef.id, details: `Blackout Date for ${displayDate} created. Lab: ${blackoutDataToSave.labId || 'Global'}. Reason: ${data.reason || 'N/A'}`}); toast({ title: 'Blackout Date Added'}); } setIsDateFormDialogOpen(false); setEditingBlackoutDate(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Failed", variant: "destructive"});} finally { setIsLoadingData(false); }
   }, [currentUser, editingBlackoutDate, fetchAllAdminData, toast]);
   const handleDeleteBlackoutDate = useCallback(async (blackoutDateId: string) => {
-    if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; } const deletedDateObj = blackoutDates.find(bd => bd.id === blackoutDateId); if (!deletedDateObj) return; setIsLoadingData(true); try { await deleteDoc(doc(db, "blackoutDates", blackoutDateId)); addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Blackout Date for ${format(parseISO(deletedDateObj.date), 'PPP')} (Lab: ${deletedDateObj.labId || 'Global'}, Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`}); toast({ title: "Blackout Date Removed", variant: "destructive" }); setDateToDelete(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Delete Failed", variant: "destructive"});} finally { setIsLoadingData(false); }
+    if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; } const deletedDateObj = blackoutDates.find(bd => bd.id === blackoutDateId); if (!deletedDateObj) return; setIsLoadingData(true); try { await deleteDoc(doc(db, "blackoutDates", blackoutDateId)); await addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Blackout Date for ${format(parseISO(deletedDateObj.date), 'PPP')} (Lab: ${deletedDateObj.labId || 'Global'}, Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`}); toast({ title: "Blackout Date Removed", variant: "destructive" }); setDateToDelete(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Delete Failed", variant: "destructive"});} finally { setIsLoadingData(false); }
   }, [currentUser, blackoutDates, fetchAllAdminData, toast]);
   const handleApplyClosureDialogFilters = useCallback(() => { setActiveClosureSearchTerm(tempClosureSearchTerm); setIsClosureFilterDialogOpen(false); }, [tempClosureSearchTerm]);
   const resetClosureDialogFiltersOnly = useCallback(() => { setTempClosureSearchTerm(''); }, []);
@@ -308,10 +408,10 @@ export default function LabOperationsCenterPage() {
   const handleOpenNewRecurringDialog = useCallback(() => { setEditingRecurringRule(null); setIsRecurringFormDialogOpen(true); }, []);
   const handleOpenEditRecurringDialog = useCallback((rule: RecurringBlackoutRule) => { setEditingRecurringRule(rule); setIsRecurringFormDialogOpen(true); }, []);
   const handleSaveRecurringRule = useCallback(async (data: RecurringRuleDialogFormValues) => {
-    if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; } const ruleDataToSave: Omit<RecurringBlackoutRule, 'id'> = { labId: data.labId === GLOBAL_CONTEXT_VALUE ? null : data.labId, name: data.name, daysOfWeek: data.daysOfWeek, reason: data.reason || undefined, }; setIsLoadingData(true); try { if (editingRecurringRule) { await updateDoc(doc(db, "recurringBlackoutRules", editingRecurringRule.id), ruleDataToSave as any); addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_UPDATED', { entityType: 'RecurringBlackoutRule', entityId: editingRecurringRule.id, details: `Recurring rule '${data.name}' updated. Lab: ${ruleDataToSave.labId || 'Global'}.`}); toast({ title: 'Recurring Rule Updated'}); } else { const docRef = await addDoc(collection(db, "recurringBlackoutRules"), ruleDataToSave); addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_CREATED', { entityType: 'RecurringBlackoutRule', entityId: docRef.id, details: `Recurring rule '${data.name}' created. Lab: ${ruleDataToSave.labId || 'Global'}.`}); toast({ title: 'Recurring Rule Added'}); } setIsRecurringFormDialogOpen(false); setEditingRecurringRule(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Failed", variant: "destructive"});} finally { setIsLoadingData(false); }
+    if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; } const ruleDataToSave: Omit<RecurringBlackoutRule, 'id'> = { labId: data.labId === GLOBAL_CONTEXT_VALUE ? null : data.labId, name: data.name, daysOfWeek: data.daysOfWeek, reason: data.reason || undefined, }; setIsLoadingData(true); try { if (editingRecurringRule) { await updateDoc(doc(db, "recurringBlackoutRules", editingRecurringRule.id), ruleDataToSave as any); await addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_UPDATED', { entityType: 'RecurringBlackoutRule', entityId: editingRecurringRule.id, details: `Recurring rule '${data.name}' updated. Lab: ${ruleDataToSave.labId || 'Global'}.`}); toast({ title: 'Recurring Rule Updated'}); } else { const docRef = await addDoc(collection(db, "recurringBlackoutRules"), ruleDataToSave); await addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_CREATED', { entityType: 'RecurringBlackoutRule', entityId: docRef.id, details: `Recurring rule '${data.name}' created. Lab: ${ruleDataToSave.labId || 'Global'}.`}); toast({ title: 'Recurring Rule Added'}); } setIsRecurringFormDialogOpen(false); setEditingRecurringRule(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Failed", variant: "destructive"});} finally { setIsLoadingData(false); }
   }, [currentUser, editingRecurringRule, fetchAllAdminData, toast]);
   const handleDeleteRecurringRule = useCallback(async (ruleId: string) => {
-    if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; } const deletedRuleObj = recurringRules.find(r => r.id === ruleId); if (!deletedRuleObj) return; setIsLoadingData(true); try { await deleteDoc(doc(db, "recurringBlackoutRules", ruleId)); addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Recurring rule '${deletedRuleObj.name}' (Lab: ${deletedRuleObj.labId || 'Global'}) deleted.`}); toast({ title: "Recurring Rule Removed", variant: "destructive" }); setRuleToDelete(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Delete Failed", variant: "destructive"});} finally { setIsLoadingData(false); }
+    if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; } const deletedRuleObj = recurringRules.find(r => r.id === ruleId); if (!deletedRuleObj) return; setIsLoadingData(true); try { await deleteDoc(doc(db, "recurringBlackoutRules", ruleId)); await addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Recurring rule '${deletedRuleObj.name}' (Lab: ${deletedRuleObj.labId || 'Global'}) deleted.`}); toast({ title: "Recurring Rule Removed", variant: "destructive" }); setRuleToDelete(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Delete Failed", variant: "destructive"});} finally { setIsLoadingData(false); }
   }, [currentUser, recurringRules, fetchAllAdminData, toast]);
 
   // Maintenance Logic
@@ -327,7 +427,18 @@ export default function LabOperationsCenterPage() {
       const searchMatch = !activeMaintenanceSearchTerm || (req.resourceName && req.resourceName.toLowerCase().includes(lowerSearchTerm)) || (req.reportedByUserName && req.reportedByUserName.toLowerCase().includes(lowerSearchTerm)) || (req.issueDescription && req.issueDescription.toLowerCase().includes(lowerSearchTerm)) || (req.assignedTechnicianName && req.assignedTechnicianName.toLowerCase().includes(lowerSearchTerm));
       const statusMatch = activeMaintenanceFilterStatus === 'all' || req.status === activeMaintenanceFilterStatus;
       const resourceMatch = activeMaintenanceFilterResourceId === 'all' || req.resourceId === activeMaintenanceFilterResourceId;
-      const labMatch = activeContextId === GLOBAL_CONTEXT_VALUE ? (activeMaintenanceFilterLabId === 'all' || req.resourceLabId === activeMaintenanceFilterLabId || (activeMaintenanceFilterLabId === '--global--' && !req.resourceLabId)) : req.resourceLabId === activeContextId;
+      let labMatch = true;
+      if (activeContextId === GLOBAL_CONTEXT_VALUE) {
+          if (activeMaintenanceFilterLabId !== 'all') {
+              if (activeMaintenanceFilterLabId === '--global--') {
+                  labMatch = !req.resourceLabId;
+              } else {
+                  labMatch = req.resourceLabId === activeMaintenanceFilterLabId;
+              }
+          }
+      } else {
+          labMatch = req.resourceLabId === activeContextId;
+      }
       let technicianMatch = true; if (activeMaintenanceFilterTechnicianId !== 'all') { if (activeMaintenanceFilterTechnicianId === '--unassigned--') { technicianMatch = !req.assignedTechnicianId; } else { technicianMatch = req.assignedTechnicianId === activeMaintenanceFilterTechnicianId; } }
       return searchMatch && statusMatch && resourceMatch && labMatch && technicianMatch;
     });
@@ -338,22 +449,69 @@ export default function LabOperationsCenterPage() {
   const handleOpenNewMaintenanceDialog = useCallback(() => { if (!currentUser) return; setEditingMaintenanceRequest(null); setIsMaintenanceFormDialogOpen(true); }, [currentUser]);
   const handleOpenEditMaintenanceDialog = useCallback((request: MaintenanceRequest) => { setEditingMaintenanceRequest(request); setIsMaintenanceFormDialogOpen(true); }, []);
   const handleSaveMaintenanceRequest = useCallback(async (data: MaintenanceDialogFormValues) => {
-    if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Error", variant: "destructive"}); return;} const resource = allResourcesForCountsAndChecks.find(r => r.id === data.resourceId); if (!resource) { toast({ title: "Error", variant: "destructive" }); return;} let dateResolvedForFirestore: Timestamp | null = null; if ((data.status === 'Resolved' || data.status === 'Closed') && data.dateResolved && isValidDateFn(new Date(data.dateResolved))) { dateResolvedForFirestore = Timestamp.fromDate(new Date(data.dateResolved)); } else if ((data.status === 'Resolved' || data.status === 'Closed') && !editingMaintenanceRequest?.dateResolved) { dateResolvedForFirestore = serverTimestamp() as Timestamp; } else if (editingMaintenanceRequest?.dateResolved && (data.status === 'Resolved' || data.status === 'Closed')) { dateResolvedForFirestore = Timestamp.fromDate(editingMaintenanceRequest.dateResolved); } const requestDataToSave: any = { resourceId: data.resourceId, issueDescription: data.issueDescription, status: data.status, assignedTechnicianId: data.assignedTechnicianId === '--unassigned--' || !data.assignedTechnicianId ? null : data.assignedTechnicianId, resolutionNotes: data.resolutionNotes || null, dateResolved: dateResolvedForFirestore, }; setIsLoadingData(true); try { if (editingMaintenanceRequest) { await updateDoc(doc(db, "maintenanceRequests", editingMaintenanceRequest.id), requestDataToSave); await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingMaintenanceRequest.id, details: `Maintenance request for '${resource.name}' updated. Status: ${data.status}.`}); toast({ title: 'Request Updated'}); if ((data.status === 'Resolved' && editingMaintenanceRequest.status !== 'Resolved') && editingMaintenanceRequest.reportedByUserId !== currentUser.id && editingMaintenanceRequest.reportedByUserId) { await addNotification( editingMaintenanceRequest.reportedByUserId, 'Maintenance Resolved', `Issue for ${resource.name} resolved.`, 'maintenance_resolved', '/maintenance');} if (data.assignedTechnicianId && data.assignedTechnicianId !== editingMaintenanceRequest.assignedTechnicianId && data.assignedTechnicianId !== '--unassigned--') { await addNotification( data.assignedTechnicianId, 'Maintenance Task Assigned', `Task for ${resource.name}: ${data.issueDescription.substring(0,50)}...`, 'maintenance_assigned', '/maintenance');} } else { const newRequestPayload = { ...requestDataToSave, reportedByUserId: currentUser.id, dateReported: serverTimestamp(), }; const docRef = await addDoc(collection(db, "maintenanceRequests"), newRequestPayload); await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New request for '${resource.name}' by ${currentUser.name}.`}); toast({ title: 'Request Logged'}); const techIdForNotification = requestDataToSave.assignedTechnicianId; if(techIdForNotification && techIdForNotification !== '--unassigned--'){ await addNotification( techIdForNotification, 'New Maintenance Request Assigned', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... assigned.`, 'maintenance_assigned', '/maintenance');} else { const usersToNotifyQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Technician']), orderBy('name', 'asc')); const usersToNotifySnapshot = await getDocs(usersToNotifyQuery); const notificationPromises = usersToNotifySnapshot.docs.map(userDoc => { if(userDoc.id !== currentUser?.id) { return addNotification( userDoc.id, 'New Unassigned Maintenance Request', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`, 'maintenance_new', '/maintenance');} return Promise.resolve(); }); await Promise.all(notificationPromises);}} setIsMaintenanceFormDialogOpen(false); setEditingMaintenanceRequest(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: `${editingMaintenanceRequest ? "Update" : "Logging"} Failed`, variant: "destructive" });} finally { setIsLoadingData(false); }
+    if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Error", variant: "destructive"}); return;}
+    const resource = allResourcesForCountsAndChecks.find(r => r.id === data.resourceId);
+    if (!resource) { toast({ title: "Error", variant: "destructive" }); return;}
+    let dateResolvedForFirestore: Timestamp | null = null;
+    if ((data.status === 'Resolved' || data.status === 'Closed') && data.dateResolved && isValidDateFn(new Date(data.dateResolved))) { dateResolvedForFirestore = Timestamp.fromDate(new Date(data.dateResolved)); }
+    else if ((data.status === 'Resolved' || data.status === 'Closed') && !editingMaintenanceRequest?.dateResolved) { dateResolvedForFirestore = serverTimestamp() as Timestamp; }
+    else if (editingMaintenanceRequest?.dateResolved && (data.status === 'Resolved' || data.status === 'Closed')) { dateResolvedForFirestore = Timestamp.fromDate(editingMaintenanceRequest.dateResolved); }
+    const requestDataToSave: any = { resourceId: data.resourceId, issueDescription: data.issueDescription, status: data.status, assignedTechnicianId: data.assignedTechnicianId === '--unassigned--' || !data.assignedTechnicianId ? null : data.assignedTechnicianId, resolutionNotes: data.resolutionNotes || null, dateResolved: dateResolvedForFirestore };
+    setIsLoadingData(true);
+    try {
+      if (editingMaintenanceRequest) {
+        await updateDoc(doc(db, "maintenanceRequests", editingMaintenanceRequest.id), requestDataToSave);
+        await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingMaintenanceRequest.id, details: `Maintenance request for '${resource.name}' updated. Status: ${data.status}.`});
+        toast({ title: 'Request Updated'});
+        if ((data.status === 'Resolved' && editingMaintenanceRequest.status !== 'Resolved') && editingMaintenanceRequest.reportedByUserId !== currentUser.id && editingMaintenanceRequest.reportedByUserId) {
+          await addNotification( editingMaintenanceRequest.reportedByUserId, 'Maintenance Resolved', `Issue for ${resource.name} resolved.`, 'maintenance_resolved', '/maintenance');
+        }
+        if (data.assignedTechnicianId && data.assignedTechnicianId !== editingMaintenanceRequest.assignedTechnicianId && data.assignedTechnicianId !== '--unassigned--') {
+          await addNotification( data.assignedTechnicianId, 'Maintenance Task Assigned', `Task for ${resource.name}: ${data.issueDescription.substring(0,50)}...`, 'maintenance_assigned', '/maintenance');
+        }
+      } else {
+        const newRequestPayload = { ...requestDataToSave, reportedByUserId: currentUser.id, dateReported: serverTimestamp(), };
+        const docRef = await addDoc(collection(db, "maintenanceRequests"), newRequestPayload);
+        await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New request for '${resource.name}' by ${currentUser.name}.`});
+        toast({ title: 'Request Logged'});
+        const techIdForNotification = requestDataToSave.assignedTechnicianId;
+        if(techIdForNotification && techIdForNotification !== '--unassigned--'){
+          await addNotification( techIdForNotification, 'New Maintenance Request Assigned', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... assigned.`, 'maintenance_assigned', '/maintenance');
+        } else {
+          const usersToNotifyQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Technician']), orderBy('name', 'asc'));
+          const usersToNotifySnapshot = await getDocs(usersToNotifyQuery);
+          const notificationPromises = usersToNotifySnapshot.docs.map(userDoc => {
+            if(userDoc.id !== currentUser?.id) {
+              return addNotification( userDoc.id, 'New Unassigned Maintenance Request', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`, 'maintenance_new', '/maintenance');
+            }
+            return Promise.resolve();
+          });
+          await Promise.all(notificationPromises);
+        }
+      }
+      setIsMaintenanceFormDialogOpen(false);
+      setEditingMaintenanceRequest(null);
+      await fetchAllAdminData();
+    } catch (error: any) {
+      toast({ title: `${editingMaintenanceRequest ? "Update" : "Logging"} Failed`, variant: "destructive" });
+    } finally {
+      setIsLoadingData(false);
+    }
   }, [currentUser, editingMaintenanceRequest, allResourcesForCountsAndChecks, fetchAllAdminData, toast]);
   const activeMaintenanceFilterCount = useMemo(() => [activeMaintenanceSearchTerm !== '', activeMaintenanceFilterStatus !== 'all', activeMaintenanceFilterResourceId !== 'all', activeMaintenanceFilterTechnicianId !== 'all', (activeContextId === GLOBAL_CONTEXT_VALUE && activeMaintenanceFilterLabId !== 'all')].filter(Boolean).length, [activeMaintenanceSearchTerm, activeMaintenanceFilterStatus, activeMaintenanceFilterResourceId, activeMaintenanceFilterTechnicianId, activeMaintenanceFilterLabId, activeContextId]);
   const canEditAnyMaintenanceRequest = useMemo(() => currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Technician'), [currentUser]);
 
   // Lab Access Requests Logic (Contextual)
   const filteredLabAccessRequests = useMemo(() => {
-    if (activeContextId === GLOBAL_CONTEXT_VALUE) { 
-      return allLabAccessRequests.filter(req => 
+    if (activeContextId === GLOBAL_CONTEXT_VALUE) {
+      return allLabAccessRequests.filter(req =>
         (activeSystemWideAccessRequestsFilterLabId === 'all' || req.labId === activeSystemWideAccessRequestsFilterLabId) &&
-        (activeSystemWideAccessRequestsFilterUser.trim() === '' || 
+        (activeSystemWideAccessRequestsFilterUser.trim() === '' ||
          (req.userName && req.userName.toLowerCase().includes(activeSystemWideAccessRequestsFilterUser.toLowerCase())) ||
          (req.userEmail && req.userEmail.toLowerCase().includes(activeSystemWideAccessRequestsFilterUser.toLowerCase()))
         )
       );
-    } else { 
+    } else {
       return allLabAccessRequests.filter(req => req.labId === activeContextId);
     }
   }, [allLabAccessRequests, activeContextId, activeSystemWideAccessRequestsFilterLabId, activeSystemWideAccessRequestsFilterUser]);
@@ -368,7 +526,7 @@ export default function LabOperationsCenterPage() {
     setTempSystemWideAccessRequestsFilterLabId('all');
     setTempSystemWideAccessRequestsFilterUser('');
   }, []);
-  
+
   const activeSystemWideAccessRequestsFilterCount = useMemo(() => [
     activeSystemWideAccessRequestsFilterLabId !== 'all',
     activeSystemWideAccessRequestsFilterUser !== ''
@@ -384,27 +542,26 @@ export default function LabOperationsCenterPage() {
         });
   }, [userLabMemberships, allUsersData, activeContextId]);
 
-  
+
   const resourcesInSelectedLab = useMemo(() => allResourcesForCountsAndChecks.filter(r => r.labId === activeContextId), [allResourcesForCountsAndChecks, activeContextId]);
   const maintenanceForSelectedLab = useMemo(() => maintenanceRequests.filter(mr => resourcesInSelectedLab.some(r => r.id === mr.resourceId)), [maintenanceRequests, resourcesInSelectedLab]);
 
 
   if (!currentUser || !canManageAny) { return ( <div className="space-y-8"><PageHeader title="Lab Operations Center" icon={Cog} description="Access Denied." /><Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission.</p></CardContent></Card></div>); }
-  
+
   return (
     <div className="space-y-6">
-      <PageHeader 
-        title="Lab Operations Center" 
-        description="Manage all aspects of your lab operations, from system-wide settings to individual lab details." 
+      <PageHeader
+        title="Lab Operations Center"
+        description="Manage all aspects of your lab operations, from system-wide settings to individual lab details."
         icon={Cog}
         actions={pageHeaderActionsContent}
       />
-      
+
       {isLoadingData ? (
         <div className="flex justify-center items-center py-20"><Loader2 className="h-12 w-12 animate-spin text-primary"/></div>
       ) : (
         <>
-          {/* SYSTEM-WIDE SETTINGS VIEW */}
           {activeContextId === GLOBAL_CONTEXT_VALUE && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
@@ -413,7 +570,7 @@ export default function LabOperationsCenterPage() {
                     <div><CardTitle className="text-xl flex items-center gap-2"><Building className="h-5 w-5 text-primary"/>All Labs ({filteredLabsWithCounts.length})</CardTitle><CardDescription>View, add, or manage operations for individual labs.</CardDescription></div>
                     <div className="flex gap-2">
                         <FilterSortDialog open={isLabFilterDialogOpen} onOpenChange={setIsLabFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="xs" className="h-7"><FilterIcon />Filter</Button></FilterSortDialogTrigger><FilterSortDialogContent className="sm:max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter &amp; Sort Labs</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="labSearchDialog">Search (Name/Loc/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="labSearchDialog" value={tempLabSearchTerm} onChange={e => setTempLabSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div><div><Label htmlFor="labSortDialog">Sort by</Label><Select value={tempLabSortBy} onValueChange={setTempLabSortBy}><SelectTrigger id="labSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{labSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabDialogFiltersOnly} className="mr-auto"><FilterX />Reset</Button><Button variant="outline" onClick={() => setIsLabFilterDialogOpen(false)}><X />Cancel</Button><Button onClick={handleApplyLabDialogFilters}><CheckCircle2 />Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
-                        <Button onClick={handleOpenNewLabDialog} size="sm" className="h-7"><PlusCircle />Lab</Button>
+                        <Button onClick={handleOpenNewLabDialog} size="xs" className="h-7"><PlusCircle />Lab</Button>
                     </div>
                   </CardHeader>
                   <CardContent className="p-0">
@@ -425,7 +582,7 @@ export default function LabOperationsCenterPage() {
                     <div><CardTitle className="text-xl flex items-center gap-2"><Wrench className="h-5 w-5 text-primary"/>All Maintenance Requests ({filteredMaintenanceRequests.length})</CardTitle></div>
                     <div className="flex gap-2">
                         <FilterSortDialog open={isMaintenanceFilterDialogOpen} onOpenChange={setIsMaintenanceFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="xs" className="h-7"><FilterIcon/>Filter</Button></FilterSortDialogTrigger><FilterSortDialogContent className="w-full max-w-lg"><FilterSortDialogHeader><FilterSortDialogTitle>Filter All Maintenance Requests</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="maintSearchSystemAll">Search (Resource/Reporter/Issue/Tech)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="maintSearchSystemAll" value={tempMaintenanceSearchTerm} onChange={e => setTempMaintenanceSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><Label htmlFor="maintStatusSystemAll">Status</Label><Select value={tempMaintenanceFilterStatus} onValueChange={(v) => setTempMaintenanceFilterStatus(v as MaintenanceRequestStatus | 'all')}><SelectTrigger id="maintStatusSystemAll" className="h-9 mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{maintenanceRequestStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div><div><Label htmlFor="maintResourceSystemAll">Resource</Label><Select value={tempMaintenanceFilterResourceId} onValueChange={setTempMaintenanceFilterResourceId} disabled={allResourcesForCountsAndChecks.length === 0}><SelectTrigger id="maintResourceSystemAll" className="h-9 mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Resources</SelectItem>{allResourcesForCountsAndChecks.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent></Select></div></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><Label htmlFor="maintTechSystemAll">Assigned Technician</Label><Select value={tempMaintenanceFilterTechnicianId} onValueChange={setTempMaintenanceFilterTechnicianId} disabled={allTechniciansForMaintenance.length === 0}><SelectTrigger id="maintTechSystemAll" className="h-9 mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All/Any</SelectItem><SelectItem value="--unassigned--">Unassigned</SelectItem>{allTechniciansForMaintenance.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div><div><Label htmlFor="maintLabSystemAll">Lab (of Resource)</Label><Select value={tempMaintenanceFilterLabId} onValueChange={setTempMaintenanceFilterLabId} disabled={labs.length === 0}><SelectTrigger id="maintLabSystemAll" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Labs</SelectItem><SelectItem value="--global--">Resources not in a specific Lab</SelectItem>{labs.map(lab => (<SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>))}</SelectContent></Select></div></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetMaintenanceDialogFiltersOnly} className="mr-auto"><FilterX />Reset</Button><Button variant="outline" onClick={() => setIsMaintenanceFilterDialogOpen(false)}><X />Cancel</Button><Button onClick={handleApplyMaintenanceDialogFilters}><CheckCircle2 />Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
-                        <Button onClick={handleOpenNewMaintenanceDialog} size="sm" className="h-7"><PlusCircle />Log Request</Button>
+                        <Button onClick={handleOpenNewMaintenanceDialog} size="xs" className="h-7"><PlusCircle />Log Request</Button>
                     </div>
                   </CardHeader>
                   <CardContent className="p-0">
@@ -434,12 +591,12 @@ export default function LabOperationsCenterPage() {
                       </ScrollArea>
                   </CardContent>
                 </Card>
-                <Card>
+                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
                     <div><CardTitle className="text-xl flex items-center gap-2"><ListChecks className="h-5 w-5 text-primary"/>Resource Types ({filteredResourceTypesWithCount.length})</CardTitle><CardDescription>Define categories for lab resources.</CardDescription></div>
                      <div className="flex gap-2">
                         <FilterSortDialog open={isResourceTypeFilterDialogOpen} onOpenChange={setIsResourceTypeFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="xs" className="h-7"><FilterIcon />Filter</Button></FilterSortDialogTrigger><FilterSortDialogContent className="sm:max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter &amp; Sort Resource Types</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="typeSearchDialog">Search (Name)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="typeSearchDialog" value={tempResourceTypeSearchTerm} onChange={e => setTempResourceTypeSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div><div><Label htmlFor="typeSortDialog">Sort by</Label><Select value={tempResourceTypeSortBy} onValueChange={setTempResourceTypeSortBy}><SelectTrigger id="typeSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{resourceTypeSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetResourceTypeDialogFiltersOnly} className="mr-auto"><FilterX />Reset</Button><Button variant="outline" onClick={() => setIsResourceTypeFilterDialogOpen(false)}><X />Cancel</Button><Button onClick={handleApplyResourceTypeDialogFilters}><CheckCircle2 />Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
-                        <Button onClick={handleOpenNewResourceTypeDialog} size="sm" className="h-7"><PlusCircle />Type</Button>
+                        <Button onClick={handleOpenNewResourceTypeDialog} size="xs" className="h-7"><PlusCircle />Type</Button>
                     </div>
                   </CardHeader>
                   <CardContent className="p-0">
@@ -503,9 +660,9 @@ export default function LabOperationsCenterPage() {
                         </FilterSortDialog>
                     </CardHeader>
                     <CardContent className="p-0">
-                    {isLabAccessRequestLoading ? <div className="text-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary"/></div> : 
+                    {isLabAccessRequestLoading ? <div className="text-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary"/></div> :
                     <ScrollArea className="max-h-96 border-t">
-                        {filteredLabAccessRequests.length > 0 ? (<Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Lab Req.</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredLabAccessRequests.map(req => (<TableRow key={req.id}><TableCell className="p-2 text-xs font-medium">{req.userName}</TableCell><TableCell className="p-2 text-xs">{req.labName}</TableCell><TableCell className="text-right p-1 space-x-0.5"><Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'approve_request', req.id)} disabled={isProcessingLabAccessRequest[req.id!]?.loading}><ThumbsUp className="text-green-600"/></Button><Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'reject_request', req.id)} disabled={isProcessingLabAccessRequest[req.id!]?.loading}><ThumbsDown className="text-red-500"/></Button></TableCell></TableRow>))}</TableBody></Table>) : <p className="text-center text-sm text-muted-foreground py-6">{activeSystemWideAccessRequestsFilterCount > 0 ? "No requests match filters." : "No pending lab access requests."}</p>}
+                        {filteredLabAccessRequests.length > 0 ? (<Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Lab Req.</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredLabAccessRequests.map(req => (<TableRow key={req.id}><TableCell className="p-2 text-xs font-medium">{req.userName}</TableCell><TableCell className="p-2 text-xs">{req.labName}</TableCell><TableCell className="text-right p-1 space-x-0.5"><Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'approve_request', req.id)} disabled={isProcessingAction[`${req.id}`]?.loading}><ThumbsUp className="text-green-600"/></Button><Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'reject_request', req.id)} disabled={isProcessingAction[`${req.id}`]?.loading}><ThumbsDown className="text-red-500"/></Button></TableCell></TableRow>))}</TableBody></Table>) : <p className="text-center text-sm text-muted-foreground py-6">{activeSystemWideAccessRequestsFilterCount > 0 ? "No requests match filters." : "No pending lab access requests."}</p>}
                     </ScrollArea>}
                     </CardContent>
                 </Card>
@@ -513,14 +670,13 @@ export default function LabOperationsCenterPage() {
             </div>
           )}
 
-          {/* LAB-SPECIFIC VIEW */}
           {activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
                    <Card>
                     <CardHeader className="flex flex-row items-start justify-between">
                         <div><CardTitle className="text-xl flex items-center gap-2"><Users className="h-5 w-5 text-primary"/>Members &amp; Access for {selectedLabDetails.name}</CardTitle></div>
-                        <Button size="sm" className="h-7" onClick={() => setIsManualAddMemberDialogOpen(true)}><Users />Member</Button>
+                        <Button size="xs" className="h-7" onClick={() => { setIsManualAddMemberDialogOpen(true); }}><Users />Member</Button>
                     </CardHeader>
                     <CardContent className="pt-0">
                         <Tabs defaultValue="active-members" className="text-sm">
@@ -530,23 +686,23 @@ export default function LabOperationsCenterPage() {
                             </TabsList>
                         <TabsContent value="active-members">
                             <ScrollArea className="max-h-80 border rounded-md">
-                            {activeLabMembers.length > 0 ? (<Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Email</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{activeLabMembers.map(member => (<TableRow key={member.userId}><TableCell className="p-2 text-xs font-medium flex items-center gap-2"><Avatar className="h-6 w-6"><AvatarImage src={member.userAvatarUrl} alt={member.userName}/><AvatarFallback>{member.userName?.charAt(0)}</AvatarFallback></Avatar>{member.userName}</TableCell><TableCell className="p-2 text-xs">{member.userEmail}</TableCell><TableCell className="text-right p-1"><Button variant="destructive" size="xs" className="h-7" onClick={() => handleMembershipAction(member.userId, member.userName!, selectedLabDetails.id, selectedLabDetails.name, 'revoke', member.id)} disabled={isProcessingLabAccessRequest[member.id!]?.loading}><ShieldOff />Revoke</Button></TableCell></TableRow>))}</TableBody></Table>) : <p className="text-center text-sm text-muted-foreground py-4">No active members.</p>}
+                            {activeLabMembers.length > 0 ? (<Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Email</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{activeLabMembers.map(member => (<TableRow key={member.userId}><TableCell className="p-2 text-xs font-medium flex items-center gap-2"><Avatar className="h-6 w-6"><AvatarImage src={member.userAvatarUrl} alt={member.userName}/><AvatarFallback>{member.userName?.charAt(0)}</AvatarFallback></Avatar>{member.userName}</TableCell><TableCell className="p-2 text-xs">{member.userEmail}</TableCell><TableCell className="text-right p-1"><Button variant="destructive" size="xs" className="h-7" onClick={() => handleMembershipAction(member.userId, member.userName!, selectedLabDetails.id, selectedLabDetails.name, 'revoke', member.id)} disabled={isProcessingAction[member.id!]?.loading}><ShieldOff />Revoke</Button></TableCell></TableRow>))}</TableBody></Table>) : <p className="text-center text-sm text-muted-foreground py-4">No active members.</p>}
                             </ScrollArea>
                         </TabsContent>
                         <TabsContent value="pending-requests">
                              <ScrollArea className="max-h-80 border rounded-md">
-                            {filteredLabAccessRequests.length > 0 ? (<Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Email</TableHead><TableHead className="p-2 text-xs">Requested</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredLabAccessRequests.map(req => (<TableRow key={req.id}><TableCell className="p-2 text-xs font-medium flex items-center gap-2"><Avatar className="h-6 w-6"><AvatarImage src={req.userAvatarUrl} alt={req.userName}/><AvatarFallback>{req.userName?.charAt(0)}</AvatarFallback></Avatar>{req.userName}</TableCell><TableCell className="p-2 text-xs">{req.userEmail}</TableCell><TableCell className="p-2 text-xs">{formatDateSafe(req.requestedAt, 'N/A', 'MMM dd, yy')}</TableCell><TableCell className="text-right p-1 space-x-0.5"><Button size="xs" variant="outline" className="h-7 text-green-600 border-green-600 hover:bg-green-50" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'approve_request', req.id)} disabled={isProcessingLabAccessRequest[req.id!]?.loading}><ThumbsUp />Approve</Button><Button size="xs" variant="outline" className="h-7 text-red-600 border-red-600 hover:bg-red-50" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'reject_request', req.id)} disabled={isProcessingLabAccessRequest[req.id!]?.loading}><ThumbsDown />Reject</Button></TableCell></TableRow>))}</TableBody></Table>) : <p className="text-center text-sm text-muted-foreground py-4">No pending requests.</p>}
+                            {filteredLabAccessRequests.length > 0 ? (<Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Email</TableHead><TableHead className="p-2 text-xs">Requested</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredLabAccessRequests.map(req => (<TableRow key={req.id}><TableCell className="p-2 text-xs font-medium flex items-center gap-2"><Avatar className="h-6 w-6"><AvatarImage src={req.userAvatarUrl} alt={req.userName}/><AvatarFallback>{req.userName?.charAt(0)}</AvatarFallback></Avatar>{req.userName}</TableCell><TableCell className="p-2 text-xs">{req.userEmail}</TableCell><TableCell className="p-2 text-xs">{formatDateSafe(req.requestedAt, 'N/A', 'MMM dd, yy')}</TableCell><TableCell className="text-right p-1 space-x-0.5"><Button size="xs" variant="outline" className="h-7 text-green-600 border-green-600 hover:bg-green-50" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'approve_request', req.id)} disabled={isProcessingAction[req.id!]?.loading}><ThumbsUp />Approve</Button><Button size="xs" variant="outline" className="h-7 text-red-600 border-red-600 hover:bg-red-50" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'reject_request', req.id)} disabled={isProcessingAction[req.id!]?.loading}><ThumbsDown />Reject</Button></TableCell></TableRow>))}</TableBody></Table>) : <p className="text-center text-sm text-muted-foreground py-4">No pending requests for this lab.</p>}
                             </ScrollArea>
                         </TabsContent>
                         </Tabs>
                     </CardContent>
                   </Card>
-                  <Card>
+                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div><CardTitle className="text-xl flex items-center gap-2"><Wrench className="h-5 w-5 text-primary"/>Maintenance for {selectedLabDetails.name}</CardTitle></div>
                          <div className="flex gap-2">
                             <FilterSortDialog open={isMaintenanceFilterDialogOpen} onOpenChange={setIsMaintenanceFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="xs" className="h-7"><FilterIcon />Filter</Button></FilterSortDialogTrigger><FilterSortDialogContent className="w-full max-w-lg"><FilterSortDialogHeader><FilterSortDialogTitle>Filter Maintenance for {selectedLabDetails.name}</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="maintSearchLab">Search (Resource/Reporter/Issue/Tech)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="maintSearchLab" value={tempMaintenanceSearchTerm} onChange={e => setTempMaintenanceSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><Label htmlFor="maintStatusLab">Status</Label><Select value={tempMaintenanceFilterStatus} onValueChange={(v) => setTempMaintenanceFilterStatus(v as MaintenanceRequestStatus | 'all')}><SelectTrigger id="maintStatusLab" className="h-9 mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{maintenanceRequestStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div><div><Label htmlFor="maintResourceLab">Resource</Label><Select value={tempMaintenanceFilterResourceId} onValueChange={setTempMaintenanceFilterResourceId} disabled={resourcesInSelectedLab.length === 0}><SelectTrigger id="maintResourceLab" className="h-9 mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Resources</SelectItem>{resourcesInSelectedLab.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent></Select></div></div><div><Label htmlFor="maintTechLab">Assigned Technician</Label><Select value={tempMaintenanceFilterTechnicianId} onValueChange={setTempMaintenanceFilterTechnicianId} disabled={allTechniciansForMaintenance.length === 0}><SelectTrigger id="maintTechLab" className="h-9 mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All/Any</SelectItem><SelectItem value="--unassigned--">Unassigned</SelectItem>{allTechniciansForMaintenance.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetMaintenanceDialogFiltersOnly} className="mr-auto"><FilterX />Reset</Button><Button variant="outline" onClick={() => setIsMaintenanceFilterDialogOpen(false)}><X />Cancel</Button><Button onClick={handleApplyMaintenanceDialogFilters}><CheckCircle2 />Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
-                            <Button onClick={handleOpenNewMaintenanceDialog} size="sm" className="h-7"><PlusCircle />Log Request</Button>
+                            <Button onClick={handleOpenNewMaintenanceDialog} size="xs" className="h-7"><PlusCircle />Log Request</Button>
                          </div>
                     </CardHeader>
                     <CardContent className="p-0">
@@ -560,13 +716,13 @@ export default function LabOperationsCenterPage() {
                 <div className="lg:col-span-1 space-y-6">
                   <Card>
                     <CardHeader className="flex flex-row items-start justify-between">
-                      <div><CardTitle className="text-xl flex items-center gap-2"><InfoIcon className="h-5 w-5 text-primary"/>Lab Overview: {selectedLabDetails.name}</CardTitle><CardDescription>{selectedLabDetails.location || "No location specified"}</CardDescription></div>
+                      <div><CardTitle className="text-xl flex items-center gap-2"><InfoIcon className="h-5 w-5 text-primary"/>Lab Overview: {selectedLabDetails.name}</CardTitle>{selectedLabDetails.location && <CardDescription>{selectedLabDetails.location}</CardDescription>}</div>
                       <Button variant="outline" size="xs" className="h-7" onClick={() => handleOpenEditLabDialog(selectedLabDetails)}><Edit />Details</Button>
                     </CardHeader>
-                    <CardContent className="space-y-2 text-sm">
-                        <div className="flex justify-between items-center py-1 border-b border-dashed"><span>Resources:</span><span className="font-bold text-primary">{resourcesInSelectedLab.length}</span></div>
-                        <div className="flex justify-between items-center py-1 border-b border-dashed"><span>Active Members:</span> <span className="font-bold text-primary">{activeLabMembers.length}</span></div>
-                        <div className="flex justify-between items-center py-1"><span>Open Maintenance:</span> <span className="font-bold text-primary">{maintenanceForSelectedLab.filter(mr => mr.status === 'Open' || mr.status === 'In Progress').length}</span></div>
+                     <CardContent className="space-y-1 text-sm pt-0"> {/* Removed p-6 for tighter content */}
+                        <div className="flex justify-between items-center py-1.5 border-b border-dashed"><span>Resources:</span><span className="font-semibold text-primary">{resourcesInSelectedLab.length}</span></div>
+                        <div className="flex justify-between items-center py-1.5 border-b border-dashed"><span>Active Members:</span> <span className="font-semibold text-primary">{activeLabMembers.length}</span></div>
+                        <div className="flex justify-between items-center py-1.5"><span>Open Maintenance:</span> <span className="font-bold text-primary">{maintenanceForSelectedLab.filter(mr => mr.status === 'Open' || mr.status === 'In Progress').length}</span></div>
                     </CardContent>
                   </Card>
                   <Card>
@@ -604,13 +760,23 @@ export default function LabOperationsCenterPage() {
         </>
       )}
 
-      {/* Standard Dialogs */}
       {isResourceTypeFormDialogOpen && currentUser && (<ResourceTypeFormDialog open={isResourceTypeFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceTypeFormDialogOpen(isOpen); if (!isOpen) setEditingType(null); }} initialType={editingType} onSave={handleSaveResourceType} />)}
       {isLabFormDialogOpen && currentUser && (<LabFormDialog open={isLabFormDialogOpen} onOpenChange={(isOpen) => { setIsLabFormDialogOpen(isOpen); if (!isOpen) setEditingLab(null); }} initialLab={editingLab} onSave={handleSaveLab} />)}
       {isDateFormDialogOpen && currentUser && (<BlackoutDateFormDialog open={isDateFormDialogOpen} onOpenChange={setIsDateFormDialogOpen} initialBlackoutDate={editingBlackoutDate} onSave={handleSaveBlackoutDate} labs={labs} currentLabContextId={activeContextId} />)}
       {isRecurringFormDialogOpen && currentUser && (<RecurringBlackoutRuleFormDialog open={isRecurringFormDialogOpen} onOpenChange={setIsRecurringFormDialogOpen} initialRule={editingRecurringRule} onSave={handleSaveRecurringRule} labs={labs} currentLabContextId={activeContextId} />)}
       {isMaintenanceFormDialogOpen && currentUser && (<MaintenanceRequestFormDialog open={isMaintenanceFormDialogOpen} onOpenChange={(isOpen) => { setIsMaintenanceFormDialogOpen(isOpen); if (!isOpen) setEditingMaintenanceRequest(null);}} initialRequest={editingMaintenanceRequest} onSave={handleSaveMaintenanceRequest} technicians={allTechniciansForMaintenance} resources={allResourcesForCountsAndChecks} currentUserRole={currentUser?.role} labContextId={activeContextId !== GLOBAL_CONTEXT_VALUE ? activeContextId : undefined} /> )}
-      {isManualAddMemberDialogOpen && selectedLabDetails && currentUser && (<ManageUserLabAccessDialog targetUser={null} allLabs={labs} open={isManualAddMemberDialogOpen} onOpenChange={setIsManualAddMemberDialogOpen} onMembershipUpdate={fetchAllAdminData} preselectedLabId={selectedLabDetails.id} />)}
+      {isManualAddMemberDialogOpen && currentUser && (
+        <ManageUserLabAccessDialog
+          targetUser={null}
+          allLabs={labs}
+          open={isManualAddMemberDialogOpen}
+          onOpenChange={setIsManualAddMemberDialogOpen}
+          onMembershipUpdate={fetchAllAdminData}
+          performMembershipAction={handleMembershipAction}
+          preselectedLabId={activeContextId !== GLOBAL_CONTEXT_VALUE ? activeContextId : undefined}
+        />
+      )}
     </div>
   );
 }
+
