@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowRightCircle } from 'lucide-react';
+import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowRightCircle, Settings2, ShieldCheck, ShieldOff } from 'lucide-react';
 import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -16,7 +16,7 @@ import { ResourceTypeFormDialog, ResourceTypeFormValues } from '@/components/adm
 import { LabFormDialog, LabFormValues } from '@/components/admin/lab-form-dialog';
 import { BlackoutDateFormDialog, BlackoutDateFormValues as BlackoutDateDialogFormValues } from '@/components/admin/blackout-date-form-dialog';
 import { RecurringBlackoutRuleFormDialog, RecurringBlackoutRuleFormValues as RecurringRuleDialogFormValues } from '@/components/admin/recurring-blackout-rule-form-dialog';
-import { MaintenanceRequestFormDialog, MaintenanceRequestFormValues as MaintenanceDialogFormValues } from '@/components/maintenance/maintenance-request-form-dialog';
+import { MaintenanceRequestFormDialog, MaintenanceRequestFormValues as MaintenanceDialogFormValues } from '@/components/admin/maintenance-request-form-dialog';
 import { ManageUserLabAccessDialog } from '@/components/admin/manage-user-lab-access-dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -24,7 +24,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList } from "@/components/ui/tabs"; // Removed TabsTrigger as it's not directly used at top level now
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp, writeBatch, where } from 'firebase/firestore';
@@ -35,8 +35,9 @@ import { cn, formatDateSafe } from '@/lib/utils';
 
 type ResourceTypeSortableColumn = 'name' | 'resourceCount' | 'description';
 const resourceTypeSortOptions: { value: string; label: string }[] = [ { value: 'name-asc', label: 'Name (A-Z)' }, { value: 'name-desc', label: 'Name (Z-A)' }, { value: 'resourceCount-asc', label: 'Resources (Low-High)' }, { value: 'resourceCount-desc', label: 'Resources (High-Low)' }, { value: 'description-asc', label: 'Description (A-Z)' }, { value: 'description-desc', label: 'Description (Z-A)' }];
-type LabSortableColumn = 'name' | 'location';
-const labSortOptions: { value: string; label: string }[] = [ { value: 'name-asc', label: 'Name (A-Z)' }, { value: 'name-desc', label: 'Name (Z-A)' }, { value: 'location-asc', label: 'Location (A-Z)' }, { value: 'location-desc', label: 'Location (Z-A)' }];
+type LabSortableColumn = 'name' | 'location' | 'resourceCount' | 'memberCount';
+const labSortOptions: { value: string; label: string }[] = [ { value: 'name-asc', label: 'Name (A-Z)' }, { value: 'name-desc', label: 'Name (Z-A)' }, { value: 'location-asc', label: 'Location (A-Z)' }, { value: 'location-desc', label: 'Location (Z-A)' }, { value: 'resourceCount-asc', label: 'Resources (Low-High)' }, { value: 'resourceCount-desc', label: 'Resources (High-Low)' }, { value: 'memberCount-asc', label: 'Members (Low-High)' }, { value: 'memberCount-desc', label: 'Members (High-Low)' }];
+
 
 const getMaintenanceStatusBadge = (status: MaintenanceRequestStatus) => {
   switch (status) {
@@ -105,13 +106,18 @@ export default function LabOperationsCenterPage() {
   const [activeMaintenanceFilterResourceId, setActiveMaintenanceFilterResourceId] = useState<string>('all');
   const [activeMaintenanceFilterTechnicianId, setActiveMaintenanceFilterTechnicianId] = useState<string>('all');
   const [activeMaintenanceFilterLabId, setActiveMaintenanceFilterLabId] = useState<string>('all');
-
-  const [labAccessRequests, setLabAccessRequests] = useState<LabMembershipRequest[]>([]);
+  
+  const [isLabAccessRequestLoading, setIsLabAccessRequestLoading] = useState(true); // Re-added
+  const [allLabAccessRequests, setAllLabAccessRequests] = useState<LabMembershipRequest[]>([]); // For global view
   const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]);
-  const [isLabAccessRequestLoading, setIsLabAccessRequestLoading] = useState(true);
   const [isProcessingLabAccessRequest, setIsProcessingLabAccessRequest] = useState<Record<string, {action: 'approve_request' | 'reject_request' | 'grant' | 'revoke', loading: boolean}>>({});
   const [selectedUserForManualAdd, setSelectedUserForManualAdd] = useState<User | null>(null);
   const [isManualAddMemberDialogOpen, setIsManualAddMemberDialogOpen] = useState(false);
+  const [isSystemWideAccessRequestsFilterOpen, setIsSystemWideAccessRequestsFilterOpen] = useState(false);
+  const [tempSystemWideAccessRequestsFilterLabId, setTempSystemWideAccessRequestsFilterLabId] = useState('all');
+  const [activeSystemWideAccessRequestsFilterLabId, setActiveSystemWideAccessRequestsFilterLabId] = useState('all');
+  const [tempSystemWideAccessRequestsFilterUser, setTempSystemWideAccessRequestsFilterUser] = useState('');
+  const [activeSystemWideAccessRequestsFilterUser, setActiveSystemWideAccessRequestsFilterUser] = useState('');
 
 
   const canManageAny = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
@@ -129,7 +135,7 @@ export default function LabOperationsCenterPage() {
         getDocs(query(collection(db, "maintenanceRequests"), orderBy("dateReported", "desc"))),
         getDocs(query(collection(db, "blackoutDates"), orderBy("date", "asc"))),
         getDocs(query(collection(db, "recurringBlackoutRules"), orderBy("name", "asc"))),
-        getDocs(query(collection(db, 'labMemberships'))), // Fetch all memberships
+        getDocs(query(collection(db, 'labMemberships'))), 
       ]);
 
       const fetchedLabs = labsSnapshot.docs.map(docSnap => ({id: docSnap.id, ...docSnap.data(), createdAt: (docSnap.data().createdAt as Timestamp)?.toDate(), lastUpdatedAt: (docSnap.data().lastUpdatedAt as Timestamp)?.toDate()} as Lab));
@@ -145,18 +151,19 @@ export default function LabOperationsCenterPage() {
       setRecurringRules(rrSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as RecurringBlackoutRule)));
       
       const allFetchedMemberships = membershipsSnapshot.docs.map(mDoc => ({ id: mDoc.id, ...mDoc.data() } as LabMembership));
-      setUserLabMemberships(allFetchedMemberships); // Store all for admin use
+      setUserLabMemberships(allFetchedMemberships); 
 
       const pendingRequestsPromises = allFetchedMemberships.filter(m => m.status === 'pending_approval').map(async (membershipData) => {
           const user = fetchedUsersAll.find(u => u.id === membershipData.userId);
           const lab = fetchedLabs.find(l => l.id === membershipData.labId);
           return { ...membershipData, id: membershipData.id, userName: user?.name || 'Unknown User', userEmail: user?.email || 'N/A', userAvatarUrl: user?.avatarUrl, labName: lab?.name || 'Unknown Lab', requestedAt: (membershipData.requestedAt as Timestamp)?.toDate()} as LabMembershipRequest;
       });
-      setLabAccessRequests(await Promise.all(pendingRequestsPromises));
+      setAllLabAccessRequests(await Promise.all(pendingRequestsPromises));
 
     } catch (error: any) {
       console.error("Error fetching admin data:", error);
       toast({ title: "Error", description: `Failed to load data: ${error.message}`, variant: "destructive" });
+      setIsLabAccessRequestLoading(false);
     }
     setIsLoadingData(false); setIsLoadingLabAccessRequestLoading(false);
   }, [toast, canManageAny]);
@@ -199,7 +206,7 @@ export default function LabOperationsCenterPage() {
   // Labs Logic
   useEffect(() => { if (isLabFilterDialogOpen) { setTempLabSearchTerm(activeLabSearchTerm); setTempLabSortBy(activeLabSortBy);}}, [isLabFilterDialogOpen, activeLabSearchTerm, activeLabSortBy]);
   const filteredLabsWithCounts = useMemo(() => {
-    let currentLabs = [...labs]; const lowerSearchTerm = activeLabSearchTerm.toLowerCase(); if (activeLabSearchTerm) { currentLabs = currentLabs.filter(lab => lab.name.toLowerCase().includes(lowerSearchTerm) || (lab.location && lab.location.toLowerCase().includes(lowerSearchTerm)) || (lab.description && lab.description.toLowerCase().includes(lowerSearchTerm)));} const [column, direction] = activeLabSortBy.split('-') as [LabSortableColumn, 'asc' | 'desc']; let labsWithCounts = currentLabs.map(lab => ({ ...lab, resourceCount: allResourcesForCountsAndChecks.filter(r => r.labId === lab.id).length, memberCount: userLabMemberships.filter(m => m.labId === lab.id && m.status === 'active').length })); labsWithCounts.sort((a, b) => { let comparison = 0; if (column === 'name') comparison = a.name.toLowerCase().localeCompare(b.name.toLowerCase()); else if (column === 'location') comparison = (a.location || '').toLowerCase().localeCompare((b.location || '').toLowerCase()); return direction === 'asc' ? comparison : -comparison; }); return labsWithCounts;
+    let currentLabs = [...labs]; const lowerSearchTerm = activeLabSearchTerm.toLowerCase(); if (activeLabSearchTerm) { currentLabs = currentLabs.filter(lab => lab.name.toLowerCase().includes(lowerSearchTerm) || (lab.location && lab.location.toLowerCase().includes(lowerSearchTerm)) || (lab.description && lab.description.toLowerCase().includes(lowerSearchTerm)));} const [column, direction] = activeLabSortBy.split('-') as [LabSortableColumn, 'asc' | 'desc']; let labsWithData = currentLabs.map(lab => ({ ...lab, resourceCount: allResourcesForCountsAndChecks.filter(r => r.labId === lab.id).length, memberCount: userLabMemberships.filter(m => m.labId === lab.id && m.status === 'active').length })); labsWithData.sort((a, b) => { let comparison = 0; if (column === 'name') comparison = a.name.toLowerCase().localeCompare(b.name.toLowerCase()); else if (column === 'location') comparison = (a.location || '').toLowerCase().localeCompare((b.location || '').toLowerCase()); else if (column === 'resourceCount') comparison = a.resourceCount - b.resourceCount; else if (column === 'memberCount') comparison = a.memberCount - b.memberCount; return direction === 'asc' ? comparison : -comparison; }); return labsWithData;
   }, [labs, activeLabSearchTerm, activeLabSortBy, allResourcesForCountsAndChecks, userLabMemberships]);
   const handleApplyLabDialogFilters = useCallback(() => { setActiveLabSearchTerm(tempLabSearchTerm); setActiveLabSortBy(tempLabSortBy); setIsLabFilterDialogOpen(false);}, [tempLabSearchTerm, tempLabSortBy]);
   const resetLabDialogFiltersOnly = useCallback(() => { setTempLabSearchTerm(''); setTempLabSortBy('name-asc'); }, []);
@@ -210,7 +217,7 @@ export default function LabOperationsCenterPage() {
     if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } setIsLoadingData(true); try { const labDataToSave: Partial<Omit<Lab, 'id' | 'createdAt' | 'lastUpdatedAt'>> & { lastUpdatedAt?: any, createdAt?: any } = { name: data.name, location: data.location || null, description: data.description || null, }; const auditAction = editingLab ? 'LAB_UPDATED' : 'LAB_CREATED'; let entityId = editingLab ? editingLab.id : ''; if (editingLab) { labDataToSave.lastUpdatedAt = serverTimestamp(); await updateDoc(doc(db, "labs", entityId), labDataToSave as any); } else { labDataToSave.createdAt = serverTimestamp(); const docRef = await addDoc(collection(db, "labs"), labDataToSave as any); entityId = docRef.id; } addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'Lab', entityId, details: `Lab '${data.name}' ${editingLab ? 'updated' : 'created'}.` }); toast({ title: `Lab ${editingLab ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingLab ? 'updated' : 'created'}.` }); setIsLabFormDialogOpen(false); setEditingLab(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Error", description: `Could not save lab: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
   };
   const handleDeleteLab = async (labId: string) => {
-    if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } const deletedLab = labs.find(lab => lab.id === labId); if (!deletedLab) { toast({ title: "Error", description: "Lab not found.", variant: "destructive" }); return; } const resourcesInThisLab = allResourcesForCountsAndChecks.filter(res => res.labId === labId).length; if (resourcesInThisLab > 0) { toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as ${resourcesInThisLab} resource(s) are assigned. Reassign them first.`, variant: "destructive", duration: 7000 }); setLabToDelete(null); return; } setIsLoadingData(true); try { await deleteDoc(doc(db, "labs", labId)); addAuditLog(currentUser.id, currentUser.name, 'LAB_DELETED', { entityType: 'Lab', entityId: labId, details: `Lab '${deletedLab.name}' deleted.` }); toast({ title: "Lab Deleted", description: `Lab "${deletedLab.name}" removed.`, variant: "destructive" }); setLabToDelete(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Delete Error", description: `Could not delete lab: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
+    if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } const deletedLab = labs.find(lab => lab.id === labId); if (!deletedLab) { toast({ title: "Error", description: "Lab not found.", variant: "destructive" }); return; } const resourcesInThisLab = allResourcesForCountsAndChecks.filter(res => res.labId === labId).length; if (resourcesInThisLab > 0) { toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as ${resourcesInThisLab} resource(s) are assigned. Reassign them first.`, variant: "destructive", duration: 7000 }); setLabToDelete(null); return; } const activeMemberships = userLabMemberships.filter(m => m.labId === labId && m.status === 'active').length; if (activeMemberships > 0) { toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as it has ${activeMemberships} active member(s). Revoke their access first.`, variant: "destructive", duration: 7000 }); setLabToDelete(null); return; } setIsLoadingData(true); try { await deleteDoc(doc(db, "labs", labId)); addAuditLog(currentUser.id, currentUser.name, 'LAB_DELETED', { entityType: 'Lab', entityId: labId, details: `Lab '${deletedLab.name}' deleted.` }); toast({ title: "Lab Deleted", description: `Lab "${deletedLab.name}" removed.`, variant: "destructive" }); setLabToDelete(null); await fetchAllAdminData(); if(activeContextId === labId) setActiveContextId(GLOBAL_CONTEXT_VALUE); } catch (error: any) { toast({ title: "Delete Error", description: `Could not delete lab: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
   };
   const activeLabFilterCount = useMemo(() => [activeLabSearchTerm !== '', activeLabSortBy !== 'name-asc'].filter(Boolean).length, [activeLabSearchTerm, activeLabSortBy]);
 
@@ -287,9 +294,32 @@ export default function LabOperationsCenterPage() {
   // Lab Access Requests Logic (Contextual)
   const filteredLabAccessRequests = useMemo(() => {
     return activeContextId === GLOBAL_CONTEXT_VALUE
-      ? labAccessRequests // Show all pending requests if global context
-      : labAccessRequests.filter(req => req.labId === activeContextId);
-  }, [labAccessRequests, activeContextId]);
+      ? allLabAccessRequests.filter(req => 
+          (activeSystemWideAccessRequestsFilterLabId === 'all' || req.labId === activeSystemWideAccessRequestsFilterLabId) &&
+          (activeSystemWideAccessRequestsFilterUser.trim() === '' || 
+           (req.userName && req.userName.toLowerCase().includes(activeSystemWideAccessRequestsFilterUser.toLowerCase())) ||
+           (req.userEmail && req.userEmail.toLowerCase().includes(activeSystemWideAccessRequestsFilterUser.toLowerCase()))
+          )
+        )
+      : allLabAccessRequests.filter(req => req.labId === activeContextId);
+  }, [allLabAccessRequests, activeContextId, activeSystemWideAccessRequestsFilterLabId, activeSystemWideAccessRequestsFilterUser]);
+
+  const handleApplySystemWideAccessRequestsFilter = useCallback(() => {
+    setActiveSystemWideAccessRequestsFilterLabId(tempSystemWideAccessRequestsFilterLabId);
+    setActiveSystemWideAccessRequestsFilterUser(tempSystemWideAccessRequestsFilterUser);
+    setIsSystemWideAccessRequestsFilterOpen(false);
+  }, [tempSystemWideAccessRequestsFilterLabId, tempSystemWideAccessRequestsFilterUser]);
+
+  const resetSystemWideAccessRequestsFilterOnly = useCallback(() => {
+    setTempSystemWideAccessRequestsFilterLabId('all');
+    setTempSystemWideAccessRequestsFilterUser('');
+  }, []);
+  
+  const activeSystemWideAccessRequestsFilterCount = useMemo(() => [
+    activeSystemWideAccessRequestsFilterLabId !== 'all',
+    activeSystemWideAccessRequestsFilterUser !== ''
+  ].filter(Boolean).length, [activeSystemWideAccessRequestsFilterLabId, activeSystemWideAccessRequestsFilterUser]);
+
 
   const activeLabMembers = useMemo(() => {
     if (activeContextId === GLOBAL_CONTEXT_VALUE) return [];
@@ -334,11 +364,10 @@ export default function LabOperationsCenterPage() {
           {/* SYSTEM-WIDE SETTINGS VIEW */}
           {activeContextId === GLOBAL_CONTEXT_VALUE && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Wider Column for Primary Management Tables */}
               <div className="lg:col-span-2 space-y-6">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
-                    <div><CardTitle className="text-xl">All Labs ({filteredLabsWithCounts.length})</CardTitle><CardDescription>View, add, edit, or manage operations for individual labs.</CardDescription></div>
+                    <div><CardTitle className="text-xl">All Labs ({filteredLabsWithCounts.length})</CardTitle><CardDescription>View, add, or manage operations for individual labs.</CardDescription></div>
                     <div className="flex gap-2">
                         <FilterSortDialog open={isLabFilterDialogOpen} onOpenChange={setIsLabFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter & Sort</Button></FilterSortDialogTrigger><FilterSortDialogContent className="sm:max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter & Sort Labs</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="labSearchDialog">Search (Name/Loc/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="labSearchDialog" value={tempLabSearchTerm} onChange={e => setTempLabSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div><div><Label htmlFor="labSortDialog">Sort by</Label><Select value={tempLabSortBy} onValueChange={setTempLabSortBy}><SelectTrigger id="labSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{labSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsLabFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyLabDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
                         <Button onClick={handleOpenNewLabDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Lab</Button>
@@ -362,7 +391,6 @@ export default function LabOperationsCenterPage() {
                 </Card>
               </div>
 
-              {/* Narrower Column for Global Settings & Overviews */}
               <div className="lg:col-span-1 space-y-6">
                 <Card>
                   <CardHeader><CardTitle className="text-xl flex items-center gap-2"><SlidersHorizontal/>System At a Glance</CardTitle></CardHeader>
@@ -370,7 +398,7 @@ export default function LabOperationsCenterPage() {
                     <div className="flex justify-between"><span>Total Labs:</span><span className="font-semibold">{labs.length}</span></div>
                     <div className="flex justify-between"><span>Total Resources:</span><span className="font-semibold">{allResourcesForCountsAndChecks.length}</span></div>
                     <div className="flex justify-between"><span>Total Users:</span><span className="font-semibold">{allUsersData.length}</span></div>
-                    <div className="flex justify-between"><span>Pending Lab Access:</span><span className="font-semibold">{labAccessRequests.length}</span></div>
+                    <div className="flex justify-between"><span>Pending Lab Access:</span><span className="font-semibold">{allLabAccessRequests.length}</span></div>
                     <div className="flex justify-between"><span>Open Maintenance:</span><span className="font-semibold">{maintenanceRequests.filter(mr => mr.status === 'Open' || mr.status === 'In Progress').length}</span></div>
                   </CardContent>
                 </Card>
@@ -381,7 +409,7 @@ export default function LabOperationsCenterPage() {
                   </CardHeader>
                   <CardContent>
                     <Tabs defaultValue="specific-dates-global">
-                      <TabsList className="grid w-full grid-cols-2 mb-2 h-9"><TabsTrigger value="specific-dates-global" className="text-xs px-2">Specific Dates</TabsTrigger><TabsTrigger value="recurring-rules-global" className="text-xs px-2">Recurring Rules</TabsTrigger></TabsList>
+                      <TabsList className="grid w-full grid-cols-2 mb-2 h-9"><TabsContent value="specific-dates-global" className="text-xs px-2 py-1.5">Specific Dates</TabsContent><TabsContent value="recurring-rules-global" className="text-xs px-2 py-1.5">Recurring Rules</TabsContent></TabsList>
                       <TabsContent value="specific-dates-global">
                         <Button onClick={handleOpenNewDateDialog} size="sm" className="w-full mb-2"><PlusCircle className="mr-2 h-4 w-4"/>Add Global Blackout Date</Button>
                         {filteredBlackoutDates.length > 0 ? (<div className="max-h-60 overflow-y-auto border rounded-md"><Table><TableHeader><TableRow><TableHead className="text-xs p-2">Date</TableHead><TableHead className="text-xs p-2">Reason</TableHead><TableHead className="text-right p-2"></TableHead></TableRow></TableHeader><TableBody>{filteredBlackoutDates.map(bd => (<TableRow key={bd.id}><TableCell className="text-xs p-2">{formatDateSafe(parseISO(bd.date), 'N/A', 'MMM dd, yyyy')}</TableCell><TableCell className="text-xs p-2 truncate max-w-[100px]" title={bd.reason}>{bd.reason || 'N/A'}</TableCell><TableCell className="text-right p-1 space-x-0.5"><Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleOpenEditDateDialog(bd)}><Edit className="h-3.5 w-3.5"/></Button><AlertDialog open={dateToDelete?.id === bd.id} onOpenChange={(isOpen) => !isOpen && setDateToDelete(null)}><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => setDateToDelete(bd)}><Trash2 className="h-3.5 w-3.5"/></Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Global Blackout?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => dateToDelete && handleDeleteBlackoutDate(dateToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}</TableBody></Table></div>) : <p className="text-center text-xs text-muted-foreground py-3">No global specific dates.</p>}
@@ -393,17 +421,32 @@ export default function LabOperationsCenterPage() {
                     </Tabs>
                   </CardContent>
                 </Card>
-                 <Card>
-                    <CardHeader><CardTitle className="text-xl flex items-center gap-2"><Users/>All Pending Lab Access Requests ({labAccessRequests.length})</CardTitle><CardDescription>Review requests for access to any lab.</CardDescription></CardHeader>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div><CardTitle className="text-xl flex items-center gap-2"><Users/>All Pending Lab Access Requests ({filteredLabAccessRequests.length})</CardTitle><CardDescription>Review requests for access to any lab.</CardDescription></div>
+                        <FilterSortDialog open={isSystemWideAccessRequestsFilterOpen} onOpenChange={setIsSystemWideAccessRequestsFilterOpen}>
+                            <FilterSortDialogTrigger asChild><Button variant="outline" size="xs" className="h-7"><FilterIcon className="mr-1.5 h-3.5 w-3.5" />Filter</Button></FilterSortDialogTrigger>
+                            <FilterSortDialogContent className="sm:max-w-md">
+                                <FilterSortDialogHeader><FilterSortDialogTitle>Filter System-Wide Access Requests</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" />
+                                <div className="space-y-3">
+                                    <div><Label htmlFor="sysWideAccessUserSearch">Search User (Name/Email)</Label><Input id="sysWideAccessUserSearch" value={tempSystemWideAccessRequestsFilterUser} onChange={(e) => setTempSystemWideAccessRequestsFilterUser(e.target.value)} placeholder="User keyword..." className="mt-1 h-9"/></div>
+                                    <div><Label htmlFor="sysWideAccessLabFilter">Filter by Lab Requested</Label><Select value={tempSystemWideAccessRequestsFilterLabId} onValueChange={setTempSystemWideAccessRequestsFilterLabId}><SelectTrigger id="sysWideAccessLabFilter" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Labs</SelectItem>{labs.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent></Select></div>
+                                </div>
+                                <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetSystemWideAccessRequestsFilterOnly} className="mr-auto"><FilterX />Reset</Button><Button variant="outline" onClick={() => setIsSystemWideAccessRequestsFilterOpen(false)}><X />Cancel</Button><Button onClick={handleApplySystemWideAccessRequestsFilter}><CheckCircle2 />Apply</Button></FilterSortDialogFooter>
+                            </FilterSortDialogContent>
+                        </FilterSortDialog>
+                    </CardHeader>
                     <CardContent className="p-0">
-                    {isLabAccessRequestLoading ? <div className="text-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary"/></div> : labAccessRequests.length > 0 ? (<div className="max-h-96 overflow-y-auto border-t"><Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Lab Req.</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{labAccessRequests.map(req => (<TableRow key={req.id}><TableCell className="p-2 text-xs font-medium">{req.userName}</TableCell><TableCell className="p-2 text-xs">{req.labName}</TableCell><TableCell className="text-right p-1 space-x-0.5"><Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'approve_request', req.id)} disabled={isProcessingLabAccessRequest[req.id!]?.loading}><ThumbsUp className="text-green-600 h-3.5 w-3.5"/></Button><Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'reject_request', req.id)} disabled={isProcessingLabAccessRequest[req.id!]?.loading}><ThumbsDown className="text-red-500 h-3.5 w-3.5"/></Button></TableCell></TableRow>))}</TableBody></Table></div>) : <p className="text-center text-sm text-muted-foreground py-6">No pending lab access requests system-wide.</p>}
+                    {isLabAccessRequestLoading ? <div className="text-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary"/></div> : filteredLabAccessRequests.length > 0 ? (<div className="max-h-96 overflow-y-auto border-t"><Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Lab Req.</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredLabAccessRequests.map(req => (<TableRow key={req.id}><TableCell className="p-2 text-xs font-medium">{req.userName}</TableCell><TableCell className="p-2 text-xs">{req.labName}</TableCell><TableCell className="text-right p-1 space-x-0.5"><Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'approve_request', req.id)} disabled={isProcessingLabAccessRequest[req.id!]?.loading}><ThumbsUp className="text-green-600 h-3.5 w-3.5"/></Button><Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'reject_request', req.id)} disabled={isProcessingLabAccessRequest[req.id!]?.loading}><ThumbsDown className="text-red-500 h-3.5 w-3.5"/></Button></TableCell></TableRow>))}</TableBody></Table></div>) : <p className="text-center text-sm text-muted-foreground py-6">{activeSystemWideAccessRequestsFilterCount > 0 ? "No requests match filters." : "No pending lab access requests system-wide."}</p>}
                     </CardContent>
                 </Card>
                 <Card>
-                  <CardHeader><CardTitle className="text-xl">All Maintenance Requests</CardTitle><CardDescription>System-wide maintenance log.</CardDescription></CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div><CardTitle className="text-xl">All Maintenance Requests</CardTitle><CardDescription>System-wide maintenance log.</CardDescription></div>
+                    <Button variant="outline" size="xs" className="h-7" onClick={() => setIsMaintenanceFilterDialogOpen(true)}><FilterIcon className="mr-1.5 h-3.5 w-3.5"/>Filter</Button>
+                  </CardHeader>
                   <CardContent className="p-0">
-                     {/* Full Maintenance Table and Filters will go here */}
-                     <p className="p-4 text-sm text-muted-foreground italic">Full maintenance table from previous design will be here.</p>
+                      {filteredMaintenanceRequests.length > 0 ? (<div className="overflow-x-auto border-t"><Table><TableHeader><TableRow><TableHead>Resource</TableHead><TableHead className="min-w-[150px]">Issue</TableHead><TableHead>Reported</TableHead><TableHead>Status</TableHead><TableHead>Assigned</TableHead><TableHead className="text-right"></TableHead></TableRow></TableHeader><TableBody>{filteredMaintenanceRequests.map((request) => (<TableRow key={request.id}><TableCell className="font-medium">{request.resourceName}</TableCell><TableCell className="text-xs text-muted-foreground max-w-[150px] truncate" title={request.issueDescription}>{request.issueDescription}</TableCell><TableCell className="text-xs">{request.reportedByUserName}</TableCell><TableCell>{getMaintenanceStatusBadge(request.status)}</TableCell><TableCell className="text-xs">{request.assignedTechnicianName || <span className="italic">Unassigned</span>}</TableCell><TableCell className="text-right p-1"><Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleOpenEditMaintenanceDialog(request)}><Edit className="h-3.5 w-3.5"/></Button></TableCell></TableRow>))}</TableBody></Table></div>) : <p className="text-center text-sm text-muted-foreground py-6">{activeMaintenanceFilterCount > 0 ? "No requests match filters." : "No maintenance requests."}</p>}
                   </CardContent>
                 </Card>
               </div>
@@ -413,9 +456,9 @@ export default function LabOperationsCenterPage() {
           {/* LAB-SPECIFIC VIEW */}
           {activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
             <div className="space-y-6">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center p-4 border-b mb-6">
                 <h2 className="text-2xl font-semibold flex items-center gap-2"><Building className="h-6 w-6 text-primary"/>Managing Lab: {selectedLabDetails.name}</h2>
-                <Button variant="outline" onClick={() => setActiveContextId(GLOBAL_CONTEXT_VALUE)}><ArrowLeftCircle className="mr-2 h-4 w-4"/>Back to System-Wide</Button>
+                <Button variant="outline" onClick={() => setActiveContextId(GLOBAL_CONTEXT_VALUE)}><ArrowRightCircle className="mr-2 h-4 w-4 rotate-180"/>Back to System-Wide</Button>
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
@@ -427,10 +470,10 @@ export default function LabOperationsCenterPage() {
                     <CardContent className="space-y-3">
                         <p className="text-sm text-muted-foreground">{selectedLabDetails.description || "No description provided for this lab."}</p>
                         <Separator/>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div><span className="font-medium">Resources in Lab:</span> {resourcesInSelectedLab.length}</div>
-                            <div><span className="font-medium">Active Members:</span> {activeLabMembers.length}</div>
-                            <div><span className="font-medium">Open Maintenance:</span> {maintenanceForSelectedLab.filter(mr => mr.status === 'Open' || mr.status === 'In Progress').length}</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm pt-2">
+                            <div className="p-3 bg-muted/50 rounded-md"><span className="font-medium block text-foreground">Resources:</span> <span className="text-lg font-bold text-primary">{resourcesInSelectedLab.length}</span></div>
+                            <div className="p-3 bg-muted/50 rounded-md"><span className="font-medium block text-foreground">Active Members:</span> <span className="text-lg font-bold text-primary">{activeLabMembers.length}</span></div>
+                            <div className="p-3 bg-muted/50 rounded-md"><span className="font-medium block text-foreground">Open Maintenance:</span> <span className="text-lg font-bold text-primary">{maintenanceForSelectedLab.filter(mr => mr.status === 'Open' || mr.status === 'In Progress').length}</span></div>
                         </div>
                     </CardContent>
                   </Card>
@@ -441,7 +484,7 @@ export default function LabOperationsCenterPage() {
                     </CardHeader>
                     <CardContent>
                         <Tabs defaultValue="active-members">
-                        <TabsList className="grid w-full grid-cols-2 mb-2 h-9"><TabsTrigger value="active-members" className="text-xs px-2">Active Members ({activeLabMembers.length})</TabsTrigger><TabsTrigger value="pending-requests" className="text-xs px-2">Pending Requests ({filteredLabAccessRequests.length})</TabsTrigger></TabsList>
+                        <TabsList className="grid w-full grid-cols-2 mb-2 h-9"><TabsContent value="active-members" className="text-xs px-2 py-1.5">Active Members ({activeLabMembers.length})</TabsContent><TabsContent value="pending-requests" className="text-xs px-2 py-1.5">Pending Requests ({filteredLabAccessRequests.length})</TabsContent></TabsList>
                         <TabsContent value="active-members">
                             {activeLabMembers.length > 0 ? (<div className="max-h-80 overflow-y-auto border rounded-md"><Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Email</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{activeLabMembers.map(member => (<TableRow key={member.userId}><TableCell className="p-2 text-xs font-medium flex items-center gap-2"><Avatar className="h-6 w-6"><AvatarImage src={member.userAvatarUrl} alt={member.userName}/><AvatarFallback>{member.userName?.charAt(0)}</AvatarFallback></Avatar>{member.userName}</TableCell><TableCell className="p-2 text-xs">{member.userEmail}</TableCell><TableCell className="text-right p-1"><Button variant="destructive" size="xs" className="h-7" onClick={() => handleMembershipAction(member.userId, member.userName!, selectedLabDetails.id, selectedLabDetails.name, 'revoke', member.id)} disabled={isProcessingLabAccessRequest[member.id!]?.loading}><ShieldOff className="mr-1.5 h-3.5 w-3.5"/>Revoke</Button></TableCell></TableRow>))}</TableBody></Table></div>) : <p className="text-center text-sm text-muted-foreground py-4">No active members in this lab.</p>}
                         </TabsContent>
@@ -460,7 +503,7 @@ export default function LabOperationsCenterPage() {
                     </CardHeader>
                     <CardContent>
                         <Tabs defaultValue="specific-dates-lab">
-                        <TabsList className="grid w-full grid-cols-2 mb-2 h-9"><TabsTrigger value="specific-dates-lab" className="text-xs px-2">Specific Dates</TabsTrigger><TabsTrigger value="recurring-rules-lab" className="text-xs px-2">Recurring Rules</TabsTrigger></TabsList>
+                        <TabsList className="grid w-full grid-cols-2 mb-2 h-9"><TabsContent value="specific-dates-lab" className="text-xs px-2 py-1.5">Specific Dates</TabsContent><TabsContent value="recurring-rules-lab" className="text-xs px-2 py-1.5">Recurring Rules</TabsContent></TabsList>
                         <TabsContent value="specific-dates-lab">
                             <Button onClick={handleOpenNewDateDialog} size="sm" className="w-full mb-2"><PlusCircle />Add Specific Date for This Lab</Button>
                             {filteredBlackoutDates.length > 0 ? (<div className="max-h-60 overflow-y-auto border rounded-md"><Table><TableHeader><TableRow><TableHead className="text-xs p-2">Date</TableHead><TableHead className="text-xs p-2">Reason</TableHead><TableHead className="text-right p-2"></TableHead></TableRow></TableHeader><TableBody>{filteredBlackoutDates.map(bd => (<TableRow key={bd.id}><TableCell className="text-xs p-2">{formatDateSafe(parseISO(bd.date), 'N/A', 'MMM dd, yyyy')}</TableCell><TableCell className="text-xs p-2 truncate max-w-[100px]" title={bd.reason}>{bd.reason || 'N/A'}</TableCell><TableCell className="text-right p-1 space-x-0.5"><Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleOpenEditDateDialog(bd)}><Edit className="h-3.5 w-3.5"/></Button><AlertDialog open={dateToDelete?.id === bd.id} onOpenChange={(isOpen) => !isOpen && setDateToDelete(null)}><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => setDateToDelete(bd)}><Trash2 className="h-3.5 w-3.5"/></Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete Blackout for {selectedLabDetails.name}?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => dateToDelete && handleDeleteBlackoutDate(dateToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}</TableBody></Table></div>) : <p className="text-center text-xs text-muted-foreground py-3">No specific dates for this lab.</p>}
@@ -504,7 +547,7 @@ export default function LabOperationsCenterPage() {
                 <div className="relative"><Label htmlFor="maintSearchSystem">Search (Resource/Reporter/Issue/Tech)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="maintSearchSystem" value={tempMaintenanceSearchTerm} onChange={e => setTempMaintenanceSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><Label htmlFor="maintStatusSystem">Status</Label><Select value={tempMaintenanceFilterStatus} onValueChange={(v) => setTempMaintenanceFilterStatus(v as MaintenanceRequestStatus | 'all')}><SelectTrigger id="maintStatusSystem" className="h-9 mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{maintenanceRequestStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
-                    <div><Label htmlFor="maintResourceSystem">Resource</Label><Select value={tempMaintenanceFilterResourceId} onValueChange={setTempMaintenanceFilterResourceId} disabled={(activeContextId !== GLOBAL_CONTEXT_VALUE ? resourcesInSelectedLab : allResourcesForCountsAndChecks).length === 0}><SelectTrigger id="maintResourceSystem" className="h-9 mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Resources</SelectItem>{(activeContextId !== GLOBAL_CONTEXT_VALUE ? resourcesInSelectedLab : allResourcesForCountsAndChecks).map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div><Label htmlFor="maintResourceSystem">Resource</Label><Select value={tempMaintenanceFilterResourceId} onValueChange={setTempMaintenanceFilterResourceId} disabled={(activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails ? resourcesInSelectedLab : allResourcesForCountsAndChecks).length === 0}><SelectTrigger id="maintResourceSystem" className="h-9 mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Resources</SelectItem>{(activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails ? resourcesInSelectedLab : allResourcesForCountsAndChecks).map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent></Select></div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><Label htmlFor="maintTechSystem">Assigned Technician</Label><Select value={tempMaintenanceFilterTechnicianId} onValueChange={setTempMaintenanceFilterTechnicianId} disabled={allTechniciansForMaintenance.length === 0}><SelectTrigger id="maintTechSystem" className="h-9 mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All/Any</SelectItem><SelectItem value="--unassigned--">Unassigned</SelectItem>{allTechniciansForMaintenance.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
