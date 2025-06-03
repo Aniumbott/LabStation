@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowRightCircle, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info } from 'lucide-react'; // Added Info here
+import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowRightCircle, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info, ArrowLeft } from 'lucide-react';
 import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -126,7 +126,7 @@ export default function LabOperationsCenterPage() {
   const fetchAllAdminData = useCallback(async () => {
     if (!canManageAny) { 
       setIsLoadingData(false); 
-      setIsLoadingLabAccessRequestLoading(false);
+      setIsLabAccessRequestLoading(false);
       return; 
     }
     setIsLoadingData(true); setIsLoadingLabAccessRequestLoading(true);
@@ -168,14 +168,52 @@ export default function LabOperationsCenterPage() {
     } catch (error: any) {
       console.error("Error fetching admin data:", error);
       toast({ title: "Error", description: `Failed to load data: ${error.message}`, variant: "destructive" });
-      setIsLoadingLabAccessRequestLoading(false);
+      setIsLabAccessRequestLoading(false);
     } finally {
       setIsLoadingData(false); 
-      setIsLoadingLabAccessRequestLoading(false);
+      setIsLabAccessRequestLoading(false);
     }
   }, [toast, canManageAny]);
 
   useEffect(() => { fetchAllAdminData(); }, [fetchAllAdminData]);
+  
+  const selectedLabDetails = useMemo(() => labs.find(lab => lab.id === activeContextId), [labs, activeContextId]);
+
+  const pageHeaderActions = (
+    <div className="flex items-center gap-3">
+      {activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
+        <Button variant="outline" size="sm" onClick={() => setActiveContextId(GLOBAL_CONTEXT_VALUE)} className="h-9">
+          <ArrowLeft className="mr-2 h-4 w-4" /> 
+          System View
+        </Button>
+      )}
+      <div className="flex items-center gap-2">
+        <Select value={activeContextId} onValueChange={setActiveContextId}>
+          <SelectTrigger 
+            id="labContextSelectPageHeader" 
+            className={cn(
+              "w-auto min-w-[220px] sm:min-w-[280px] h-9 text-sm",
+              activeContextId === GLOBAL_CONTEXT_VALUE ? "bg-primary/10 border-primary/30 font-medium" : "" 
+            )}
+          >
+            <SelectValue placeholder="Select Context..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={GLOBAL_CONTEXT_VALUE} className="text-sm py-1.5">
+              <Globe className="inline-block mr-2 h-4 w-4 text-muted-foreground"/>System-Wide Settings
+            </SelectItem>
+            {labs.length > 0 && <Separator/>}
+            {labs.map(lab => (
+              <SelectItem key={lab.id} value={lab.id} className="text-sm py-1.5">
+                <Building className="inline-block mr-2 h-4 w-4 text-muted-foreground"/>{lab.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+
 
   const handleMembershipAction = async (
     targetUserId: string, targetUserName: string, labId: string, labName: string,
@@ -339,33 +377,23 @@ export default function LabOperationsCenterPage() {
         });
   }, [userLabMemberships, allUsersData, activeContextId]);
 
-  const selectedLabDetails = useMemo(() => labs.find(lab => lab.id === activeContextId), [labs, activeContextId]);
+  
   const resourcesInSelectedLab = useMemo(() => allResourcesForCountsAndChecks.filter(r => r.labId === activeContextId), [allResourcesForCountsAndChecks, activeContextId]);
   const maintenanceForSelectedLab = useMemo(() => maintenanceRequests.filter(mr => resourcesInSelectedLab.some(r => r.id === mr.resourceId)), [maintenanceRequests, resourcesInSelectedLab]);
 
 
   if (!currentUser || !canManageAny) { return ( <div className="space-y-8"><PageHeader title="Lab Operations Center" icon={Cog} description="Access Denied." /><Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission.</p></CardContent></Card></div>); }
-  const currentManagingLabName = activeContextId === GLOBAL_CONTEXT_VALUE ? "System-Wide Settings" : (labs.find(l => l.id === activeContextId)?.name || "Selected Lab");
-
+  
   return (
     <TooltipProvider>
     <div className="space-y-6">
-      <PageHeader title="Lab Operations Center" description="Manage labs, resource types, closures, maintenance, and lab access." icon={Cog} />
+      <PageHeader 
+        title="Lab Operations Center" 
+        description="Manage all aspects of your lab operations, from system-wide settings to individual lab details." 
+        icon={Cog}
+        actions={pageHeaderActions}
+      />
       
-      <div className="flex items-center gap-4 p-4 border rounded-md bg-muted/30 shadow-sm">
-        <Label htmlFor="labContextSelect" className="text-sm font-medium whitespace-nowrap shrink-0">Currently Managing:</Label>
-        <Select value={activeContextId} onValueChange={setActiveContextId}>
-          <SelectTrigger id="labContextSelect" className="w-full sm:w-auto min-w-[280px] h-10 text-base">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={GLOBAL_CONTEXT_VALUE} className="text-base py-2"><Globe className="inline-block mr-2 h-5 w-5 text-muted-foreground"/>System-Wide Settings</SelectItem>
-            <Separator/>
-            {labs.map(lab => (<SelectItem key={lab.id} value={lab.id} className="text-base py-2"><Building className="inline-block mr-2 h-5 w-5 text-muted-foreground"/>{lab.name}</SelectItem>))}
-          </SelectContent>
-        </Select>
-      </div>
-
       {isLoadingData ? (
         <div className="flex justify-center items-center py-20"><Loader2 className="h-12 w-12 animate-spin text-primary"/></div>
       ) : (
@@ -383,7 +411,7 @@ export default function LabOperationsCenterPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="p-0">
-                    {filteredLabsWithCounts.length > 0 ? (<div className="overflow-x-auto border-t"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead className="text-center">Resources</TableHead><TableHead className="text-center">Members</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredLabsWithCounts.map(lab => (<TableRow key={lab.id}><TableCell className="font-medium">{lab.name}</TableCell><TableCell>{lab.location || 'N/A'}</TableCell><TableCell className="text-center">{lab.resourceCount}</TableCell><TableCell className="text-center">{lab.memberCount}</TableCell><TableCell className="text-right space-x-1"><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditLabDialog(lab)}><Edit /></Button></TooltipTrigger><TooltipContent>Edit Details</TooltipContent></Tooltip><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setActiveContextId(lab.id)}><Settings2 className="text-primary"/></Button></TooltipTrigger><TooltipContent>Manage Lab Operations</TooltipContent></Tooltip><AlertDialog open={labToDelete?.id === lab.id} onOpenChange={(isOpen) => !isOpen && setLabToDelete(null)}><Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabToDelete(lab)}><Trash2 /></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Lab</TooltipContent></Tooltip><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete "{labToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>Ensure no resources or active memberships are assigned.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => labToDelete && handleDeleteLab(labToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}</TableBody></Table></div>) : (<p className="p-6 text-center text-muted-foreground">No labs defined yet.</p>)}
+                    {filteredLabsWithCounts.length > 0 ? (<ScrollArea className="max-h-[400px]"><div className="overflow-x-auto border-t"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead className="text-center">Resources</TableHead><TableHead className="text-center">Members</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredLabsWithCounts.map(lab => (<TableRow key={lab.id}><TableCell className="font-medium">{lab.name}</TableCell><TableCell>{lab.location || 'N/A'}</TableCell><TableCell className="text-center">{lab.resourceCount}</TableCell><TableCell className="text-center">{lab.memberCount}</TableCell><TableCell className="text-right space-x-1"><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditLabDialog(lab)}><Edit /></Button></TooltipTrigger><TooltipContent>Edit Details</TooltipContent></Tooltip><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setActiveContextId(lab.id)}><Settings2 className="text-primary"/></Button></TooltipTrigger><TooltipContent>Manage Lab Operations</TooltipContent></Tooltip><AlertDialog open={labToDelete?.id === lab.id} onOpenChange={(isOpen) => !isOpen && setLabToDelete(null)}><Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabToDelete(lab)}><Trash2 /></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Lab</TooltipContent></Tooltip><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete "{labToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>Ensure no resources or active memberships are assigned.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => labToDelete && handleDeleteLab(labToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}</TableBody></Table></div></ScrollArea>) : (<p className="p-6 text-center text-muted-foreground">No labs defined yet.</p>)}
                   </CardContent>
                 </Card>
                 <Card>
@@ -395,7 +423,7 @@ export default function LabOperationsCenterPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="p-0">
-                    {filteredResourceTypesWithCount.length > 0 ? (<div className="overflow-x-auto border-t"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredResourceTypesWithCount.map(type => (<TableRow key={type.id}><TableCell className="font-medium">{type.name}</TableCell><TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell><TableCell className="text-center">{type.resourceCount}</TableCell><TableCell className="text-right space-x-1"><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)}><Edit /></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip><AlertDialog open={typeToDelete?.id === type.id} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}><Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)}><Trash2 /></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete "{typeToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}</TableBody></Table></div>) : (<p className="p-6 text-center text-muted-foreground">No resource types defined.</p>)}
+                    {filteredResourceTypesWithCount.length > 0 ? (<ScrollArea className="max-h-96"><div className="overflow-x-auto border-t"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredResourceTypesWithCount.map(type => (<TableRow key={type.id}><TableCell className="font-medium">{type.name}</TableCell><TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell><TableCell className="text-center">{type.resourceCount}</TableCell><TableCell className="text-right space-x-1"><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)}><Edit /></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip><AlertDialog open={typeToDelete?.id === type.id} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}><Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)}><Trash2 /></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete "{typeToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}</TableBody></Table></div></ScrollArea>) : (<p className="p-6 text-center text-muted-foreground">No resource types defined.</p>)}
                   </CardContent>
                 </Card>
               </div>
@@ -414,7 +442,7 @@ export default function LabOperationsCenterPage() {
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
                     <div><CardTitle className="text-xl flex items-center gap-2"><CalendarOff className="h-5 w-5 text-primary"/>Global Lab Closures</CardTitle></div>
-                     <div className="flex gap-1">
+                     <div className="flex items-center gap-1">
                         <FilterSortDialog open={isClosureFilterDialogOpen} onOpenChange={setIsClosureFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="xs" className="h-7"><FilterIcon />Filter</Button></FilterSortDialogTrigger><FilterSortDialogContent className="w-full max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter Global Closures</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="closureSearchDialogGlobal">Search (Reason/Date/Name)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="closureSearchDialogGlobal" value={tempClosureSearchTerm} onChange={(e) => setTempClosureSearchTerm(e.target.value)} placeholder="e.g., Holiday..." className="mt-1 h-9 pl-8"/></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetClosureDialogFiltersOnly} className="mr-auto"><FilterX />Reset</Button><Button variant="outline" onClick={() => setIsClosureFilterDialogOpen(false)}><X />Cancel</Button><Button onClick={handleApplyClosureDialogFilters}><CheckCircle2 />Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
                         <Button onClick={handleOpenNewDateDialog} size="xs" className="h-7"><PlusCircle />Date</Button>
                         <Button onClick={handleOpenNewRecurringDialog} size="xs" className="h-7"><PlusCircle />Rule</Button>
@@ -479,10 +507,7 @@ export default function LabOperationsCenterPage() {
           {/* LAB-SPECIFIC VIEW */}
           {activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
             <div className="space-y-6">
-              <div className="flex justify-between items-center p-4 border-b mb-6 bg-card rounded-md shadow">
-                <h2 className="text-2xl font-semibold flex items-center gap-2"><Building className="h-6 w-6 text-primary"/>Managing Lab: {selectedLabDetails.name}</h2>
-                <Button variant="outline" size="sm" onClick={() => setActiveContextId(GLOBAL_CONTEXT_VALUE)}><ArrowRightCircle className="rotate-180"/>Back to System-Wide</Button>
-              </div>
+              {/* The H2 and back button that were here are now part of PageHeader actions */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
                   <Card>
@@ -529,7 +554,7 @@ export default function LabOperationsCenterPage() {
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div><CardTitle className="text-xl flex items-center gap-2"><CalendarDays className="h-5 w-5 text-primary"/>Closures for {selectedLabDetails.name}</CardTitle></div>
-                         <div className="flex gap-1">
+                         <div className="flex items-center gap-1">
                             <FilterSortDialog open={isClosureFilterDialogOpen} onOpenChange={setIsClosureFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="xs" className="h-7"><FilterIcon />Filter</Button></FilterSortDialogTrigger><FilterSortDialogContent className="w-full max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter Closures for {selectedLabDetails.name}</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="closureSearchDialogLab">Search (Reason/Date/Name)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="closureSearchDialogLab" value={tempClosureSearchTerm} onChange={(e) => setTempClosureSearchTerm(e.target.value)} placeholder="e.g., Maintenance..." className="mt-1 h-9 pl-8"/></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetClosureDialogFiltersOnly} className="mr-auto"><FilterX />Reset</Button><Button variant="outline" onClick={() => setIsClosureFilterDialogOpen(false)}><X />Cancel</Button><Button onClick={handleApplyClosureDialogFilters}><CheckCircle2 />Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
                             <Button onClick={handleOpenNewDateDialog} size="xs" className="h-7"><PlusCircle />Date</Button>
                             <Button onClick={handleOpenNewRecurringDialog} size="xs" className="h-7"><PlusCircle />Rule</Button>
@@ -602,6 +627,3 @@ export default function LabOperationsCenterPage() {
     </TooltipProvider>
   );
 }
-
-
-    
