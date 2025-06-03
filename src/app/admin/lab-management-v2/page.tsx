@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Dialog as FilterSortDialog, DialogContent as FilterSortDialogContent, DialogHeader as FilterSortDialogHeader, DialogTitle as FilterSortDialogTitle, DialogFooter as FilterSortDialogFooter } from '@/components/ui/dialog'; // Aliased to avoid conflict with AlertDialog
+import { Dialog as FilterSortDialog, DialogContent as FilterSortDialogContent, DialogHeader as FilterSortDialogHeader, DialogTitle as FilterSortDialogTitle, DialogFooter as FilterSortDialogFooter, DialogTrigger as FilterSortDialogTrigger } from '@/components/ui/dialog'; // Added FilterSortDialogTrigger
 import { useToast } from '@/hooks/use-toast';
 import { ResourceTypeFormDialog, ResourceTypeFormValues } from '@/components/admin/resource-type-form-dialog';
 import { LabFormDialog, LabFormValues } from '@/components/admin/lab-form-dialog';
@@ -56,6 +56,8 @@ export default function LabOperationsCenterPage() {
   const { currentUser } = useAuth();
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [activeContextId, setActiveContextId] = useState<string>(GLOBAL_CONTEXT_VALUE);
+  const [isLabAccessRequestLoading, setIsLoadingLabAccessRequestLoading] = useState(true);
+
 
   const [resourceTypes, setResourceTypes] = useState<ResourceType[]>([]);
   const [allResourcesForCountsAndChecks, setAllResourcesForCountsAndChecks] = useState<Resource[]>([]);
@@ -107,11 +109,9 @@ export default function LabOperationsCenterPage() {
   const [activeMaintenanceFilterTechnicianId, setActiveMaintenanceFilterTechnicianId] = useState<string>('all');
   const [activeMaintenanceFilterLabId, setActiveMaintenanceFilterLabId] = useState<string>('all');
   
-  const [isLabAccessRequestLoading, setIsLoadingLabAccessRequestLoading] = useState(true);
   const [allLabAccessRequests, setAllLabAccessRequests] = useState<LabMembershipRequest[]>([]); 
   const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]);
-  const [isProcessingLabAccessRequest, setIsProcessingLabAccessRequest] = useState<Record<string, {action: 'approve_request' | 'reject_request' | 'grant' | 'revoke', loading: boolean}>>({});
-  const [selectedUserForManualAdd, setSelectedUserForManualAdd] = useState<User | null>(null);
+  const [isProcessingLabAccessRequest, setIsProcessingLabAccessRequest] = useState<Record<string, {action: 'grant' | 'revoke' | 'approve_request' | 'reject_request', loading: boolean}>>({});
   const [isManualAddMemberDialogOpen, setIsManualAddMemberDialogOpen] = useState(false);
   const [isSystemWideAccessRequestsFilterOpen, setIsSystemWideAccessRequestsFilterOpen] = useState(false);
   const [tempSystemWideAccessRequestsFilterLabId, setTempSystemWideAccessRequestsFilterLabId] = useState('all');
@@ -125,7 +125,7 @@ export default function LabOperationsCenterPage() {
   const fetchAllAdminData = useCallback(async () => {
     if (!canManageAny) { 
       setIsLoadingData(false); 
-      setIsLoadingLabAccessRequestLoading(false); // Ensure this is set to false if no permissions
+      setIsLoadingLabAccessRequestLoading(false);
       return; 
     }
     setIsLoadingData(true); setIsLoadingLabAccessRequestLoading(true);
@@ -167,8 +167,10 @@ export default function LabOperationsCenterPage() {
     } catch (error: any) {
       console.error("Error fetching admin data:", error);
       toast({ title: "Error", description: `Failed to load data: ${error.message}`, variant: "destructive" });
+      setIsLoadingLabAccessRequestLoading(false);
     } finally {
-      setIsLoadingData(false); setIsLoadingLabAccessRequestLoading(false);
+      setIsLoadingData(false); 
+      setIsLoadingLabAccessRequestLoading(false);
     }
   }, [toast, canManageAny]);
 
@@ -279,7 +281,7 @@ export default function LabOperationsCenterPage() {
       const searchMatch = !activeMaintenanceSearchTerm || (req.resourceName && req.resourceName.toLowerCase().includes(lowerSearchTerm)) || (req.reportedByUserName && req.reportedByUserName.toLowerCase().includes(lowerSearchTerm)) || (req.issueDescription && req.issueDescription.toLowerCase().includes(lowerSearchTerm)) || (req.assignedTechnicianName && req.assignedTechnicianName.toLowerCase().includes(lowerSearchTerm));
       const statusMatch = activeMaintenanceFilterStatus === 'all' || req.status === activeMaintenanceFilterStatus;
       const resourceMatch = activeMaintenanceFilterResourceId === 'all' || req.resourceId === activeMaintenanceFilterResourceId;
-      const labMatch = activeContextId === GLOBAL_CONTEXT_VALUE ? (activeMaintenanceFilterLabId === 'all' || req.resourceLabId === activeMaintenanceFilterLabId) : req.resourceLabId === activeContextId;
+      const labMatch = activeContextId === GLOBAL_CONTEXT_VALUE ? (activeMaintenanceFilterLabId === 'all' || req.resourceLabId === activeMaintenanceFilterLabId || (activeMaintenanceFilterLabId === '--global--' && !req.resourceLabId)) : req.resourceLabId === activeContextId;
       let technicianMatch = true; if (activeMaintenanceFilterTechnicianId !== 'all') { if (activeMaintenanceFilterTechnicianId === '--unassigned--') { technicianMatch = !req.assignedTechnicianId; } else { technicianMatch = req.assignedTechnicianId === activeMaintenanceFilterTechnicianId; } }
       return searchMatch && statusMatch && resourceMatch && labMatch && technicianMatch;
     });
@@ -297,7 +299,7 @@ export default function LabOperationsCenterPage() {
 
   // Lab Access Requests Logic (Contextual)
   const filteredLabAccessRequests = useMemo(() => {
-    if (activeContextId === GLOBAL_CONTEXT_VALUE) { // System-Wide View for Lab Access
+    if (activeContextId === GLOBAL_CONTEXT_VALUE) { 
       return allLabAccessRequests.filter(req => 
         (activeSystemWideAccessRequestsFilterLabId === 'all' || req.labId === activeSystemWideAccessRequestsFilterLabId) &&
         (activeSystemWideAccessRequestsFilterUser.trim() === '' || 
@@ -305,7 +307,7 @@ export default function LabOperationsCenterPage() {
          (req.userEmail && req.userEmail.toLowerCase().includes(activeSystemWideAccessRequestsFilterUser.toLowerCase()))
         )
       );
-    } else { // Lab-Specific View
+    } else { 
       return allLabAccessRequests.filter(req => req.labId === activeContextId);
     }
   }, [allLabAccessRequests, activeContextId, activeSystemWideAccessRequestsFilterLabId, activeSystemWideAccessRequestsFilterUser]);
@@ -373,14 +375,14 @@ export default function LabOperationsCenterPage() {
               <div className="lg:col-span-2 space-y-6">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
-                    <div><CardTitle className="text-xl">All Labs ({filteredLabsWithCounts.length})</CardTitle><CardDescription>View, add, or manage operations for individual labs.</CardDescription></div>
+                    <div><CardTitle className="text-xl">All Labs ({filteredLabsWithCounts.length})</CardTitle><CardDescription>Overview of all labs and quick management actions.</CardDescription></div>
                     <div className="flex gap-2">
                         <FilterSortDialog open={isLabFilterDialogOpen} onOpenChange={setIsLabFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter & Sort</Button></FilterSortDialogTrigger><FilterSortDialogContent className="sm:max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter & Sort Labs</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="labSearchDialog">Search (Name/Loc/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="labSearchDialog" value={tempLabSearchTerm} onChange={e => setTempLabSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div><div><Label htmlFor="labSortDialog">Sort by</Label><Select value={tempLabSortBy} onValueChange={setTempLabSortBy}><SelectTrigger id="labSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{labSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsLabFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyLabDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
                         <Button onClick={handleOpenNewLabDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Lab</Button>
                     </div>
                   </CardHeader>
                   <CardContent className="p-0">
-                    {filteredLabsWithCounts.length > 0 ? (<div className="overflow-x-auto border-t"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead className="text-center">Resources</TableHead><TableHead className="text-center">Members</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredLabsWithCounts.map(lab => (<TableRow key={lab.id}><TableCell className="font-medium">{lab.name}</TableCell><TableCell>{lab.location || 'N/A'}</TableCell><TableCell className="text-center">{lab.resourceCount}</TableCell><TableCell className="text-center">{lab.memberCount}</TableCell><TableCell className="text-right space-x-1"><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditLabDialog(lab)}><Edit /></Button></TooltipTrigger><TooltipContent>Edit Lab Details</TooltipContent></Tooltip><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setActiveContextId(lab.id)}><Settings className="text-primary"/></Button></TooltipTrigger><TooltipContent>Manage Lab Operations</TooltipContent></Tooltip><AlertDialog open={labToDelete?.id === lab.id} onOpenChange={(isOpen) => !isOpen && setLabToDelete(null)}><Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabToDelete(lab)}><Trash2 /></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Lab</TooltipContent></Tooltip><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete "{labToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources or active memberships are assigned.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => labToDelete && handleDeleteLab(labToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}</TableBody></Table></div>) : (<p className="p-6 text-center text-muted-foreground">No labs defined yet.</p>)}
+                    {filteredLabsWithCounts.length > 0 ? (<div className="overflow-x-auto border-t"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead className="text-center">Resources</TableHead><TableHead className="text-center">Members</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredLabsWithCounts.map(lab => (<TableRow key={lab.id}><TableCell className="font-medium">{lab.name}</TableCell><TableCell>{lab.location || 'N/A'}</TableCell><TableCell className="text-center">{lab.resourceCount}</TableCell><TableCell className="text-center">{lab.memberCount}</TableCell><TableCell className="text-right space-x-1"><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditLabDialog(lab)}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Lab Details</TooltipContent></Tooltip><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setActiveContextId(lab.id)}><Cog className="text-primary h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Manage Lab Operations</TooltipContent></Tooltip><AlertDialog open={labToDelete?.id === lab.id} onOpenChange={(isOpen) => !isOpen && setLabToDelete(null)}><Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabToDelete(lab)}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Lab</TooltipContent></Tooltip><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete "{labToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources or active memberships are assigned.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => labToDelete && handleDeleteLab(labToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}</TableBody></Table></div>) : (<p className="p-6 text-center text-muted-foreground">No labs defined yet.</p>)}
                   </CardContent>
                 </Card>
                 <Card>
@@ -392,14 +394,14 @@ export default function LabOperationsCenterPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="p-0">
-                    {filteredResourceTypesWithCount.length > 0 ? (<div className="overflow-x-auto border-t"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredResourceTypesWithCount.map(type => (<TableRow key={type.id}><TableCell className="font-medium">{type.name}</TableCell><TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell><TableCell className="text-center">{type.resourceCount}</TableCell><TableCell className="text-right space-x-1"><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)}><Edit /></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip><AlertDialog open={typeToDelete?.id === type.id} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}><Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)}><Trash2 /></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Type</TooltipContent></Tooltip><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete "{typeToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}</TableBody></Table></div>) : (<p className="p-6 text-center text-muted-foreground">No resource types defined.</p>)}
+                    {filteredResourceTypesWithCount.length > 0 ? (<div className="overflow-x-auto border-t"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredResourceTypesWithCount.map(type => (<TableRow key={type.id}><TableCell className="font-medium">{type.name}</TableCell><TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell><TableCell className="text-center">{type.resourceCount}</TableCell><TableCell className="text-right space-x-1"><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip><AlertDialog open={typeToDelete?.id === type.id} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}><Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Type</TooltipContent></Tooltip><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete "{typeToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}</TableBody></Table></div>) : (<p className="p-6 text-center text-muted-foreground">No resource types defined.</p>)}
                   </CardContent>
                 </Card>
               </div>
 
               <div className="lg:col-span-1 space-y-6">
                 <Card>
-                  <CardHeader><CardTitle className="text-xl flex items-center gap-2"><SlidersHorizontal/>System At a Glance</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="text-xl flex items-center gap-2"><SlidersHorizontal className="h-5 w-5 text-primary"/>System At a Glance</CardTitle></CardHeader>
                   <CardContent className="space-y-2 text-sm">
                     <div className="flex justify-between"><span>Total Labs:</span><span className="font-semibold">{labs.length}</span></div>
                     <div className="flex justify-between"><span>Total Resources:</span><span className="font-semibold">{allResourcesForCountsAndChecks.length}</span></div>
@@ -411,7 +413,7 @@ export default function LabOperationsCenterPage() {
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
                     <div><CardTitle className="text-xl">Global Lab Closures</CardTitle><CardDescription>Closures affecting all labs.</CardDescription></div>
-                     <FilterSortDialog open={isClosureFilterDialogOpen} onOpenChange={setIsClosureFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="xs" className="h-7"><FilterIcon className="mr-1.5 h-3.5 w-3.5" />Filter</Button></FilterSortDialogTrigger><FilterSortDialogContent className="w-full max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter Global Closures</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="closureSearchDialogGlobal">Search (Reason/Date/Name)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="closureSearchDialogGlobal" value={tempClosureSearchTerm} onChange={(e) => setTempClosureSearchTerm(e.target.value)} placeholder="e.g., Holiday..." className="mt-1 h-9 pl-8"/></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetClosureDialogFiltersOnly} className="mr-auto"><FilterX />Reset</Button><Button variant="outline" onClick={() => setIsClosureFilterDialogOpen(false)}><X />Cancel</Button><Button onClick={handleApplyClosureDialogFilters}><CheckCircle2 />Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
+                     <FilterSortDialog open={isClosureFilterDialogOpen} onOpenChange={setIsClosureFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="xs" className="h-7"><FilterIcon className="mr-1.5 h-3.5 w-3.5" />Filter</Button></FilterSortDialogTrigger><FilterSortDialogContent className="w-full max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter Global Closures</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="closureSearchDialogGlobal">Search (Reason/Date/Name)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="closureSearchDialogGlobal" value={tempClosureSearchTerm} onChange={(e) => setTempClosureSearchTerm(e.target.value)} placeholder="e.g., Holiday..." className="mt-1 h-9 pl-8"/></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetClosureDialogFiltersOnly} className="mr-auto"><FilterX className="h-4 w-4 mr-2"/>Reset</Button><Button variant="outline" onClick={() => setIsClosureFilterDialogOpen(false)}><X className="h-4 w-4 mr-2"/>Cancel</Button><Button onClick={handleApplyClosureDialogFilters}><CheckCircle2 className="h-4 w-4 mr-2"/>Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
                   </CardHeader>
                   <CardContent>
                     <Tabs defaultValue="specific-dates-global" className="text-sm">
@@ -432,7 +434,7 @@ export default function LabOperationsCenterPage() {
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
-                        <div><CardTitle className="text-xl flex items-center gap-2"><Users/>All Pending Lab Access Requests ({filteredLabAccessRequests.length})</CardTitle><CardDescription>Review requests for access to any lab.</CardDescription></div>
+                        <div><CardTitle className="text-xl flex items-center gap-2"><Users className="h-5 w-5 text-primary"/>All Pending Lab Access Requests ({filteredLabAccessRequests.length})</CardTitle><CardDescription>Review requests for access to any lab.</CardDescription></div>
                         <FilterSortDialog open={isSystemWideAccessRequestsFilterOpen} onOpenChange={setIsSystemWideAccessRequestsFilterOpen}>
                             <FilterSortDialogTrigger asChild><Button variant="outline" size="xs" className="h-7"><FilterIcon className="mr-1.5 h-3.5 w-3.5" />Filter</Button></FilterSortDialogTrigger>
                             <FilterSortDialogContent className="sm:max-w-md">
@@ -441,7 +443,7 @@ export default function LabOperationsCenterPage() {
                                     <div><Label htmlFor="sysWideAccessUserSearch">Search User (Name/Email)</Label><Input id="sysWideAccessUserSearch" value={tempSystemWideAccessRequestsFilterUser} onChange={(e) => setTempSystemWideAccessRequestsFilterUser(e.target.value)} placeholder="User keyword..." className="mt-1 h-9"/></div>
                                     <div><Label htmlFor="sysWideAccessLabFilter">Filter by Lab Requested</Label><Select value={tempSystemWideAccessRequestsFilterLabId} onValueChange={setTempSystemWideAccessRequestsFilterLabId}><SelectTrigger id="sysWideAccessLabFilter" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Labs</SelectItem>{labs.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent></Select></div>
                                 </div>
-                                <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetSystemWideAccessRequestsFilterOnly} className="mr-auto"><FilterX />Reset</Button><Button variant="outline" onClick={() => setIsSystemWideAccessRequestsFilterOpen(false)}><X />Cancel</Button><Button onClick={handleApplySystemWideAccessRequestsFilter}><CheckCircle2 />Apply</Button></FilterSortDialogFooter>
+                                <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetSystemWideAccessRequestsFilterOnly} className="mr-auto"><FilterX className="h-4 w-4 mr-2"/>Reset</Button><Button variant="outline" onClick={() => setIsSystemWideAccessRequestsFilterOpen(false)}><X className="h-4 w-4 mr-2"/>Cancel</Button><Button onClick={handleApplySystemWideAccessRequestsFilter}><CheckCircle2 className="h-4 w-4 mr-2"/>Apply</Button></FilterSortDialogFooter>
                             </FilterSortDialogContent>
                         </FilterSortDialog>
                     </CardHeader>
@@ -449,7 +451,7 @@ export default function LabOperationsCenterPage() {
                     {isLabAccessRequestLoading ? <div className="text-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary"/></div> : filteredLabAccessRequests.length > 0 ? (<div className="max-h-96 overflow-y-auto border-t"><Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Lab Req.</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredLabAccessRequests.map(req => (<TableRow key={req.id}><TableCell className="p-2 text-xs font-medium">{req.userName}</TableCell><TableCell className="p-2 text-xs">{req.labName}</TableCell><TableCell className="text-right p-1 space-x-0.5"><Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'approve_request', req.id)} disabled={isProcessingLabAccessRequest[req.id!]?.loading}><ThumbsUp className="text-green-600 h-3.5 w-3.5"/></Button><Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'reject_request', req.id)} disabled={isProcessingLabAccessRequest[req.id!]?.loading}><ThumbsDown className="text-red-500 h-3.5 w-3.5"/></Button></TableCell></TableRow>))}</TableBody></Table></div>) : <p className="text-center text-sm text-muted-foreground py-6">{activeSystemWideAccessRequestsFilterCount > 0 ? "No requests match filters." : "No pending lab access requests system-wide."}</p>}
                     </CardContent>
                 </Card>
-                <Card>
+                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
                     <div><CardTitle className="text-xl">All Maintenance Requests</CardTitle><CardDescription>System-wide maintenance log.</CardDescription></div>
                     <Button variant="outline" size="xs" className="h-7" onClick={() => setIsMaintenanceFilterDialogOpen(true)}><FilterIcon className="mr-1.5 h-3.5 w-3.5"/>Filter</Button>
@@ -473,7 +475,7 @@ export default function LabOperationsCenterPage() {
                 <div className="lg:col-span-2 space-y-6">
                   <Card>
                     <CardHeader className="flex flex-row items-start justify-between">
-                      <div><CardTitle className="text-xl">Lab Overview & Stats</CardTitle><CardDescription>{selectedLabDetails.location || "No location specified"}</CardDescription></div>
+                      <div><CardTitle className="text-xl">Lab Overview: {selectedLabDetails.name}</CardTitle><CardDescription>{selectedLabDetails.location || "No location specified"}</CardDescription></div>
                       <Button variant="outline" size="sm" onClick={() => handleOpenEditLabDialog(selectedLabDetails)}><Edit className="mr-2 h-4 w-4"/>Edit Details</Button>
                     </CardHeader>
                     <CardContent className="space-y-3">
@@ -488,7 +490,7 @@ export default function LabOperationsCenterPage() {
                   </Card>
                    <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
-                        <div><CardTitle className="text-xl">Members & Access Requests</CardTitle><CardDescription>Manage users with access to {selectedLabDetails.name}.</CardDescription></div>
+                        <div><CardTitle className="text-xl">Members & Access for {selectedLabDetails.name}</CardTitle></div>
                         <Button size="sm" onClick={() => setIsManualAddMemberDialogOpen(true)}><Users className="mr-2 h-4 w-4"/>Add Member Manually</Button>
                     </CardHeader>
                     <CardContent>
@@ -511,7 +513,7 @@ export default function LabOperationsCenterPage() {
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div><CardTitle className="text-xl">Closures for {selectedLabDetails.name}</CardTitle></div>
-                         <FilterSortDialog open={isClosureFilterDialogOpen} onOpenChange={setIsClosureFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="xs" className="h-7"><FilterIcon className="mr-1.5 h-3.5 w-3.5" />Filter</Button></FilterSortDialogTrigger><FilterSortDialogContent className="w-full max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter Closures for {selectedLabDetails.name}</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="closureSearchDialogLab">Search (Reason/Date/Name)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="closureSearchDialogLab" value={tempClosureSearchTerm} onChange={(e) => setTempClosureSearchTerm(e.target.value)} placeholder="e.g., Maintenance..." className="mt-1 h-9 pl-8"/></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetClosureDialogFiltersOnly} className="mr-auto"><FilterX />Reset</Button><Button variant="outline" onClick={() => setIsClosureFilterDialogOpen(false)}><X />Cancel</Button><Button onClick={handleApplyClosureDialogFilters}><CheckCircle2 />Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
+                         <FilterSortDialog open={isClosureFilterDialogOpen} onOpenChange={setIsClosureFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="xs" className="h-7"><FilterIcon className="mr-1.5 h-3.5 w-3.5" />Filter</Button></FilterSortDialogTrigger><FilterSortDialogContent className="w-full max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter Closures for {selectedLabDetails.name}</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="closureSearchDialogLab">Search (Reason/Date/Name)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="closureSearchDialogLab" value={tempClosureSearchTerm} onChange={(e) => setTempClosureSearchTerm(e.target.value)} placeholder="e.g., Maintenance..." className="mt-1 h-9 pl-8"/></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetClosureDialogFiltersOnly} className="mr-auto"><FilterX className="h-4 w-4 mr-2"/>Reset</Button><Button variant="outline" onClick={() => setIsClosureFilterDialogOpen(false)}><X className="h-4 w-4 mr-2"/>Cancel</Button><Button onClick={handleApplyClosureDialogFilters}><CheckCircle2 className="h-4 w-4 mr-2"/>Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
                     </CardHeader>
                     <CardContent>
                         <Tabs defaultValue="specific-dates-lab" className="text-sm">
@@ -566,16 +568,13 @@ export default function LabOperationsCenterPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><Label htmlFor="maintTechSystem">Assigned Technician</Label><Select value={tempMaintenanceFilterTechnicianId} onValueChange={setTempMaintenanceFilterTechnicianId} disabled={allTechniciansForMaintenance.length === 0}><SelectTrigger id="maintTechSystem" className="h-9 mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All/Any</SelectItem><SelectItem value="--unassigned--">Unassigned</SelectItem>{allTechniciansForMaintenance.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent></Select></div>
-                    {activeContextId === GLOBAL_CONTEXT_VALUE && (<div><Label htmlFor="maintLabSystem">Lab (of Resource)</Label><Select value={tempMaintenanceFilterLabId} onValueChange={setTempMaintenanceFilterLabId} disabled={labs.length === 0}><SelectTrigger id="maintLabSystem" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Labs</SelectItem>{labs.map(lab => (<SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>))}</SelectContent></Select></div>)}
+                    {activeContextId === GLOBAL_CONTEXT_VALUE && (<div><Label htmlFor="maintLabSystem">Lab (of Resource)</Label><Select value={tempMaintenanceFilterLabId} onValueChange={setTempMaintenanceFilterLabId} disabled={labs.length === 0}><SelectTrigger id="maintLabSystem" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Labs</SelectItem><SelectItem value="--global--">Resources not in a specific Lab</SelectItem>{labs.map(lab => (<SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>))}</SelectContent></Select></div>)}
                 </div>
               </div>
-              <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetMaintenanceDialogFiltersOnly} className="mr-auto"><FilterX />Reset</Button><Button variant="outline" onClick={() => setIsMaintenanceFilterDialogOpen(false)}><X />Cancel</Button><Button onClick={handleApplyMaintenanceDialogFilters}><CheckCircle2 />Apply</Button></FilterSortDialogFooter>
+              <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetMaintenanceDialogFiltersOnly} className="mr-auto"><FilterX className="h-4 w-4 mr-2"/>Reset</Button><Button variant="outline" onClick={() => setIsMaintenanceFilterDialogOpen(false)}><X className="h-4 w-4 mr-2"/>Cancel</Button><Button onClick={handleApplyMaintenanceDialogFilters}><CheckCircle2 className="h-4 w-4 mr-2"/>Apply</Button></FilterSortDialogFooter>
           </FilterSortDialogContent>
       </FilterSortDialog>
     </div>
     </TooltipProvider>
   );
 }
-
-
-    
