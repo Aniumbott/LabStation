@@ -92,7 +92,8 @@ export default function DashboardPage() {
         toast({ title: "Error Loading Labs Data", variant: "destructive" });
     }
 
-    if (currentUser && currentUser.id) {
+    // Only fetch specific user memberships if not an Admin
+    if (currentUser && currentUser.id && currentUser.role !== 'Admin') {
         try {
             const membershipsQuery = query(collection(db, 'labMemberships'), where('userId', '==', currentUser.id));
             const membershipsSnapshot = await getDocs(membershipsQuery);
@@ -103,6 +104,7 @@ export default function DashboardPage() {
             setUserMemberships([]);
         }
     } else {
+        // For Admins, or if no user, memberships list remains empty as it's not relevant for them.
         setUserMemberships([]);
     }
     setIsLoadingLabsAndMemberships(false);
@@ -462,7 +464,7 @@ export default function DashboardPage() {
                         <CardDescription>Status: Pending Approval</CardDescription>
                       </CardHeader>
                       <CardFooter>
-                        <Button variant="outline" size="sm" className="w-full" onClick={() => handleCancelRequest(req.id!, req.labName)} disabled={isMembershipActionLoading[req.id!]}>
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => handleCancelRequest(req.id!, req.labName!)} disabled={isMembershipActionLoading[req.id!]}>
                            {isMembershipActionLoading[req.id!] ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <XCircle className="mr-2 h-4 w-4"/>}
                           Cancel Request
                         </Button>
@@ -506,3 +508,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
