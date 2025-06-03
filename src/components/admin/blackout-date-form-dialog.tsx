@@ -16,16 +16,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Calendar } from '@/components/ui/calendar';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Added Select
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Save, X, PlusCircle, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
-import type { BlackoutDate, Lab } from '@/types'; // Added Lab
+import type { BlackoutDate, Lab } from '@/types';
 import { format, parseISO, isValid as isValidDateFn, startOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 const blackoutDateFormSchema = z.object({
-  labId: z.string().optional().nullable(), // Added labId field
+  labId: z.string().optional().nullable(),
   date: z.date({ 
     required_error: "A date is required.",
     invalid_type_error: "That's not a valid date!",
@@ -40,16 +40,17 @@ interface BlackoutDateFormDialogProps {
   onOpenChange: (open: boolean) => void;
   initialBlackoutDate: BlackoutDate | null;
   onSave: (data: BlackoutDateFormValues) => Promise<void>;
-  labs: Lab[]; // Added labs prop
+  labs: Lab[];
+  currentLabContextId?: string; // Optional: To pre-fill "Applies To"
 }
 
-const GLOBAL_CLOSURE_VALUE = "--global--";
+const GLOBAL_CLOSURE_VALUE = "--global--"; // Represents the null/undefined labId for global closures
 
-export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate, onSave, labs }: BlackoutDateFormDialogProps) {
+export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate, onSave, labs, currentLabContextId }: BlackoutDateFormDialogProps) {
   const form = useForm<BlackoutDateFormValues>({
     resolver: zodResolver(blackoutDateFormSchema),
     defaultValues: {
-      labId: GLOBAL_CLOSURE_VALUE, // Default to Global
+      labId: currentLabContextId && currentLabContextId !== GLOBAL_CLOSURE_VALUE ? currentLabContextId : GLOBAL_CLOSURE_VALUE,
       date: startOfDay(new Date()),
       reason: '',
     },
@@ -58,23 +59,22 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const resetForm = useCallback(() => {
+    let defaultLabId = GLOBAL_CLOSURE_VALUE;
     if (initialBlackoutDate) {
-      const dateToSet = initialBlackoutDate.date && isValidDateFn(parseISO(initialBlackoutDate.date)) 
-                        ? parseISO(initialBlackoutDate.date) 
-                        : startOfDay(new Date());
-      form.reset({
-        labId: initialBlackoutDate.labId || GLOBAL_CLOSURE_VALUE,
-        date: dateToSet,
-        reason: initialBlackoutDate.reason || '',
-      });
-    } else {
-      form.reset({
-        labId: GLOBAL_CLOSURE_VALUE,
-        date: startOfDay(new Date()),
-        reason: '',
-      });
+        defaultLabId = initialBlackoutDate.labId || GLOBAL_CLOSURE_VALUE;
+    } else if (currentLabContextId && currentLabContextId !== GLOBAL_CLOSURE_VALUE) {
+        defaultLabId = currentLabContextId;
     }
-  }, [initialBlackoutDate, form.reset]);
+
+    const dateToSet = initialBlackoutDate?.date && isValidDateFn(parseISO(initialBlackoutDate.date)) 
+                      ? parseISO(initialBlackoutDate.date) 
+                      : startOfDay(new Date());
+    form.reset({
+      labId: defaultLabId,
+      date: dateToSet,
+      reason: initialBlackoutDate?.reason || '',
+    });
+  }, [initialBlackoutDate, form.reset, currentLabContextId]);
 
 
   useEffect(() => {
@@ -82,7 +82,7 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
       setIsSubmitting(false);
       resetForm();
     }
-  }, [open, initialBlackoutDate, form.reset, resetForm]);
+  }, [open, initialBlackoutDate, currentLabContextId, form.reset, resetForm]);
 
   async function onSubmit(data: BlackoutDateFormValues) {
     setIsSubmitting(true);
@@ -98,6 +98,18 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
       setIsSubmitting(false);
     }
   }
+  
+  const dialogDescription = useMemo(() => {
+    if (initialBlackoutDate && initialBlackoutDate.date) {
+        const labName = initialBlackoutDate.labId ? (labs.find(l=>l.id === initialBlackoutDate.labId)?.name || 'Specific Lab') : 'All Labs';
+        return `Modify the blackout. Applies to: ${labName}.`;
+    }
+    const contextLabName = currentLabContextId && currentLabContextId !== GLOBAL_CLOSURE_VALUE 
+                           ? (labs.find(l => l.id === currentLabContextId)?.name || 'Selected Lab') 
+                           : 'Global (All Labs)';
+    return `Select a date for the new closure. It will default to applying to: ${contextLabName}. You can change this below.`;
+  }, [initialBlackoutDate, labs, currentLabContextId]);
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -105,7 +117,7 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
         <DialogHeader>
           <DialogTitle>{initialBlackoutDate ? 'Edit Blackout Date' : 'Add New Blackout Date'}</DialogTitle>
           <DialogDescription>
-            {initialBlackoutDate && initialBlackoutDate.date ? `Modify the blackout. Applies to: ${initialBlackoutDate.labId ? labs.find(l=>l.id === initialBlackoutDate.labId)?.name || 'Specific Lab' : 'All Labs'}.` : 'Select a date and optionally provide a reason for lab closure.'}
+            {dialogDescription}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>

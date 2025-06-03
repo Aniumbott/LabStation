@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,15 +16,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Added Select
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
-import type { RecurringBlackoutRule, DayOfWeek, Lab } from '@/types'; // Added Lab
+import type { RecurringBlackoutRule, DayOfWeek, Lab } from '@/types';
 import { daysOfWeekArray } from '@/types';
 
 
 const recurringBlackoutRuleFormSchema = z.object({
-  labId: z.string().optional().nullable(), // Added labId field
+  labId: z.string().optional().nullable(),
   name: z.string().min(2, { message: 'Rule name must be at least 2 characters.' }).max(100, { message: 'Rule name cannot exceed 100 characters.' }),
   daysOfWeek: z.array(z.enum(daysOfWeekArray)).min(1, { message: "Please select at least one day of the week." }),
   reason: z.string().max(100, { message: 'Reason cannot exceed 100 characters.' }).optional().or(z.literal('')),
@@ -37,16 +37,17 @@ interface RecurringBlackoutRuleFormDialogProps {
   onOpenChange: (open: boolean) => void;
   initialRule: RecurringBlackoutRule | null;
   onSave: (data: RecurringBlackoutRuleFormValues) => Promise<void>;
-  labs: Lab[]; // Added labs prop
+  labs: Lab[];
+  currentLabContextId?: string; // Optional: To pre-fill "Applies To"
 }
 
-const GLOBAL_CLOSURE_VALUE = "--global--";
+const GLOBAL_CLOSURE_VALUE = "--global--"; // Represents the null/undefined labId for global closures
 
-export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRule, onSave, labs }: RecurringBlackoutRuleFormDialogProps) {
+export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRule, onSave, labs, currentLabContextId }: RecurringBlackoutRuleFormDialogProps) {
   const form = useForm<RecurringBlackoutRuleFormValues>({
     resolver: zodResolver(recurringBlackoutRuleFormSchema),
     defaultValues: {
-      labId: GLOBAL_CLOSURE_VALUE, // Default to Global
+      labId: currentLabContextId && currentLabContextId !== GLOBAL_CLOSURE_VALUE ? currentLabContextId : GLOBAL_CLOSURE_VALUE,
       name: '',
       daysOfWeek: [],
       reason: '',
@@ -55,29 +56,26 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const resetForm = useCallback(() => {
+    let defaultLabId = GLOBAL_CLOSURE_VALUE;
     if (initialRule) {
-        form.reset({
-          labId: initialRule.labId || GLOBAL_CLOSURE_VALUE,
-          name: initialRule.name,
-          daysOfWeek: initialRule.daysOfWeek || [],
-          reason: initialRule.reason || '',
-        });
-      } else {
-        form.reset({
-          labId: GLOBAL_CLOSURE_VALUE,
-          name: '',
-          daysOfWeek: [],
-          reason: '',
-        });
-      }
-  }, [initialRule, form.reset]);
+        defaultLabId = initialRule.labId || GLOBAL_CLOSURE_VALUE;
+    } else if (currentLabContextId && currentLabContextId !== GLOBAL_CLOSURE_VALUE) {
+        defaultLabId = currentLabContextId;
+    }
+    form.reset({
+      labId: defaultLabId,
+      name: initialRule?.name || '',
+      daysOfWeek: initialRule?.daysOfWeek || [],
+      reason: initialRule?.reason || '',
+    });
+  }, [initialRule, form.reset, currentLabContextId]);
 
   useEffect(() => {
     if (open) {
       setIsSubmitting(false);
       resetForm();
     }
-  }, [open, initialRule, form.reset, resetForm]); 
+  }, [open, initialRule, currentLabContextId, form.reset, resetForm]); 
 
   async function onSubmit(data: RecurringBlackoutRuleFormValues) {
     setIsSubmitting(true);
@@ -94,13 +92,24 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
     }
   }
 
+  const dialogDescription = useMemo(() => {
+    if (initialRule) {
+        const labName = initialRule.labId ? (labs.find(l=>l.id === initialRule.labId)?.name || 'Specific Lab') : 'All Labs';
+        return `Modify the rule "${initialRule.name}". Applies to: ${labName}.`;
+    }
+    const contextLabName = currentLabContextId && currentLabContextId !== GLOBAL_CLOSURE_VALUE 
+                           ? (labs.find(l => l.id === currentLabContextId)?.name || 'Selected Lab') 
+                           : 'Global (All Labs)';
+    return `Define a new weekly recurring closure. It will default to applying to: ${contextLabName}. You can change this below.`;
+  }, [initialRule, labs, currentLabContextId]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{initialRule ? 'Edit Recurring Lab Closure Rule' : 'Add New Recurring Lab Closure Rule'}</DialogTitle>
           <DialogDescription>
-            {initialRule ? `Modify the rule "${initialRule.name}". Applies to: ${initialRule.labId ? labs.find(l=>l.id === initialRule.labId)?.name || 'Specific Lab' : 'All Labs'}.` : 'Define a new weekly recurring closure for the lab.'}
+            {dialogDescription}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
