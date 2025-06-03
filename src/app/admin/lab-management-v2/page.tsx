@@ -30,6 +30,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger, // Ensure this is imported
 }from "@/components/ui/alert-dialog";
 import {
   Dialog as FilterSortDialog,
@@ -150,7 +151,7 @@ export default function LabOperationsCenterPage() {
 
   const [labAccessRequests, setLabAccessRequests] = useState<LabMembershipRequest[]>([]);
   const [isLabAccessRequestLoading, setIsLabAccessRequestLoading] = useState(true);
-  const [isProcessingLabAccessRequest, setIsProcessingLabAccessRequest] = useState<Record<string,boolean>>({});
+  const [isProcessingLabAccessRequest, setIsProcessingLabAccessRequest] = useState<Record<string, {action: 'approve_request' | 'reject_request', loading: boolean}>>({});
   const [isLabAccessFilterDialogOpen, setIsLabAccessFilterDialogOpen] = useState(false);
   const [tempLabAccessFilterLabId, setTempLabAccessFilterLabId] = useState<string>('all');
   const [activeLabAccessFilterLabId, setActiveLabAccessFilterLabId] = useState<string>('all');
@@ -250,7 +251,7 @@ export default function LabOperationsCenterPage() {
         toast({ title: "Authentication Error", variant: "destructive" });
         return;
     }
-    setIsProcessingLabAccessRequest(prev => ({...prev, [membershipId]: true}));
+    setIsProcessingLabAccessRequest(prev => ({...prev, [membershipId]: {action, loading: true}}));
     try {
       const result = await manageLabMembership_SA(
         currentUser.id,
@@ -271,7 +272,7 @@ export default function LabOperationsCenterPage() {
     } catch (error: any) {
       toast({ title: "Error", description: `Failed to process request: ${error.message}`, variant: "destructive" });
     } finally {
-      setIsProcessingLabAccessRequest(prev => ({...prev, [membershipId]: false}));
+      setIsProcessingLabAccessRequest(prev => ({...prev, [membershipId]: {action, loading: false}}));
     }
   };
 
@@ -449,8 +450,8 @@ export default function LabOperationsCenterPage() {
                             <TableCell>{req.labName}</TableCell>
                             <TableCell>{req.requestedAt ? formatDateSafe(req.requestedAt, 'N/A', 'PPP p') : 'N/A'}</TableCell>
                             <TableCell className="text-right space-x-1">
-                               <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleLabAccessRequestAction(req.id!, req.userId, req.userName!, req.labId, req.labName!, 'approve_request')} disabled={isProcessingLabAccessRequest[req.id!]}>{isProcessingLabAccessRequest[req.id!] && (window as any).actionBeingProcessed === 'approve_request' ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsUp className="h-4 w-4 text-green-600" />}<span className="sr-only">Approve</span></Button></TooltipTrigger><TooltipContent>Approve Request</TooltipContent></Tooltip>
-                               <Tooltip><TooltipTrigger asChild><Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => handleLabAccessRequestAction(req.id!, req.userId, req.userName!, req.labId, req.labName!, 'reject_request')} disabled={isProcessingLabAccessRequest[req.id!]}>{isProcessingLabAccessRequest[req.id!] && (window as any).actionBeingProcessed === 'reject_request' ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsDown className="h-4 w-4" />}<span className="sr-only">Reject</span></Button></TooltipTrigger><TooltipContent>Reject Request</TooltipContent></Tooltip>
+                               <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleLabAccessRequestAction(req.id!, req.userId, req.userName!, req.labId, req.labName!, 'approve_request')} disabled={isProcessingLabAccessRequest[req.id!]?.loading}>{isProcessingLabAccessRequest[req.id!]?.loading && isProcessingLabAccessRequest[req.id!]?.action === 'approve_request' ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsUp className="h-4 w-4 text-green-600" />}<span className="sr-only">Approve</span></Button></TooltipTrigger><TooltipContent>Approve Request</TooltipContent></Tooltip>
+                               <Tooltip><TooltipTrigger asChild><Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => handleLabAccessRequestAction(req.id!, req.userId, req.userName!, req.labId, req.labName!, 'reject_request')} disabled={isProcessingLabAccessRequest[req.id!]?.loading}>{isProcessingLabAccessRequest[req.id!]?.loading && isProcessingLabAccessRequest[req.id!]?.action === 'reject_request' ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsDown className="h-4 w-4" />}<span className="sr-only">Reject</span></Button></TooltipTrigger><TooltipContent>Reject Request</TooltipContent></Tooltip>
                             </TableCell>
                           </TableRow>
                         ))}
