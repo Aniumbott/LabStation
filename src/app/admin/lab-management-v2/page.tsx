@@ -10,7 +10,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Dialog as FilterSortDialog, DialogContent as FilterSortDialogContent, DialogHeader as FilterSortDialogHeader, DialogTitle as FilterSortDialogTitle, DialogFooter as FilterSortDialogFooter, DialogTrigger as FilterSortDialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog as FilterSortDialog,
+  DialogContent as FilterSortDialogContent,
+  DialogDescription as FilterSortDialogDescription,
+  DialogHeader as FilterSortDialogHeader,
+  DialogTitle as FilterSortDialogTitle,
+  DialogFooter as FilterSortDialogFooter,
+  DialogTrigger as FilterSortDialogTrigger,
+} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { ResourceTypeFormDialog, ResourceTypeFormValues } from '@/components/admin/resource-type-form-dialog';
 import { LabFormDialog, LabFormValues } from '@/components/admin/lab-form-dialog';
@@ -126,7 +134,7 @@ export default function LabOperationsCenterPage() {
   const fetchAllAdminData = useCallback(async () => {
     if (!canManageAny) { 
       setIsLoadingData(false); 
-      setIsLabAccessRequestLoading(false);
+      setIsLoadingLabAccessRequestLoading(false);
       return; 
     }
     setIsLoadingData(true); setIsLoadingLabAccessRequestLoading(true);
@@ -171,7 +179,7 @@ export default function LabOperationsCenterPage() {
       setIsLabAccessRequestLoading(false);
     } finally {
       setIsLoadingData(false); 
-      setIsLabAccessRequestLoading(false);
+      setIsLoadingLabAccessRequestLoading(false);
     }
   }, [toast, canManageAny]);
 
@@ -181,9 +189,9 @@ export default function LabOperationsCenterPage() {
 
   const pageHeaderActions = (
     <div className="flex items-center gap-3">
-      {activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
+      {activeContextId !== GLOBAL_CONTEXT_VALUE && (
         <Button variant="outline" size="sm" onClick={() => setActiveContextId(GLOBAL_CONTEXT_VALUE)} className="h-9">
-          <ArrowLeft className="mr-2 h-4 w-4" /> 
+          <ArrowLeft className="mr-2 h-4 w-4" />
           System View
         </Button>
       )}
@@ -384,6 +392,39 @@ export default function LabOperationsCenterPage() {
 
   if (!currentUser || !canManageAny) { return ( <div className="space-y-8"><PageHeader title="Lab Operations Center" icon={Cog} description="Access Denied." /><Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission.</p></CardContent></Card></div>); }
   
+  const pageHeaderActionsContent = (
+    <div className="flex items-center gap-2">
+        {activeContextId !== GLOBAL_CONTEXT_VALUE && (
+            <Button variant="outline" size="sm" onClick={() => setActiveContextId(GLOBAL_CONTEXT_VALUE)} className="h-9">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                System View
+            </Button>
+        )}
+        <Select value={activeContextId} onValueChange={setActiveContextId}>
+            <SelectTrigger 
+                id="labContextSelectPageHeader" 
+                className={cn(
+                    "w-auto min-w-[200px] sm:min-w-[240px] h-9 text-sm",
+                    activeContextId === GLOBAL_CONTEXT_VALUE ? "bg-primary/10 border-primary/30 font-semibold" : "" 
+                )}
+            >
+                <SelectValue placeholder="Select Context..." />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value={GLOBAL_CONTEXT_VALUE} className="text-sm py-1.5">
+                    <Globe className="inline-block mr-2 h-4 w-4 text-muted-foreground"/>System-Wide Settings
+                </SelectItem>
+                {labs.length > 0 && <Separator className="my-1"/>}
+                {labs.map(lab => (
+                    <SelectItem key={lab.id} value={lab.id} className="text-sm py-1.5">
+                        <Building className="inline-block mr-2 h-4 w-4 text-muted-foreground"/>{lab.name}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    </div>
+  );
+  
   return (
     <TooltipProvider>
     <div className="space-y-6">
@@ -391,7 +432,7 @@ export default function LabOperationsCenterPage() {
         title="Lab Operations Center" 
         description="Manage all aspects of your lab operations, from system-wide settings to individual lab details." 
         icon={Cog}
-        actions={pageHeaderActions}
+        actions={pageHeaderActionsContent}
       />
       
       {isLoadingData ? (
@@ -507,7 +548,6 @@ export default function LabOperationsCenterPage() {
           {/* LAB-SPECIFIC VIEW */}
           {activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
             <div className="space-y-6">
-              {/* The H2 and back button that were here are now part of PageHeader actions */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
                   <Card>
