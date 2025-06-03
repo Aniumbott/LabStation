@@ -10,14 +10,14 @@ import {
   CalendarDays,
   UserCog,
   Users as UsersIconLucide,
-  Archive,
+  Archive, // Old icon for Lab Management
   CheckSquare,
   Wrench,
   Bell,
-  // CalendarOff, // Icon for Lab Closures, now managed under Lab Management
   Loader2,
   BarChart3,
-  History
+  History,
+  Cog, // New icon for Lab Operations Center
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
@@ -53,7 +53,7 @@ const navItems: NavItem[] = [
   { href: '/bookings', label: 'Bookings', icon: CalendarDays },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/profile', label: 'My Profile', icon: UserCog },
-  { href: '/maintenance', label: 'Maintenance', icon: Wrench }, // Stays for general users
+  { href: '/maintenance', label: 'Maintenance', icon: Wrench },
   {
     href: '/admin/booking-requests',
     label: 'Booking Requests',
@@ -61,17 +61,17 @@ const navItems: NavItem[] = [
     adminOnly: true,
   },
   {
-    href: '/admin/inventory', // Consolidated page for Labs, Resource Types, Closures, Admin Maintenance
-    label: 'Lab Management',
+    href: '/admin/inventory', // Kept for now, as per user instruction
+    label: 'Old Lab Mgmt (Inv)', // Renamed to differentiate
     icon: Archive,
     adminOnly: true,
   },
-  // { // Lab Closures is now a tab under Lab Management
-  //   href: '/admin/blackout-dates',
-  //   label: 'Lab Closures',
-  //   icon: CalendarOff,
-  //   adminOnly: true,
-  // },
+  {
+    href: '/admin/lab-management-v2', // New page
+    label: 'Lab Operations',
+    icon: Cog, // Using Cog icon
+    adminOnly: true,
+  },
   {
     href: '/admin/users',
     label: 'Users',
@@ -191,3 +191,4 @@ export function AppLayout({ children }: { children: ReactNode }) {
   );
 }
     
+        
