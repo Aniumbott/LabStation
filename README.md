@@ -43,6 +43,7 @@ LabStation is a comprehensive web application designed to streamline the managem
         *   Promotion from a waitlist.
         *   New maintenance requests or status updates.
         *   Signup approvals.
+        *   Lab access request status updates (approved, rejected, revoked).
 *   **Usage Logging:**
     *   After a booking is completed, users can log usage details: actual start/end times, outcome (Success, Failure, Interrupted), data storage location, and comments.
 *   **Reporting & Analytics (Admin):**
@@ -54,11 +55,16 @@ LabStation is a comprehensive web application designed to streamline the managem
         *   Current waitlist sizes.
 *   **Audit Logging (Admin):**
     *   Tracks key system events and actions for administrative review.
-*   **Admin Panel:**
-    *   Centralized sections for managing Users (including signup requests), Resources, Lab Management (Labs, Resource Types), Booking Requests, Lab Closures (Blackout Dates & Recurring Rules), Maintenance Requests, Reports, and Audit Logs.
-*   **Lab Management (Admin):**
-    *   Manage **Labs** (CRUD operations for lab entities: name, location, description).
-    *   Manage **Resource Types** (CRUD operations for resource categories).
+*   **Lab Operations Center (Admin):**
+    *   Centralized management for Labs, Resource Types, Lab Closures (Blackout Dates & Recurring Rules), Maintenance Requests (admin view), and Lab Access Requests.
+    *   Context-driven interface to manage system-wide settings or focus on specific lab operations.
+*   **Lab & Membership Management:**
+    *   Admins can manage **Labs** (CRUD operations for lab entities: name, location, description).
+    *   Admins can manage **Resource Types** (CRUD operations for resource categories).
+    *   Users can request access to specific labs.
+    *   Admins can approve or reject lab access requests.
+    *   Admins can manually grant or revoke lab access for users.
+    *   Users can leave labs they are members of.
 
 ## Tech Stack
 
@@ -74,7 +80,7 @@ LabStation is a comprehensive web application designed to streamline the managem
 *   **Icons:** Lucide React
 *   **Authentication:** Firebase Authentication (Email/Password)
 *   **Database:** Firebase Firestore (for user profiles and application data)
-*   **Server-Side Operations:** Firebase Admin SDK (for notifications, audit logs, and other server-side operations)
+*   **Server-Side Operations:** Firebase Admin SDK (for notifications, audit logs, and other server-side operations like lab membership management)
 
 ## Getting Started (Local Development)
 
@@ -226,10 +232,45 @@ LabStation is a comprehensive web application designed to streamline the managem
 
             // RESOURCES Collection
             match /resources/{resourceId} {
-              // All authenticated users can read and list resources.
-              allow read, list: if request.auth != null;
+              // Authenticated users can read and list resources if they are members of the lab the resource belongs to, or if the resource has no labId.
+              // Admins can read and list all resources.
+              function isMemberOfResourceLab(resourceData) {
+                return resourceData.labId == null ||
+                       exists(/databases/$(database)/documents/labMemberships/$(request.auth.uid + '_' + resourceData.labId)) &&
+                       get(/databases/$(database)/documents/labMemberships/$(request.auth.uid + '_' + resourceData.labId)).data.status == 'active';
+              }
+
+              allow read: if request.auth != null && (isAdmin(request.auth.uid) || isMemberOfResourceLab(resource.data));
+              allow list: if request.auth != null; // Listing typically needs broader read, specific filtering happens client-side or via secure queries. For simplicity, allow list, but detail view is secured.
+              
               // Only Admins can create, update, or delete resources.
               allow write: if request.auth != null && isAdmin(request.auth.uid);
+            }
+
+            // LABMEMBERSHIPS Collection
+            match /labMemberships/{membershipId} {
+              // Users can create their own 'pending_approval' requests.
+              allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
+                              && request.resource.data.status == 'pending_approval'
+                              && !("updatedAt" in request.resource.data) // Cannot set by client
+                              && !("actingAdminId" in request.resource.data); // Cannot set by client
+              
+              // Users can read their own memberships. Admins can read any.
+              allow read: if request.auth != null && (isOwner(request.resource.data.userId) || isAdmin(request.auth.uid));
+              
+              // Users can list their own memberships. Admins can list all for management.
+              allow list: if request.auth != null; // Let client filter, or create specific rules for admin listing
+              
+              // Users can delete their own 'pending_approval' or 'rejected' or 'revoked' memberships (essentially cancelling/clearing).
+              // Users can delete their own 'active' memberships (leaving a lab).
+              // Admins can delete any membership (effectively revoking or cleaning up).
+              allow delete: if request.auth != null && (
+                              (isOwner(resource.data.userId) && (resource.data.status == 'pending_approval' || resource.data.status == 'rejected' || resource.data.status == 'revoked' || resource.data.status == 'active')) ||
+                              isAdmin(request.auth.uid)
+                            );
+              
+              // Updates (like status changes from pending to active/rejected) are handled by Admin SDK (server-side).
+              allow update: if false; // No client-side updates allowed for now, only server-side.
             }
 
             // BOOKINGS Collection
@@ -246,9 +287,17 @@ LabStation is a comprehensive web application designed to streamline the managem
 
               // Authenticated users can create bookings for themselves, which start in 'Pending' or 'Waitlisted' status.
               // Client should not be able to set createdAt.
+              // Users can only book resources in labs they are members of, or global resources.
+              function canBookResource(resourceId) {
+                let resourceData = get(/databases/$(database)/documents/resources/$(resourceId)).data;
+                return resourceData.labId == null ||
+                       exists(/databases/$(database)/documents/labMemberships/$(request.auth.uid + '_' + resourceData.labId)) &&
+                       get(/databases/$(database)/documents/labMemberships/$(request.auth.uid + '_' + resourceData.labId)).data.status == 'active';
+              }
               allow create: if request.auth != null && request.resource.data.userId == request.auth.uid
                               && (request.resource.data.status == 'Pending' || request.resource.data.status == 'Waitlisted')
-                              && !("createdAt" in request.resource.data);
+                              && !("createdAt" in request.resource.data)
+                              && canBookResource(request.resource.data.resourceId);
 
 
               // Users can cancel their own 'Pending', 'Waitlisted', or 'Confirmed' bookings.
@@ -283,10 +332,12 @@ LabStation is a comprehensive web application designed to streamline the managem
               allow read, list: if request.auth != null;
 
               // Authenticated users can create maintenance requests for a resource, which start in 'Open' status.
+              // Users can only report issues for resources in labs they are members of, or global resources.
               allow create: if request.auth != null && request.resource.data.reportedByUserId == request.auth.uid
                               && request.resource.data.status == 'Open'
                               && !("dateReported" in request.resource.data)
-                              && !("dateResolved" in request.resource.data);
+                              && !("dateResolved" in request.resource.data)
+                              && canBookResource(request.resource.data.resourceId); // Reusing canBookResource for simplicity, implies lab membership
 
               // Admins can perform broader updates.
               // Assigned Technicians can update status, resolution notes, and resolved date.
@@ -346,8 +397,6 @@ LabStation is a comprehensive web application designed to streamline the managem
         *   **`bookings` collection:**
             *   `userId (Ascending), startTime (Ascending)`
                 *   *Purpose: For users to view their own bookings, sorted by start time (My Bookings page).*
-            *   `userId (Ascending), startTime (Ascending), endTime (Ascending)`
-                 *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('startTime', '>=', ...).orderBy('startTime', 'asc')`). This index specifically uses `startTime` for the range filter as initially intended for "upcoming." The dashboard query was later adjusted to filter on `endTime` and order by `startTime`, requiring `userId ASC, endTime ASC, startTime ASC` which is also listed.*
             *   `userId (Ascending), endTime (Ascending), startTime (Ascending)`
                  *   *Purpose: Critical for dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('endTime', '>=', ...).orderBy('startTime', 'asc')`).*
             *   `resourceId (Ascending), status (Ascending), startTime (Ascending)`
@@ -360,6 +409,8 @@ LabStation is a comprehensive web application designed to streamline the managem
                 *   *Purpose: For processing waitlists in FIFO order for a specific resource.*
             *   `resourceId (Ascending), userId (Ascending), startTime (Descending)`
                 *   *Purpose: For `src/app/resources/[resourceId]/page.tsx` to fetch user's past bookings for a specific resource.*
+            *   `userId (Ascending), endTime (Ascending)` (*Adjusted, startTime Desc might be better depending on final upcoming booking query*)
+                *   *Purpose: For dashboard query of user's upcoming bookings (`where('userId', '==', ...).where('endTime', '>=', ...).orderBy('startTime', 'asc')`). Original was (`userId ASC, startTime ASC, endTime ASC`) but query is now on `endTime`.*
 
         *   **`maintenanceRequests` collection:**
             *   `resourceId (Ascending), dateReported (Descending)`
@@ -372,6 +423,16 @@ LabStation is a comprehensive web application designed to streamline the managem
         *   **`notifications` collection:**
             *   `userId (Ascending), createdAt (Descending)`
                 *   *Purpose: For users to view their notifications, sorted by creation time.*
+        
+        *   **`labMemberships` collection (NEW):**
+            *   `userId (Ascending), status (Ascending)`
+                *   *Purpose: For users to see their active lab memberships and pending requests on their dashboard.*
+            *   `labId (Ascending), status (Ascending)`
+                *   *Purpose: For admins to list members or pending requests for a specific lab.*
+            *   `status (Ascending), requestedAt (Ascending)`
+                *   *Purpose: For admins to view a system-wide list of pending lab access requests, ordered by when they were requested.*
+            *   `userId (Ascending), labId (Ascending)`
+                *   *Purpose: To quickly check if a specific user has any type of membership (active, pending, etc.) for a specific lab.*
 
         *   **A Note on Index Creation Links:** If Firestore errors with "The query requires an index" and provides a link, **use that link**. It will pre-configure the index exactly as Firestore's query planner needs it.
 
@@ -387,3 +448,6 @@ LabStation is a comprehensive web application designed to streamline the managem
 ## Deployment
 
 This application is configured to be easily deployable on platforms like [Vercel](https://vercel.com/) (which is recommended for Next.js projects). Connect your Git repository (GitHub, GitLab, Bitbucket) to Vercel, and it will typically auto-detect the Next.js settings. Remember to configure your Firebase environment variables (from your `.env.local` file, including the Admin SDK credentials) in Vercel's project settings.
+
+
+    
