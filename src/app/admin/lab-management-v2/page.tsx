@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowRightCircle, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info, ArrowLeft } from 'lucide-react';
+import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon } from 'lucide-react';
 import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -66,6 +66,8 @@ export default function LabOperationsCenterPage() {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [activeContextId, setActiveContextId] = useState<string>(GLOBAL_CONTEXT_VALUE);
   const [isLabAccessRequestLoading, setIsLoadingLabAccessRequestLoading] = useState(true);
+  const [activeGlobalClosuresTab, setActiveGlobalClosuresTab] = useState('specific-dates-global');
+  const [activeLabSpecificClosuresTab, setActiveLabSpecificClosuresTab] = useState('specific-dates-lab');
 
 
   const [resourceTypes, setResourceTypes] = useState<ResourceType[]>([]);
@@ -137,7 +139,8 @@ export default function LabOperationsCenterPage() {
       setIsLoadingLabAccessRequestLoading(false);
       return; 
     }
-    setIsLoadingData(true); setIsLoadingLabAccessRequestLoading(true);
+    setIsLoadingData(true); 
+    setIsLoadingLabAccessRequestLoading(true);
     try {
       const [labsSnapshot, typesSnapshot, resourcesSnapshot, usersSnapshot, techniciansSnapshot, maintenanceSnapshot, boSnapshot, rrSnapshot, membershipsSnapshot] = await Promise.all([
         getDocs(query(collection(db, "labs"), orderBy("name", "asc"))),
@@ -176,7 +179,7 @@ export default function LabOperationsCenterPage() {
     } catch (error: any) {
       console.error("Error fetching admin data:", error);
       toast({ title: "Error", description: `Failed to load data: ${error.message}`, variant: "destructive" });
-      setIsLabAccessRequestLoading(false);
+      setIsLoadingLabAccessRequestLoading(false);
     } finally {
       setIsLoadingData(false); 
       setIsLoadingLabAccessRequestLoading(false);
@@ -186,39 +189,31 @@ export default function LabOperationsCenterPage() {
   useEffect(() => { fetchAllAdminData(); }, [fetchAllAdminData]);
   
   const selectedLabDetails = useMemo(() => labs.find(lab => lab.id === activeContextId), [labs, activeContextId]);
-
-  const pageHeaderActions = (
-    <div className="flex items-center gap-3">
-      {activeContextId !== GLOBAL_CONTEXT_VALUE && (
-        <Button variant="outline" size="sm" onClick={() => setActiveContextId(GLOBAL_CONTEXT_VALUE)} className="h-9">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          System View
-        </Button>
-      )}
-      <div className="flex items-center gap-2">
+  
+  const pageHeaderActionsContent = (
+    <div className="flex items-center gap-2">
         <Select value={activeContextId} onValueChange={setActiveContextId}>
-          <SelectTrigger 
-            id="labContextSelectPageHeader" 
-            className={cn(
-              "w-auto min-w-[220px] sm:min-w-[280px] h-9 text-sm",
-              activeContextId === GLOBAL_CONTEXT_VALUE ? "bg-primary/10 border-primary/30 font-medium" : "" 
-            )}
-          >
-            <SelectValue placeholder="Select Context..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={GLOBAL_CONTEXT_VALUE} className="text-sm py-1.5">
-              <Globe className="inline-block mr-2 h-4 w-4 text-muted-foreground"/>System-Wide Settings
-            </SelectItem>
-            {labs.length > 0 && <Separator/>}
-            {labs.map(lab => (
-              <SelectItem key={lab.id} value={lab.id} className="text-sm py-1.5">
-                <Building className="inline-block mr-2 h-4 w-4 text-muted-foreground"/>{lab.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
+            <SelectTrigger 
+                id="labContextSelectPageHeader" 
+                className={cn(
+                    "w-auto min-w-[200px] sm:min-w-[240px] h-9 text-sm",
+                    activeContextId === GLOBAL_CONTEXT_VALUE ? "bg-primary/10 border-primary/30 font-semibold" : "" 
+                )}
+            >
+                <SelectValue placeholder="Select Context..." />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value={GLOBAL_CONTEXT_VALUE} className="text-sm py-1.5">
+                    <Globe className="inline-block mr-2 h-4 w-4 text-muted-foreground"/>System-Wide Settings
+                </SelectItem>
+                {labs.length > 0 && <Separator className="my-1"/>}
+                {labs.map(lab => (
+                    <SelectItem key={lab.id} value={lab.id} className="text-sm py-1.5">
+                        <Building className="inline-block mr-2 h-4 w-4 text-muted-foreground"/>{lab.name}
+                    </SelectItem>
+                ))}
+            </SelectContent>
         </Select>
-      </div>
     </div>
   );
 
@@ -392,39 +387,6 @@ export default function LabOperationsCenterPage() {
 
   if (!currentUser || !canManageAny) { return ( <div className="space-y-8"><PageHeader title="Lab Operations Center" icon={Cog} description="Access Denied." /><Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission.</p></CardContent></Card></div>); }
   
-  const pageHeaderActionsContent = (
-    <div className="flex items-center gap-2">
-        {activeContextId !== GLOBAL_CONTEXT_VALUE && (
-            <Button variant="outline" size="sm" onClick={() => setActiveContextId(GLOBAL_CONTEXT_VALUE)} className="h-9">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                System View
-            </Button>
-        )}
-        <Select value={activeContextId} onValueChange={setActiveContextId}>
-            <SelectTrigger 
-                id="labContextSelectPageHeader" 
-                className={cn(
-                    "w-auto min-w-[200px] sm:min-w-[240px] h-9 text-sm",
-                    activeContextId === GLOBAL_CONTEXT_VALUE ? "bg-primary/10 border-primary/30 font-semibold" : "" 
-                )}
-            >
-                <SelectValue placeholder="Select Context..." />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value={GLOBAL_CONTEXT_VALUE} className="text-sm py-1.5">
-                    <Globe className="inline-block mr-2 h-4 w-4 text-muted-foreground"/>System-Wide Settings
-                </SelectItem>
-                {labs.length > 0 && <Separator className="my-1"/>}
-                {labs.map(lab => (
-                    <SelectItem key={lab.id} value={lab.id} className="text-sm py-1.5">
-                        <Building className="inline-block mr-2 h-4 w-4 text-muted-foreground"/>{lab.name}
-                    </SelectItem>
-                ))}
-            </SelectContent>
-        </Select>
-    </div>
-  );
-  
   return (
     <TooltipProvider>
     <div className="space-y-6">
@@ -485,15 +447,15 @@ export default function LabOperationsCenterPage() {
                     <div><CardTitle className="text-xl flex items-center gap-2"><CalendarOff className="h-5 w-5 text-primary"/>Global Lab Closures</CardTitle></div>
                      <div className="flex items-center gap-1">
                         <FilterSortDialog open={isClosureFilterDialogOpen} onOpenChange={setIsClosureFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="xs" className="h-7"><FilterIcon />Filter</Button></FilterSortDialogTrigger><FilterSortDialogContent className="w-full max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter Global Closures</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="closureSearchDialogGlobal">Search (Reason/Date/Name)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="closureSearchDialogGlobal" value={tempClosureSearchTerm} onChange={(e) => setTempClosureSearchTerm(e.target.value)} placeholder="e.g., Holiday..." className="mt-1 h-9 pl-8"/></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetClosureDialogFiltersOnly} className="mr-auto"><FilterX />Reset</Button><Button variant="outline" onClick={() => setIsClosureFilterDialogOpen(false)}><X />Cancel</Button><Button onClick={handleApplyClosureDialogFilters}><CheckCircle2 />Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
-                        <Button onClick={handleOpenNewDateDialog} size="xs" className="h-7"><PlusCircle />Date</Button>
-                        <Button onClick={handleOpenNewRecurringDialog} size="xs" className="h-7"><PlusCircle />Rule</Button>
+                        {activeGlobalClosuresTab === 'specific-dates-global' && <Button onClick={handleOpenNewDateDialog} size="xs" className="h-7"><PlusCircle />Date</Button>}
+                        {activeGlobalClosuresTab === 'recurring-rules-global' && <Button onClick={handleOpenNewRecurringDialog} size="xs" className="h-7"><PlusCircle />Rule</Button>}
                      </div>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    <Tabs defaultValue="specific-dates-global" className="text-sm">
+                    <Tabs defaultValue={activeGlobalClosuresTab} onValueChange={setActiveGlobalClosuresTab} className="text-sm">
                         <TabsList className="grid w-full grid-cols-2 mb-2 h-9">
-                            <TabsTrigger value="specific-dates-global">Specific Dates ({filteredBlackoutDates.length})</TabsTrigger>
-                            <TabsTrigger value="recurring-rules-global">Recurring Rules ({filteredRecurringRules.length})</TabsTrigger>
+                            <TabsTrigger value="specific-dates-global">Specific</TabsTrigger>
+                            <TabsTrigger value="recurring-rules-global">Recurring</TabsTrigger>
                         </TabsList>
                       <TabsContent value="specific-dates-global" className="space-y-2">
                         <ScrollArea className="max-h-60 border rounded-md">
@@ -552,7 +514,7 @@ export default function LabOperationsCenterPage() {
                 <div className="lg:col-span-2 space-y-6">
                   <Card>
                     <CardHeader className="flex flex-row items-start justify-between">
-                      <div><CardTitle className="text-xl flex items-center gap-2"><Info className="h-5 w-5 text-primary"/>Lab Overview: {selectedLabDetails.name}</CardTitle><CardDescription>{selectedLabDetails.location || "No location specified"}</CardDescription></div>
+                      <div><CardTitle className="text-xl flex items-center gap-2"><InfoIcon className="h-5 w-5 text-primary"/>Lab Overview: {selectedLabDetails.name}</CardTitle><CardDescription>{selectedLabDetails.location || "No location specified"}</CardDescription></div>
                       <Button variant="outline" size="sm" className="h-7" onClick={() => handleOpenEditLabDialog(selectedLabDetails)}><Edit />Details</Button>
                     </CardHeader>
                     <CardContent className="space-y-3">
@@ -596,15 +558,15 @@ export default function LabOperationsCenterPage() {
                         <div><CardTitle className="text-xl flex items-center gap-2"><CalendarDays className="h-5 w-5 text-primary"/>Closures for {selectedLabDetails.name}</CardTitle></div>
                          <div className="flex items-center gap-1">
                             <FilterSortDialog open={isClosureFilterDialogOpen} onOpenChange={setIsClosureFilterDialogOpen}><FilterSortDialogTrigger asChild><Button variant="outline" size="xs" className="h-7"><FilterIcon />Filter</Button></FilterSortDialogTrigger><FilterSortDialogContent className="w-full max-w-md"><FilterSortDialogHeader><FilterSortDialogTitle>Filter Closures for {selectedLabDetails.name}</FilterSortDialogTitle></FilterSortDialogHeader><Separator className="my-3" /><div className="space-y-3"><div className="relative"><Label htmlFor="closureSearchDialogLab">Search (Reason/Date/Name)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="closureSearchDialogLab" value={tempClosureSearchTerm} onChange={(e) => setTempClosureSearchTerm(e.target.value)} placeholder="e.g., Maintenance..." className="mt-1 h-9 pl-8"/></div></div><FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetClosureDialogFiltersOnly} className="mr-auto"><FilterX />Reset</Button><Button variant="outline" onClick={() => setIsClosureFilterDialogOpen(false)}><X />Cancel</Button><Button onClick={handleApplyClosureDialogFilters}><CheckCircle2 />Apply</Button></FilterSortDialogFooter></FilterSortDialogContent></FilterSortDialog>
-                            <Button onClick={handleOpenNewDateDialog} size="xs" className="h-7"><PlusCircle />Date</Button>
-                            <Button onClick={handleOpenNewRecurringDialog} size="xs" className="h-7"><PlusCircle />Rule</Button>
+                            {activeLabSpecificClosuresTab === 'specific-dates-lab' && <Button onClick={handleOpenNewDateDialog} size="xs" className="h-7"><PlusCircle />Date</Button>}
+                            {activeLabSpecificClosuresTab === 'recurring-rules-lab' && <Button onClick={handleOpenNewRecurringDialog} size="xs" className="h-7"><PlusCircle />Rule</Button>}
                          </div>
                     </CardHeader>
                     <CardContent className="pt-0">
-                        <Tabs defaultValue="specific-dates-lab" className="text-sm">
+                        <Tabs defaultValue={activeLabSpecificClosuresTab} onValueChange={setActiveLabSpecificClosuresTab} className="text-sm">
                             <TabsList className="grid w-full grid-cols-2 mb-2 h-9">
-                                <TabsTrigger value="specific-dates-lab">Specific Dates ({filteredBlackoutDates.length})</TabsTrigger>
-                                <TabsTrigger value="recurring-rules-lab">Recurring Rules ({filteredRecurringRules.length})</TabsTrigger>
+                                <TabsTrigger value="specific-dates-lab">Specific</TabsTrigger>
+                                <TabsTrigger value="recurring-rules-lab">Recurring</TabsTrigger>
                             </TabsList>
                         <TabsContent value="specific-dates-lab" className="space-y-2">
                             <ScrollArea className="max-h-60 border rounded-md">
