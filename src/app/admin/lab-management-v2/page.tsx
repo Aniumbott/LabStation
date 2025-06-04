@@ -439,7 +439,14 @@ export default function LabOperationsCenterPage() {
       } else {
           labMatch = req.resourceLabId === activeContextId;
       }
-      let technicianMatch = true; if (activeMaintenanceFilterTechnicianId !== 'all') { if (activeMaintenanceFilterTechnicianId === '--unassigned--') { technicianMatch = !req.assignedTechnicianId; } else { technicianMatch = req.assignedTechnicianId === activeMaintenanceFilterTechnicianId; } }
+      let technicianMatch = true;
+      if (activeMaintenanceFilterTechnicianId !== 'all') {
+        if (activeMaintenanceFilterTechnicianId === '--unassigned--') {
+          technicianMatch = !req.assignedTechnicianId;
+        } else {
+          technicianMatch = req.assignedTechnicianId === activeMaintenanceFilterTechnicianId;
+        }
+      }
       return searchMatch && statusMatch && resourceMatch && labMatch && technicianMatch;
     });
   }, [maintenanceRequests, allResourcesForCountsAndChecks, allTechniciansForMaintenance, allUsersData, activeMaintenanceSearchTerm, activeMaintenanceFilterStatus, activeMaintenanceFilterResourceId, activeMaintenanceFilterTechnicianId, activeMaintenanceFilterLabId, activeContextId]);
@@ -456,7 +463,15 @@ export default function LabOperationsCenterPage() {
     if ((data.status === 'Resolved' || data.status === 'Closed') && data.dateResolved && isValidDateFn(new Date(data.dateResolved))) { dateResolvedForFirestore = Timestamp.fromDate(new Date(data.dateResolved)); }
     else if ((data.status === 'Resolved' || data.status === 'Closed') && !editingMaintenanceRequest?.dateResolved) { dateResolvedForFirestore = serverTimestamp() as Timestamp; }
     else if (editingMaintenanceRequest?.dateResolved && (data.status === 'Resolved' || data.status === 'Closed')) { dateResolvedForFirestore = Timestamp.fromDate(editingMaintenanceRequest.dateResolved); }
-    const requestDataToSave: any = { resourceId: data.resourceId, issueDescription: data.issueDescription, status: data.status, assignedTechnicianId: data.assignedTechnicianId === '--unassigned--' || !data.assignedTechnicianId ? null : data.assignedTechnicianId, resolutionNotes: data.resolutionNotes || null, dateResolved: dateResolvedForFirestore };
+
+    const requestDataToSave: any = {
+      resourceId: data.resourceId,
+      issueDescription: data.issueDescription,
+      status: data.status,
+      assignedTechnicianId: data.assignedTechnicianId === '--unassigned--' || !data.assignedTechnicianId ? null : data.assignedTechnicianId,
+      resolutionNotes: data.resolutionNotes || null,
+      dateResolved: dateResolvedForFirestore
+    };
     setIsLoadingData(true);
     try {
       if (editingMaintenanceRequest) {
@@ -542,10 +557,10 @@ export default function LabOperationsCenterPage() {
         });
   }, [userLabMemberships, allUsersData, activeContextId]);
 
-
   const resourcesInSelectedLab = useMemo(() => allResourcesForCountsAndChecks.filter(r => r.labId === activeContextId), [allResourcesForCountsAndChecks, activeContextId]);
-  const maintenanceForSelectedLab = useMemo(() => maintenanceRequests.filter(mr => resourcesInSelectedLab.some(r => r.id === mr.resourceId)), [maintenanceRequests, resourcesInSelectedLab]);
 
+  const maintenanceForSelectedLab = useMemo(() => maintenanceRequests.filter(mr => resourcesInSelectedLab.some(r => r.id === mr.resourceId)), [maintenanceRequests, resourcesInSelectedLab]);
+  ;
 
   if (!currentUser || !canManageAny) { return ( <div className="space-y-8"><PageHeader title="Lab Operations Center" icon={Cog} description="Access Denied." /><Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission.</p></CardContent></Card></div>); }
 
@@ -662,7 +677,7 @@ export default function LabOperationsCenterPage() {
                     <CardContent className="p-0">
                     {isLabAccessRequestLoading ? <div className="text-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary"/></div> :
                     <ScrollArea className="max-h-96 border-t">
-                        {filteredLabAccessRequests.length > 0 ? (<Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Lab Req.</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredLabAccessRequests.map(req => (<TableRow key={req.id}><TableCell className="p-2 text-xs font-medium">{req.userName}</TableCell><TableCell className="p-2 text-xs">{req.labName}</TableCell><TableCell className="text-right p-1 space-x-0.5"><Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'approve_request', req.id)} disabled={isProcessingAction[`${req.id}`]?.loading}><ThumbsUp className="text-green-600"/></Button><Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'reject_request', req.id)} disabled={isProcessingAction[`${req.id}`]?.loading}><ThumbsDown className="text-red-500"/></Button></TableCell></TableRow>))}</TableBody></Table>) : <p className="text-center text-sm text-muted-foreground py-6">{activeSystemWideAccessRequestsFilterCount > 0 ? "No requests match filters." : "No pending lab access requests."}</p>}
+                        {filteredLabAccessRequests.length > 0 ? (<Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Lab Req.</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredLabAccessRequests.map(req => (<TableRow key={req.id}><TableCell className="p-2 text-xs font-medium">{req.userName}</TableCell><TableCell className="p-2 text-xs">{req.labName}</TableCell><TableCell className="text-right p-1 space-x-0.5"><Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'approve_request', req.id)} disabled={isProcessingAction[`${req.id}`]?.loading && isProcessingAction[`${req.id}`]?.action === 'approve_request'}><ThumbsUp className="text-green-600"/></Button><Button size="icon" variant="outline" className="h-7 w-7" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'reject_request', req.id)} disabled={isProcessingAction[`${req.id}`]?.loading && isProcessingAction[`${req.id}`]?.action === 'reject_request'}><ThumbsDown className="text-red-500"/></Button></TableCell></TableRow>))}</TableBody></Table>) : <p className="text-center text-sm text-muted-foreground py-6">{activeSystemWideAccessRequestsFilterCount > 0 ? "No requests match filters." : "No pending lab access requests."}</p>}
                     </ScrollArea>}
                     </CardContent>
                 </Card>
@@ -686,12 +701,12 @@ export default function LabOperationsCenterPage() {
                             </TabsList>
                         <TabsContent value="active-members">
                             <ScrollArea className="max-h-80 border rounded-md">
-                            {activeLabMembers.length > 0 ? (<Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Email</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{activeLabMembers.map(member => (<TableRow key={member.userId}><TableCell className="p-2 text-xs font-medium flex items-center gap-2"><Avatar className="h-6 w-6"><AvatarImage src={member.userAvatarUrl} alt={member.userName}/><AvatarFallback>{member.userName?.charAt(0)}</AvatarFallback></Avatar>{member.userName}</TableCell><TableCell className="p-2 text-xs">{member.userEmail}</TableCell><TableCell className="text-right p-1"><Button variant="destructive" size="xs" className="h-7" onClick={() => handleMembershipAction(member.userId, member.userName!, selectedLabDetails.id, selectedLabDetails.name, 'revoke', member.id)} disabled={isProcessingAction[member.id!]?.loading}><ShieldOff />Revoke</Button></TableCell></TableRow>))}</TableBody></Table>) : <p className="text-center text-sm text-muted-foreground py-4">No active members.</p>}
+                            {activeLabMembers.length > 0 ? (<Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Email</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{activeLabMembers.map(member => (<TableRow key={member.userId}><TableCell className="p-2 text-xs font-medium flex items-center gap-2"><Avatar className="h-6 w-6"><AvatarImage src={member.userAvatarUrl} alt={member.userName}/><AvatarFallback>{member.userName?.charAt(0)}</AvatarFallback></Avatar>{member.userName}</TableCell><TableCell className="p-2 text-xs">{member.userEmail}</TableCell><TableCell className="text-right p-1"><Button variant="destructive" size="xs" className="h-7" onClick={() => handleMembershipAction(member.userId, member.userName!, selectedLabDetails.id, selectedLabDetails.name, 'revoke', member.id)} disabled={isProcessingAction[member.id!]?.loading && isProcessingAction[member.id!]?.action === 'revoke'}><ShieldOff />Revoke</Button></TableCell></TableRow>))}</TableBody></Table>) : <p className="text-center text-sm text-muted-foreground py-4">No active members.</p>}
                             </ScrollArea>
                         </TabsContent>
                         <TabsContent value="pending-requests">
                              <ScrollArea className="max-h-80 border rounded-md">
-                            {filteredLabAccessRequests.length > 0 ? (<Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Email</TableHead><TableHead className="p-2 text-xs">Requested</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredLabAccessRequests.map(req => (<TableRow key={req.id}><TableCell className="p-2 text-xs font-medium flex items-center gap-2"><Avatar className="h-6 w-6"><AvatarImage src={req.userAvatarUrl} alt={req.userName}/><AvatarFallback>{req.userName?.charAt(0)}</AvatarFallback></Avatar>{req.userName}</TableCell><TableCell className="p-2 text-xs">{req.userEmail}</TableCell><TableCell className="p-2 text-xs">{formatDateSafe(req.requestedAt, 'N/A', 'MMM dd, yy')}</TableCell><TableCell className="text-right p-1 space-x-0.5"><Button size="xs" variant="outline" className="h-7 text-green-600 border-green-600 hover:bg-green-50" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'approve_request', req.id)} disabled={isProcessingAction[req.id!]?.loading}><ThumbsUp />Approve</Button><Button size="xs" variant="outline" className="h-7 text-red-600 border-red-600 hover:bg-red-50" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'reject_request', req.id)} disabled={isProcessingAction[req.id!]?.loading}><ThumbsDown />Reject</Button></TableCell></TableRow>))}</TableBody></Table>) : <p className="text-center text-sm text-muted-foreground py-4">No pending requests for this lab.</p>}
+                            {filteredLabAccessRequests.length > 0 ? (<Table><TableHeader><TableRow><TableHead className="p-2 text-xs">User</TableHead><TableHead className="p-2 text-xs">Email</TableHead><TableHead className="p-2 text-xs">Requested</TableHead><TableHead className="text-right p-2 text-xs">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredLabAccessRequests.map(req => (<TableRow key={req.id}><TableCell className="p-2 text-xs font-medium flex items-center gap-2"><Avatar className="h-6 w-6"><AvatarImage src={req.userAvatarUrl} alt={req.userName}/><AvatarFallback>{req.userName?.charAt(0)}</AvatarFallback></Avatar>{req.userName}</TableCell><TableCell className="p-2 text-xs">{req.userEmail}</TableCell><TableCell className="p-2 text-xs">{formatDateSafe(req.requestedAt, 'N/A', 'MMM dd, yy')}</TableCell><TableCell className="text-right p-1 space-x-0.5"><Button size="xs" variant="outline" className="h-7 text-green-600 border-green-600 hover:bg-green-50" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'approve_request', req.id)} disabled={isProcessingAction[req.id!]?.loading && isProcessingAction[req.id!]?.action === 'approve_request'}><ThumbsUp />Approve</Button><Button size="xs" variant="outline" className="h-7 text-red-600 border-red-600 hover:bg-red-50" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'reject_request', req.id)} disabled={isProcessingAction[req.id!]?.loading && isProcessingAction[req.id!]?.action === 'reject_request'}><ThumbsDown />Reject</Button></TableCell></TableRow>))}</TableBody></Table>) : <p className="text-center text-sm text-muted-foreground py-4">No pending requests for this lab.</p>}
                             </ScrollArea>
                         </TabsContent>
                         </Tabs>
@@ -719,7 +734,7 @@ export default function LabOperationsCenterPage() {
                       <div><CardTitle className="text-xl flex items-center gap-2"><InfoIcon className="h-5 w-5 text-primary"/>Lab Overview: {selectedLabDetails.name}</CardTitle>{selectedLabDetails.location && <CardDescription>{selectedLabDetails.location}</CardDescription>}</div>
                       <Button variant="outline" size="xs" className="h-7" onClick={() => handleOpenEditLabDialog(selectedLabDetails)}><Edit />Details</Button>
                     </CardHeader>
-                     <CardContent className="space-y-1 text-sm pt-0"> {/* Removed p-6 for tighter content */}
+                     <CardContent className="space-y-1 text-sm pt-0">
                         <div className="flex justify-between items-center py-1.5 border-b border-dashed"><span>Resources:</span><span className="font-semibold text-primary">{resourcesInSelectedLab.length}</span></div>
                         <div className="flex justify-between items-center py-1.5 border-b border-dashed"><span>Active Members:</span> <span className="font-semibold text-primary">{activeLabMembers.length}</span></div>
                         <div className="flex justify-between items-center py-1.5"><span>Open Maintenance:</span> <span className="font-bold text-primary">{maintenanceForSelectedLab.filter(mr => mr.status === 'Open' || mr.status === 'In Progress').length}</span></div>
@@ -779,4 +794,3 @@ export default function LabOperationsCenterPage() {
     </div>
   );
 }
-
