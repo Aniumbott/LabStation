@@ -56,11 +56,15 @@ const resourceFormSchema = z.object({
     username: z.string().max(100).optional().or(z.literal('')),
     port: z.preprocess(
       (val) => (String(val ?? '').trim() === '' ? undefined : String(val).trim()),
-      z.string().transform((val) => {
+      z.string().optional().transform((val) => { // Added .optional() here
         if (val === undefined || val === '') return undefined;
         const num = Number(val);
         return isNaN(num) ? undefined : num;
-      }).pipe(z.number().int().min(1).max(65535).optional().nullable())
+      }).pipe(
+        z.number().int().min(1).max(65535)
+        .optional()
+        .nullable()
+      )
     ),
     notes: z.string().max(500).optional().or(z.literal('')),
   }).optional(),
@@ -170,7 +174,9 @@ export function ResourceFormDialog({
             imageUrl: data.imageUrl || '',
             remoteAccess: data.remoteAccess ? {
                 ...data.remoteAccess,
-                port: data.remoteAccess.port === null || data.remoteAccess.port === undefined ? undefined : Number(data.remoteAccess.port),
+                port: (data.remoteAccess.port === null || data.remoteAccess.port === undefined)
+                      ? null // Store as null if empty/undefined for DB consistency
+                      : Number(data.remoteAccess.port),
             } : undefined,
         };
 
@@ -199,9 +205,9 @@ export function ResourceFormDialog({
             {initialResource ? `Modify details for "${initialResource.name}".` : 'Provide information for the new lab resource.'}
           </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <ScrollArea className="max-h-[65vh] mt-4">
-            <form onSubmit={form.handleSubmit(onSubmit)} id="resource-form-id" className="pr-1"> {/* Add pr-1 to form if scrollbar is inside form's direct scrollarea */}
+        <ScrollArea className="max-h-[65vh] mt-4">
+          <Form {...form}>
+            <form id="resource-form-id" onSubmit={form.handleSubmit(onSubmit)}>
               <div className="space-y-6 pl-1 pr-2 pb-6">
                   <FormField
                     control={form.control}
@@ -493,8 +499,8 @@ export function ResourceFormDialog({
                   </div>
               </div>
             </form>
-          </ScrollArea>
-        </Form>
+          </Form>
+        </ScrollArea>
         <DialogFooter className="pt-6 border-t">
           <Button type="submit" form="resource-form-id" disabled={isSubmitting || (resourceTypes.length === 0 && !initialResource) || (labs.length === 0 && !initialResource) }>
             {isSubmitting
