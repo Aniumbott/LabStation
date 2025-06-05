@@ -69,11 +69,11 @@ interface LabMembershipRequest extends LabMembership {
 export default function LabOperationsCenterPage() {
     const { toast } = useToast();
     const { currentUser } = useAuth();
-    const searchParamsObj = useSearchParams(); // Get searchParams object
+    const searchParamsObj = useSearchParams(); 
 
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [activeContextId, setActiveContextId] = useState<string>(GLOBAL_CONTEXT_VALUE);
-    const [isLabAccessRequestLoading, setIsLoadingLabAccessRequestLoading] = useState(true);
+    const [isLabAccessRequestLoading, setIsLabAccessRequestLoading] = useState(true); // Restored this line
 
     const [activeGlobalClosuresTab, setActiveGlobalClosuresTab] = useState('specific-dates-global');
     const [activeLabSpecificClosuresTab, setActiveLabSpecificClosuresTab] = useState('specific-dates-lab');
@@ -215,13 +215,17 @@ export default function LabOperationsCenterPage() {
     useEffect(() => { fetchAllAdminData(); }, [fetchAllAdminData]);
 
     useEffect(() => {
-        const preselectedLabId = searchParamsObj.get('labId'); // Updated
+        const preselectedLabId = searchParamsObj.get('labId'); 
         if (preselectedLabId && labs.find(l => l.id === preselectedLabId)) {
           setActiveContextId(preselectedLabId);
         } else if (preselectedLabId) {
+          // If labId in URL doesn't match any known labs, default to global or show error
+          // For now, defaulting to global if labId is invalid but present.
+          // A toast notification could be added here if desired.
           setActiveContextId(GLOBAL_CONTEXT_VALUE);
         }
-      }, [searchParamsObj, labs]); // Updated dependency
+        // If no labId in URL, activeContextId remains its default (GLOBAL_CONTEXT_VALUE)
+      }, [searchParamsObj, labs]); // labs dependency is important here
 
     const selectedLabDetails = useMemo(() => labs.find(lab => lab.id === activeContextId), [labs, activeContextId]);
 
@@ -252,45 +256,7 @@ export default function LabOperationsCenterPage() {
       </div>
     );
 
-    // Placeholder for Resource Types (System-Wide only)
-    // Placeholder for Labs List (System-Wide only)
-    // Placeholder for Lab Closures (System-Wide or Lab-Specific)
-    // Placeholder for Maintenance (System-Wide or Lab-Specific based on resource's lab)
-    // Placeholder for Lab Access (System-Wide requests or Lab-Specific members)
-    
-    const handleMembershipAction = useCallback(async (
-        targetUserId: string, targetUserName: string, labId: string, labName: string,
-        action: 'grant' | 'revoke' | 'approve_request' | 'reject_request',
-        membershipDocIdToUpdate?: string
-      ) => {
-        if (!currentUser || !currentUser.id || !currentUser.name) {
-          toast({ title: "Authentication Error", variant: "destructive" });
-          return;
-        }
-        const actionKey = membershipDocIdToUpdate || `${targetUserId}-${labId}-${action}`;
-        setIsProcessingAction(prev => ({ ...prev, [actionKey]: { action, loading: true } }));
-    
-        try {
-          const result = await manageLabMembership_SA(
-            currentUser.id, currentUser.name,
-            targetUserId, targetUserName,
-            labId, labName,
-            action, membershipDocIdToUpdate
-          );
-          if (result.success) {
-            toast({ title: "Success", description: result.message });
-            fetchAllAdminData(); // Refresh all data, including memberships and access requests
-          } else {
-            toast({ title: "Action Failed", description: result.message, variant: "destructive" });
-          }
-        } catch (error: any) {
-          toast({ title: "Error", description: `Failed to process request: ${error.message}`, variant: "destructive" });
-        } finally {
-          setIsProcessingAction(prev => ({ ...prev, [actionKey]: { action, loading: false } }));
-        }
-    }, [currentUser, fetchAllAdminData, toast]);
-
-
+    // --- Start of placeholder logic for UNCOMMENTED sections ----
     // --- Resource Types Logic (Only for GLOBAL_CONTEXT_VALUE) ---
     useEffect(() => { if (isResourceTypeFilterDialogOpen) { setTempResourceTypeSearchTerm(activeResourceTypeSearchTerm); setTempResourceTypeSortBy(activeResourceTypeSortBy);}}, [isResourceTypeFilterDialogOpen, activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
     const filteredResourceTypesWithCount = useMemo(() => {
@@ -337,8 +303,8 @@ export default function LabOperationsCenterPage() {
             const labIdForFilter = activeContextId === GLOBAL_CONTEXT_VALUE ? null : activeContextId;
             const isGlobalOrMatchesContext = bd.labId === labIdForFilter || (!bd.labId && labIdForFilter === null);
 
-            if (activeContextId !== GLOBAL_CONTEXT_VALUE && bd.labId !== activeContextId && bd.labId !== null) return false; // Exclude other labs' specific closures
-            if (activeContextId === GLOBAL_CONTEXT_VALUE && bd.labId !== null) return false; // In global, only show global specific closures
+            if (activeContextId !== GLOBAL_CONTEXT_VALUE && bd.labId !== activeContextId && bd.labId !== null) return false; 
+            if (activeContextId === GLOBAL_CONTEXT_VALUE && bd.labId !== null) return false; 
             
             const lowerSearchTerm = activeClosureSearchTerm.toLowerCase();
             const reasonMatch = bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm);
@@ -391,7 +357,6 @@ export default function LabOperationsCenterPage() {
       if (activeContextId !== GLOBAL_CONTEXT_VALUE) {
         reqs = reqs.filter(req => req.resourceLabId === activeContextId);
       } else {
-        // Global context, but user might have selected a specific lab in the filter
         if (activeMaintenanceFilterLabId !== 'all') {
           reqs = reqs.filter(req => req.resourceLabId === activeMaintenanceFilterLabId);
         }
@@ -414,7 +379,9 @@ export default function LabOperationsCenterPage() {
     const handleOpenNewMaintenanceDialog = useCallback(() => { if (!currentUser) return; setEditingMaintenanceRequest(null); setIsMaintenanceFormDialogOpen(true); }, [currentUser]);
     const handleOpenEditMaintenanceDialog = useCallback((request: MaintenanceRequest) => { setEditingMaintenanceRequest(request); setIsMaintenanceFormDialogOpen(true); }, []);
     const handleSaveMaintenanceRequest = useCallback(async (data: MaintenanceDialogFormValues) => {
-      if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Error", variant: "destructive"}); return;} const resource = allResourcesForCountsAndChecks.find(r => r.id === data.resourceId); if (!resource) { toast({ title: "Error", variant: "destructive" }); return;} let dateResolvedForFirestore: Timestamp | null = null; if ((data.status === 'Resolved' || data.status === 'Closed') && data.dateResolved && isValidDateFn(new Date(data.dateResolved))) { dateResolvedForFirestore = Timestamp.fromDate(new Date(data.dateResolved)); } else if ((data.status === 'Resolved' || data.status === 'Closed') && !editingMaintenanceRequest?.dateResolved) { dateResolvedForFirestore = serverTimestamp() as Timestamp; } else if (editingMaintenanceRequest?.dateResolved && (data.status === 'Resolved' || data.status === 'Closed')) { dateResolvedForFirestore = Timestamp.fromDate(editingMaintenanceRequest.dateResolved); } const requestDataToSave: any = { resourceId: data.resourceId, issueDescription: data.issueDescription, status: data.status, assignedTechnicianId: data.assignedTechnicianId === '--unassigned--' || !data.assignedTechnicianId ? null : data.assignedTechnicianId, resolutionNotes: data.resolutionNotes || null, dateResolved: dateResolvedForFirestore }; setIsLoadingData(true); try { if (editingMaintenanceRequest) { await updateDoc(doc(db, "maintenanceRequests", editingMaintenanceRequest.id), requestDataToSave); await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingMaintenanceRequest.id, details: `Maintenance request for '${resource.name}' updated. Status: ${data.status}.`}); toast({ title: 'Request Updated'}); if ((data.status === 'Resolved' && editingMaintenanceRequest.status !== 'Resolved') && editingMaintenanceRequest.reportedByUserId !== currentUser.id && editingMaintenanceRequest.reportedByUserId) { await addNotification( editingMaintenanceRequest.reportedByUserId, 'Maintenance Resolved', `Issue for ${resource.name} resolved.`, 'maintenance_resolved', '/maintenance');} if (data.assignedTechnicianId && data.assignedTechnicianId !== editingMaintenanceRequest.assignedTechnicianId && data.assignedTechnicianId !== '--unassigned--') { await addNotification( data.assignedTechnicianId, 'Maintenance Task Assigned', `Task for ${resource.name}: ${data.issueDescription.substring(0,50)}...`, 'maintenance_assigned', '/maintenance');} } else { const newRequestPayload = { ...requestDataToSave, reportedByUserId: currentUser.id, dateReported: serverTimestamp(), }; const docRef = await addDoc(collection(db, "maintenanceRequests"), newRequestPayload); await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New request for '${resource.name}' by ${currentUser.name}.`}); toast({ title: 'Request Logged'}); const techIdForNotification = requestDataToSave.assignedTechnicianId; if(techIdForNotification && techIdForNotification !== '--unassigned--'){ await addNotification( techIdForNotification, 'New Maintenance Request Assigned', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... assigned.`, 'maintenance_assigned', '/maintenance');} else { const usersToNotifyQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Technician']), orderBy('name', 'asc')); const usersToNotifySnapshot = await getDocs(usersToNotifyQuery); const notificationPromises = usersToNotifySnapshot.docs.map(userDoc => { if(userDoc.id !== currentUser?.id) { return addNotification( userDoc.id, 'New Unassigned Maintenance Request', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`, 'maintenance_new', '/maintenance');} return Promise.resolve(); }); await Promise.all(notificationPromises);}} setIsMaintenanceFormDialogOpen(false); setEditingMaintenanceRequest(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: `${editingMaintenanceRequest ? "Update" : "Logging"} Failed`, variant: "destructive" });} finally { setIsLoadingData(false); }
+      if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Error", variant: "destructive"}); return;} const resource = allResourcesForCountsAndChecks.find(r => r.id === data.resourceId); if (!resource) { toast({ title: "Error", variant: "destructive" }); return;} let dateResolvedForFirestore: Timestamp | null = null; if ((data.status === 'Resolved' || data.status === 'Closed') && data.dateResolved && isValidDateFn(new Date(data.dateResolved))) { dateResolvedForFirestore = Timestamp.fromDate(new Date(data.dateResolved)); } else if ((data.status === 'Resolved' || data.status === 'Closed') && !editingMaintenanceRequest?.dateResolved) { dateResolvedForFirestore = serverTimestamp() as Timestamp; } else if (editingMaintenanceRequest?.dateResolved && (data.status === 'Resolved' || data.status === 'Closed')) { dateResolvedForFirestore = Timestamp.fromDate(editingMaintenanceRequest.dateResolved); } 
+      const requestDataToSave: any = { resourceId: data.resourceId, issueDescription: data.issueDescription, status: data.status, assignedTechnicianId: data.assignedTechnicianId === '--unassigned--' || !data.assignedTechnicianId ? null : data.assignedTechnicianId, resolutionNotes: data.resolutionNotes || null, dateResolved: dateResolvedForFirestore };
+      setIsLoadingData(true); try { if (editingMaintenanceRequest) { await updateDoc(doc(db, "maintenanceRequests", editingMaintenanceRequest.id), requestDataToSave); await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingMaintenanceRequest.id, details: `Maintenance request for '${resource.name}' updated. Status: ${data.status}.`}); toast({ title: 'Request Updated'}); if ((data.status === 'Resolved' && editingMaintenanceRequest.status !== 'Resolved') && editingMaintenanceRequest.reportedByUserId !== currentUser.id && editingMaintenanceRequest.reportedByUserId) { await addNotification( editingMaintenanceRequest.reportedByUserId, 'Maintenance Resolved', `Issue for ${resource.name} resolved.`, 'maintenance_resolved', '/maintenance');} if (data.assignedTechnicianId && data.assignedTechnicianId !== editingMaintenanceRequest.assignedTechnicianId && data.assignedTechnicianId !== '--unassigned--') { await addNotification( data.assignedTechnicianId, 'Maintenance Task Assigned', `Task for ${resource.name}: ${data.issueDescription.substring(0,50)}...`, 'maintenance_assigned', '/maintenance');} } else { const newRequestPayload = { ...requestDataToSave, reportedByUserId: currentUser.id, dateReported: serverTimestamp(), }; const docRef = await addDoc(collection(db, "maintenanceRequests"), newRequestPayload); await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New request for '${resource.name}' by ${currentUser.name}.`}); toast({ title: 'Request Logged'}); const techIdForNotification = requestDataToSave.assignedTechnicianId; if(techIdForNotification && techIdForNotification !== '--unassigned--'){ await addNotification( techIdForNotification, 'New Maintenance Request Assigned', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... assigned.`, 'maintenance_assigned', '/maintenance');} else { const usersToNotifyQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Technician']), orderBy('name', 'asc')); const usersToNotifySnapshot = await getDocs(usersToNotifyQuery); const notificationPromises = usersToNotifySnapshot.docs.map(userDoc => { if(userDoc.id !== currentUser?.id) { return addNotification( userDoc.id, 'New Unassigned Maintenance Request', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`, 'maintenance_new', '/maintenance');} return Promise.resolve(); }); await Promise.all(notificationPromises);}} setIsMaintenanceFormDialogOpen(false); setEditingMaintenanceRequest(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: `${editingMaintenanceRequest ? "Update" : "Logging"} Failed`, variant: "destructive" });} finally { setIsLoadingData(false); }
     }, [currentUser, editingMaintenanceRequest, allResourcesForCountsAndChecks, fetchAllAdminData, toast]);
     const activeMaintenanceFilterCount = useMemo(() => {
       let count = [activeMaintenanceSearchTerm !== '', activeMaintenanceFilterStatus !== 'all', activeMaintenanceFilterResourceId !== 'all', activeMaintenanceFilterTechnicianId !== 'all'].filter(Boolean).length;
@@ -424,12 +391,50 @@ export default function LabOperationsCenterPage() {
     const canEditAnyMaintenanceRequest = useMemo(() => currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Technician'), [currentUser]);
 
     // --- Lab Access & Membership Logic (Context-Aware) ---
+    const handleMembershipAction = useCallback(async (
+        targetUserId: string, targetUserName: string, labId: string, labName: string,
+        action: 'grant' | 'revoke' | 'approve_request' | 'reject_request',
+        membershipDocIdToUpdate?: string
+      ) => {
+        if (!currentUser || !currentUser.id || !currentUser.name) {
+          toast({ title: "Authentication Error", variant: "destructive" });
+          return;
+        }
+        const actionKey = membershipDocIdToUpdate || `${targetUserId}-${labId}-${action}`;
+        setIsProcessingAction(prev => ({ ...prev, [actionKey]: { action, loading: true } }));
+    
+        try {
+          const result = await manageLabMembership_SA(
+            currentUser.id, currentUser.name,
+            targetUserId, targetUserName,
+            labId, labName,
+            action, membershipDocIdToUpdate
+          );
+          if (result.success) {
+            toast({ title: "Success", description: result.message });
+            fetchAllAdminData(); 
+          } else {
+            toast({ title: "Action Failed", description: result.message, variant: "destructive" });
+          }
+        } catch (error: any) {
+          toast({ title: "Error", description: `Failed to process request: ${error.message}`, variant: "destructive" });
+        } finally {
+          setIsProcessingAction(prev => ({ ...prev, [actionKey]: { action, loading: false } }));
+        }
+    }, [currentUser, fetchAllAdminData, toast]);
+
     useEffect(() => {
       if (isSystemWideAccessRequestsFilterOpen) {
         setTempSystemWideAccessRequestsFilterLabId(activeSystemWideAccessRequestsFilterLabId);
         setTempSystemWideAccessRequestsFilterUser(activeSystemWideAccessRequestsFilterUser);
       }
     }, [isSystemWideAccessRequestsFilterOpen, activeSystemWideAccessRequestsFilterLabId, activeSystemWideAccessRequestsFilterUser]);
+    
+    /* 
+    // The following useMemo hooks were commented out for parsing error diagnosis
+    // and should be restored progressively.
+    // Ensure these are restored in the correct order relative to other hooks and logic.
+
     const filteredLabAccessRequests = useMemo(() => {
       let requests = allLabAccessRequests;
       if (activeSystemWideAccessRequestsFilterLabId !== 'all') {
@@ -441,6 +446,24 @@ export default function LabOperationsCenterPage() {
       }
       return requests;
     }, [allLabAccessRequests, activeSystemWideAccessRequestsFilterLabId, activeSystemWideAccessRequestsFilterUser]);
+    
+    const activeLabMembers = useMemo(() => {
+      if (activeContextId === GLOBAL_CONTEXT_VALUE) return []; // Don't show for global
+      return userLabMemberships
+        .filter(mem => mem.labId === activeContextId && mem.status === 'active')
+        .map(mem => {
+          const user = allUsersData.find(u => u.id === mem.userId);
+          return { ...mem, userName: user?.name || 'Unknown User', userEmail: user?.email || 'N/A', userAvatarUrl: user?.avatarUrl };
+        });
+    }, [userLabMemberships, allUsersData, activeContextId]);
+    
+    const resourcesInSelectedLab = useMemo(() => allResourcesForCountsAndChecks.filter(r => r.labId === activeContextId), [allResourcesForCountsAndChecks, activeContextId]);
+    
+    const maintenanceForSelectedLab = useMemo(() => {
+      return maintenanceRequests.filter(mr => resourcesInSelectedLab.some(r => r.id === mr.resourceId));
+    }, [maintenanceRequests, resourcesInSelectedLab]);
+    */
+
     const handleApplySystemWideAccessRequestsFilter = useCallback(() => {
       setActiveSystemWideAccessRequestsFilterLabId(tempSystemWideAccessRequestsFilterLabId);
       setActiveSystemWideAccessRequestsFilterUser(tempSystemWideAccessRequestsFilterUser);
@@ -457,20 +480,6 @@ export default function LabOperationsCenterPage() {
       setIsSystemWideAccessRequestsFilterOpen(false);
     }, [resetSystemWideAccessRequestsFilterDialogOnly]);
     const activeSystemWideAccessRequestsFilterCount = useMemo(() => [activeSystemWideAccessRequestsFilterLabId !== 'all', activeSystemWideAccessRequestsFilterUser !== ''].filter(Boolean).length, [activeSystemWideAccessRequestsFilterLabId, activeSystemWideAccessRequestsFilterUser]);
-    
-    const activeLabMembers = useMemo(() => {
-      if (activeContextId === GLOBAL_CONTEXT_VALUE) return []; // Don't show for global
-      return userLabMemberships
-        .filter(mem => mem.labId === activeContextId && mem.status === 'active')
-        .map(mem => {
-          const user = allUsersData.find(u => u.id === mem.userId);
-          return { ...mem, userName: user?.name || 'Unknown User', userEmail: user?.email || 'N/A', userAvatarUrl: user?.avatarUrl };
-        });
-    }, [userLabMemberships, allUsersData, activeContextId]);
-    const resourcesInSelectedLab = useMemo(() => allResourcesForCountsAndChecks.filter(r => r.labId === activeContextId), [allResourcesForCountsAndChecks, activeContextId]);
-    const maintenanceForSelectedLab = useMemo(() => {
-      return maintenanceRequests.filter(mr => resourcesInSelectedLab.some(r => r.id === mr.resourceId));
-    }, [maintenanceRequests, resourcesInSelectedLab]);
 
 
     if (!currentUser || !canManageAny) {
@@ -492,8 +501,18 @@ export default function LabOperationsCenterPage() {
         </div>
       )}
 
-      {!isLoadingData && activeContextId === GLOBAL_CONTEXT_VALUE && (
-        <Tabs defaultValue={searchParamsObj.get('tab') || "labs"} className="w-full"> {/* Updated */}
+      {/* DIAGNOSTIC PLACEHOLDER: Restore content progressively */}
+      {!isLoadingData && (
+        <div className="p-4 bg-yellow-100 border border-yellow-400 rounded-md text-yellow-700">
+          <p className="font-semibold">Diagnostic Mode</p>
+          <p>Page content significantly reduced for extreme parsing error diagnosis.</p>
+          <p>If this renders, the error is in the commented out JavaScript, not the file structure or imports.</p>
+        </div>
+      )}
+
+
+      {/* {!isLoadingData && activeContextId === GLOBAL_CONTEXT_VALUE && (
+        <Tabs defaultValue={searchParamsObj.get('tab') || "labs"} className="w-full">
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
             <TabsTrigger value="labs">Manage Labs</TabsTrigger>
             <TabsTrigger value="resource-types">Resource Types</TabsTrigger>
@@ -501,21 +520,20 @@ export default function LabOperationsCenterPage() {
             <TabsTrigger value="maintenance-log">Maintenance Log</TabsTrigger>
             <TabsTrigger value="lab-access-requests">Lab Access Requests</TabsTrigger>
           </TabsList>
-          {/* Content for GLOBAL_CONTEXT_VALUE tabs will be restored here */}
         </Tabs>
       )}
 
       {!isLoadingData && activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
-         <Tabs defaultValue={searchParamsObj.get('tab') || "lab-details"} className="w-full"> {/* Updated */}
+         <Tabs defaultValue={searchParamsObj.get('tab') || "lab-details"} className="w-full"> 
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
                 <TabsTrigger value="lab-details">Lab Overview</TabsTrigger>
                 <TabsTrigger value="lab-closures">Closures</TabsTrigger>
                 <TabsTrigger value="lab-maintenance">Maintenance</TabsTrigger>
                 <TabsTrigger value="lab-members">Members & Access</TabsTrigger>
             </TabsList>
-            {/* Content for Lab-Specific context tabs will be restored here */}
         </Tabs>
-      )}
+      )} */}
+
 
       {isResourceTypeFormDialogOpen && currentUser && (<ResourceTypeFormDialog open={isResourceTypeFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceTypeFormDialogOpen(isOpen); if (!isOpen) setEditingType(null); }} initialType={editingType} onSave={handleSaveResourceType} />)}
       {isLabFormDialogOpen && currentUser && (<LabFormDialog open={isLabFormDialogOpen} onOpenChange={(isOpen) => { setIsLabFormDialogOpen(isOpen); if (!isOpen) setEditingLab(null); }} initialLab={editingLab} onSave={handleSaveLab} />)}
@@ -524,7 +542,7 @@ export default function LabOperationsCenterPage() {
       {isMaintenanceFormDialogOpen && currentUser && (<MaintenanceRequestFormDialog open={isMaintenanceFormDialogOpen} onOpenChange={(isOpen) => { setIsMaintenanceFormDialogOpen(isOpen); if (!isOpen) setEditingMaintenanceRequest(null);}} initialRequest={editingMaintenanceRequest} onSave={handleSaveMaintenanceRequest} technicians={allTechniciansForMaintenance} resources={allResourcesForCountsAndChecks} currentUserRole={currentUser?.role} labContextId={activeContextId !== GLOBAL_CONTEXT_VALUE ? activeContextId : undefined}/> )}
       {isManualAddMemberDialogOpen && currentUser && (
         <ManageUserLabAccessDialog
-            targetUser={null} // No specific target user when adding manually
+            targetUser={null} 
             allLabs={labs}
             open={isManualAddMemberDialogOpen}
             onOpenChange={(isOpen) => {
@@ -538,4 +556,3 @@ export default function LabOperationsCenterPage() {
     </div>
   );
 }
-
