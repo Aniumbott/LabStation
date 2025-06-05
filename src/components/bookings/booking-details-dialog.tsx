@@ -18,7 +18,7 @@ import { Calendar, Clock, User, Info, Tag, StickyNote, Activity, CheckCircle, Al
 import { cn } from '@/lib/utils';
 import { Separator } from '../ui/separator';
 import { LogUsageFormDialog } from './log-usage-form-dialog';
-import { ScrollArea } from '@/components/ui/scroll-area'; // Added ScrollArea
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface BookingDetailsDialogProps {
   booking: Booking | null;
@@ -104,9 +104,9 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
               Full information for your booking of {currentBookingDetails.resourceName}.
             </DialogDescription>
           </DialogHeader>
-          <Separator />
-          <ScrollArea className="max-h-[60vh] pr-3"> {/* Added ScrollArea */}
-            <div className="grid gap-3 py-3 text-sm">
+          <Separator className="my-4"/>
+          <ScrollArea className="max-h-[60vh]"> 
+            <div className="space-y-3 text-sm">
               <div className="flex items-center">
                 <Info className="mr-3 h-5 w-5 text-muted-foreground" />
                 <span className="font-medium text-muted-foreground w-28">Resource:</span>
@@ -148,31 +148,29 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
 
             {currentBookingDetails.usageDetails && (
               <>
-                <Separator />
-                <div className="py-3">
-                  <h3 className="text-md font-semibold mb-2 flex items-center">
+                <Separator className="my-4" />
+                <div className="space-y-3 text-sm">
+                  <h3 className="text-md font-semibold flex items-center">
                     <Activity className="mr-2 h-5 w-5 text-primary" /> Usage Details
                   </h3>
-                  <div className="grid gap-3 text-sm pl-2">
-                    <DetailItem icon={Clock} label="Actual Start" value={currentBookingDetails.usageDetails.actualStartTime ? format(parseISO(currentBookingDetails.usageDetails.actualStartTime), 'PPP, p') : 'N/A'} />
-                    <DetailItem icon={Clock} label="Actual End" value={currentBookingDetails.usageDetails.actualEndTime ? format(parseISO(currentBookingDetails.usageDetails.actualEndTime), 'PPP, p') : 'N/A'} />
-                    {currentBookingDetails.usageDetails.outcome && (
-                      <div className="flex items-center">
-                        <div className="mr-3 h-5 w-5 flex items-center justify-center">{getOutcomeIcon(currentBookingDetails.usageDetails.outcome)}</div>
-                          <div>
-                            <span className="font-medium text-muted-foreground">Outcome:</span>
-                            <p className="text-foreground">{currentBookingDetails.usageDetails.outcome}</p>
-                          </div>
-                      </div>
-                    )}
-                    <DetailItem icon={FileText} label="Data Location" value={currentBookingDetails.usageDetails.dataStorageLocation} />
-                    <DetailItem icon={StickyNote} label="Usage Comments" value={currentBookingDetails.usageDetails.usageComments} />
-                  </div>
+                  <DetailItem icon={Clock} label="Actual Start" value={currentBookingDetails.usageDetails.actualStartTime ? format(parseISO(currentBookingDetails.usageDetails.actualStartTime), 'PPP, p') : 'N/A'} />
+                  <DetailItem icon={Clock} label="Actual End" value={currentBookingDetails.usageDetails.actualEndTime ? format(parseISO(currentBookingDetails.usageDetails.actualEndTime), 'PPP, p') : 'N/A'} />
+                  {currentBookingDetails.usageDetails.outcome && (
+                    <div className="flex items-center">
+                      <div className="mr-3 h-5 w-5 flex items-center justify-center">{getOutcomeIcon(currentBookingDetails.usageDetails.outcome)}</div>
+                        <div>
+                          <span className="font-medium text-muted-foreground">Outcome:</span>
+                          <p className="text-foreground">{currentBookingDetails.usageDetails.outcome}</p>
+                        </div>
+                    </div>
+                  )}
+                  <DetailItem icon={FileText} label="Data Location" value={currentBookingDetails.usageDetails.dataStorageLocation} />
+                  <DetailItem icon={StickyNote} label="Usage Comments" value={currentBookingDetails.usageDetails.usageComments} />
                 </div>
               </>
             )}
-          </ScrollArea> {/* End ScrollArea */}
-          <Separator />
+          </ScrollArea> 
+          <Separator className="my-4"/>
           <DialogFooter className="pt-4">
             {canLogUsage && (
               <Button variant="secondary" onClick={() => setIsLogUsageFormOpen(true)}>

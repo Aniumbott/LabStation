@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
 import type { Lab } from '@/types';
+import { Separator } from '@/components/ui/separator';
 
 const labFormSchema = z.object({
   name: z.string().min(2, { message: 'Lab name must be at least 2 characters.' }).max(100, { message: 'Name cannot exceed 100 characters.' }),
@@ -89,8 +90,9 @@ export function LabFormDialog({ open, onOpenChange, initialLab, onSave }: LabFor
             {initialLab ? `Modify details for "${initialLab.name}".` : 'Provide information for the new lab.'}
           </DialogDescription>
         </DialogHeader>
+        <Separator className="my-4" />
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-2 pb-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
               name="name"

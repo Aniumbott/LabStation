@@ -21,6 +21,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
 import type { RecurringBlackoutRule, DayOfWeek, Lab } from '@/types';
 import { daysOfWeekArray } from '@/types';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 const recurringBlackoutRuleFormSchema = z.object({
@@ -112,110 +114,115 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
             {dialogDescription}
           </DialogDescription>
         </DialogHeader>
+        <Separator className="my-4" />
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-2 pb-4">
-            <FormField
-              control={form.control}
-              name="labId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Applies To</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value || GLOBAL_CLOSURE_VALUE}
-                    disabled={isSubmitting}
-                  >
-                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value={GLOBAL_CLOSURE_VALUE}>Global (All Labs)</SelectItem>
-                      {labs.map(lab => (
-                        <SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <ScrollArea className="max-h-[60vh]">
+              <div className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="labId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Applies To</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value || GLOBAL_CLOSURE_VALUE}
+                        disabled={isSubmitting}
+                      >
+                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value={GLOBAL_CLOSURE_VALUE}>Global (All Labs)</SelectItem>
+                          {labs.map(lab => (
+                            <SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Rule Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Weekend Closure, Weekly Maintenance" {...field} disabled={isSubmitting}/>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="daysOfWeek"
+                  render={() => (
+                    <FormItem>
+                      <div className="mb-2">
+                        <FormLabel className="text-base">Days of the Week</FormLabel>
+                        <FormDescription>
+                          Select the days this rule applies to.
+                        </FormDescription>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
+                      {daysOfWeekArray.map((day) => (
+                        <FormField
+                          key={day}
+                          control={form.control}
+                          name="daysOfWeek"
+                          render={({ field }) => {
+                            return (
+                              <FormItem
+                                key={day}
+                                className="flex flex-row items-start space-x-3 space-y-0"
+                              >
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value?.includes(day)}
+                                    onCheckedChange={(checked) => {
+                                      return checked
+                                        ? field.onChange([...(field.value || []), day])
+                                        : field.onChange(
+                                            (field.value || []).filter(
+                                              (value) => value !== day
+                                            )
+                                          )
+                                    }}
+                                    disabled={isSubmitting}
+                                  />
+                                </FormControl>
+                                <FormLabel className="font-normal">
+                                  {day}
+                                </FormLabel>
+                              </FormItem>
+                            )
+                          }}
+                        />
                       ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Rule Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Weekend Closure, Weekly Maintenance" {...field} disabled={isSubmitting}/>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="daysOfWeek"
-              render={() => (
-                <FormItem>
-                  <div className="mb-2">
-                    <FormLabel className="text-base">Days of the Week</FormLabel>
-                    <FormDescription>
-                      Select the days this rule applies to.
-                    </FormDescription>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
-                  {daysOfWeekArray.map((day) => (
-                    <FormField
-                      key={day}
-                      control={form.control}
-                      name="daysOfWeek"
-                      render={({ field }) => {
-                        return (
-                          <FormItem
-                            key={day}
-                            className="flex flex-row items-start space-x-3 space-y-0"
-                          >
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value?.includes(day)}
-                                onCheckedChange={(checked) => {
-                                  return checked
-                                    ? field.onChange([...(field.value || []), day])
-                                    : field.onChange(
-                                        (field.value || []).filter(
-                                          (value) => value !== day
-                                        )
-                                      )
-                                }}
-                                disabled={isSubmitting}
-                              />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              {day}
-                            </FormLabel>
-                          </FormItem>
-                        )
-                      }}
-                    />
-                  ))}
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="reason"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Reason (Optional)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Lab closed, Scheduled cleaning" {...field} value={field.value || ''} disabled={isSubmitting}/>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="reason"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Reason (Optional)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Lab closed, Scheduled cleaning" {...field} value={field.value || ''} disabled={isSubmitting}/>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </ScrollArea>
             <DialogFooter className="pt-4">
                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                 <X className="mr-2 h-4 w-4" /> Cancel

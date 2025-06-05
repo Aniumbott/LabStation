@@ -42,6 +42,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn, formatDateSafe } from '@/lib/utils';
 import { db, auth } from '@/lib/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 const bookingStatusesForApprovalFilter: Array<'all' | 'Pending' | 'Waitlisted'> = ['all', 'Pending', 'Waitlisted'];
@@ -367,7 +368,7 @@ export default function BookingRequestsPage() {
                   )}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="w-full max-w-md">
+              <DialogContent className="w-full sm:max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Filter Booking Requests</DialogTitle>
                   <DialogDescription>
@@ -375,52 +376,54 @@ export default function BookingRequestsPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <Separator className="my-4" />
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="requestSearchDialog">Search (Resource/User/Notes)</Label>
-                      <div className="relative mt-1">
-                        <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                        id="requestSearchDialog"
-                        type="search"
-                        placeholder="Keyword..."
-                        value={tempSearchTerm}
-                        onChange={(e) => setTempSearchTerm(e.target.value)}
-                        className="h-9 pl-8"
-                        />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <ScrollArea className="max-h-[60vh]">
+                  <div className="space-y-4">
                     <div>
-                      <Label htmlFor="requestResourceDialog">Resource</Label>
-                      <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId} disabled={isLoading || allResources.length === 0}>
-                          <SelectTrigger id="requestResourceDialog" className="h-9 mt-1">
-                            <SelectValue placeholder={isLoading ? "Loading..." : (allResources.length > 0 ? "Filter by Resource" : "No resources found")} />
-                          </SelectTrigger>
-                          <SelectContent>
-                              <SelectItem value="all">All Resources</SelectItem>
-                              {allResources
-                                  .map(resource => (
-                                      <SelectItem key={resource.id} value={resource.id}>{resource.name}</SelectItem>
-                                  ))
-                              }
-                          </SelectContent>
-                      </Select>
+                      <Label htmlFor="requestSearchDialog">Search (Resource/User/Notes)</Label>
+                        <div className="relative mt-1">
+                          <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                          id="requestSearchDialog"
+                          type="search"
+                          placeholder="Keyword..."
+                          value={tempSearchTerm}
+                          onChange={(e) => setTempSearchTerm(e.target.value)}
+                          className="h-9 pl-8"
+                          />
+                      </div>
                     </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                      <Label htmlFor="requestStatusDialog">Status</Label>
-                      <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as 'Pending' | 'Waitlisted' | 'all')}>
-                          <SelectTrigger id="requestStatusDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
-                          <SelectContent>
-                              {bookingStatusesForApprovalFilter.map(s => (
-                                  <SelectItem key={s} value={s}>{s === 'all' ? 'All (Pending & Waitlisted)' : s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
-                              ))}
-                          </SelectContent>
-                      </Select>
+                        <Label htmlFor="requestResourceDialog">Resource</Label>
+                        <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId} disabled={isLoading || allResources.length === 0}>
+                            <SelectTrigger id="requestResourceDialog" className="h-9 mt-1">
+                              <SelectValue placeholder={isLoading ? "Loading..." : (allResources.length > 0 ? "Filter by Resource" : "No resources found")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Resources</SelectItem>
+                                {allResources
+                                    .map(resource => (
+                                        <SelectItem key={resource.id} value={resource.id}>{resource.name}</SelectItem>
+                                    ))
+                                }
+                            </SelectContent>
+                        </Select>
+                      </div>
+                        <div>
+                        <Label htmlFor="requestStatusDialog">Status</Label>
+                        <Select value={tempFilterStatus} onValueChange={(v) => setTempFilterStatus(v as 'Pending' | 'Waitlisted' | 'all')}>
+                            <SelectTrigger id="requestStatusDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
+                            <SelectContent>
+                                {bookingStatusesForApprovalFilter.map(s => (
+                                    <SelectItem key={s} value={s}>{s === 'all' ? 'All (Pending & Waitlisted)' : s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <DialogFooter className="pt-6 border-t mt-4">
+                </ScrollArea>
+                <DialogFooter className="pt-4">
                     <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
@@ -440,7 +443,7 @@ export default function BookingRequestsPage() {
               <CardTitle>Pending & Waitlisted Requests ({bookingsForApproval.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto border rounded-md">
+              <div className="overflow-x-auto rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>

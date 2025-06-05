@@ -22,7 +22,8 @@ import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { useAuth } from '@/components/auth-context';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { manageLabMembership_SA } from '@/lib/firestore-helpers'; // Use the server action directly
+import { manageLabMembership_SA } from '@/lib/firestore-helpers';
+import { Separator } from '@/components/ui/separator';
 
 interface ManageUserLabAccessDialogProps {
   targetUser: User | null;
@@ -227,6 +228,7 @@ export function ManageUserLabAccessDialog({
           <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
+        <Separator className="my-4" />
 
         {isLoadingMemberships ? (
           <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading data...</div>
@@ -275,30 +277,32 @@ export function ManageUserLabAccessDialog({
                 )}
             </div>
         ) : (
-          <ScrollArea className="max-h-[60vh] pr-2">
-            <Table>
-              <TableHeader><TableRow><TableHead>Lab Name</TableHead><TableHead>Current Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {currentMembershipsInfo.map(info => (
-                  <TableRow key={info.labId}>
-                    <TableCell className="font-medium">{info.labName}</TableCell>
-                    <TableCell>{getStatusBadge(info.status)}</TableCell>
-                    <TableCell className="text-right">
-                      {info.status === 'active' || info.status === 'pending_approval' || info.status === 'revoked' ? (
-                        <Button variant="destructive" size="sm" className="h-8" onClick={() => handleLabRowAction(info.labId, info.labName, info.status, info.membershipDocId)} disabled={isProcessingLabRowAction[`${info.labId}-${initialTargetUser!.id}`]}>
-                          {isProcessingLabRowAction[`${info.labId}-${initialTargetUser!.id}`] ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ShieldOff className="mr-2 h-4 w-4"/>}Revoke
-                        </Button>
-                      ) : (
-                        <Button variant="default" size="sm" className="h-8" onClick={() => handleLabRowAction(info.labId, info.labName, info.status, info.membershipDocId)} disabled={isProcessingLabRowAction[`${info.labId}-${initialTargetUser!.id}`]}>
-                          {isProcessingLabRowAction[`${info.labId}-${initialTargetUser!.id}`] ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <PlusCircle className="mr-2 h-4 w-4"/>}Grant Access
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            {currentMembershipsInfo.length === 0 && <p className="text-center text-muted-foreground py-4">No labs configured in the system.</p>}
+          <ScrollArea className="max-h-[60vh]">
+            <div className="space-y-0"> {/* No space-y on the direct div to let Table handle its structure */}
+              <Table>
+                <TableHeader><TableRow><TableHead>Lab Name</TableHead><TableHead>Current Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {currentMembershipsInfo.map(info => (
+                    <TableRow key={info.labId}>
+                      <TableCell className="font-medium">{info.labName}</TableCell>
+                      <TableCell>{getStatusBadge(info.status)}</TableCell>
+                      <TableCell className="text-right">
+                        {info.status === 'active' || info.status === 'pending_approval' || info.status === 'revoked' ? (
+                          <Button variant="destructive" size="sm" className="h-8" onClick={() => handleLabRowAction(info.labId, info.labName, info.status, info.membershipDocId)} disabled={isProcessingLabRowAction[`${info.labId}-${initialTargetUser!.id}`]}>
+                            {isProcessingLabRowAction[`${info.labId}-${initialTargetUser!.id}`] ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ShieldOff className="mr-2 h-4 w-4"/>}Revoke
+                          </Button>
+                        ) : (
+                          <Button variant="default" size="sm" className="h-8" onClick={() => handleLabRowAction(info.labId, info.labName, info.status, info.membershipDocId)} disabled={isProcessingLabRowAction[`${info.labId}-${initialTargetUser!.id}`]}>
+                            {isProcessingLabRowAction[`${info.labId}-${initialTargetUser!.id}`] ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <PlusCircle className="mr-2 h-4 w-4"/>}Grant Access
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {currentMembershipsInfo.length === 0 && <p className="text-center text-muted-foreground py-4">No labs configured in the system.</p>}
+            </div>
           </ScrollArea>
         )}
         <DialogFooter className="pt-4">

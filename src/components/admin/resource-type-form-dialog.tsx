@@ -17,8 +17,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Save, X, PlusCircle, Loader2 } from 'lucide-react'; // Added Loader2
+import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
 import type { ResourceType } from '@/types';
+import { Separator } from '@/components/ui/separator';
 
 const resourceTypeFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(50, { message: 'Name cannot exceed 50 characters.' }),
@@ -72,8 +73,9 @@ export function ResourceTypeFormDialog({ open, onOpenChange, initialType, onSave
             {initialType ? `Modify details for "${initialType.name}".` : 'Provide information for the new resource category.'}
           </DialogDescription>
         </DialogHeader>
+        <Separator className="my-4" />
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-2 pb-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
               name="name"

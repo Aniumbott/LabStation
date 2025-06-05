@@ -55,6 +55,7 @@ import { userRolesList } from '@/lib/app-constants';
 import { addNotification, addAuditLog } from '@/lib/firestore-helpers';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, Timestamp, query, orderBy, where, writeBatch as firestoreWriteBatch } from 'firebase/firestore';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 const userStatusesListForFilter: (UserStatus | 'all')[] = ['all', 'active', 'pending_approval', 'suspended'];
@@ -403,7 +404,7 @@ export default function UsersPage() {
                   )}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="w-full max-w-xs sm:max-w-sm md:max-w-md">
+              <DialogContent className="w-full sm:max-w-md">
                 <DialogHeader>
                   <DialogTitle>Filter Users</DialogTitle>
                   <DialogDescription>
@@ -411,50 +412,52 @@ export default function UsersPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <Separator className="my-4" />
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <Label htmlFor="userSearchDialog">Search (Name/Email)</Label>
-                    <div className="relative mt-1">
-                       <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                        id="userSearchDialog"
-                        type="search"
-                        placeholder="Name or email..."
-                        value={tempSearchTerm}
-                        onChange={(e) => setTempSearchTerm(e.target.value)}
-                        className="h-9 pl-8"
-                        />
+                <ScrollArea className="max-h-[60vh]">
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="userSearchDialog">Search (Name/Email)</Label>
+                      <div className="relative mt-1">
+                         <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                          id="userSearchDialog"
+                          type="search"
+                          placeholder="Name or email..."
+                          value={tempSearchTerm}
+                          onChange={(e) => setTempSearchTerm(e.target.value)}
+                          className="h-9 pl-8"
+                          />
+                      </div>
+                    </div>
+                     <div>
+                      <Label htmlFor="userRoleDialog">Role</Label>
+                      <Select value={tempFilterRole} onValueChange={(value) => setTempFilterRole(value as RoleName | 'all')} >
+                        <SelectTrigger id="userRoleDialog" className="h-9 mt-1">
+                          <SelectValue placeholder="Select Role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Roles</SelectItem>
+                          {userRolesList.map(role => (
+                            <SelectItem key={role} value={role}>{role}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="userStatusDialog">Status</Label>
+                      <Select value={tempFilterStatus} onValueChange={(value) => setTempFilterStatus(value as UserStatus | 'all')} >
+                        <SelectTrigger id="userStatusDialog" className="h-9 mt-1">
+                          <SelectValue placeholder="Select Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {userStatusesListForFilter.map(status => (
+                            <SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                   <div>
-                    <Label htmlFor="userRoleDialog">Role</Label>
-                    <Select value={tempFilterRole} onValueChange={(value) => setTempFilterRole(value as RoleName | 'all')} >
-                      <SelectTrigger id="userRoleDialog" className="h-9 mt-1">
-                        <SelectValue placeholder="Select Role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Roles</SelectItem>
-                        {userRolesList.map(role => (
-                          <SelectItem key={role} value={role}>{role}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="userStatusDialog">Status</Label>
-                    <Select value={tempFilterStatus} onValueChange={(value) => setTempFilterStatus(value as UserStatus | 'all')} >
-                      <SelectTrigger id="userStatusDialog" className="h-9 mt-1">
-                        <SelectValue placeholder="Select Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {userStatusesListForFilter.map(status => (
-                          <SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter className="pt-6 border-t mt-4">
+                </ScrollArea>
+                <DialogFooter className="pt-4">
                   <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>

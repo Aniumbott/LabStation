@@ -182,8 +182,8 @@ export default function AuditLogPage() {
                 </DialogDescription>
               </DialogHeader>
               <Separator className="my-4" />
-              <ScrollArea className="max-h-[60vh] overflow-y-auto pr-2">
-                <div className="space-y-4 py-2">
+              <ScrollArea className="max-h-[60vh]">
+                <div className="space-y-4">
                   <div>
                     <Label htmlFor="auditSearchDialog">Search (User, Action, Entity, Details)</Label>
                     <div className="relative mt-1">
@@ -214,7 +214,7 @@ export default function AuditLogPage() {
                   </div>
                 </div>
               </ScrollArea>
-              <DialogFooter className="pt-6 border-t mt-4">
+              <DialogFooter className="pt-4">
                 <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                   <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                 </Button>

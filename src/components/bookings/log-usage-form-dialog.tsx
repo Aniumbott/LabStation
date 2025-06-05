@@ -24,6 +24,7 @@ import { BookingUsageOutcomes } from '@/types';
 import { format, parseISO, isValid } from 'date-fns';
 import { ScrollArea } from '../ui/scroll-area';
 import { Save, X } from 'lucide-react';
+import { Separator } from '../ui/separator';
 
 const logUsageFormSchema = z.object({
   actualStartTime: z.string().optional().refine(val => !val || isValid(parseISO(val)), {
@@ -54,13 +55,11 @@ interface LogUsageFormDialogProps {
   onSaveUsage: (usageData: BookingUsageDetails) => void;
 }
 
-// Helper to format date for datetime-local input
 const formatForDateTimeLocal = (isoString?: string): string => {
   if (!isoString) return '';
   try {
     const date = parseISO(isoString);
     if (isValid(date)) {
-      // Format: YYYY-MM-DDTHH:mm
       return format(date, "yyyy-MM-dd'T'HH:mm");
     }
   } catch (e) { /* ignore parse error, return empty */ }
@@ -112,10 +111,11 @@ export function LogUsageFormDialog({ booking, open, onOpenChange, onSaveUsage }:
             Record details for the booking on {format(new Date(booking.startTime), 'PPP')}.
           </DialogDescription>
         </DialogHeader>
+        <Separator className="my-4" />
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
-            <ScrollArea className="max-h-[60vh] overflow-y-auto pr-2">
-              <div className="space-y-4 py-4">
+            <ScrollArea className="max-h-[60vh]">
+              <div className="space-y-4">
                 <FormField
                   control={form.control}
                   name="actualStartTime"
@@ -194,7 +194,8 @@ export function LogUsageFormDialog({ booking, open, onOpenChange, onSaveUsage }:
                 />
               </div>
             </ScrollArea>
-            <DialogFooter className="pt-6 border-t">
+            <Separator className="my-4" />
+            <DialogFooter className="pt-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>

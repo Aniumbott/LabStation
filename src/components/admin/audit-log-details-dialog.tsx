@@ -7,15 +7,13 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  // DialogFooter, // No longer needed if only containing a close button
 } from "@/components/ui/dialog";
-// import { Button } from "@/components/ui/button"; // No longer needed if only for the close button
 import type { AuditLogEntry } from '@/types';
 import { formatDateSafe } from '@/lib/utils';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { User, Tag, Info, CalendarDays, Hash, Database, Fingerprint } from "lucide-react"; // Removed X as it was for the button
+import { User, Tag, Info, CalendarDays, Hash, Database, Fingerprint } from "lucide-react";
 
 interface AuditLogDetailsDialogProps {
   logEntry: AuditLogEntry | null;
@@ -57,9 +55,9 @@ export function AuditLogDetailsDialog({ logEntry, isOpen, onOpenChange }: AuditL
             Detailed information for the selected log entry.
           </DialogDescription>
         </DialogHeader>
-        <Separator className="my-3"/>
-        <ScrollArea className="max-h-[60vh] pr-3">
-          <div className="grid gap-2 text-sm py-2">
+        <Separator className="my-4"/>
+        <ScrollArea className="max-h-[60vh]">
+          <div className="space-y-2">
             <DetailItem icon={CalendarDays} label="Timestamp" value={formatDateSafe(logEntry.timestamp, 'N/A', 'PPP, p')} />
             <DetailItem icon={User} label="User Name" value={logEntry.userName} />
             <DetailItem icon={Fingerprint} label="User ID" value={logEntry.userId} />
@@ -76,7 +74,7 @@ export function AuditLogDetailsDialog({ logEntry, isOpen, onOpenChange }: AuditL
             </div>
           </div>
         </ScrollArea>
-        {/* Separator and DialogFooter removed as the explicit close button is gone */}
+        {/* Default close button in DialogContent will be used */}
       </DialogContent>
     </Dialog>
   );
