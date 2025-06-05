@@ -355,7 +355,7 @@ export default function BookingRequestsPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <ScrollArea className="max-h-[60vh] mt-4">
-                  <div className="space-y-4 pl-1 pr-1">
+                  <div className="space-y-4 pl-1 pr-1 pb-2">
                     <div>
                       <Label htmlFor="requestSearchDialog">Search (Resource/User/Notes)</Label>
                         <div className="relative mt-1">
