@@ -38,9 +38,10 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
+  AlertDialogFooter, // Added AlertDialogFooter
   AlertDialogHeader,
-  AlertDialogTitle as AlertDialogTypeTitle, // Renamed to avoid conflict
-  AlertDialogTrigger as AlertDialogTypeTrigger, // Renamed to avoid conflict
+  AlertDialogTitle as AlertDialogTypeTitle,
+  AlertDialogTrigger as AlertDialogTypeTrigger,
 } from "@/components/ui/alert-dialog";
 import { Calendar as ShadCNCalendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
@@ -644,12 +645,12 @@ export default function AdminResourcesPage() {
               {filteredResources.map((resource) => (
                 <TableRow key={resource.id}>
                   <TableCell>
-                    <Link href={`/resources/${resource.id}`}>
+                    <Link href={`/admin/resources/${resource.id}`}>
                       <Image src={resource.imageUrl || 'https://placehold.co/100x100.png'} alt={resource.name} width={40} height={40} className="rounded-md object-cover h-10 w-10 hover:opacity-80 transition-opacity" data-ai-hint="lab equipment"/>
                     </Link>
                   </TableCell>
                   <TableCell className="font-medium">
-                     <Link href={`/resources/${resource.id}`} className="hover:text-primary hover:underline">{resource.name}</Link>
+                     <Link href={`/admin/resources/${resource.id}`} className="hover:text-primary hover:underline">{resource.name}</Link>
                   </TableCell>
                   <TableCell>{resource.resourceTypeName || 'N/A'}</TableCell>
                   <TableCell>{resource.labName || 'N/A'}</TableCell>
