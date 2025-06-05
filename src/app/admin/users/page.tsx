@@ -44,7 +44,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { UserFormDialog, UserFormValues } from '@/components/admin/user-form-dialog';
-import { ManageUserLabAccessDialog } from '@/components/admin/manage-user-lab-access-dialog'; // New Import
+import { ManageUserLabAccessDialog } from '@/components/admin/manage-user-lab-access-dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -54,13 +54,13 @@ import { useAuth } from '@/components/auth-context';
 import { userRolesList } from '@/lib/app-constants';
 import { addNotification, addAuditLog } from '@/lib/firestore-helpers';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, Timestamp, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, Timestamp, query, orderBy, where, writeBatch as firestoreWriteBatch } from 'firebase/firestore';
+
 
 const userStatusesListForFilter: (UserStatus | 'all')[] = ['all', 'active', 'pending_approval', 'suspended'];
 
 const roleIcons: Record<User['role'], React.ElementType> = {
   'Admin': ShieldAlert,
-  'Lab Manager': UserCogIcon, // Will be filtered out by userRolesList if not present
   'Technician': UserCheck,
   'Researcher': UserCheck,
 };
@@ -68,7 +68,6 @@ const roleIcons: Record<User['role'], React.ElementType> = {
 const getRoleBadgeVariant = (role: RoleName): "default" | "secondary" | "destructive" | "outline" => {
     switch (role) {
       case 'Admin': return 'destructive';
-      case 'Lab Manager': return 'default';
       case 'Technician': return 'secondary';
       case 'Researcher': return 'outline';
       default: return 'outline';
@@ -77,9 +76,9 @@ const getRoleBadgeVariant = (role: RoleName): "default" | "secondary" | "destruc
 
 const getStatusBadgeVariant = (status: UserStatus): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
-      case 'active': return 'default'; 
-      case 'pending_approval': return 'secondary'; 
-      case 'suspended': return 'destructive'; 
+      case 'active': return 'default';
+      case 'pending_approval': return 'secondary';
+      case 'suspended': return 'destructive';
       default: return 'outline';
     }
 };
@@ -90,15 +89,15 @@ export default function UsersPage() {
   const { currentUser: loggedInUser } = useAuth();
 
   const [users, setUsers] = useState<User[]>([]);
-  const [allLabs, setAllLabs] = useState<Lab[]>([]); // New state for labs
-  const [isLoadingData, setIsLoadingData] = useState(true); // Combined loading state
+  const [allLabs, setAllLabs] = useState<Lab[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [userToReject, setUserToReject] = useState<User | null>(null);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   
-  const [isLabAccessDialogOpen, setIsLabAccessDialogOpen] = useState(false); // New state for lab access dialog
-  const [selectedUserForLabAccess, setSelectedUserForLabAccess] = useState<User | null>(null); // New state
+  const [isLabAccessDialogOpen, setIsLabAccessDialogOpen] = useState(false);
+  const [selectedUserForLabAccess, setSelectedUserForLabAccess] = useState<User | null>(null);
 
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
@@ -113,7 +112,6 @@ export default function UsersPage() {
   const fetchData = useCallback(async () => {
     setIsLoadingData(true);
     try {
-      // Fetch Users
       const usersCollectionRef = collection(db, "users");
       const usersQuery = query(usersCollectionRef, orderBy("name", "asc"));
       const usersSnapshot = await getDocs(usersQuery);
@@ -137,7 +135,6 @@ export default function UsersPage() {
       });
       setUsers(fetchedUsers);
 
-      // Fetch Labs (needed for the new lab access dialog)
       const labsCollectionRef = collection(db, "labs");
       const labsQuery = query(labsCollectionRef, orderBy("name", "asc"));
       const labsSnapshot = await getDocs(labsQuery);
@@ -145,7 +142,6 @@ export default function UsersPage() {
       setAllLabs(fetchedLabs);
 
     } catch (error: any) {
-      console.error("Error fetching users or labs: ", error);
       toast({ title: "Error Fetching Data", description: error.message || "Failed to load data from database.", variant: "destructive" });
       setUsers([]);
       setAllLabs([]);
@@ -226,7 +222,7 @@ export default function UsersPage() {
     
     setIsLoadingData(true);
     try {
-      if (editingUser) { 
+      if (editingUser) {
         const userDocRef = doc(db, "users", editingUser.id);
         await updateDoc(userDocRef, {
           name: data.name,
@@ -234,15 +230,15 @@ export default function UsersPage() {
         });
         await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_UPDATED', { entityType: 'User', entityId: editingUser.id, details: `User ${data.name} (ID: ${editingUser.id}) details updated. Role set to ${data.role}.` });
         toast({ title: 'User Updated', description: `User ${data.name} has been updated.` });
-      } else { 
+      } else {
         const newUserId = `admin_created_${Date.now()}_${Math.random().toString(36).substring(2,9)}`;
         const userDocRef = doc(db, "users", newUserId);
         await setDoc(userDocRef, {
           name: data.name,
-          email: data.email, 
+          email: data.email,
           role: data.role,
           avatarUrl: 'https://placehold.co/100x100.png',
-          status: 'active' as User['status'], 
+          status: 'active' as User['status'],
           createdAt: serverTimestamp(),
         });
         await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User profile for ${data.name} (${data.email}) created by admin with role ${data.role}. This user cannot log in without a corresponding Auth account.` });
@@ -252,10 +248,9 @@ export default function UsersPage() {
       setEditingUser(null);
       await fetchData();
     } catch (error: any) {
-      console.error(`Error ${editingUser ? 'updating' : 'creating'} user profile:`, error);
       toast({ title: "Operation Failed", description: `Could not ${editingUser ? 'update' : 'create'} user profile: ${error.message}`, variant: "destructive" });
     } finally {
-      setIsLoadingData(false); 
+      setIsLoadingData(false);
     }
   }, [loggedInUser, editingUser, fetchData, toast]);
 
@@ -273,13 +268,14 @@ export default function UsersPage() {
     setIsLoadingData(true);
     try {
       const userDocRef = doc(db, "users", userId);
-      await deleteDoc(userDocRef); 
       
-      // Also delete their lab memberships
+      const batch = firestoreWriteBatch(db);
+      batch.delete(userDocRef);
+      
       const membershipsQuery = query(collection(db, 'labMemberships'), where('userId', '==', userId));
       const membershipsSnapshot = await getDocs(membershipsQuery);
-      const batch =_getDocs(db).batch(); // Assuming db is your firestore instance, needs to be firebase.firestore() from client SDK for batch
-      membershipsSnapshot.forEach(doc => batch.delete(doc.ref));
+      membershipsSnapshot.forEach(docSnap => batch.delete(docSnap.ref));
+      
       await batch.commit();
 
       await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_DELETED', { entityType: 'User', entityId: userId, details: `User profile for ${userToDeleteDetails.name} (ID: ${userId}) and all their lab memberships deleted. Associated Firebase Auth user may still exist if one was created via signup.` });
@@ -287,7 +283,6 @@ export default function UsersPage() {
       setUserToDelete(null);
       await fetchData();
     } catch (error: any) {
-      console.error("Error deleting user profile and memberships:", error);
       toast({ title: "Delete Failed", description: `Could not delete user profile/memberships: ${error.message}`, variant: "destructive" });
     } finally {
       setIsLoadingData(false);
@@ -316,7 +311,6 @@ export default function UsersPage() {
         await addAuditLog(loggedInUser.id, adminName, 'USER_APPROVED', { entityType: 'User', entityId: userId, details: `User ${approvedUserName} (ID: ${userId}) approved by ${adminName}.`});
         toast({ title: 'User Approved', description: `User ${approvedUserName} has been approved and is now active.` });
         
-        console.log(`[UsersPage/handleApproveUser] About to call addNotification for userId: ${userId}`);
         try {
             await addNotification(
                 userId,
@@ -325,9 +319,7 @@ export default function UsersPage() {
                 'signup_approved',
                 '/login'
             );
-            console.log(`[UsersPage/handleApproveUser] Successfully called addNotification for userId: ${userId}`);
         } catch (notificationError: any) {
-            console.error(`[UsersPage/handleApproveUser] Error calling addNotification for userId ${userId}:`, notificationError);
             toast({
                 title: "Notification Error",
                 description: `User ${approvedUserName} was approved, but sending the notification failed. Error: ${notificationError.message}`,
@@ -336,7 +328,6 @@ export default function UsersPage() {
         }
         await fetchData();
     } catch (error: any) {
-        console.error("Error approving user:", error);
         toast({ title: 'Approval Failed', description: `Could not approve user ${userToApproveDetails.name}: ${error.message}`, variant: 'destructive' });
     } finally {
         setIsLoadingData(false);
@@ -349,7 +340,7 @@ export default function UsersPage() {
         setUserToReject(null);
         return;
     }
-    const userDetails = users.find(u => u.id === userToReject.id); 
+    const userDetails = users.find(u => u.id === userToReject.id);
     if (!userDetails) {
         toast({ title: "Error", description: "User to reject not found in current list.", variant: "destructive" });
         setUserToReject(null);
@@ -369,7 +360,6 @@ export default function UsersPage() {
       setUserToReject(null);
       await fetchData();
     } catch (error: any) {
-      console.error("Error rejecting user:", error);
       toast({ title: 'Rejection Failed', description: `Could not reject user ${userDetails.name}: ${error.message}`, variant: 'destructive' });
     } finally {
       setIsLoadingData(false);
@@ -421,7 +411,7 @@ export default function UsersPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <Separator className="my-4" />
-                <div className="flex flex-col gap-4"> 
+                <div className="flex flex-col gap-4">
                   <div>
                     <Label htmlFor="userSearchDialog">Search (Name/Email)</Label>
                     <div className="relative mt-1">
@@ -502,7 +492,7 @@ export default function UsersPage() {
             </TableHeader>
             <TableBody>
               {filteredUsers.map((user) => {
-                const RoleIcon = roleIcons[user.role] || UsersIconLucide;
+                const RoleIcon = roleIcons[user.role as Exclude<RoleName, 'Lab Manager'>] || UsersIconLucide; // Ensure Lab Manager is excluded if necessary
                 return (
                   <TableRow key={user.id}>
                     <TableCell>
@@ -670,7 +660,7 @@ export default function UsersPage() {
             setIsLabAccessDialogOpen(isOpen);
             if (!isOpen) setSelectedUserForLabAccess(null);
           }}
-          onMembershipUpdate={fetchData} 
+          onMembershipUpdate={fetchData}
         />
       )}
     </div>

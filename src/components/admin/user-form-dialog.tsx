@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { UserPlus, Save, X, Loader2 } from 'lucide-react';
 import type { User, RoleName } from '@/types';
-import { userRolesList } from '@/lib/app-constants'; // Will now use the updated list
+import { userRolesList } from '@/lib/app-constants';
 
 const userFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, "Name cannot exceed 100 characters."),
@@ -51,7 +51,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
       form.reset({
         name: initialUser.name,
         email: initialUser.email,
-        role: userRolesList.includes(initialUser.role) ? initialUser.role : 'Researcher', // Fallback if old role was 'Lab Manager'
+        role: userRolesList.includes(initialUser.role) ? initialUser.role : 'Researcher',
       });
     } else {
       form.reset({
@@ -60,17 +60,17 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
         role: 'Researcher',
       });
     }
-  }, [initialUser, form.reset]);
+  }, [initialUser, form]);
 
 
   useEffect(() => {
     if (open) {
       resetForm();
     }
-  }, [open, initialUser, form.reset, resetForm]);
+  }, [open, resetForm]);
 
   async function onSubmit(data: UserFormValues) {
-    await onSave(data);
+    await onSave(data); // Parent handles isSubmitting and toast
   }
 
   return (
@@ -129,7 +129,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {userRolesList.map((role) => ( // userRolesList is now updated
+                      {userRolesList.map((role) => (
                         <SelectItem key={role} value={role}>
                           {role}
                         </SelectItem>

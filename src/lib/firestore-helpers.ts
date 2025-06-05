@@ -14,11 +14,8 @@ export async function addNotification(
   linkToParam?: string | undefined
 ): Promise<void> {
   const functionName = "addNotification V7 DEBUG (Admin SDK)";
-  // console.log(`--- [${functionName}] ENTERING FUNCTION ---`);
-  // console.log(`[${functionName}] typeof window:`, typeof window);
 
   const paramsReceived = { userId, title, message, type, linkToParam };
-  // console.log(`[${functionName}] Parameters received:`, JSON.stringify(paramsReceived, null, 2));
 
   if (!userId || !title || !message || !type) {
     const errorMsg = `Missing required parameters for notification. Data: ${JSON.stringify(paramsReceived, null, 2)}`;
@@ -41,11 +38,8 @@ export async function addNotification(
     newNotificationData.linkTo = finalLinkTo;
   }
 
-  // console.log(`[${functionName}] Attempting to add notification to Firestore. Data:`, JSON.stringify(newNotificationData, null, 2));
-
   try {
     const docRef = await adminDb.collection('notifications').add(newNotificationData);
-    // console.log(`!!! SUCCESS !!! [${functionName}] Successfully added notification to Firestore. Doc ID: ${docRef.id}, UserID: ${userId}, Type: ${type}`);
   } catch (e: any) {
     console.error(`!!! FIRESTORE ERROR IN ${functionName} !!! FirebaseError:`, e.toString());
     console.error(`[${functionName}] Error Code:`, e.code);
@@ -73,11 +67,8 @@ export async function addAuditLog(
   }
 ): Promise<void> {
   const functionName = "addAuditLog V8 (Admin SDK)";
-  // console.log(`--- [${functionName}] ENTERING FUNCTION ---`);
 
   const paramsReceived = { actingUserId, actingUserName, action, params };
-  // console.log(`[${functionName}] Parameters received:`, JSON.stringify(paramsReceived, null, 2));
-
 
   if (!actingUserId || !actingUserName || !action || !params.details) {
      const errorMsg = `Missing required parameters for audit log. Data: ${JSON.stringify(paramsReceived, null, 2)}`;
@@ -98,11 +89,8 @@ export async function addAuditLog(
   if (params.secondaryEntityType !== undefined) newLogData.secondaryEntityType = params.secondaryEntityType;
   if (params.secondaryEntityId !== undefined) newLogData.secondaryEntityId = params.secondaryEntityId;
 
-  // console.log(`[${functionName}] Attempting to add audit log to Firestore. Data:`, JSON.stringify(newLogData, null, 2));
-
   try {
     const docRef = await adminDb.collection('auditLogs').add(newLogData);
-    // console.log(`!!! SUCCESS !!! [${functionName}] Successfully added audit log to Firestore. Doc ID: ${docRef.id}, Action: ${action}, User: ${actingUserName}`);
   } catch (e: any) {
     console.error(`!!! FIRESTORE ERROR IN ${functionName} !!! FirebaseError:`, e.toString());
     console.error(`[${functionName}] Error Code:`, e.code);
@@ -124,9 +112,6 @@ export async function processWaitlistForResource(
   triggeringAction: 'admin_reject' | 'user_cancel_confirmed'
 ): Promise<void> {
   const functionName = "processWaitlistForResource V1 (Admin SDK)";
-  // console.log(`--- [${functionName}] ENTERING for resource ${resourceId} ---`);
-  // console.log(`[${functionName}] Freed slot: ${freedSlotStartTime.toISOString()} to ${freedSlotEndTime.toISOString()}`);
-  // console.log(`[${functionName}] Triggered by: ${triggeringAction}`);
 
   try {
     const waitlistQuery = adminDb.collection('bookings')
@@ -137,11 +122,8 @@ export async function processWaitlistForResource(
     const waitlistSnapshot = await waitlistQuery.get();
 
     if (waitlistSnapshot.empty) {
-      // console.log(`[${functionName}] No waitlisted bookings found for resource ${resourceId}.`);
       return;
     }
-
-    // console.log(`[${functionName}] Found ${waitlistSnapshot.docs.length} waitlisted bookings for resource ${resourceId}.`);
 
     const freedStart = freedSlotStartTime;
     const freedEnd = freedSlotEndTime;
@@ -155,11 +137,7 @@ export async function processWaitlistForResource(
       const waitlistedUserId = waitlistedBookingData.userId;
       const waitlistedUserName = waitlistedBookingData.userName || 'Waitlisted User';
 
-      // console.log(`[${functionName}] Evaluating waitlisted booking ${waitlistedBookingId} for user ${waitlistedUserId}: ${waitlistedStartTime.toISOString()} to ${waitlistedEndTime.toISOString()}`);
-
       if (waitlistedStartTime >= freedStart && waitlistedEndTime <= freedEnd) {
-        // console.log(`[${functionName}] Booking ${waitlistedBookingId} fits within the freed slot.`);
-
         const conflictQuery = adminDb.collection('bookings')
           .where('resourceId', '==', resourceId)
           .where('status', 'in', ['Confirmed', 'Pending'])
@@ -169,7 +147,6 @@ export async function processWaitlistForResource(
         const conflictSnapshot = await conflictQuery.get();
 
         if (conflictSnapshot.empty) {
-          // console.log(`[${functionName}] No conflicts found for booking ${waitlistedBookingId}. Promoting to 'Pending'.`);
           const bookingDocRef = adminDb.collection('bookings').doc(waitlistedBookingId);
           await bookingDocRef.update({ status: 'Pending' });
 
@@ -215,17 +192,10 @@ export async function processWaitlistForResource(
           } catch (adminNotifError) {
             console.error(`[${functionName}] Failed to send 'promoted_admin' notifications:`, adminNotifError);
           }
-
-          // console.log(`[${functionName}] Successfully promoted booking ${waitlistedBookingId}. Exiting waitlist processing for this slot.`);
           return;
-        } else {
-          // console.log(`[${functionName}] Booking ${waitlistedBookingId} conflicts with another existing Confirmed/Pending booking. Skipping.`);
         }
-      } else {
-        // console.log(`[${functionName}] Booking ${waitlistedBookingId} does not fit into the freed slot. Skipping.`);
       }
     }
-    // console.log(`[${functionName}] No suitable waitlisted booking found to promote for resource ${resourceId} in the freed slot.`);
 
   } catch (error: any) {
     console.error(`!!! ERROR IN ${functionName} for resource ${resourceId} !!!`, error.toString());
@@ -249,17 +219,11 @@ export async function createBooking_SA(
   actingUser: { id: string; name: string }
 ): Promise<string> {
   const functionName = "createBooking_SA V3 (Admin SDK)";
-  // console.log(`--- [${functionName}] ENTERING FUNCTION ---`);
-  // console.log(`[${functionName}] typeof window:`, typeof window);
-  // console.log(`[${functionName}] bookingPayload received:`, JSON.stringify(bookingPayload));
-  // console.log(`[${functionName}] actingUser received:`, JSON.stringify(actingUser));
 
   if (!adminDb) {
     console.error(`!!! CRITICAL ERROR IN ${functionName} !!! adminDb is not initialized!`);
     throw new Error("Firebase Admin SDK is not initialized on the server.");
   }
-  // console.log("[createBooking_SA V3] Using adminDb instance:", adminDb ? "adminDb is available" : "adminDb IS NULL OR UNDEFINED!!!");
-
 
   if (!actingUser || !actingUser.id || !actingUser.name) {
     throw new Error("Acting user information is missing for creating booking.");
@@ -278,11 +242,8 @@ export async function createBooking_SA(
     createdAt: FieldValue.serverTimestamp(),
   };
 
-  // console.log(`[${functionName}] Attempting to add booking to Firestore. Data:`, JSON.stringify(dataToSave, null, 2));
-
   try {
     const docRef = await adminDb.collection('bookings').add(dataToSave);
-    // console.log(`!!! SUCCESS !!! [${functionName}] Successfully created booking with Admin SDK. Doc ID: ${docRef.id}`);
 
     let auditDetails = `Booking for resource ${bookingPayload.resourceId} (User: ${bookingPayload.userId}) created by ${actingUser.name}. Status: ${bookingPayload.status}.`;
     if (actingUser.id !== bookingPayload.userId) {
@@ -325,11 +286,10 @@ export async function manageLabMembership_SA(
   targetUserName: string,
   labId: string,
   labName: string,
-  action: 'grant' | 'revoke' | 'approve_request' | 'reject_request', // Added approve/reject
-  membershipDocIdToUpdate?: string // Optional: ID of existing 'pending_approval' doc
+  action: 'grant' | 'revoke' | 'approve_request' | 'reject_request',
+  membershipDocIdToUpdate?: string
 ): Promise<{ success: boolean; message: string }> {
   const functionName = "manageLabMembership_SA V2";
-  console.log(`--- [${functionName}] ENTERING ---`, { adminUserId, targetUserId, labId, action, membershipDocIdToUpdate });
 
   if (!adminUserId || !adminUserName || !targetUserId || !labId || !labName) {
     throw new Error("Missing required parameters for managing lab membership.");
@@ -342,7 +302,6 @@ export async function manageLabMembership_SA(
     if (membershipDocIdToUpdate) {
       membershipDocRef = adminDb.collection('labMemberships').doc(membershipDocIdToUpdate);
     } else {
-      // For grant/revoke when no specific pending doc ID is given, query to find existing
       const q = adminDb.collection('labMemberships')
         .where('userId', '==', targetUserId)
         .where('labId', '==', labId)
@@ -362,14 +321,12 @@ export async function manageLabMembership_SA(
         updatedAt: now,
         actingAdminId: adminUserId,
       };
-      if (membershipDocRef) { // Existing doc (could be pending, rejected, or even active again)
+      if (membershipDocRef) {
         await membershipDocRef.update(membershipData);
-        console.log(`[${functionName}] Membership for user ${targetUserId} in lab ${labId} updated to active.`);
-      } else { // No existing doc, create new active membership
-        membershipData.requestedAt = now as Timestamp; // Set requestedAt if entirely new
-        membershipDocRef = adminDb.collection('labMemberships').doc(); // Generate new ID
+      } else {
+        membershipData.requestedAt = now as Timestamp;
+        membershipDocRef = adminDb.collection('labMemberships').doc();
         await membershipDocRef.set(membershipData);
-        console.log(`[${functionName}] New active membership created for user ${targetUserId} in lab ${labId}.`);
       }
       await addAuditLog(adminUserId, adminUserName, 'LAB_MEMBERSHIP_GRANTED', {
         entityType: 'LabMembership', entityId: membershipDocRef.id, secondaryEntityType: 'User', secondaryEntityId: targetUserId, details: `Admin ${adminUserName} granted user ${targetUserName} access to lab ${labName}.`
@@ -380,7 +337,6 @@ export async function manageLabMembership_SA(
     } else if (action === 'approve_request') {
       if (!membershipDocIdToUpdate || !membershipDocRef) throw new Error("Membership document ID required for approval.");
       await membershipDocRef.update({ status: 'active', updatedAt: now, actingAdminId: adminUserId });
-      console.log(`[${functionName}] Membership request ${membershipDocIdToUpdate} approved.`);
       await addAuditLog(adminUserId, adminUserName, 'LAB_MEMBERSHIP_APPROVED', {
         entityType: 'LabMembership', entityId: membershipDocIdToUpdate, secondaryEntityType: 'User', secondaryEntityId: targetUserId, details: `Admin ${adminUserName} approved lab access request for ${targetUserName} to lab ${labName}.`
       });
@@ -390,7 +346,6 @@ export async function manageLabMembership_SA(
     } else if (action === 'reject_request') {
       if (!membershipDocIdToUpdate || !membershipDocRef) throw new Error("Membership document ID required for rejection.");
       await membershipDocRef.update({ status: 'rejected', updatedAt: now, actingAdminId: adminUserId });
-      console.log(`[${functionName}] Membership request ${membershipDocIdToUpdate} rejected.`);
       await addAuditLog(adminUserId, adminUserName, 'LAB_MEMBERSHIP_REJECTED', {
         entityType: 'LabMembership', entityId: membershipDocIdToUpdate, secondaryEntityType: 'User', secondaryEntityId: targetUserId, details: `Admin ${adminUserName} rejected lab access request for ${targetUserName} to lab ${labName}.`
       });
@@ -400,14 +355,12 @@ export async function manageLabMembership_SA(
     } else if (action === 'revoke') {
       if (membershipDocRef) {
         await membershipDocRef.delete();
-        console.log(`[${functionName}] Membership for user ${targetUserId} in lab ${labId} deleted (revoked).`);
         await addAuditLog(adminUserId, adminUserName, 'LAB_MEMBERSHIP_REVOKED', {
           entityType: 'LabMembership', entityId: membershipDocRef.id, secondaryEntityType: 'User', secondaryEntityId: targetUserId, details: `Admin ${adminUserName} revoked ${targetUserName}'s access to lab ${labName}.`
         });
         await addNotification(targetUserId, 'Lab Access Revoked', `Your access to ${labName} has been revoked by an administrator.`, 'lab_access_revoked', '/dashboard');
         return { success: true, message: `Access to ${labName} revoked for ${targetUserName}.` };
       } else {
-        console.log(`[${functionName}] No existing membership found to revoke for user ${targetUserId} in lab ${labId}.`);
         return { success: false, message: `${targetUserName} does not have existing access to ${labName} to revoke.` };
       }
     }
@@ -425,10 +378,8 @@ export async function requestLabAccess_SA(
     labName: string
 ): Promise<{ success: boolean; message: string; membershipId?: string }> {
     const functionName = "requestLabAccess_SA";
-    console.log(`--- [${functionName}] ENTERING ---`, { requestingUserId, labId });
 
     try {
-        // Check if an active or pending membership already exists
         const existingQuery = adminDb.collection('labMemberships')
             .where('userId', '==', requestingUserId)
             .where('labId', '==', labId)
@@ -448,14 +399,12 @@ export async function requestLabAccess_SA(
             updatedAt: Timestamp.now(),
         };
         const docRef = await adminDb.collection('labMemberships').add(newMembershipData);
-        console.log(`[${functionName}] Lab access request created with ID: ${docRef.id}`);
 
         await addAuditLog(requestingUserId, requestingUserName, 'LAB_MEMBERSHIP_REQUESTED', {
             entityType: 'LabMembership', entityId: docRef.id, secondaryEntityType: 'Lab', secondaryEntityId: labId,
             details: `User ${requestingUserName} requested access to lab ${labName}.`
         });
 
-        // Notify Admins
         const adminUsersQuery = adminDb.collection('users').where('role', '==', 'Admin');
         const adminSnapshot = await adminUsersQuery.get();
         adminSnapshot.forEach(adminDoc => {
@@ -464,7 +413,7 @@ export async function requestLabAccess_SA(
                 'New Lab Access Request',
                 `${requestingUserName} has requested access to ${labName}. Please review in Lab Management.`,
                 'lab_access_request_received',
-                '/admin/inventory?tab=lab-access-requests'
+                '/admin/inventory?tab=lab-access-requests' // Note: This link might need updating to /admin/lab-management-v2?tab=lab-access-requests
             );
         });
 
@@ -479,10 +428,9 @@ export async function cancelLabAccessRequest_SA(
     requestingUserId: string,
     requestingUserName: string,
     membershipId: string,
-    labName: string // For audit log/notification messages
+    labName: string
 ): Promise<{ success: boolean; message: string }> {
     const functionName = "cancelLabAccessRequest_SA";
-    console.log(`--- [${functionName}] ENTERING ---`, { requestingUserId, membershipId });
 
     try {
         const membershipDocRef = adminDb.collection('labMemberships').doc(membershipId);
@@ -499,7 +447,6 @@ export async function cancelLabAccessRequest_SA(
         }
 
         await membershipDocRef.delete();
-        console.log(`[${functionName}] Lab access request ${membershipId} cancelled.`);
 
         await addAuditLog(requestingUserId, requestingUserName, 'LAB_MEMBERSHIP_CANCELLED', {
             entityType: 'LabMembership', entityId: membershipId, secondaryEntityType: 'Lab', secondaryEntityId: docSnap.data()?.labId,
@@ -517,10 +464,9 @@ export async function leaveLab_SA(
     requestingUserId: string,
     requestingUserName: string,
     membershipId: string,
-    labName: string // For audit log/notification messages
+    labName: string
 ): Promise<{ success: boolean; message: string }> {
     const functionName = "leaveLab_SA";
-    console.log(`--- [${functionName}] ENTERING ---`, { requestingUserId, membershipId });
 
     try {
         const membershipDocRef = adminDb.collection('labMemberships').doc(membershipId);
@@ -537,14 +483,12 @@ export async function leaveLab_SA(
         }
 
         await membershipDocRef.delete();
-        console.log(`[${functionName}] User ${requestingUserId} left lab via membership ${membershipId}.`);
 
         await addAuditLog(requestingUserId, requestingUserName, 'LAB_MEMBERSHIP_LEFT', {
             entityType: 'LabMembership', entityId: membershipId, secondaryEntityType: 'Lab', secondaryEntityId: docSnap.data()?.labId,
             details: `User ${requestingUserName} left lab ${labName}.`
         });
         
-        // Optionally notify admins that a user left a lab
         const adminUsersQuery = adminDb.collection('users').where('role', '==', 'Admin');
         const adminSnapshot = await adminUsersQuery.get();
         adminSnapshot.forEach(adminDoc => {
@@ -552,8 +496,8 @@ export async function leaveLab_SA(
                 adminDoc.id,
                 'User Left Lab',
                 `${requestingUserName} has voluntarily left ${labName}.`,
-                'lab_access_left', // New notification type might be needed
-                `/admin/users` // Link to user management or lab management page
+                'lab_access_left',
+                `/admin/users`
             );
         });
 
@@ -563,4 +507,3 @@ export async function leaveLab_SA(
         return { success: false, message: `Failed to leave lab: ${error.message}` };
     }
 }
-

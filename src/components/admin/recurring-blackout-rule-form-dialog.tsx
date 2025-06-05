@@ -38,10 +38,10 @@ interface RecurringBlackoutRuleFormDialogProps {
   initialRule: RecurringBlackoutRule | null;
   onSave: (data: RecurringBlackoutRuleFormValues) => Promise<void>;
   labs: Lab[];
-  currentLabContextId?: string; // Optional: To pre-fill "Applies To"
+  currentLabContextId?: string;
 }
 
-const GLOBAL_CLOSURE_VALUE = "--global--"; // Represents the null/undefined labId for global closures
+const GLOBAL_CLOSURE_VALUE = "--global--";
 
 export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRule, onSave, labs, currentLabContextId }: RecurringBlackoutRuleFormDialogProps) {
   const form = useForm<RecurringBlackoutRuleFormValues>({
@@ -68,14 +68,14 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
       daysOfWeek: initialRule?.daysOfWeek || [],
       reason: initialRule?.reason || '',
     });
-  }, [initialRule, form.reset, currentLabContextId]);
+  }, [initialRule, form, currentLabContextId]);
 
   useEffect(() => {
     if (open) {
       setIsSubmitting(false);
       resetForm();
     }
-  }, [open, initialRule, currentLabContextId, form.reset, resetForm]); 
+  }, [open, resetForm]);
 
   async function onSubmit(data: RecurringBlackoutRuleFormValues) {
     setIsSubmitting(true);
@@ -86,7 +86,7 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
     try {
         await onSave(dataToSave);
     } catch (error) {
-        console.error("Error in RecurringBlackoutRuleFormDialog onSubmit:", error);
+        // Parent handles toast
     } finally {
         setIsSubmitting(false);
     }
@@ -97,8 +97,8 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
         const labName = initialRule.labId ? (labs.find(l=>l.id === initialRule.labId)?.name || 'Specific Lab') : 'All Labs';
         return `Modify the rule "${initialRule.name}". Applies to: ${labName}.`;
     }
-    const contextLabName = currentLabContextId && currentLabContextId !== GLOBAL_CLOSURE_VALUE 
-                           ? (labs.find(l => l.id === currentLabContextId)?.name || 'Selected Lab') 
+    const contextLabName = currentLabContextId && currentLabContextId !== GLOBAL_CLOSURE_VALUE
+                           ? (labs.find(l => l.id === currentLabContextId)?.name || 'Selected Lab')
                            : 'Global (All Labs)';
     return `Define a new weekly recurring closure. It will default to applying to: ${contextLabName}. You can change this below.`;
   }, [initialRule, labs, currentLabContextId]);
@@ -120,9 +120,9 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Applies To</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    value={field.value || GLOBAL_CLOSURE_VALUE} 
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || GLOBAL_CLOSURE_VALUE}
                     disabled={isSubmitting}
                   >
                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>

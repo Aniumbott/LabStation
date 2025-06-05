@@ -27,7 +27,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { login, currentUser, isLoading: authIsLoading } = useAuth();
   const [pageErrorMessage, setPageErrorMessage] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false); // Form-specific submitting state
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -38,48 +38,38 @@ export default function LoginPage() {
   });
 
   useEffect(() => {
-    // Redirect if user is already logged in and auth check is complete
     if (!authIsLoading && currentUser) {
       router.push('/dashboard');
     }
   }, [currentUser, authIsLoading, router]);
 
   useEffect(() => {
-    // Display messages set by AuthContext (e.g., pending approval)
     if (typeof window !== 'undefined') {
       const storedMessage = localStorage.getItem('login_message');
       if (storedMessage) {
         setPageErrorMessage(storedMessage);
-        // Optional: Clear the message after displaying it, or let AuthContext handle it.
-        // localStorage.removeItem('login_message'); 
       }
     }
-  }, [authIsLoading]); // Re-check if authIsLoading changes, as message might be set then.
+  }, [authIsLoading]);
 
 
   const onSubmit = async (data: LoginFormValues) => {
-    setPageErrorMessage(null); // Clear previous page-level errors
+    setPageErrorMessage(null);
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('login_message'); // Clear any auth context messages before new attempt
+      localStorage.removeItem('login_message');
     }
     setIsSubmitting(true);
     
     const result = await login(data.email, data.password);
     
     if (!result.success) {
-      // Login function itself failed (e.g., Firebase auth error)
-      // OR onAuthStateChanged determined user is not 'active' and set login_message
       const finalMessage = result.message || (typeof window !== 'undefined' ? localStorage.getItem('login_message') : null) || "Login failed. An unknown error occurred.";
       setPageErrorMessage(finalMessage);
     }
-    // If result.success is true, the useEffect above will handle redirection
-    // once currentUser is set by onAuthStateChanged and authIsLoading becomes false.
     setIsSubmitting(false);
   };
   
-  // Show loader if AuthContext is still loading and there's no current user yet.
-  // This prevents flashing the login form if a session is being restored.
-  if (authIsLoading && !currentUser) { 
+  if (authIsLoading && !currentUser) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -87,8 +77,6 @@ export default function LoginPage() {
     );
   }
   
-  // If currentUser becomes available (and not authLoading), useEffect will redirect.
-  // This case is to prevent rendering the form if already logged in but redirect hasn't happened.
   if (currentUser) {
      return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -165,5 +153,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
-    

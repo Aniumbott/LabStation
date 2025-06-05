@@ -1,2 +1,4 @@
-// This file was for testing Firestore writes and is no longer needed.
+
+// This file is deprecated and no longer used.
+// Its functionality has been consolidated or removed.
 // This file can be safely deleted.

@@ -33,7 +33,7 @@ const NONE_PROTOCOL_VALUE = "--none-protocol--";
 const resourceFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, { message: 'Name cannot exceed 100 characters.' }),
   resourceTypeId: z.string().min(1, { message: 'Please select a resource type.' }),
-  labId: z.string().min(1, { message: 'Please select a lab.' }), // Changed from lab to labId
+  labId: z.string().min(1, { message: 'Please select a lab.' }),
   status: z.enum(resourceStatusesList as [ResourceStatus, ...ResourceStatus[]], { required_error: 'Please select a status.'}),
   description: z.string().max(500, { message: 'Description cannot exceed 500 characters.' }).optional().or(z.literal('')),
   imageUrl: z.string().url({ message: 'Please enter a valid URL for the image.' }).optional().or(z.literal('')),
@@ -74,11 +74,11 @@ interface ResourceFormDialogProps {
   initialResource: Resource | null;
   onSave: (data: ResourceFormValues, resourceIdToUpdate?: string) => Promise<void>;
   resourceTypes: ResourceType[];
-  labs: Lab[]; // Added labs prop
+  labs: Lab[];
 }
 
 export function ResourceFormDialog({
-    open, onOpenChange, initialResource, onSave, resourceTypes, labs // Added labs
+    open, onOpenChange, initialResource, onSave, resourceTypes, labs
 }: ResourceFormDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -87,7 +87,7 @@ export function ResourceFormDialog({
     defaultValues: {
         name: '',
         resourceTypeId: '',
-        labId: '', // Changed from lab to labId
+        labId: '',
         status: 'Working',
         description: '',
         imageUrl: '',
@@ -109,7 +109,7 @@ export function ResourceFormDialog({
       form.reset({
         name: initialResource.name,
         resourceTypeId: initialResource.resourceTypeId,
-        labId: initialResource.labId, // Changed from lab to labId
+        labId: initialResource.labId,
         status: initialResource.status,
         description: initialResource.description || '',
         imageUrl: initialResource.imageUrl || '',
@@ -135,7 +135,7 @@ export function ResourceFormDialog({
       form.reset({
         name: '',
         resourceTypeId: resourceTypes.length > 0 ? resourceTypes[0].id : '',
-        labId: labs.length > 0 ? labs[0].id : '', // Default to first labId
+        labId: labs.length > 0 ? labs[0].id : '',
         status: 'Working',
         description: '',
         imageUrl: '',
@@ -151,14 +151,14 @@ export function ResourceFormDialog({
         allowQueueing: false,
       });
     }
-  }, [initialResource, resourceTypes, labs, form.reset]); // Added labs
+  }, [initialResource, resourceTypes, labs, form]);
 
   useEffect(() => {
     if (open) {
       setIsSubmitting(false);
       resetForm();
     }
-  }, [open, initialResource, resourceTypes, labs, form.reset, resetForm]); // Added labs
+  }, [open, resetForm]);
 
 
   async function onSubmit(data: ResourceFormValues) {
@@ -183,7 +183,7 @@ export function ResourceFormDialog({
       await onSave(processedData, initialResource?.id);
 
     } catch (error) {
-      console.error("Error during resource save submission:", error);
+      // Parent handles toast
     } finally {
       setIsSubmitting(false);
     }
@@ -237,14 +237,14 @@ export function ResourceFormDialog({
                     />
                     <FormField
                       control={form.control}
-                      name="labId" // Changed from lab to labId
+                      name="labId"
                       render={({ field }) => (
                           <FormItem>
                           <FormLabel>Lab <span className="text-destructive">*</span></FormLabel>
                           <Select onValueChange={field.onChange} value={field.value || ''} disabled={labs.length === 0 || isSubmitting}>
                               <FormControl><SelectTrigger><SelectValue placeholder={labs.length > 0 ? "Select a lab" : "No labs defined"} /></SelectTrigger></FormControl>
                               <SelectContent>
-                              {labs.length > 0 ? labs.map(lab => ( // Use dynamic labs list
+                              {labs.length > 0 ? labs.map(lab => (
                                   <SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>
                               )) : <SelectItem value="disabled_placeholder_no_labs" disabled>No labs available. Add labs in Lab Management.</SelectItem>}
                               </SelectContent>

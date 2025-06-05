@@ -74,8 +74,7 @@ export function LabFormDialog({ open, onOpenChange, initialLab, onSave }: LabFor
     try {
       await onSave(data);
     } catch (error) {
-      console.error("Error in LabFormDialog onSubmit:", error);
-      // Parent component should handle toast for save errors
+      // Parent handles toast
     } finally {
       setIsSubmitting(false);
     }

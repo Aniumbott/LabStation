@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils';
 
 const blackoutDateFormSchema = z.object({
   labId: z.string().optional().nullable(),
-  date: z.date({ 
+  date: z.date({
     required_error: "A date is required.",
     invalid_type_error: "That's not a valid date!",
   }),
@@ -41,10 +41,10 @@ interface BlackoutDateFormDialogProps {
   initialBlackoutDate: BlackoutDate | null;
   onSave: (data: BlackoutDateFormValues) => Promise<void>;
   labs: Lab[];
-  currentLabContextId?: string; // Optional: To pre-fill "Applies To"
+  currentLabContextId?: string;
 }
 
-const GLOBAL_CLOSURE_VALUE = "--global--"; // Represents the null/undefined labId for global closures
+const GLOBAL_CLOSURE_VALUE = "--global--";
 
 export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate, onSave, labs, currentLabContextId }: BlackoutDateFormDialogProps) {
   const form = useForm<BlackoutDateFormValues>({
@@ -66,15 +66,15 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
         defaultLabId = currentLabContextId;
     }
 
-    const dateToSet = initialBlackoutDate?.date && isValidDateFn(parseISO(initialBlackoutDate.date)) 
-                      ? parseISO(initialBlackoutDate.date) 
+    const dateToSet = initialBlackoutDate?.date && isValidDateFn(parseISO(initialBlackoutDate.date))
+                      ? parseISO(initialBlackoutDate.date)
                       : startOfDay(new Date());
     form.reset({
       labId: defaultLabId,
       date: dateToSet,
       reason: initialBlackoutDate?.reason || '',
     });
-  }, [initialBlackoutDate, form.reset, currentLabContextId]);
+  }, [initialBlackoutDate, form, currentLabContextId]);
 
 
   useEffect(() => {
@@ -82,7 +82,7 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
       setIsSubmitting(false);
       resetForm();
     }
-  }, [open, initialBlackoutDate, currentLabContextId, form.reset, resetForm]);
+  }, [open, resetForm]);
 
   async function onSubmit(data: BlackoutDateFormValues) {
     setIsSubmitting(true);
@@ -91,21 +91,21 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
       labId: data.labId === GLOBAL_CLOSURE_VALUE ? null : data.labId,
     };
     try {
-      await onSave(dataToSave); 
+      await onSave(dataToSave);
     } catch (error) {
-      console.error("Error in BlackoutDateFormDialog onSubmit:", error);
+      // Parent handles toast
     } finally {
       setIsSubmitting(false);
     }
   }
-  
+
   const dialogDescription = useMemo(() => {
     if (initialBlackoutDate && initialBlackoutDate.date) {
         const labName = initialBlackoutDate.labId ? (labs.find(l=>l.id === initialBlackoutDate.labId)?.name || 'Specific Lab') : 'All Labs';
         return `Modify the blackout. Applies to: ${labName}.`;
     }
-    const contextLabName = currentLabContextId && currentLabContextId !== GLOBAL_CLOSURE_VALUE 
-                           ? (labs.find(l => l.id === currentLabContextId)?.name || 'Selected Lab') 
+    const contextLabName = currentLabContextId && currentLabContextId !== GLOBAL_CLOSURE_VALUE
+                           ? (labs.find(l => l.id === currentLabContextId)?.name || 'Selected Lab')
                            : 'Global (All Labs)';
     return `Select a date for the new closure. It will default to applying to: ${contextLabName}. You can change this below.`;
   }, [initialBlackoutDate, labs, currentLabContextId]);
@@ -128,9 +128,9 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Applies To</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    value={field.value || GLOBAL_CLOSURE_VALUE} 
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || GLOBAL_CLOSURE_VALUE}
                     disabled={isSubmitting}
                   >
                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
@@ -179,7 +179,7 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
                             if(date) field.onChange(startOfDay(date));
                             setIsCalendarOpen(false);
                         }}
-                        disabled={(date) => date < startOfDay(new Date()) && !initialBlackoutDate } 
+                        disabled={(date) => date < startOfDay(new Date()) && !initialBlackoutDate }
                         initialFocus
                       />
                     </PopoverContent>

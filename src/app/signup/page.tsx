@@ -50,7 +50,7 @@ export default function SignupPage() {
   const onSubmit = async (data: SignupFormValues) => {
     setErrorMessage(null);
     setSuccessMessage(null);
-    form.control.disabled = true; // Visually disable form
+    form.control.disabled = true;
     try {
       const result = await signup(data.name, data.email, data.password);
       if (result.success) {
@@ -60,7 +60,6 @@ export default function SignupPage() {
           description: result.message || 'Your account request has been submitted for approval.',
           duration: 5000,
         });
-        // Optionally redirect after a delay or let user click a link
         setTimeout(() => {
           router.push('/login');
         }, 3000);
@@ -68,10 +67,9 @@ export default function SignupPage() {
         setErrorMessage(result.message || 'Signup failed. Please try again.');
       }
     } catch (error) {
-      console.error("Signup submission error:", error);
       setErrorMessage("An unexpected error occurred. Please try again.");
     } finally {
-      if(!successMessage) { // Only re-enable if no success (as success leads to redirect)
+      if(!successMessage) {
          form.control.disabled = false;
       }
     }

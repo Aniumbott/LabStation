@@ -170,7 +170,6 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       bookings.sort((a, b) => compareAsc(a.startTime, b.startTime));
       setAllBookingsDataSource(bookings);
     } catch (error: any) {
-      console.error("Error fetching bookings:", error);
       toast({ title: "Error Loading Bookings", description: `Failed to load bookings. ${error.message}`, variant: "destructive" });
       setAllBookingsDataSource([]);
     }
@@ -183,7 +182,6 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     setIsLoadingAvailabilityRules(true);
     setIsLoadingUsersForFilter(true);
     try {
-      // Fetch User's Lab Memberships
       let activeUserLabIds: string[] = [];
       if (currentUser && currentUser.id && currentUser.role !== 'Admin') {
           const membershipsQuery = query(collection(db, 'labMemberships'), where('userId', '==', currentUser.id), where('status', '==', 'active'));
@@ -192,13 +190,11 @@ function BookingsPageContent({}: BookingsPageContentProps) {
           setUserLabMemberships(memberships);
           activeUserLabIds = memberships.map(m => m.labId);
       } else if (currentUser && currentUser.role === 'Admin') {
-        // Admins have access to all labs implicitly for resource listing
         const allLabsSnapshot = await getDocs(query(collection(db, 'labs')));
         activeUserLabIds = allLabsSnapshot.docs.map(lDoc => lDoc.id);
       }
 
 
-      // Fetch Resources, filtered by lab access if not Admin
       const resourcesQueryInstance = query(collection(db, 'resources'), orderBy('name', 'asc'));
       const resourcesSnapshot = await getDocs(resourcesQueryInstance);
       let resourcesData = resourcesSnapshot.docs.map(docSnap => {
@@ -219,7 +215,6 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       setAllAvailableResources(resourcesData);
 
     } catch (error: any) {
-      console.error("Error fetching resources/memberships:", error);
       setAllAvailableResources([]);
       setUserLabMemberships([]);
     } finally {
@@ -231,7 +226,6 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       const usersSnapshot = await getDocs(usersQuery);
       setAllUsersForFilter(usersSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as User)));
     } catch (error: any) {
-      console.error("Error fetching users for filter:", error);
       setAllUsersForFilter([]);
     } finally {
       setIsLoadingUsersForFilter(false);
@@ -246,7 +240,6 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       const recurringSnapshot = await getDocs(recurringQuery);
       setFetchedRecurringRules(recurringSnapshot.docs.map(r => ({ id: r.id, ...r.data() } as any)));
     } catch (error: any) {
-      console.error("Error fetching blackout/recurring rules:", error);
       setFetchedBlackoutDates([]);
       setFetchedRecurringRules([]);
     } finally {
@@ -316,7 +309,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     if (bookingToEdit) {
       bookingData = {
         ...bookingToEdit,
-        userId: bookingToEdit.userId, // Ensure userId is passed for existing bookings
+        userId: bookingToEdit.userId,
       };
     } else {
       const initialResourceId = resourceIdForNew || (allAvailableResources.length > 0 ? allAvailableResources[0].id : '');
@@ -324,7 +317,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         startTime: defaultStartTime,
         endTime: new Date(defaultStartTime.getTime() + 2 * 60 * 60 * 1000),
         createdAt: new Date(),
-        userId: currentUser.id, // For new bookings, default requester is current user
+        userId: currentUser.id,
         resourceId: initialResourceId,
         status: 'Pending',
         notes: '',
@@ -529,9 +522,6 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
     if (!selectedResource) {
       toast({ title: "Resource Not Found", variant: "destructive" }); return;
     }
-    // if (selectedResource.status !== 'Working') { // This check will be done by server action too
-    //   toast({ title: "Resource Not Operational", description: `"${selectedResource.name}" is ${selectedResource.status.toLowerCase()}.`, variant: "destructive", duration: 7000 }); return;
-    // }
 
     let finalStartTime: Date; let finalEndTime: Date;
     try {
@@ -543,7 +533,6 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
     if (isNewBooking && isBefore(startOfDay(finalStartTime), startOfToday())) { toast({ title: "Invalid Date", description: "Cannot book past dates.", variant: "destructive" }); return; }
     if (finalEndTime <= finalStartTime) { toast({ title: "Invalid Time", description: "End time must be after start time.", variant: "destructive" }); return; }
 
-    // Lab closure check
     const resourceLabId = selectedResource.labId;
     const bookingDayIndex = getDay(finalStartTime);
     const bookingDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][bookingDayIndex];
@@ -565,7 +554,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
       for (const period of selectedResource.unavailabilityPeriods) {
         if (!period.startDate || !period.endDate) continue;
         const unavailabilityStart = startOfDay(parseISO(period.startDate));
-        const unavailabilityEnd = dateFnsAddDays(startOfDay(parseISO(period.endDate)), 1); // end is exclusive
+        const unavailabilityEnd = dateFnsAddDays(startOfDay(parseISO(period.endDate)), 1);
         if ((finalStartTime >= unavailabilityStart && finalStartTime < unavailabilityEnd) || (finalEndTime > unavailabilityStart && finalEndTime <= unavailabilityEnd) || (finalStartTime <= unavailabilityStart && finalEndTime >= unavailabilityEnd)) {
           toast({ title: "Resource Unavailable", description: `${selectedResource.name} unavailable: ${period.reason || 'Scheduled Unavailability'}.`, variant: "destructive", duration: 7000 }); return;
         }
@@ -575,9 +564,8 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
     let finalStatus: Booking['status'] = isNewBooking ? 'Pending' : (formData.status || 'Pending');
     let conflictingBookingFound: (Booking & { id: string }) | undefined = undefined;
 
-    if (isNewBooking) { // Conflict check only for new bookings server-side
+    if (isNewBooking) {
       setIsLoadingBookings(true);
-      // This client-side check is indicative; server-side is definitive.
       const bookingsCollectionRef = collection(db, 'bookings');
       const q = query( bookingsCollectionRef, where('resourceId', '==', formData.resourceId!), where('status', 'in', ['Confirmed', 'Pending']), where('startTime', '<', Timestamp.fromDate(finalEndTime)), where('endTime', '>', Timestamp.fromDate(finalStartTime)));
       try {
@@ -870,7 +858,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                        const canAdministerBooking = currentUser?.role === 'Admin';
 
                        const canEditThisBooking = canAdministerBooking || (isCurrentUserBooking && (booking.status === 'Pending' || booking.status === 'Waitlisted' || booking.status === 'Confirmed'));
-                       const canCancelThisBooking = canAdministerBooking || isCurrentUserBooking; // Includes admins cancelling any, others cancelling their own
+                       const canCancelThisBooking = canAdministerBooking || isCurrentUserBooking;
 
                         return (
                         <TableRow key={booking.id} className={cn(booking.status === 'Cancelled' && 'opacity-60')}>
@@ -1040,7 +1028,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUser, allAvailableR
           if (newEndDateTime.getHours() > 17 || (newEndDateTime.getHours() === 17 && newEndDateTime.getMinutes() > 0)) form.setValue('endTime', '17:00', { shouldValidate: true });
           else form.setValue('endTime', format(newEndDateTime, 'HH:mm'), { shouldValidate: true });
         }
-      } catch (e) { console.error("Error auto-adjusting end time:", e); }
+      } catch (e) { /* Silent catch for auto-adjust logic */ }
     }
   }, [watchStartTime, watchBookingDate, form]);
 

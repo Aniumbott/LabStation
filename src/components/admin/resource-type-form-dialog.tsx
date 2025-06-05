@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Save, X, PlusCircle } from 'lucide-react';
+import { Save, X, PlusCircle, Loader2 } from 'lucide-react'; // Added Loader2
 import type { ResourceType } from '@/types';
 
 const resourceTypeFormSchema = z.object({
@@ -59,8 +59,8 @@ export function ResourceTypeFormDialog({ open, onOpenChange, initialType, onSave
     }
   }, [open, initialType, form.reset]);
 
-  function onSubmit(data: ResourceTypeFormValues) {
-    onSave(data);
+  async function onSubmit(data: ResourceTypeFormValues) {
+    onSave(data); // Parent should handle isSubmitting and toast
   }
 
   return (
@@ -81,7 +81,7 @@ export function ResourceTypeFormDialog({ open, onOpenChange, initialType, onSave
                 <FormItem>
                   <FormLabel>Type Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Electron Microscope" {...field} />
+                    <Input placeholder="e.g., Electron Microscope" {...field} disabled={form.formState.isSubmitting}/>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -94,20 +94,24 @@ export function ResourceTypeFormDialog({ open, onOpenChange, initialType, onSave
                 <FormItem>
                   <FormLabel>Description (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="A brief description of this resource category..." {...field} value={field.value || ''}/>
+                    <Textarea placeholder="A brief description of this resource category..." {...field} value={field.value || ''} disabled={form.formState.isSubmitting}/>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={form.formState.isSubmitting}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting 
-                  ? (initialType ? 'Saving...' : 'Creating...') 
-                  : (initialType ? <><Save className="mr-2 h-4 w-4" /> Save Changes</> : <><PlusCircle className="mr-2 h-4 w-4" /> Create Type</>)
+                {form.formState.isSubmitting
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  : (initialType ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)
+                }
+                {form.formState.isSubmitting
+                  ? (initialType ? 'Saving...' : 'Creating...')
+                  : (initialType ? 'Save Changes' : 'Create Type')
                 }
               </Button>
             </DialogFooter>

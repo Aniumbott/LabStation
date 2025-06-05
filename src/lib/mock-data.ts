@@ -1,2 +1,4 @@
-// This file is no longer needed as its content was moved or is obsolete.
+
+// This file is deprecated and no longer used.
+// Its functionality has been consolidated or removed.
 // This file can be safely deleted.

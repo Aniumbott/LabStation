@@ -30,7 +30,6 @@ export default function ProfilePage() {
   const [editableName, setEditableName] = useState('');
   const [isSavingName, setIsSavingName] = useState(false);
 
-  // Password Change State
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -73,7 +72,6 @@ export default function ProfilePage() {
         });
       }
     } catch (error: any) {
-      console.error("Profile update error:", error);
       toast({
         title: "Error",
         description: error.message || "An unexpected error occurred while updating your profile.",
@@ -102,13 +100,8 @@ export default function ProfilePage() {
     }
 
     setIsSavingPassword(true);
-    // Simulate API delay for password change
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // In a real app, you would call an API to change the password.
-    // For this mock, we'll just simulate success.
-    // We won't actually compare currentPassword for simplicity in mock.
-    // Assume the backend handles current password verification.
 
     setIsSavingPassword(false);
     setPasswordChangeSuccess("Password changed successfully (mock). Please use your new password next time you log in.");
@@ -159,7 +152,7 @@ export default function ProfilePage() {
     );
   }
 
-  if (!currentUser) return null; 
+  if (!currentUser) return null;
 
   return (
     <div className="space-y-8">
@@ -333,7 +326,7 @@ export default function ProfilePage() {
             </div>
           </CardContent>
           <Separator />
-          <CardFooter className="p-6 flex justify-start"> {/* Changed to justify-start for Logout button */}
+          <CardFooter className="p-6 flex justify-start">
             <Button variant="destructive" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Logout
@@ -344,4 +337,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-

@@ -15,7 +15,7 @@ import {
 import { auth, db } from '@/lib/firebase';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp, Timestamp, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { addNotification, addAuditLog } from '@/lib/firestore-helpers';
-import { useToast } from '@/hooks/use-toast'; // Added useToast
+import { useToast } from '@/hooks/use-toast';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -31,7 +31,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { toast } = useToast(); // Initialize toast
+  const { toast } = useToast();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               };
               setCurrentUser(appUser);
               if (typeof window !== 'undefined') {
-                localStorage.setItem('labstation_user', JSON.stringify(appUser)); 
+                localStorage.setItem('labstation_user', JSON.stringify(appUser));
               }
             } else {
               let message = 'Your account is not active.';
@@ -80,13 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
           }
         } catch (error) {
-          console.error("AuthContext: Error fetching Firestore user profile:", error);
           const profileErrorMsg = 'Error retrieving your profile during login. Please try again or contact support.';
           if (typeof window !== 'undefined') localStorage.setItem('login_message', profileErrorMsg);
           try {
             await firebaseSignOut(auth);
           } catch (signOutError) {
-            console.error("AuthContext: Error signing out after profile fetch error:", signOutError);
+            // Silent fail on signout error after profile fetch error
           }
           setCurrentUser(null);
           if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
@@ -106,7 +105,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password?: string): Promise<{ success: boolean; message?: string }> => {
     if (!password) return { success: false, message: "Password is required." };
     
-    console.log(`AuthContext: Attempting login for email: [${email}]`);
     setIsLoading(true);
     if (typeof window !== 'undefined') localStorage.removeItem('login_message');
     
@@ -114,7 +112,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await signInWithEmailAndPassword(auth, email, password);
       return { success: true };
     } catch (error: any) {
-      console.error("Firebase login error object:", error); 
       let message = "Login failed. Please check your credentials or contact support.";
 
       if (error.code === 'auth/invalid-credential') {
@@ -131,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       if (typeof window !== 'undefined') localStorage.setItem('login_message', message);
-      setIsLoading(false); 
+      setIsLoading(false);
       return { success: false, message: message };
     }
   }, []);
@@ -141,7 +138,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await firebaseSignOut(auth);
     } catch (error) {
-      console.error("AuthContext: Firebase logout error:", error);
       setCurrentUser(null);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('labstation_user');
@@ -176,8 +172,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const adminUsersQuery = query(
           collection(db, "users"),
-          where("role", "in", ["Admin", "Lab Manager"]),
-          orderBy("name", "asc") // Added for index consistency
+          where("role", "in", ["Admin"]), // Removed 'Lab Manager' as per type changes
+          orderBy("name", "asc")
         );
         const adminUsersSnapshot = await getDocs(adminUsersQuery);
         const notificationPromises = adminUsersSnapshot.docs.map(adminDoc => {
@@ -193,9 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return Promise.resolve();
         });
         await Promise.all(notificationPromises);
-        console.log("Admin notifications sent for new signup.");
       } catch (adminNotificationError: any) {
-          console.error("Error sending signup notifications to admins:", adminNotificationError);
           toast({
               title: "Admin Notification Failed",
               description: `Signup was successful, but failed to notify admins: ${adminNotificationError.message}`,
@@ -204,12 +198,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
       }
       
-      await firebaseSignOut(auth); 
+      await firebaseSignOut(auth);
       setIsLoading(false);
       return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: firebaseUser.uid };
     } catch (error: any) {
       setIsLoading(false);
-      console.error("Firebase signup error:", error);
       let message = "Signup failed. Please try again.";
       if (error.code === 'auth/email-already-in-use') {
         message = "This email address is already in use by another account.";
@@ -274,7 +267,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: true, message: "Profile updated successfully." };
     } catch (error: any) {
       setIsLoading(false);
-      console.error("Firebase profile update error:", error);
       return { success: false, message: error.message || "Failed to update profile." };
     }
   }, [currentUser]);
@@ -293,4 +285,3 @@ export function useAuth() {
   }
   return context;
 }
-
