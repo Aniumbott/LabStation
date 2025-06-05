@@ -821,7 +821,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
         }
       />
        <Card className="shadow-lg">
-            <CardHeader className="border-b flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-2">
+            <CardHeader className="pb-3 border-b-0 flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-2">
                 <div>
                     <CardTitle>
                     {activeSelectedDate ? `Bookings for ${formatDateSafe(activeSelectedDate, 'this day', 'PPP')}` :
@@ -837,7 +837,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
             {isLoadingAnyData && bookingsToDisplay.length === 0 && allBookingsDataSource.length === 0 ? (
                 <div className="text-center py-10 text-muted-foreground"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary mb-2" />Loading bookings...</div>
             ) : bookingsToDisplay.length > 0 ? (
-                <div className="overflow-x-auto rounded-md border">
+                <div className="overflow-x-auto border-l border-r border-b rounded-b-lg rounded-t-none">
                 <Table>
                     <TableHeader>
                     <TableRow>
@@ -1097,3 +1097,4 @@ export default function BookingsPage() {
     </Suspense>
   );
 }
+
