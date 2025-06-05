@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter, Clock, Info, Loader2, User as UserIcon, Package as ResourceIcon, CheckCircle2, StickyNote } from 'lucide-react';
+import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, Filter as FilterIcon, Clock, Info, Loader2, User as UserIcon, Package as ResourceIcon, CheckCircle2, StickyNote } from 'lucide-react';
 import type { Booking, Resource, User, ResourceStatus } from '@/types';
 import { addNotification, addAuditLog, processWaitlistForResource } from '@/lib/firestore-helpers';
 import { useAuth } from '@/components/auth-context';
@@ -338,8 +338,8 @@ export default function BookingRequestsPage() {
             <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
-                  <ListFilter className="mr-2 h-4 w-4" />
-                  Filters
+                  <FilterIcon className="mr-2 h-4 w-4" />
+                  Filter
                   {activeFilterCount > 0 && (
                     <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
                       {activeFilterCount}
@@ -517,4 +517,3 @@ export default function BookingRequestsPage() {
     </TooltipProvider>
   );
 }
-

@@ -5,7 +5,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation'; // Added
 import { PageHeader } from '@/components/layout/page-header';
-import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare, UserPlus2, Briefcase } from 'lucide-react';
+import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare, UserPlus2, Briefcase } from 'lucide-react';
 import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus, DayOfWeek } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -1053,7 +1053,7 @@ export default function LabOperationsCenterPage() {
                   <div><CardTitle className="text-xl">Labs</CardTitle><p className="text-sm text-muted-foreground mt-1">Define laboratory locations and view their resource/member counts.</p></div>
                   <div className="flex gap-2 flex-wrap">
                     <FilterSortDialog open={isLabFilterDialogOpen} onOpenChange={setIsLabFilterDialogOpen}>
-                      <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter & Sort {activeLabFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeLabFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
+                      <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter {activeLabFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeLabFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
                       <FilterSortDialogContent className="sm:max-w-md">
                         <FilterSortDialogHeader><FilterSortDialogTitle>Filter & Sort Labs</FilterSortDialogTitle></FilterSortDialogHeader>
                         <Separator className="my-3" />
@@ -1121,7 +1121,7 @@ export default function LabOperationsCenterPage() {
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <div><CardTitle className="text-xl">Global Lab Closures</CardTitle><p className="text-sm text-muted-foreground mt-1">Manage blackout dates and recurring rules that apply system-wide (to all labs).</p></div>
                      <FilterSortDialog open={isGlobalClosureFilterDialogOpen} onOpenChange={setIsGlobalClosureFilterDialogOpen}>
-                      <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter Closures {activeGlobalClosureFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeGlobalClosureFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
+                      <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter {activeGlobalClosureFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeGlobalClosureFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
                       <FilterSortDialogContent className="sm:max-w-md">
                         <FilterSortDialogHeader><FilterSortDialogTitle>Filter Global Closures</FilterSortDialogTitle></FilterSortDialogHeader>
                         <Separator className="my-3" />
@@ -1206,7 +1206,7 @@ export default function LabOperationsCenterPage() {
                     <FilterSortDialog open={isMaintenanceFilterDialogOpen} onOpenChange={setIsMaintenanceFilterDialogOpen}>
                       <FilterSortDialogTrigger asChild>
                         <Button variant="outline" size="sm">
-                          <ListFilter className="mr-2 h-4 w-4" />Filters 
+                          <FilterIcon className="mr-2 h-4 w-4" />Filter 
                           {activeMaintenanceFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeMaintenanceFilterCount}</Badge>}
                         </Button>
                       </FilterSortDialogTrigger>
@@ -1454,7 +1454,7 @@ export default function LabOperationsCenterPage() {
                         <CardDescription>Manage specific and recurring unavailability for this lab.</CardDescription>
                     </div>
                     <FilterSortDialog open={isLabSpecificClosureFilterDialogOpen} onOpenChange={setIsLabSpecificClosureFilterDialogOpen}>
-                        <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter Lab Closures {activeLabSpecificClosureFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeLabSpecificClosureFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
+                        <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter {activeLabSpecificClosureFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeLabSpecificClosureFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
                         <FilterSortDialogContent className="sm:max-w-md">
                             <FilterSortDialogHeader><FilterSortDialogTitle>Filter Closures for {selectedLabDetails.name}</FilterSortDialogTitle></FilterSortDialogHeader>
                             <Separator className="my-3" />
@@ -1538,7 +1538,7 @@ export default function LabOperationsCenterPage() {
                         <FilterSortDialog open={isLabSpecificMaintenanceFilterDialogOpen} onOpenChange={setIsLabSpecificMaintenanceFilterDialogOpen}>
                           <FilterSortDialogTrigger asChild>
                             <Button variant="outline" size="sm">
-                              <ListFilter className="mr-2 h-4 w-4" />Filters
+                              <FilterIcon className="mr-2 h-4 w-4" />Filter
                               {activeLabSpecificMaintenanceFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeLabSpecificMaintenanceFilterCount}</Badge>}
                             </Button>
                           </FilterSortDialogTrigger>
@@ -1742,4 +1742,3 @@ export default function LabOperationsCenterPage() {
     </TooltipProvider>
   );
 }
-

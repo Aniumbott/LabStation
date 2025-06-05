@@ -166,7 +166,7 @@ export default function AuditLogPage() {
             <DialogTrigger asChild>
               <Button variant="outline">
                 <FilterIcon className="mr-2 h-4 w-4" />
-                Filters
+                Filter
                 {activeFilterCount > 0 && (
                   <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
                     {activeFilterCount}

@@ -3,7 +3,7 @@
 
 import React, { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams }from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, Search as SearchIcon, FilterX, Eye, Loader2, ListFilter, Info, Clock, Calendar as CalendarIconLucide, User as UserIcon, Package as ResourceIcon, CheckCircle2, Save, CheckCircle, AlertCircle, Users, ToggleLeft, ToggleRight, X } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Info, Clock, Calendar as CalendarIconLucide, User as UserIcon, Package as ResourceIcon, CheckCircle2, Save, CheckCircle, AlertCircle, Users, ToggleLeft, ToggleRight, X } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -780,7 +780,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                 </div>
               )}
                <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
-                    <DialogTrigger asChild><Button variant="outline" size="sm"><ListFilter className="mr-2 h-4 w-4" />Filters {activeFilterCount > 0 && (<Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">{activeFilterCount}</Badge>)}</Button></DialogTrigger>
+                    <DialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter {activeFilterCount > 0 && (<Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">{activeFilterCount}</Badge>)}</Button></DialogTrigger>
                     <DialogContent className="w-full sm:max-w-lg">
                         <DialogHeader><DialogTitle>Filter Bookings</DialogTitle><DialogDescription>Refine your list of bookings.</DialogDescription></DialogHeader>
                         <ScrollArea className="max-h-[60vh] mt-4">
@@ -1097,4 +1097,3 @@ export default function BookingsPage() {
     </Suspense>
   );
 }
-
