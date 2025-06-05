@@ -493,23 +493,22 @@ export function ResourceFormDialog({
                 </div>
             </div>
             </ScrollArea>
-            <DialogFooter className="pt-6 border-t">
-              <Button type="submit" disabled={isSubmitting || (resourceTypes.length === 0 && !initialResource) || (labs.length === 0 && !initialResource) }>
-                {isSubmitting
-                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  : (initialResource ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)
-                }
-                {isSubmitting
-                  ? (initialResource ? 'Saving...' : 'Creating...')
-                  : (initialResource ? 'Save Changes' : 'Create Resource')
-                }
-              </Button>
-            </DialogFooter>
+            {/* DialogFooter moved outside the form */}
           </form>
         </Form>
+        <DialogFooter className="pt-6 border-t">
+          <Button type="submit" form="resource-form-id" disabled={isSubmitting || (resourceTypes.length === 0 && !initialResource) || (labs.length === 0 && !initialResource) }>
+            {isSubmitting
+              ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              : (initialResource ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)
+            }
+            {isSubmitting
+              ? (initialResource ? 'Saving...' : 'Creating...')
+              : (initialResource ? 'Save Changes' : 'Create Resource')
+            }
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-
-    
