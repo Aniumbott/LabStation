@@ -5,7 +5,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation'; // Added
 import { PageHeader } from '@/components/layout/page-header';
-import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare } from 'lucide-react';
+import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare, UserPlus2 } from 'lucide-react';
 import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus, DayOfWeek } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -66,6 +66,13 @@ interface LabMembershipRequest extends LabMembership {
   userAvatarUrl?: string;
   labName?: string;
 }
+
+interface LabMembershipDisplay extends LabMembership {
+  userName: string;
+  userEmail: string;
+  userAvatarUrl?: string;
+}
+
 
 // Helper: Maintenance Status Badge (Specific to this page to avoid conflicts if utils.tsx is changed)
 const getMaintenanceStatusBadge = (status: MaintenanceRequestStatus) => {
@@ -173,6 +180,7 @@ export default function LabOperationsCenterPage() {
     const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]); // All memberships for various calculations
     const [isProcessingLabAccessAction, setIsProcessingLabAccessAction] = useState<Record<string, boolean>>({});
     const [isLabAccessRequestLoading, setIsLabAccessRequestLoading] = useState(true);
+    const [isLabSpecificMemberAddDialogOpen, setIsLabSpecificMemberAddDialogOpen] = useState(false);
 
 
     const canManageAny = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
@@ -195,7 +203,7 @@ export default function LabOperationsCenterPage() {
           getDocs(query(collection(db, "maintenanceRequests"), orderBy("dateReported", "desc"))),
           getDocs(query(collection(db, "blackoutDates"), orderBy("date", "asc"))),
           getDocs(query(collection(db, "recurringBlackoutRules"), orderBy("name", "asc"))),
-          getDocs(query(collection(db, 'labMemberships'))),
+          getDocs(query(collection(db, 'labMemberships'), orderBy('requestedAt', 'asc'))), // Fetch all memberships, sort by request time
         ]);
 
         const fetchedLabs = labsSnapshot.docs.map(docSnap => ({id: docSnap.id, ...docSnap.data(), createdAt: (docSnap.data().createdAt as Timestamp)?.toDate(), lastUpdatedAt: (docSnap.data().lastUpdatedAt as Timestamp)?.toDate()} as Lab));
@@ -220,9 +228,9 @@ export default function LabOperationsCenterPage() {
         setAllRecurringRules(rrSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as RecurringBlackoutRule)));
 
         const allFetchedMemberships = membershipsSnapshot.docs.map(mDoc => ({ id: mDoc.id, ...mDoc.data() } as LabMembership));
-        setUserLabMemberships(allFetchedMemberships);
+        setUserLabMemberships(allFetchedMemberships); // Store all memberships
 
-        const pendingRequestsPromises = allFetchedMemberships
+        const pendingRequestsPromises = allFetchedMemberships // Filter from all memberships
             .filter(m => m.status === 'pending_approval')
             .map(async (membershipData) => {
                 const user = fetchedUsersAll.find(u => u.id === membershipData.userId);
@@ -350,12 +358,12 @@ export default function LabOperationsCenterPage() {
     const handleOpenNewResourceTypeDialog = useCallback(() => {
         setEditingType(null);
         setIsResourceTypeFormDialogOpen(true);
-    }, []);
+    }, [setEditingType, setIsResourceTypeFormDialogOpen]);
 
     const handleOpenEditResourceTypeDialog = useCallback((type: ResourceType) => {
         setEditingType(type);
         setIsResourceTypeFormDialogOpen(true);
-    }, []);
+    }, [setEditingType, setIsResourceTypeFormDialogOpen]);
 
     const handleSaveResourceType = useCallback(async (data: ResourceTypeFormValues) => {
         if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
@@ -1097,6 +1105,29 @@ export default function LabOperationsCenterPage() {
         }
     }, [currentUser, fetchAllAdminData, toast]);
 
+    const labSpecificMembershipsDisplay = useMemo(() => {
+      if (activeContextId === GLOBAL_CONTEXT_VALUE || isLoadingData) return [];
+      
+      return userLabMemberships
+        .filter(membership => membership.labId === activeContextId)
+        .map(membership => {
+          const user = allUsersData.find(u => u.id === membership.userId);
+          return {
+            ...membership,
+            userName: user?.name || 'Unknown User',
+            userEmail: user?.email || 'N/A',
+            userAvatarUrl: user?.avatarUrl,
+          } as LabMembershipDisplay;
+        })
+        .sort((a, b) => {
+          // Prioritize pending requests
+          if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
+          if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
+          // Then sort by user name
+          return a.userName.localeCompare(b.userName);
+        });
+    }, [activeContextId, userLabMemberships, allUsersData, isLoadingData]);
+
 
     if (!currentUser || !canManageAny) {
       return ( <div className="space-y-8"><PageHeader title="Lab Operations Center" icon={Cog} description="Access Denied." /><Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission.</p></CardContent></Card></div>);
@@ -1718,7 +1749,84 @@ export default function LabOperationsCenterPage() {
                     </CardContent>
                 </Card>
               </TabsContent>
-              <TabsContent value="lab-members" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Members & Access</CardTitle></CardHeader><CardContent><p>Lab-specific members and access management here.</p></CardContent></Card></TabsContent>
+              <TabsContent value="lab-members" className="mt-6">
+                <Card>
+                    <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                        <div>
+                            <CardTitle>{selectedLabDetails.name} - Members & Access</CardTitle>
+                            <CardDescription>Manage user access and view members of this lab.</CardDescription>
+                        </div>
+                        <Button size="sm" onClick={() => setIsLabSpecificMemberAddDialogOpen(true)} disabled={!canManageAny}>
+                            <UserPlus2 className="mr-2 h-4 w-4"/> Add New Member to {selectedLabDetails.name}
+                        </Button>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        {isLoadingData && labSpecificMembershipsDisplay.length === 0 ? (
+                            <div className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2"/>Loading lab members...</div>
+                        ) : labSpecificMembershipsDisplay.length > 0 ? (
+                            <div className="overflow-x-auto border rounded-md shadow-sm">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>User</TableHead>
+                                            <TableHead>Status in Lab</TableHead>
+                                            <TableHead>Last Activity</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {labSpecificMembershipsDisplay.map(member => (
+                                            <TableRow key={member.id || member.userId}>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2">
+                                                        <Avatar className="h-8 w-8">
+                                                            <AvatarImage src={member.userAvatarUrl} alt={member.userName} data-ai-hint="user avatar"/>
+                                                            <AvatarFallback>{member.userName.charAt(0)}</AvatarFallback>
+                                                        </Avatar>
+                                                        <div>
+                                                            <div className="font-medium">{member.userName}</div>
+                                                            <div className="text-xs text-muted-foreground">{member.userEmail}</div>
+                                                        </div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant={
+                                                        member.status === 'active' ? 'default' :
+                                                        member.status === 'pending_approval' ? 'secondary' :
+                                                        'destructive'
+                                                    } className={cn(member.status === 'active' && "bg-green-500 text-white")}>
+                                                        {member.status.replace('_', ' ')}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>{formatDateSafe(member.updatedAt ? (member.updatedAt as Timestamp).toDate() : (member.requestedAt as Timestamp)?.toDate(), 'N/A', 'PPP p')}</TableCell>
+                                                <TableCell className="text-right space-x-1">
+                                                    {member.status === 'pending_approval' && (
+                                                        <>
+                                                            <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleMembershipAction(member.userId, member.userName, selectedLabDetails.id, selectedLabDetails.name, 'approve_request', member.id)} disabled={isProcessingLabAccessAction[member.id!] || isLoadingData}><ThumbsUp className="h-4 w-4 text-green-600"/></Button></TooltipTrigger><TooltipContent>Approve Request</TooltipContent></Tooltip>
+                                                            <Tooltip><TooltipTrigger asChild><Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => handleMembershipAction(member.userId, member.userName, selectedLabDetails.id, selectedLabDetails.name, 'reject_request', member.id)} disabled={isProcessingLabAccessAction[member.id!] || isLoadingData}><ThumbsDown className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Reject Request</TooltipContent></Tooltip>
+                                                        </>
+                                                    )}
+                                                    {member.status === 'active' && (
+                                                        <Tooltip><TooltipTrigger asChild><Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => handleMembershipAction(member.userId, member.userName, selectedLabDetails.id, selectedLabDetails.name, 'revoke', member.id)} disabled={isProcessingLabAccessAction[member.id!] || isLoadingData}><ShieldOff className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Revoke Access</TooltipContent></Tooltip>
+                                                    )}
+                                                    {(member.status === 'rejected' || member.status === 'revoked') && (
+                                                         <Tooltip><TooltipTrigger asChild><Button variant="default" size="icon" className="h-8 w-8" onClick={() => handleMembershipAction(member.userId, member.userName, selectedLabDetails.id, selectedLabDetails.name, 'grant', member.id)} disabled={isProcessingLabAccessAction[member.id!] || isLoadingData}><PlusCircle className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Re-Grant Access</TooltipContent></Tooltip>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        ) : (
+                             <div className="text-center py-10 text-muted-foreground">
+                                <Users2 className="h-12 w-12 mx-auto mb-3 opacity-50"/>
+                                <p className="font-medium">No members or pending requests for {selectedLabDetails.name}.</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+              </TabsContent>
           </Tabs>
         )}
 
@@ -1745,6 +1853,17 @@ export default function LabOperationsCenterPage() {
             resources={allResourcesForCountsAndChecks} // Pass all resources
             currentUserRole={currentUser?.role}
             labContextId={activeContextId === GLOBAL_CONTEXT_VALUE ? undefined : activeContextId} // Pass current lab context
+          />
+        )}
+        {currentUser && selectedLabDetails && isLabSpecificMemberAddDialogOpen && (
+          <ManageUserLabAccessDialog
+            targetUser={null} // For adding new, user is selected within dialog
+            allLabs={labs}
+            open={isLabSpecificMemberAddDialogOpen}
+            onOpenChange={setIsLabSpecificMemberAddDialogOpen}
+            onMembershipUpdate={fetchAllAdminData}
+            performMembershipAction={handleMembershipAction}
+            preselectedLabId={activeContextId} // Pass the current lab context
           />
         )}
       </div>
