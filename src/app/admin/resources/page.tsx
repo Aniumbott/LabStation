@@ -40,7 +40,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle as AlertDialogTypeTitle, 
+  AlertDialogTitle as AlertDialogTypeTitle,
 } from "@/components/ui/alert-dialog";
 import { Calendar as ShadCNCalendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
@@ -52,7 +52,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Added Tabs imports
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, Timestamp as FirestoreTimestamp } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
@@ -92,7 +92,7 @@ export default function AdminResourcesPage() {
   const [fetchedLabs, setFetchedLabs] = useState<Lab[]>([]);
   const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
-  const [activeTab, setActiveTab] = useState("resources"); // State for active tab
+  const [activeTab, setActiveTab] = useState("resources");
 
   const [isResourceFormDialogOpen, setIsResourceFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
@@ -542,14 +542,18 @@ export default function AdminResourcesPage() {
         title="Resources & Types"
         description={pageDescription}
         icon={ClipboardList}
+        actions={
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="inline-block">
+            <TabsList className="h-9 p-0.5">
+              <TabsTrigger value="resources" className="px-3 py-1.5 text-sm h-full">Resources</TabsTrigger>
+              <TabsTrigger value="resource-types" disabled={!canManageResourcesAndTypes} className="px-3 py-1.5 text-sm h-full">Types</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        }
       />
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="resources">Manage Resources</TabsTrigger>
-          <TabsTrigger value="resource-types" disabled={!canManageResourcesAndTypes}>Manage Resource Types</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="resources" className="mt-6">
+        {/* Original TabsList is removed from here */}
+        <TabsContent value="resources" className="mt-0"> {/* Changed mt-6 to mt-0 */}
             <Card>
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <div>
@@ -694,7 +698,7 @@ export default function AdminResourcesPage() {
         </TabsContent>
 
         {canManageResourcesAndTypes && (
-            <TabsContent value="resource-types" className="mt-6">
+            <TabsContent value="resource-types" className="mt-0"> {/* Changed mt-6 to mt-0 */}
             <Card>
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div><CardTitle className="text-xl">Resource Types</CardTitle><CardDescription>Define categories for lab resources.</CardDescription></div>
