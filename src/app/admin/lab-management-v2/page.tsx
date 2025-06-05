@@ -20,6 +20,7 @@ import {
   DialogFooter as FilterSortDialogFooter,
   DialogTrigger as FilterSortDialogTrigger,
 } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from '@/hooks/use-toast';
 import { ResourceTypeFormDialog, ResourceTypeFormValues } from '@/components/admin/resource-type-form-dialog';
 import { LabFormDialog, LabFormValues } from '@/components/admin/lab-form-dialog';
@@ -69,7 +70,7 @@ interface LabMembershipRequest extends LabMembership {
 export default function LabOperationsCenterPage() {
     const { toast } = useToast();
     const { currentUser } = useAuth();
-    const searchParamsObj = useSearchParams(); 
+    const searchParamsObj = useSearchParams();
 
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [activeContextId, setActiveContextId] = useState<string>(GLOBAL_CONTEXT_VALUE);
@@ -219,13 +220,14 @@ export default function LabOperationsCenterPage() {
     useEffect(() => { fetchAllAdminData(); }, [fetchAllAdminData]);
 
     useEffect(() => {
-        const preselectedLabId = searchParamsObj.get('labId'); 
+        const preselectedLabId = searchParamsObj.get('labId');
         if (preselectedLabId && labs.find(l => l.id === preselectedLabId)) {
           setActiveContextId(preselectedLabId);
         } else if (preselectedLabId) {
+          // If labId in URL is invalid or not found, default to global
           setActiveContextId(GLOBAL_CONTEXT_VALUE);
         }
-      }, [searchParamsObj, labs]); 
+      }, [searchParamsObj, labs]); // Added labs to dependency array
 
     const selectedLabDetails = useMemo(() => labs.find(lab => lab.id === activeContextId), [labs, activeContextId]);
 
@@ -280,8 +282,8 @@ export default function LabOperationsCenterPage() {
       }));
       typesWithCount.sort((a, b) => {
         let comparison = 0;
-        const valA = a[column as keyof typeof a]; 
-        const valB = b[column as keyof typeof b]; 
+        const valA = a[column as keyof typeof a];
+        const valB = b[column as keyof typeof b];
 
         if (column === 'resourceCount') {
           comparison = (valA as number) - (valB as number);
@@ -312,7 +314,7 @@ export default function LabOperationsCenterPage() {
         resetResourceTypeDialogFiltersOnly();
         setIsResourceTypeFilterDialogOpen(false);
     }, [resetResourceTypeDialogFiltersOnly]);
-    
+
     const handleOpenNewResourceTypeDialog = useCallback(() => {
         setEditingType(null);
         setIsResourceTypeFormDialogOpen(true);
@@ -346,7 +348,7 @@ export default function LabOperationsCenterPage() {
         } finally {
             setIsLoadingData(false);
         }
-    }, [currentUser, canManageAny, editingType, fetchAllAdminData, toast]);
+    }, [currentUser, canManageAny, editingType, fetchAllAdminData, toast, setIsLoadingData, setIsResourceTypeFormDialogOpen, setEditingType]);
 
     const handleDeleteResourceType = useCallback(async (typeId: string) => {
         if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
@@ -370,8 +372,8 @@ export default function LabOperationsCenterPage() {
         } finally {
             setIsLoadingData(false);
         }
-    }, [currentUser, canManageAny, resourceTypes, allResourcesForCountsAndChecks, fetchAllAdminData, toast]);
-    
+    }, [currentUser, canManageAny, resourceTypes, allResourcesForCountsAndChecks, fetchAllAdminData, toast, setIsLoadingData, setTypeToDelete]);
+
     const activeResourceTypeFilterCount = useMemo(() => [activeResourceTypeSearchTerm !== '', activeResourceTypeSortBy !== 'name-asc'].filter(Boolean).length, [activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
 
 
@@ -396,7 +398,7 @@ export default function LabOperationsCenterPage() {
         }
         // const actionKey = membershipDocIdToUpdate || `${targetUserId}-${labId}-${action}`;
         // setIsProcessingAction(prev => ({ ...prev, [actionKey]: { action, loading: true } })); // Assuming setIsProcessingAction is defined
-    
+
         try {
           const result = await manageLabMembership_SA(
             currentUser.id, currentUser.name,
@@ -406,7 +408,7 @@ export default function LabOperationsCenterPage() {
           );
           if (result.success) {
             toast({ title: "Success", description: result.message });
-            fetchAllAdminData(); 
+            fetchAllAdminData();
           } else {
             toast({ title: "Action Failed", description: result.message, variant: "destructive" });
           }
@@ -418,137 +420,138 @@ export default function LabOperationsCenterPage() {
     }, [currentUser, fetchAllAdminData, toast]);
 
     // ... (Other commented out sections for Labs, Closures, Maintenance, Access/Membership) ...
-    
+
     if (!currentUser || !canManageAny) { // Main permission check for the whole page
       return ( <div className="space-y-8"><PageHeader title="Lab Operations Center" icon={Cog} description="Access Denied." /><Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission.</p></CardContent></Card></div>);
     }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Lab Operations Center"
-        description="Manage all aspects of your lab operations, from system-wide settings to individual lab details."
-        icon={Cog}
-        actions={pageHeaderActionsContent}
-      />
-      {isLoadingData && (
-        <div className="flex justify-center items-center py-20">
-            <Loader2 className="h-12 w-12 animate-spin text-primary"/>
-            <p className="ml-4 text-lg text-muted-foreground">Loading Lab Operations Data...</p>
-        </div>
-      )}
-
-      {!isLoadingData && activeContextId === GLOBAL_CONTEXT_VALUE && (
-        <Tabs defaultValue={searchParamsObj.get('tab') || "labs"} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
-            <TabsTrigger value="labs">Manage Labs</TabsTrigger>
-            <TabsTrigger value="resource-types">Resource Types</TabsTrigger>
-            <TabsTrigger value="global-closures">Global Closures</TabsTrigger>
-            <TabsTrigger value="maintenance-log">Maintenance Log</TabsTrigger>
-            <TabsTrigger value="lab-access-requests">Lab Access Requests</TabsTrigger>
-          </TabsList>
-
-          {/* System-Wide View: Resource Types Tab */}
-          <TabsContent value="resource-types" className="mt-6">
-            <Card>
-              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                <div><CardTitle className="text-xl">Resource Types</CardTitle><p className="text-sm text-muted-foreground mt-1">Define categories for lab resources.</p></div>
-                <div className="flex gap-2 flex-wrap">
-                  <FilterSortDialog open={isResourceTypeFilterDialogOpen} onOpenChange={setIsResourceTypeFilterDialogOpen}>
-                    <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter & Sort {activeResourceTypeFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeResourceTypeFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
-                    <FilterSortDialogContent className="sm:max-w-md">
-                      <FilterSortDialogHeader><FilterSortDialogTitle>Filter & Sort Resource Types</FilterSortDialogTitle></FilterSortDialogHeader>
-                      <Separator className="my-3" />
-                      <div className="space-y-3">
-                        <div className="relative"><Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="typeSearchDialog" value={tempResourceTypeSearchTerm} onChange={e => setTempResourceTypeSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>
-                        <div><Label htmlFor="typeSortDialog">Sort by</Label><Select value={tempResourceTypeSortBy} onValueChange={setTempResourceTypeSortBy}><SelectTrigger id="typeSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{resourceTypeSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
-                      </div>
-                      <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetResourceTypeDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsResourceTypeFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyResourceTypeDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
-                    </FilterSortDialogContent>
-                  </FilterSortDialog>
-                  {canManageAny && <Button onClick={handleOpenNewResourceTypeDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Type</Button>}
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                {isLoadingData && filteredResourceTypesWithCount.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
-                ) : filteredResourceTypesWithCount.length > 0 ? (
-                  <div className="overflow-x-auto border rounded-md shadow-sm">
-                    <Table>
-                      <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead>{canManageAny && <TableHead className="text-right w-[100px]">Actions</TableHead>}</TableRow></TableHeader>
-                      <TableBody>{filteredResourceTypesWithCount.map(type => (
-                        <TableRow key={type.id}>
-                          <TableCell className="font-medium">{type.name}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell>
-                          <TableCell className="text-center">{type.resourceCount}</TableCell>
-                          {canManageAny && <TableCell className="text-right space-x-1">
-                            <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip>
-                            <AlertDialog open={typeToDelete?.id === type.id} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}>
-                              <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Type</TooltipContent></Tooltip>
-                              <AlertDialogContent>
-                                <AlertDialogHeader><AlertDialogTitle>Delete "{typeToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>
-                                <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </TableCell>}
-                        </TableRow>
-                      ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : ( 
-                  <div className="text-center py-10 text-muted-foreground">
-                    <ListChecks className="h-12 w-12 mx-auto mb-3 opacity-50"/>
-                    <p className="font-medium">{activeResourceTypeFilterCount > 0 ? "No types match criteria." : "No resource types defined."}</p>
-                    {activeResourceTypeFilterCount > 0 && <Button variant="link" onClick={resetAllActiveResourceTypePageFilters} className="mt-2 text-xs"><FilterX className="mr-1.5 h-3.5 w-3.5"/>Reset Filters</Button>}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-           {/* Placeholder for other system-wide tabs */}
-          <TabsContent value="labs" className="mt-6"><Card><CardHeader><CardTitle>Manage Labs</CardTitle></CardHeader><CardContent><p>Lab management UI (list, add, edit, delete labs) will be here.</p></CardContent></Card></TabsContent>
-          <TabsContent value="global-closures" className="mt-6"><Card><CardHeader><CardTitle>Global Closures</CardTitle></CardHeader><CardContent><p>Global blackout dates and recurring rules UI will be here.</p></CardContent></Card></TabsContent>
-          <TabsContent value="maintenance-log" className="mt-6"><Card><CardHeader><CardTitle>System-Wide Maintenance Log</CardTitle></CardHeader><CardContent><p>Full maintenance log UI will be here.</p></CardContent></Card></TabsContent>
-          <TabsContent value="lab-access-requests" className="mt-6"><Card><CardHeader><CardTitle>System-Wide Lab Access Requests</CardTitle></CardHeader><CardContent><p>Lab access requests management UI will be here.</p></CardContent></Card></TabsContent>
-        </Tabs>
-      )}
-
-      {/* {!isLoadingData && activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
-         <Tabs defaultValue={searchParamsObj.get('tab') || "lab-details"} className="w-full"> 
-            <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
-                <TabsTrigger value="lab-details">Lab Overview</TabsTrigger>
-                <TabsTrigger value="lab-closures">Closures</TabsTrigger>
-                <TabsTrigger value="lab-maintenance">Maintenance</TabsTrigger>
-                <TabsTrigger value="lab-members">Members & Access</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="lab-details" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Overview</CardTitle></CardHeader><CardContent><p>Lab-specific overview content here.</p></CardContent></Card></TabsContent>
-            <TabsContent value="lab-closures" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Closures</CardTitle></CardHeader><CardContent><p>Lab-specific closures management here.</p></CardContent></Card></TabsContent>
-            <TabsContent value="lab-maintenance" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Maintenance</CardTitle></CardHeader><CardContent><p>Lab-specific maintenance log here.</p></CardContent></Card></TabsContent>
-            <TabsContent value="lab-members" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Members & Access</CardTitle></CardHeader><CardContent><p>Lab-specific members and access management here.</p></CardContent></Card></TabsContent>
-        </Tabs>
-      )} */}
-
-
-      {isResourceTypeFormDialogOpen && currentUser && (<ResourceTypeFormDialog open={isResourceTypeFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceTypeFormDialogOpen(isOpen); if (!isOpen) setEditingType(null); }} initialType={editingType} onSave={handleSaveResourceType} />)}
-      {/* {isLabFormDialogOpen && currentUser && (<LabFormDialog open={isLabFormDialogOpen} onOpenChange={(isOpen) => { setIsLabFormDialogOpen(isOpen); if (!isOpen) setEditingLab(null); }} initialLab={editingLab} onSave={handleSaveLab} />)} */}
-      {/* {isDateFormDialogOpen && currentUser && (<BlackoutDateFormDialog open={isDateFormDialogOpen} onOpenChange={setIsDateFormDialogOpen} initialBlackoutDate={editingBlackoutDate} onSave={handleSaveBlackoutDate} labs={labs} currentLabContextId={activeContextId} />)} */}
-      {/* {isRecurringFormDialogOpen && currentUser && (<RecurringBlackoutRuleFormDialog open={isRecurringFormDialogOpen} onOpenChange={setIsRecurringFormDialogOpen} initialRule={editingRecurringRule} onSave={handleSaveRecurringRule} labs={labs} currentLabContextId={activeContextId} />)} */}
-      {/* {isMaintenanceFormDialogOpen && currentUser && (<MaintenanceRequestFormDialog open={isMaintenanceFormDialogOpen} onOpenChange={(isOpen) => { setIsMaintenanceFormDialogOpen(isOpen); if (!isOpen) setEditingMaintenanceRequest(null);}} initialRequest={editingMaintenanceRequest} onSave={handleSaveMaintenanceRequest} technicians={allTechniciansForMaintenance} resources={allResourcesForCountsAndChecks} currentUserRole={currentUser?.role} labContextId={activeContextId !== GLOBAL_CONTEXT_VALUE ? activeContextId : undefined}/> )} */}
-      {/* {isManualAddMemberDialogOpen && currentUser && (
-        <ManageUserLabAccessDialog
-            targetUser={null} 
-            allLabs={labs}
-            open={isManualAddMemberDialogOpen}
-            onOpenChange={(isOpen) => {
-                setIsManualAddMemberDialogOpen(isOpen);
-            }}
-            onMembershipUpdate={fetchAllAdminData}
-            performMembershipAction={handleMembershipAction} // Pass the correctly scoped action handler
-            preselectedLabId={activeContextId !== GLOBAL_CONTEXT_VALUE ? activeContextId : undefined}
+    <TooltipProvider>
+      <div className="space-y-6">
+        <PageHeader
+          title="Lab Operations Center"
+          description="Manage all aspects of your lab operations, from system-wide settings to individual lab details."
+          icon={Cog}
+          actions={pageHeaderActionsContent}
         />
-      )} */}
-    </div>
+        {isLoadingData && (
+          <div className="flex justify-center items-center py-20">
+              <Loader2 className="h-12 w-12 animate-spin text-primary"/>
+              <p className="ml-4 text-lg text-muted-foreground">Loading Lab Operations Data...</p>
+          </div>
+        )}
+
+        {!isLoadingData && activeContextId === GLOBAL_CONTEXT_VALUE && (
+          <Tabs defaultValue={searchParamsObj.get('tab') || "labs"} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
+              <TabsTrigger value="labs">Manage Labs</TabsTrigger>
+              <TabsTrigger value="resource-types">Resource Types</TabsTrigger>
+              <TabsTrigger value="global-closures">Global Closures</TabsTrigger>
+              <TabsTrigger value="maintenance-log">Maintenance Log</TabsTrigger>
+              <TabsTrigger value="lab-access-requests">Lab Access Requests</TabsTrigger>
+            </TabsList>
+
+            {/* System-Wide View: Resource Types Tab */}
+            <TabsContent value="resource-types" className="mt-6">
+              <Card>
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <div><CardTitle className="text-xl">Resource Types</CardTitle><p className="text-sm text-muted-foreground mt-1">Define categories for lab resources.</p></div>
+                  <div className="flex gap-2 flex-wrap">
+                    <FilterSortDialog open={isResourceTypeFilterDialogOpen} onOpenChange={setIsResourceTypeFilterDialogOpen}>
+                      <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter & Sort {activeResourceTypeFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeResourceTypeFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
+                      <FilterSortDialogContent className="sm:max-w-md">
+                        <FilterSortDialogHeader><FilterSortDialogTitle>Filter & Sort Resource Types</FilterSortDialogTitle></FilterSortDialogHeader>
+                        <Separator className="my-3" />
+                        <div className="space-y-3">
+                          <div className="relative"><Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="typeSearchDialog" value={tempResourceTypeSearchTerm} onChange={e => setTempResourceTypeSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>
+                          <div><Label htmlFor="typeSortDialog">Sort by</Label><Select value={tempResourceTypeSortBy} onValueChange={setTempResourceTypeSortBy}><SelectTrigger id="typeSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{resourceTypeSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
+                        </div>
+                        <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetResourceTypeDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsResourceTypeFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyResourceTypeDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
+                      </FilterSortDialogContent>
+                    </FilterSortDialog>
+                    {canManageAny && <Button onClick={handleOpenNewResourceTypeDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Type</Button>}
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {isLoadingData && filteredResourceTypesWithCount.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
+                  ) : filteredResourceTypesWithCount.length > 0 ? (
+                    <div className="overflow-x-auto border rounded-md shadow-sm">
+                      <Table>
+                        <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead>{canManageAny && <TableHead className="text-right w-[100px]">Actions</TableHead>}</TableRow></TableHeader>
+                        <TableBody>{filteredResourceTypesWithCount.map(type => (
+                          <TableRow key={type.id}>
+                            <TableCell className="font-medium">{type.name}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell>
+                            <TableCell className="text-center">{type.resourceCount}</TableCell>
+                            {canManageAny && <TableCell className="text-right space-x-1">
+                              <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip>
+                              <AlertDialog open={typeToDelete?.id === type.id} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}>
+                                <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Type</TooltipContent></Tooltip>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader><AlertDialogTitle>Delete "{typeToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>
+                                  <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </TableCell>}
+                          </TableRow>
+                        ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <ListChecks className="h-12 w-12 mx-auto mb-3 opacity-50"/>
+                      <p className="font-medium">{activeResourceTypeFilterCount > 0 ? "No types match criteria." : "No resource types defined."}</p>
+                      {activeResourceTypeFilterCount > 0 && <Button variant="link" onClick={resetAllActiveResourceTypePageFilters} className="mt-2 text-xs"><FilterX className="mr-1.5 h-3.5 w-3.5"/>Reset Filters</Button>}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+             {/* Placeholder for other system-wide tabs */}
+            <TabsContent value="labs" className="mt-6"><Card><CardHeader><CardTitle>Manage Labs</CardTitle></CardHeader><CardContent><p>Lab management UI (list, add, edit, delete labs) will be here.</p></CardContent></Card></TabsContent>
+            <TabsContent value="global-closures" className="mt-6"><Card><CardHeader><CardTitle>Global Closures</CardTitle></CardHeader><CardContent><p>Global blackout dates and recurring rules UI will be here.</p></CardContent></Card></TabsContent>
+            <TabsContent value="maintenance-log" className="mt-6"><Card><CardHeader><CardTitle>System-Wide Maintenance Log</CardTitle></CardHeader><CardContent><p>Full maintenance log UI will be here.</p></CardContent></Card></TabsContent>
+            <TabsContent value="lab-access-requests" className="mt-6"><Card><CardHeader><CardTitle>System-Wide Lab Access Requests</CardTitle></CardHeader><CardContent><p>Lab access requests management UI will be here.</p></CardContent></Card></TabsContent>
+          </Tabs>
+        )}
+
+        {/* {!isLoadingData && activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
+           <Tabs defaultValue={searchParamsObj.get('tab') || "lab-details"} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
+                  <TabsTrigger value="lab-details">Lab Overview</TabsTrigger>
+                  <TabsTrigger value="lab-closures">Closures</TabsTrigger>
+                  <TabsTrigger value="lab-maintenance">Maintenance</TabsTrigger>
+                  <TabsTrigger value="lab-members">Members & Access</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="lab-details" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Overview</CardTitle></CardHeader><CardContent><p>Lab-specific overview content here.</p></CardContent></Card></TabsContent>
+              <TabsContent value="lab-closures" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Closures</CardTitle></CardHeader><CardContent><p>Lab-specific closures management here.</p></CardContent></Card></TabsContent>
+              <TabsContent value="lab-maintenance" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Maintenance</CardTitle></CardHeader><CardContent><p>Lab-specific maintenance log here.</p></CardContent></Card></TabsContent>
+              <TabsContent value="lab-members" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Members & Access</CardTitle></CardHeader><CardContent><p>Lab-specific members and access management here.</p></CardContent></Card></TabsContent>
+          </Tabs>
+        )} */}
+
+
+        {isResourceTypeFormDialogOpen && currentUser && (<ResourceTypeFormDialog open={isResourceTypeFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceTypeFormDialogOpen(isOpen); if (!isOpen) setEditingType(null); }} initialType={editingType} onSave={handleSaveResourceType} />)}
+        {/* {isLabFormDialogOpen && currentUser && (<LabFormDialog open={isLabFormDialogOpen} onOpenChange={(isOpen) => { setIsLabFormDialogOpen(isOpen); if (!isOpen) setEditingLab(null); }} initialLab={editingLab} onSave={handleSaveLab} />)} */}
+        {/* {isDateFormDialogOpen && currentUser && (<BlackoutDateFormDialog open={isDateFormDialogOpen} onOpenChange={setIsDateFormDialogOpen} initialBlackoutDate={editingBlackoutDate} onSave={handleSaveBlackoutDate} labs={labs} currentLabContextId={activeContextId} />)} */}
+        {/* {isRecurringFormDialogOpen && currentUser && (<RecurringBlackoutRuleFormDialog open={isRecurringFormDialogOpen} onOpenChange={setIsRecurringFormDialogOpen} initialRule={editingRecurringRule} onSave={handleSaveRecurringRule} labs={labs} currentLabContextId={activeContextId} />)} */}
+        {/* {isMaintenanceFormDialogOpen && currentUser && (<MaintenanceRequestFormDialog open={isMaintenanceFormDialogOpen} onOpenChange={(isOpen) => { setIsMaintenanceFormDialogOpen(isOpen); if (!isOpen) setEditingMaintenanceRequest(null);}} initialRequest={editingMaintenanceRequest} onSave={handleSaveMaintenanceRequest} technicians={allTechniciansForMaintenance} resources={allResourcesForCountsAndChecks} currentUserRole={currentUser?.role} labContextId={activeContextId !== GLOBAL_CONTEXT_VALUE ? activeContextId : undefined}/> )} */}
+        {/* {isManualAddMemberDialogOpen && currentUser && (
+          <ManageUserLabAccessDialog
+              targetUser={null}
+              allLabs={labs}
+              open={isManualAddMemberDialogOpen}
+              onOpenChange={(isOpen) => {
+                  setIsManualAddMemberDialogOpen(isOpen);
+              }}
+              onMembershipUpdate={fetchAllAdminData}
+              performMembershipAction={handleMembershipAction} // Pass the correctly scoped action handler
+              preselectedLabId={activeContextId !== GLOBAL_CONTEXT_VALUE ? activeContextId : undefined}
+          />
+        )} */}
+      </div>
+    </TooltipProvider>
   );
 }
-
