@@ -10,7 +10,7 @@ import React, {
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, X, CalendarPlus, CheckCircle2, Building } from 'lucide-react';
+import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, X, CalendarPlus, CheckCircle2, Building, ListChecks, Edit, Trash2 } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType, Lab, LabMembership } from '@/types';
 import { resourceStatusesList } from '@/lib/app-constants';
 import { useAuth } from '@/components/auth-context';
@@ -32,10 +32,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle as AlertDialogTypeTitle, // Renamed to avoid conflict
+  AlertDialogTrigger as AlertDialogTypeTrigger, // Renamed to avoid conflict
+} from "@/components/ui/alert-dialog";
 import { Calendar as ShadCNCalendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ResourceTypeFormDialog, ResourceTypeFormValues } from '@/components/admin/resource-type-form-dialog';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -60,6 +71,14 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/layout/page-header';
 import { addAuditLog } from '@/lib/firestore-helpers';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+
+type ResourceTypeSortableColumn = 'name' | 'resourceCount' | 'description';
+const resourceTypeSortOptions: { value: string; label: string }[] = [
+  { value: 'name-asc', label: 'Name (A-Z)' }, { value: 'name-desc', label: 'Name (Z-A)' },
+  { value: 'resourceCount-asc', label: 'Resources (Low-High)' }, { value: 'resourceCount-desc', label: 'Resources (High-Low)' },
+];
 
 
 export default function AdminResourcesPage() {
@@ -73,27 +92,37 @@ export default function AdminResourcesPage() {
   const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
-  const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
+  const [isResourceFormDialogOpen, setIsResourceFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
-  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-  const [tempSearchTerm, setTempSearchTerm] = useState('');
-  const [tempFilterTypeId, setTempFilterTypeId] = useState<string>('all');
-  const [tempFilterLabId, setTempFilterLabId] = useState<string>('all');
-  const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(undefined);
-  const [currentMonthInDialog, setCurrentMonthInDialog] = useState<Date>(startOfDay(new Date()));
+  const [isResourceFilterDialogOpen, setIsResourceFilterDialogOpen] = useState(false);
+  const [tempResourceSearchTerm, setTempResourceSearchTerm] = useState('');
+  const [tempResourceFilterTypeId, setTempResourceFilterTypeId] = useState<string>('all');
+  const [tempResourceFilterLabId, setTempResourceFilterLabId] = useState<string>('all');
+  const [tempResourceSelectedDate, setTempResourceSelectedDate] = useState<Date | undefined>(undefined);
+  const [currentMonthInResourceDialog, setCurrentMonthInResourceDialog] = useState<Date>(startOfDay(new Date()));
 
-  const [activeSearchTerm, setActiveSearchTerm] = useState('');
-  const [activeFilterTypeId, setActiveFilterTypeId] = useState<string>('all');
-  const [activeFilterLabId, setActiveFilterLabId] = useState<string>('all');
-  const [activeSelectedDate, setActiveSelectedDate] = useState<Date | undefined>(undefined);
+  const [activeResourceSearchTerm, setActiveResourceSearchTerm] = useState('');
+  const [activeResourceFilterTypeId, setActiveResourceFilterTypeId] = useState<string>('all');
+  const [activeResourceFilterLabId, setActiveResourceFilterLabId] = useState<string>('all');
+  const [activeResourceSelectedDate, setActiveResourceSelectedDate] = useState<Date | undefined>(undefined);
 
-  const canManageResources = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
+  // State for Resource Type Management
+  const [typeToDelete, setTypeToDelete] = useState<ResourceType | null>(null);
+  const [isResourceTypeFormDialogOpen, setIsResourceTypeFormDialogOpen] = useState(false);
+  const [editingResourceType, setEditingResourceType] = useState<ResourceType | null>(null);
+  const [isResourceTypeFilterSortDialogOpen, setIsResourceTypeFilterSortDialogOpen] = useState(false);
+  const [tempResourceTypeSearchTerm, setTempResourceTypeSearchTerm] = useState('');
+  const [activeResourceTypeSearchTerm, setActiveResourceTypeSearchTerm] = useState('');
+  const [tempResourceTypeSortBy, setTempResourceTypeSortBy] = useState<string>('name-asc');
+  const [activeResourceTypeSortBy, setActiveResourceTypeSortBy] = useState<string>('name-asc');
+
+
+  const canManageResourcesAndTypes = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
 
   const fetchInitialData = useCallback(async () => {
     setIsLoadingData(true);
     try {
-      // Fetch Labs first as they are needed for resource lab names and filtering
       const labsQueryInstance = query(collection(db, "labs"), orderBy("name", "asc"));
       const labsSnapshot = await getDocs(labsQueryInstance);
       const rLabs: Lab[] = labsSnapshot.docs.map(docSnap => ({
@@ -104,7 +133,6 @@ export default function AdminResourcesPage() {
       }));
       setFetchedLabs(rLabs);
 
-      // Fetch User's Lab Memberships if not Admin
       let activeUserLabIds: string[] = [];
       if (currentUser && currentUser.role !== 'Admin') {
         const membershipsQuery = query(collection(db, 'labMemberships'), where('userId', '==', currentUser.id), where('status', '==', 'active'));
@@ -114,7 +142,6 @@ export default function AdminResourcesPage() {
         activeUserLabIds = memberships.map(m => m.labId);
       }
 
-      // Fetch Resources
       const resourcesQuery = query(collection(db, "resources"), orderBy("name", "asc"));
       const resourcesSnapshot = await getDocs(resourcesQuery);
       const fetchedResourcesPromises = resourcesSnapshot.docs.map(async (docSnap) => {
@@ -149,13 +176,11 @@ export default function AdminResourcesPage() {
       });
       let fetchedResources = await Promise.all(fetchedResourcesPromises);
 
-      // Filter resources based on lab access if not admin
       if (currentUser && currentUser.role !== 'Admin') {
         fetchedResources = fetchedResources.filter(resource => activeUserLabIds.includes(resource.labId));
       }
       setAllResourcesDataSource(fetchedResources);
 
-      // Fetch Resource Types
       const typesQueryInstance = query(collection(db, "resourceTypes"), orderBy("name", "asc"));
       const typesSnapshot = await getDocs(typesQueryInstance);
       const rTypes: ResourceType[] = typesSnapshot.docs.map(docSnap => ({
@@ -166,7 +191,6 @@ export default function AdminResourcesPage() {
       setFetchedResourceTypes(rTypes);
 
     } catch (error: any) {
-      console.error("Error fetching initial data: ", error);
       toast({ title: "Database Error", description: `Failed to fetch data: ${error.message}`, variant: "destructive" });
       setAllResourcesDataSource([]);
       setFetchedResourceTypes([]);
@@ -178,20 +202,20 @@ export default function AdminResourcesPage() {
 
 
   useEffect(() => {
-    if (currentUser) { // Ensure currentUser is loaded before fetching
+    if (currentUser) { 
         fetchInitialData();
     }
-  }, [fetchInitialData, currentUser]); // Add currentUser as dependency
+  }, [fetchInitialData, currentUser]); 
 
   useEffect(() => {
-    if (isFilterDialogOpen) {
-      setTempSearchTerm(activeSearchTerm);
-      setTempFilterTypeId(activeFilterTypeId);
-      setTempFilterLabId(activeFilterLabId);
-      setTempSelectedDate(activeSelectedDate);
-      setCurrentMonthInDialog(activeSelectedDate || startOfDay(new Date()));
+    if (isResourceFilterDialogOpen) {
+      setTempResourceSearchTerm(activeResourceSearchTerm);
+      setTempResourceFilterTypeId(activeResourceFilterTypeId);
+      setTempResourceFilterLabId(activeResourceFilterLabId);
+      setTempResourceSelectedDate(activeResourceSelectedDate);
+      setCurrentMonthInResourceDialog(activeResourceSelectedDate || startOfDay(new Date()));
     }
-  }, [isFilterDialogOpen, activeSearchTerm, activeFilterTypeId, activeFilterLabId, activeSelectedDate]);
+  }, [isResourceFilterDialogOpen, activeResourceSearchTerm, activeResourceFilterTypeId, activeResourceFilterLabId, activeResourceSelectedDate]);
 
   const filteredResources = useMemo(() => {
     return allResourcesDataSource.map(resource => {
@@ -199,8 +223,8 @@ export default function AdminResourcesPage() {
       const lab = fetchedLabs.find(l => l.id === resource.labId);
       return { ...resource, resourceTypeName: type?.name || 'N/A', labName: lab?.name || 'N/A' };
     }).filter(resource => {
-      const lowerSearchTerm = activeSearchTerm.toLowerCase();
-      const searchMatch = !activeSearchTerm ||
+      const lowerSearchTerm = activeResourceSearchTerm.toLowerCase();
+      const searchMatch = !activeResourceSearchTerm ||
         resource.name.toLowerCase().includes(lowerSearchTerm) ||
         (resource.description && resource.description.toLowerCase().includes(lowerSearchTerm)) ||
         (resource.manufacturer && resource.manufacturer.toLowerCase().includes(lowerSearchTerm)) ||
@@ -208,12 +232,12 @@ export default function AdminResourcesPage() {
         (resource.resourceTypeName && resource.resourceTypeName.toLowerCase().includes(lowerSearchTerm)) ||
         (resource.labName && resource.labName.toLowerCase().includes(lowerSearchTerm));
 
-      const typeMatch = activeFilterTypeId === 'all' || resource.resourceTypeId === activeFilterTypeId;
-      const labMatch = activeFilterLabId === 'all' || resource.labId === activeFilterLabId;
+      const typeMatch = activeResourceFilterTypeId === 'all' || resource.resourceTypeId === activeResourceFilterTypeId;
+      const labMatch = activeResourceFilterLabId === 'all' || resource.labId === activeResourceFilterLabId;
 
       let dateMatch = true;
-      if (activeSelectedDate) {
-        const dateToFilter = startOfDay(activeSelectedDate);
+      if (activeResourceSelectedDate) {
+        const dateToFilter = startOfDay(activeResourceSelectedDate);
         const isUnavailabilityOverlap = resource.unavailabilityPeriods?.some(period => {
             if (!period.startDate || !period.endDate) return false;
             try {
@@ -221,7 +245,7 @@ export default function AdminResourcesPage() {
                 const periodEnd = startOfDay(parseISO(period.endDate));
                 return isValidDateFn(periodStart) && isValidDateFn(periodEnd) &&
                        isWithinInterval(dateToFilter, { start: periodStart, end: periodEnd });
-            } catch (e) { console.warn("Error parsing unavailability period dates for filter:", e); return false; }
+            } catch (e) { return false; }
         });
 
         if (isUnavailabilityOverlap) {
@@ -232,54 +256,53 @@ export default function AdminResourcesPage() {
       }
       return searchMatch && typeMatch && labMatch && dateMatch;
     });
-  }, [allResourcesDataSource, fetchedResourceTypes, fetchedLabs, activeSearchTerm, activeFilterTypeId, activeFilterLabId, activeSelectedDate]);
+  }, [allResourcesDataSource, fetchedResourceTypes, fetchedLabs, activeResourceSearchTerm, activeResourceFilterTypeId, activeResourceFilterLabId, activeResourceSelectedDate]);
 
 
-  const handleApplyDialogFilters = useCallback(() => {
-    setActiveSearchTerm(tempSearchTerm);
-    setActiveFilterTypeId(tempFilterTypeId);
-    setActiveFilterLabId(tempFilterLabId);
-    setActiveSelectedDate(tempSelectedDate);
-    setIsFilterDialogOpen(false);
-  }, [tempSearchTerm, tempFilterTypeId, tempFilterLabId, tempSelectedDate]);
+  const handleApplyResourceDialogFilters = useCallback(() => {
+    setActiveResourceSearchTerm(tempResourceSearchTerm);
+    setActiveResourceFilterTypeId(tempResourceFilterTypeId);
+    setActiveResourceFilterLabId(tempResourceFilterLabId);
+    setActiveResourceSelectedDate(tempResourceSelectedDate);
+    setIsResourceFilterDialogOpen(false);
+  }, [tempResourceSearchTerm, tempResourceFilterTypeId, tempResourceFilterLabId, tempResourceSelectedDate]);
 
-  const resetDialogFiltersOnly = useCallback(() => {
-    setTempSearchTerm('');
-    setTempFilterTypeId('all');
-    setTempFilterLabId('all');
-    setTempSelectedDate(undefined);
-    setCurrentMonthInDialog(startOfDay(new Date()));
+  const resetResourceDialogFiltersOnly = useCallback(() => {
+    setTempResourceSearchTerm('');
+    setTempResourceFilterTypeId('all');
+    setTempResourceFilterLabId('all');
+    setTempResourceSelectedDate(undefined);
+    setCurrentMonthInResourceDialog(startOfDay(new Date()));
   }, []);
 
-  const resetAllActivePageFilters = useCallback(() => {
-    setActiveSearchTerm('');
-    setActiveFilterTypeId('all');
-    setActiveFilterLabId('all');
-    setActiveSelectedDate(undefined);
-    resetDialogFiltersOnly();
-    setIsFilterDialogOpen(false);
-  }, [resetDialogFiltersOnly]);
+  const resetAllActiveResourcePageFilters = useCallback(() => {
+    setActiveResourceSearchTerm('');
+    setActiveResourceFilterTypeId('all');
+    setActiveResourceFilterLabId('all');
+    setActiveResourceSelectedDate(undefined);
+    resetResourceDialogFiltersOnly();
+    setIsResourceFilterDialogOpen(false);
+  }, [resetResourceDialogFiltersOnly]);
 
-  const handleOpenNewDialog = useCallback(() => {
-    if (fetchedResourceTypes.length === 0) {
-        toast({ title: "No Resource Types Defined", description: "Please add resource types in Lab Management.", variant: "destructive" });
-        router.push('/admin/inventory?tab=resource-types');
+  const handleOpenNewResourceDialog = useCallback(() => {
+    if (fetchedResourceTypes.length === 0 && canManageResourcesAndTypes) {
+        toast({ title: "No Resource Types Defined", description: "Please add resource types below before adding a resource.", variant: "destructive" });
         return;
     }
-    if (fetchedLabs.length === 0) {
-        toast({ title: "No Labs Defined", description: "Please add labs in Lab Management.", variant: "destructive" });
-        router.push('/admin/inventory?tab=labs');
+    if (fetchedLabs.length === 0 && canManageResourcesAndTypes) {
+        toast({ title: "No Labs Defined", description: "Please add labs in Lab Operations before adding a resource.", variant: "destructive" });
+        router.push('/admin/lab-management-v2?tab=labs');
         return;
     }
     setEditingResource(null);
-    setIsFormDialogOpen(true);
-  }, [fetchedResourceTypes, fetchedLabs, toast, router]);
+    setIsResourceFormDialogOpen(true);
+  }, [fetchedResourceTypes, fetchedLabs, toast, router, canManageResourcesAndTypes]);
 
 
   const handleSaveResource = useCallback(async (data: ResourceFormValues) => {
-    if (!currentUser || !canManageResources) {
+    if (!currentUser || !canManageResourcesAndTypes) {
       toast({ title: "Permission Denied", description: "You are not authorized.", variant: "destructive" });
-      setIsFormDialogOpen(false);
+      setIsResourceFormDialogOpen(false);
       return;
     }
 
@@ -291,7 +314,6 @@ export default function AdminResourcesPage() {
     if (!lab) {
       toast({ title: "Invalid Lab", variant: "destructive" }); return;
     }
-
 
     let purchaseDateForFirestore: Timestamp | null = null;
     if (data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))) {
@@ -371,33 +393,146 @@ export default function AdminResourcesPage() {
         addAuditLog(currentUser.id, currentUser.name || 'Admin', auditAction, { entityType: 'Resource', entityId: docRef.id, details: auditDetails });
         toast({ title: 'Resource Created', description: `Resource "${data.name}" has been created.` });
       }
-      setIsFormDialogOpen(false);
+      setIsResourceFormDialogOpen(false);
       setEditingResource(null);
       await fetchInitialData();
     } catch (error: any) {
-        console.error(`Error ${isEditing ? 'updating' : 'creating'} resource:`, error);
         toast({ title: "Database Error", description: `Failed to ${isEditing ? 'update' : 'create'} resource: ${error.message}`, variant: "destructive" });
     } finally {
       setIsLoadingData(false);
     }
-  }, [currentUser, canManageResources, editingResource, fetchedResourceTypes, fetchedLabs, fetchInitialData, toast]);
+  }, [currentUser, canManageResourcesAndTypes, editingResource, fetchedResourceTypes, fetchedLabs, fetchInitialData, toast]);
 
 
-  const activeFilterCount = useMemo(() => [
-    activeSearchTerm !== '',
-    activeFilterTypeId !== 'all',
-    activeFilterLabId !== 'all',
-    activeSelectedDate !== undefined
-  ].filter(Boolean).length, [activeSearchTerm, activeFilterTypeId, activeFilterLabId, activeSelectedDate]);
+  const activeResourceFilterCount = useMemo(() => [
+    activeResourceSearchTerm !== '',
+    activeResourceFilterTypeId !== 'all',
+    activeResourceFilterLabId !== 'all',
+    activeResourceSelectedDate !== undefined
+  ].filter(Boolean).length, [activeResourceSearchTerm, activeResourceFilterTypeId, activeResourceFilterLabId, activeResourceSelectedDate]);
 
 
-  const handleOpenEditDialog = (resource: Resource) => {
-    setEditingResource(resource);
-    setIsFormDialogOpen(true);
-  };
+  // Resource Type Management Logic (Ported)
+  useEffect(() => {
+    if (isResourceTypeFilterSortDialogOpen) {
+        setTempResourceTypeSearchTerm(activeResourceTypeSearchTerm);
+        setTempResourceTypeSortBy(activeResourceTypeSortBy);
+    }
+  }, [isResourceTypeFilterSortDialogOpen, activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
+
+  const filteredResourceTypesForDisplay = useMemo(() => {
+    let currentTypes = [...fetchedResourceTypes];
+    const lowerSearchTerm = activeResourceTypeSearchTerm.toLowerCase();
+    if (activeResourceTypeSearchTerm) {
+      currentTypes = currentTypes.filter(type =>
+        type.name.toLowerCase().includes(lowerSearchTerm) ||
+        (type.description && type.description.toLowerCase().includes(lowerSearchTerm))
+      );
+    }
+    const [column, direction] = activeResourceTypeSortBy.split('-') as [ResourceTypeSortableColumn, 'asc' | 'desc'];
+    let typesWithCount = currentTypes.map(type => ({
+      ...type,
+      resourceCount: allResourcesDataSource.filter(res => res.resourceTypeId === type.id).length,
+    }));
+    typesWithCount.sort((a, b) => {
+      let comparison = 0;
+      const valA = a[column as keyof typeof a];
+      const valB = b[column as keyof typeof b];
+
+      if (column === 'resourceCount') {
+        comparison = (valA as number) - (valB as number);
+      } else if (column === 'name') {
+        comparison = (valA as string).toLowerCase().localeCompare((valB as string).toLowerCase());
+      } else if (column === 'description') {
+        comparison = (a.description || '').toLowerCase().localeCompare((b.description || '').toLowerCase());
+      }
+      return direction === 'asc' ? comparison : -comparison;
+    });
+    return typesWithCount;
+  }, [fetchedResourceTypes, allResourcesDataSource, activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
+
+  const handleApplyResourceTypeFilterSort = useCallback(() => {
+      setActiveResourceTypeSearchTerm(tempResourceTypeSearchTerm);
+      setActiveResourceTypeSortBy(tempResourceTypeSortBy);
+      setIsResourceTypeFilterSortDialogOpen(false);
+  }, [tempResourceTypeSearchTerm, tempResourceTypeSortBy]);
+
+  const resetResourceTypeFilterSortDialog = useCallback(() => {
+      setTempResourceTypeSearchTerm('');
+      setTempResourceTypeSortBy('name-asc');
+  }, []);
+
+  const resetAllActiveResourceTypePageFiltersSort = useCallback(() => {
+      setActiveResourceTypeSearchTerm('');
+      setActiveResourceTypeSortBy('name-asc');
+      resetResourceTypeFilterSortDialog();
+      setIsResourceTypeFilterSortDialogOpen(false);
+  }, [resetResourceTypeFilterSortDialog]);
+
+  const handleOpenNewResourceTypeDialog = useCallback(() => {
+      setEditingResourceType(null);
+      setIsResourceTypeFormDialogOpen(true);
+  }, []);
+
+  const handleOpenEditResourceTypeDialog = useCallback((type: ResourceType) => {
+      setEditingResourceType(type);
+      setIsResourceTypeFormDialogOpen(true);
+  }, []);
+
+  const handleSaveResourceType = useCallback(async (data: ResourceTypeFormValues) => {
+      if (!currentUser || !currentUser.name || !canManageResourcesAndTypes) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
+      setIsLoadingData(true);
+      try {
+          const typeDataToSave = { name: data.name, description: data.description || null };
+          const auditAction = editingResourceType ? 'RESOURCE_TYPE_UPDATED' : 'RESOURCE_TYPE_CREATED';
+          let entityId = editingResourceType ? editingResourceType.id : '';
+          if (editingResourceType) {
+              await updateDoc(doc(db, "resourceTypes", entityId), typeDataToSave);
+          } else {
+              const docRef = await addDoc(collection(db, "resourceTypes"), typeDataToSave);
+              entityId = docRef.id;
+          }
+          await addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'ResourceType', entityId, details: `Resource Type '${data.name}' ${editingResourceType ? 'updated' : 'created'}.` });
+          toast({ title: `Resource Type ${editingResourceType ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingResourceType ? 'updated' : 'created'}.` });
+          setIsResourceTypeFormDialogOpen(false);
+          setEditingResourceType(null);
+          await fetchInitialData(); // Refresh resource types list
+      } catch (error: any) {
+          toast({ title: "Save Error", description: `Could not save resource type: ${error.message}`, variant: "destructive" });
+      } finally {
+          setIsLoadingData(false);
+      }
+  }, [currentUser, canManageResourcesAndTypes, editingResourceType, fetchInitialData, toast]);
+
+  const handleDeleteResourceType = useCallback(async (typeId: string) => {
+      if (!currentUser || !currentUser.name || !canManageResourcesAndTypes) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
+      const deletedType = fetchedResourceTypes.find(rt => rt.id === typeId);
+      if (!deletedType) { toast({ title: "Error", description: "Resource type not found.", variant: "destructive" }); return; }
+      const resourcesOfThisType = allResourcesDataSource.filter(res => res.resourceTypeId === typeId).length;
+      if (resourcesOfThisType > 0) {
+          toast({ title: "Deletion Blocked", description: `Cannot delete "${deletedType.name}" as ${resourcesOfThisType} resource(s) are assigned. Reassign them first.`, variant: "destructive", duration: 7000 });
+          setTypeToDelete(null);
+          return;
+      }
+      setIsLoadingData(true);
+      try {
+          await deleteDoc(doc(db, "resourceTypes", typeId));
+          await addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_DELETED', { entityType: 'ResourceType', entityId: typeId, details: `Resource Type '${deletedType.name}' deleted.` });
+          toast({ title: "Resource Type Deleted", description: `"${deletedType.name}" removed.`, variant: "destructive" });
+          setTypeToDelete(null);
+          await fetchInitialData(); // Refresh resource types list
+      } catch (error: any) {
+          toast({ title: "Delete Error", description: `Could not delete resource type: ${error.message}`, variant: "destructive" });
+      } finally {
+          setIsLoadingData(false);
+      }
+  }, [currentUser, canManageResourcesAndTypes, fetchedResourceTypes, allResourcesDataSource, fetchInitialData, toast]);
+
+  const activeResourceTypeFilterSortCount = useMemo(() => [activeResourceTypeSearchTerm !== '', activeResourceTypeSortBy !== 'name-asc'].filter(Boolean).length, [activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
+
 
   const pageDescription = currentUser?.role === 'Admin'
-    ? "Browse, filter, add, and manage all lab resources. Click resource name for details."
+    ? "Browse, filter, add, and manage all lab resources and their types. Click resource name for details."
     : "Browse and filter available lab resources from labs you have access to. Click resource name for details.";
 
 
@@ -409,14 +544,14 @@ export default function AdminResourcesPage() {
         icon={ClipboardList}
         actions={
           <div className="flex items-center gap-2">
-            <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+            <Dialog open={isResourceFilterDialogOpen} onOpenChange={setIsResourceFilterDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
                   <FilterIcon className="mr-2 h-4 w-4" />
-                  Filters
-                  {activeFilterCount > 0 && (
+                  Filter Resources
+                  {activeResourceFilterCount > 0 && (
                     <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
-                      {activeFilterCount}
+                      {activeResourceFilterCount}
                     </Badge>
                   )}
                 </Button>
@@ -424,9 +559,7 @@ export default function AdminResourcesPage() {
               <DialogContent className="w-full max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Filter Resources</DialogTitle>
-                  <DialogDescription>
-                    Refine the list of available lab resources.
-                  </DialogDescription>
+                  <DialogDescription>Refine the list of available lab resources.</DialogDescription>
                 </DialogHeader>
                 <Separator className="my-4" />
                 <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
@@ -435,90 +568,57 @@ export default function AdminResourcesPage() {
                       <Label htmlFor="resourceSearchDialog">Search (Name/Keyword)</Label>
                       <div className="relative mt-1">
                           <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                          <Input
-                          id="resourceSearchDialog"
-                          type="search"
-                          placeholder="Name, manufacturer, model, type, lab..."
-                          value={tempSearchTerm}
-                          onChange={(e) => setTempSearchTerm(e.target.value)}
-                          className="h-9 pl-8"
-                          />
+                          <Input id="resourceSearchDialog" type="search" placeholder="Name, manufacturer, model, type, lab..." value={tempResourceSearchTerm} onChange={(e) => setTempResourceSearchTerm(e.target.value)} className="h-9 pl-8"/>
                       </div>
                     </div>
                     <Separator />
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="resourceTypeFilterDialog">Type</Label>
-                        <Select value={tempFilterTypeId} onValueChange={setTempFilterTypeId} disabled={fetchedResourceTypes.length === 0}>
+                        <Select value={tempResourceFilterTypeId} onValueChange={setTempResourceFilterTypeId} disabled={fetchedResourceTypes.length === 0}>
                           <SelectTrigger id="resourceTypeFilterDialog" className="h-9 mt-1"><SelectValue placeholder={fetchedResourceTypes.length > 0 ? "Filter by Type" : "No types available"} /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">All Types</SelectItem>
-                            {fetchedResourceTypes.map(type => (
-                              <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-                            ))}
+                            {fetchedResourceTypes.map(type => (<SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>))}
                           </SelectContent>
                         </Select>
-                         {fetchedResourceTypes.length === 0 && <p className="text-xs text-muted-foreground mt-1">No resource types found. Add types in Lab Management.</p>}
+                         {fetchedResourceTypes.length === 0 && <p className="text-xs text-muted-foreground mt-1">No resource types found. Add types below or in Lab Operations.</p>}
                       </div>
                       <div>
                         <Label htmlFor="resourceLabFilterDialog">Lab</Label>
-                        <Select value={tempFilterLabId} onValueChange={setTempFilterLabId} disabled={fetchedLabs.length === 0}>
+                        <Select value={tempResourceFilterLabId} onValueChange={setTempResourceFilterLabId} disabled={fetchedLabs.length === 0}>
                           <SelectTrigger id="resourceLabFilterDialog" className="h-9 mt-1"><SelectValue placeholder={fetchedLabs.length > 0 ? "Filter by Lab" : "No labs available"} /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">All Labs</SelectItem>
                             { (currentUser?.role === 'Admin' ? fetchedLabs : fetchedLabs.filter(lab => userLabMemberships.some(m => m.labId === lab.id && m.status === 'active')))
-                                .map(lab => (
-                                  <SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>
-                                ))
-                            }
+                                .map(lab => (<SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>))}
                           </SelectContent>
                         </Select>
-                        {fetchedLabs.length === 0 && <p className="text-xs text-muted-foreground mt-1">No labs found. Add labs in Lab Management.</p>}
+                        {fetchedLabs.length === 0 && <p className="text-xs text-muted-foreground mt-1">No labs found. Add labs in Lab Operations.</p>}
                         {currentUser?.role !== 'Admin' && fetchedLabs.filter(lab => userLabMemberships.some(m => m.labId === lab.id && m.status === 'active')).length === 0 && fetchedLabs.length > 0 &&
-                            <p className="text-xs text-muted-foreground mt-1">You currently have no active lab memberships. Request access via your dashboard.</p>
-                        }
+                            <p className="text-xs text-muted-foreground mt-1">You currently have no active lab memberships. Request access via your dashboard.</p>}
                       </div>
                     </div>
                     <Separator />
                     <div>
                         <Label className="mb-2 block text-sm font-medium">Available On (Optional)</Label>
                         <div className="flex justify-center items-center rounded-md border p-2">
-                          <ShadCNCalendar
-                              mode="single"
-                              selected={tempSelectedDate}
-                              onSelect={setTempSelectedDate}
-                              month={currentMonthInDialog}
-                              onMonthChange={setCurrentMonthInDialog}
-                              disabled={(date) => date < startOfDay(new Date()) }
-                              footer={ tempSelectedDate &&
-                                  <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => { setTempSelectedDate(undefined); setCurrentMonthInDialog(startOfDay(new Date()));} }
-                                      className="w-full mt-2 text-xs"
-                                  >
-                                      <FilterX className="mr-2 h-4 w-4" /> Reset Date Filter
-                                  </Button>
-                              }
-                              classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }}
-                          />
+                          <ShadCNCalendar mode="single" selected={tempResourceSelectedDate} onSelect={setTempResourceSelectedDate} month={currentMonthInResourceDialog} onMonthChange={setCurrentMonthInResourceDialog} disabled={(date) => date < startOfDay(new Date()) } footer={ tempResourceSelectedDate && <Button variant="ghost" size="sm" onClick={() => { setTempResourceSelectedDate(undefined); setCurrentMonthInResourceDialog(startOfDay(new Date()));} } className="w-full mt-2 text-xs"><FilterX className="mr-2 h-4 w-4" /> Reset Date Filter</Button>} classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }} />
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">Filters for resources with status 'Working' on selected date, excluding unavailability.</p>
                     </div>
                   </div>
                 </ScrollArea>
                 <DialogFooter className="pt-6 border-t mt-4">
-                   <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
-                    <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
-                  </Button>
-                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
-                  <Button onClick={handleApplyDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply Filters</Button>
+                   <Button variant="ghost" onClick={resetResourceDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters</Button>
+                  <Button variant="outline" onClick={() => setIsResourceFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
+                  <Button onClick={handleApplyResourceDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            {canManageResources && (
-                <Button onClick={handleOpenNewDialog}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add
+            {canManageResourcesAndTypes && (
+                <Button onClick={handleOpenNewResourceDialog}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Resource
                 </Button>
             )}
           </div>
@@ -545,34 +645,19 @@ export default function AdminResourcesPage() {
                 <TableRow key={resource.id}>
                   <TableCell>
                     <Link href={`/resources/${resource.id}`}>
-                      <Image
-                          src={resource.imageUrl || 'https://placehold.co/100x100.png'}
-                          alt={resource.name}
-                          width={40} height={40}
-                          className="rounded-md object-cover h-10 w-10 hover:opacity-80 transition-opacity"
-                          data-ai-hint="lab equipment"
-                      />
+                      <Image src={resource.imageUrl || 'https://placehold.co/100x100.png'} alt={resource.name} width={40} height={40} className="rounded-md object-cover h-10 w-10 hover:opacity-80 transition-opacity" data-ai-hint="lab equipment"/>
                     </Link>
                   </TableCell>
                   <TableCell className="font-medium">
-                     <Link href={`/resources/${resource.id}`} className="hover:text-primary hover:underline">
-                        {resource.name}
-                     </Link>
+                     <Link href={`/resources/${resource.id}`} className="hover:text-primary hover:underline">{resource.name}</Link>
                   </TableCell>
                   <TableCell>{resource.resourceTypeName || 'N/A'}</TableCell>
                   <TableCell>{resource.labName || 'N/A'}</TableCell>
                   <TableCell>{getResourceStatusBadge(resource.status)}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      asChild
-                      size="sm"
-                      variant="default"
-                      disabled={resource.status !== 'Working'}
-                      className="h-8 text-xs"
-                    >
-                      <Link href={`/bookings?resourceId=${resource.id}${activeSelectedDate ? `&date=${format(activeSelectedDate, 'yyyy-MM-dd')}`: ''}`}>
-                        <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
-                        Book
+                    <Button asChild size="sm" variant="default" disabled={resource.status !== 'Working'} className="h-8 text-xs">
+                      <Link href={`/bookings?resourceId=${resource.id}${activeResourceSelectedDate ? `&date=${format(activeResourceSelectedDate, 'yyyy-MM-dd')}`: ''}`}>
+                        <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />Book
                       </Link>
                     </Button>
                   </TableCell>
@@ -585,42 +670,80 @@ export default function AdminResourcesPage() {
          <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
           <CardContent>
             <ClipboardList className="mx-auto h-12 w-12 mb-4 opacity-50" />
-            <p className="text-lg font-medium">
-                {activeFilterCount > 0 ? "No Resources Match Filters" : "No Resources Found"}
-            </p>
-            <p className="text-sm mb-4">
-                {activeFilterCount > 0
-                    ? "Try adjusting your filter or search criteria."
-                    : (canManageResources ? "There are currently no resources in the catalog. Add one to get started!" : "There are currently no resources accessible to you. Request lab access via your dashboard or contact an admin.")
-                }
-            </p>
-            {activeFilterCount > 0 ? (
-                <Button variant="outline" onClick={resetAllActivePageFilters}>
-                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
-                </Button>
-            ): (
-              !isLoadingData && allResourcesDataSource.length === 0 && canManageResources && (
-                <Button onClick={handleOpenNewDialog}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add First Resource
-                </Button>
-              )
-            )}
+            <p className="text-lg font-medium">{activeResourceFilterCount > 0 ? "No Resources Match Filters" : "No Resources Found"}</p>
+            <p className="text-sm mb-4">{activeResourceFilterCount > 0 ? "Try adjusting your filter or search criteria." : (canManageResourcesAndTypes ? "There are currently no resources in the catalog. Add one to get started!" : "There are currently no resources accessible to you. Request lab access via your dashboard or contact an admin.")}</p>
+            {activeResourceFilterCount > 0 ? (<Button variant="outline" onClick={resetAllActiveResourcePageFilters}><FilterX className="mr-2 h-4 w-4" /> Reset All Filters</Button>
+            ): (!isLoadingData && allResourcesDataSource.length === 0 && canManageResourcesAndTypes && (<Button onClick={handleOpenNewResourceDialog}><PlusCircle className="mr-2 h-4 w-4" /> Add First Resource</Button>))}
           </CardContent>
         </Card>
       )}
-      {isFormDialogOpen && (
-        <ResourceFormDialog
-            open={isFormDialogOpen}
-            onOpenChange={(isOpen) => {
-                setIsFormDialogOpen(isOpen);
-                if (!isOpen) setEditingResource(null);
-            }}
-            initialResource={editingResource}
-            onSave={handleSaveResource}
-            resourceTypes={fetchedResourceTypes}
-            labs={currentUser?.role === 'Admin' ? fetchedLabs : fetchedLabs.filter(lab => userLabMemberships.some(m => m.labId === lab.id && m.status === 'active'))}
-        />
+
+      {isResourceFormDialogOpen && (
+        <ResourceFormDialog open={isResourceFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceFormDialogOpen(isOpen); if (!isOpen) setEditingResource(null);}} initialResource={editingResource} onSave={handleSaveResource} resourceTypes={fetchedResourceTypes} labs={currentUser?.role === 'Admin' ? fetchedLabs : fetchedLabs.filter(lab => userLabMemberships.some(m => m.labId === lab.id && m.status === 'active'))}/>
+      )}
+
+      {canManageResourcesAndTypes && (
+        <>
+          <Separator className="my-10" />
+          <Card>
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <div><CardTitle className="text-xl">Resource Types</CardTitle><CardDescription>Define categories for lab resources.</CardDescription></div>
+              <div className="flex gap-2 flex-wrap">
+                <Dialog open={isResourceTypeFilterSortDialogOpen} onOpenChange={setIsResourceTypeFilterSortDialogOpen}>
+                  <DialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter & Sort {activeResourceTypeFilterSortCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeResourceTypeFilterSortCount}</Badge>}</Button></DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader><DialogTitle>Filter & Sort Resource Types</DialogTitle></DialogHeader>
+                    <Separator className="my-3" />
+                    <div className="space-y-3">
+                      <div className="relative"><Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="typeSearchDialog" value={tempResourceTypeSearchTerm} onChange={e => setTempResourceTypeSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>
+                      <div><Label htmlFor="typeSortDialog">Sort by</Label><Select value={tempResourceTypeSortBy} onValueChange={setTempResourceTypeSortBy}><SelectTrigger id="typeSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{resourceTypeSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
+                    </div>
+                    <DialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetResourceTypeFilterSortDialog} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsResourceTypeFilterSortDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyResourceTypeFilterSort}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                <Button onClick={handleOpenNewResourceTypeDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Type</Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {isLoadingData && filteredResourceTypesForDisplay.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
+              ) : filteredResourceTypesForDisplay.length > 0 ? (
+                <div className="overflow-x-auto border rounded-md shadow-sm">
+                  <Table>
+                    <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
+                    <TableBody>{filteredResourceTypesForDisplay.map(type => (
+                      <TableRow key={type.id}>
+                        <TableCell className="font-medium">{type.name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell>
+                        <TableCell className="text-center">{type.resourceCount}</TableCell>
+                        <TableCell className="text-right space-x-1">
+                          <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip></TooltipProvider>
+                          <AlertDialogTypeTrigger asChild>
+                            <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}><Trash2 className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent></Tooltip></TooltipProvider>
+                          </AlertDialogTypeTrigger>
+                        </TableCell>
+                      </TableRow>
+                    ))}</TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-10 text-muted-foreground">
+                  <ListChecks className="h-12 w-12 mx-auto mb-3 opacity-50"/>
+                  <p className="font-medium">{activeResourceTypeFilterSortCount > 0 ? "No types match criteria." : "No resource types defined."}</p>
+                  {activeResourceTypeFilterSortCount > 0 && <Button variant="link" onClick={resetAllActiveResourceTypePageFiltersSort} className="mt-2 text-xs"><FilterX className="mr-1.5 h-3.5 w-3.5"/>Reset Filters</Button>}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          {isResourceTypeFormDialogOpen && (<ResourceTypeFormDialog open={isResourceTypeFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceTypeFormDialogOpen(isOpen); if (!isOpen) setEditingResourceType(null); }} initialType={editingResourceType} onSave={handleSaveResourceType} />)}
+          <AlertDialog open={!!typeToDelete} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader><AlertDialogTypeTitle>Delete "{typeToDelete?.name}"?</AlertDialogTypeTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>
+              <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
       )}
     </div>
   );
 }
+
