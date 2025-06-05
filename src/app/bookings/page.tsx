@@ -837,7 +837,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
             {isLoadingAnyData && bookingsToDisplay.length === 0 && allBookingsDataSource.length === 0 ? (
                 <div className="text-center py-10 text-muted-foreground"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary mb-2" />Loading bookings...</div>
             ) : bookingsToDisplay.length > 0 ? (
-                <div className="overflow-x-auto border-l border-r border-b rounded-b-lg rounded-t-none">
+                <div className="overflow-x-auto border rounded-b-lg rounded-t-none">
                 <Table>
                     <TableHeader>
                     <TableRow>
