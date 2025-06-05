@@ -417,7 +417,17 @@ export default function BookingRequestsPage() {
         ) : bookingsForApproval.length > 0 ? (
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle>Pending & Waitlisted Requests ({bookingsForApproval.length})</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                Pending & Waitlisted Requests
+                {bookingsForApproval.length > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="rounded-full h-6 w-6 p-0 flex items-center justify-center text-xs"
+                  >
+                    {bookingsForApproval.length}
+                  </Badge>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto border rounded-b-lg rounded-t-none">
