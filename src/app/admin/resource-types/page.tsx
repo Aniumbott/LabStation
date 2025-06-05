@@ -1,6 +1,3 @@
-// This file is no longer needed.
-// Its functionality has been moved to /src/app/admin/inventory/page.tsx
+// This file is deprecated as its functionality has been moved to /src/app/admin/lab-management-v2/page.tsx.
 // This file can be safely deleted.
-export default function ResourceTypesPage_DEPRECATED() {
-  return null;
-}
+export default function DeprecatedAdminResourceTypesPage() { return null; }

@@ -1,8 +1,3 @@
-'use client';
-// This file is no longer needed as resource browsing and management is centralized 
-// in /admin/resources.
-// You can safely delete this file.
-export default function ResourcesPage_DEPRECATED() {
-  return null;
-}
-    
+// This file is deprecated. Resource browsing is primarily handled via /admin/resources and individual resource detail pages.
+// This file can be safely deleted.
+export default function DeprecatedResourcesListPage() { return null; }

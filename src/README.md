@@ -1,1 +1,2 @@
-<!-- This file is marked for deletion use README.md in root folder of project instead. -->
+<!-- This file is marked for deletion. Use README.md in the root folder of the project instead. -->
+This file can be safely deleted.
