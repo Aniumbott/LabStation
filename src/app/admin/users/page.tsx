@@ -404,7 +404,7 @@ export default function UsersPage() {
                   )}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="w-full sm:max-w-md">
+              <DialogContent className="w-full sm:max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Filter Users</DialogTitle>
                   <DialogDescription>
@@ -495,7 +495,7 @@ export default function UsersPage() {
             </TableHeader>
             <TableBody>
               {filteredUsers.map((user) => {
-                const RoleIcon = roleIcons[user.role as Exclude<RoleName, 'Lab Manager'>] || UsersIconLucide; // Ensure Lab Manager is excluded if necessary
+                const RoleIcon = roleIcons[user.role as Exclude<RoleName, 'Lab Manager'>] || UsersIconLucide;
                 return (
                   <TableRow key={user.id}>
                     <TableCell>
