@@ -333,7 +333,7 @@ export default function DashboardPage() {
         ) : currentUser && upcomingUserBookings.length > 0 ? (
           <Card className="shadow-lg">
             <CardContent className="p-0">
-              <div className="overflow-x-auto border rounded-md">
+              <div className="overflow-x-auto border rounded-t-md">
                 <Table>
                   <TableHeader>
                     <TableRow>
