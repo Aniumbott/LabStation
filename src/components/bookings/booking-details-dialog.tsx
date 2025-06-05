@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { Booking, BookingUsageDetails } from '@/types';
 import { format, isValid, parseISO, isPast } from 'date-fns';
-import { Calendar, Clock, User, Info, Tag, StickyNote, Activity, CheckCircle, AlertCircle, XCircle, FileText, Edit2, X } from 'lucide-react';
+import { Calendar, Clock, User, Info, Tag, StickyNote, Activity, CheckCircle, AlertCircle, XCircle, FileText, Edit2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LogUsageFormDialog } from './log-usage-form-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -173,9 +173,7 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
                 <Edit2 className="mr-2 h-4 w-4" /> {currentBookingDetails.usageDetails ? 'Edit Usage Log' : 'Log Usage'}
               </Button>
             )}
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              <X className="mr-2 h-4 w-4" /> Close
-            </Button>
+            {/* Close button is handled by the 'X' in DialogContent by default */}
           </DialogFooter>
         </DialogContent>
       </Dialog>

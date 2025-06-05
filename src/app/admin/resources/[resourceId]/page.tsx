@@ -5,7 +5,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, AlertCircle, CheckCircle, Construction, User as UserIconLucide, Calendar as CalendarIcon, XCircle, Building, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, AlertCircle, CheckCircle, Construction, User as UserIconLucide, Calendar as CalendarIcon, ShieldAlert } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -178,7 +178,7 @@ export default function ResourceDetailPage() {
   const [resourceTypeName, setResourceTypeName] = useState<string>('Loading...');
   const [labName, setLabName] = useState<string>('Loading...');
   const [isLoading, setIsLoading] = useState(true);
-  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null); // null: loading, true: access, false: no access
 
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
@@ -195,11 +195,11 @@ export default function ResourceDetailPage() {
     if (!resourceId) {
       setIsLoading(false);
       setResource(null);
-      setHasAccess(false);
+      setHasAccess(false); // No resource ID, no access
       return;
     }
     setIsLoading(true);
-    setHasAccess(null);
+    setHasAccess(null); // Reset access status on new fetch
     try {
       const resourceDocRef = doc(db, "resources", resourceId);
       const docSnap = await getDoc(resourceDocRef);
@@ -234,6 +234,7 @@ export default function ResourceDetailPage() {
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
         };
 
+        // Check Lab Access
         if (currentUser?.role !== 'Admin' && fetchedResource.labId) {
           const membershipQuery = query(collection(db, 'labMemberships'),
             where('userId', '==', currentUser?.id),
@@ -243,7 +244,7 @@ export default function ResourceDetailPage() {
           const membershipSnapshot = await getDocs(membershipQuery);
           if (membershipSnapshot.empty) {
             setHasAccess(false);
-            setResource(fetchedResource);
+            setResource(fetchedResource); // Still set resource for admins if they somehow landed here without perms
             setIsLoading(false);
             return;
           }
@@ -265,7 +266,7 @@ export default function ResourceDetailPage() {
 
       } else {
         setResource(null);
-        setHasAccess(false);
+        setHasAccess(false); // Resource not found, so no access
       }
     } catch (error: any) {
       toast({ title: "Error Fetching Resource", description: `Could not load resource details. ${error.message}`, variant: "destructive" });
@@ -277,12 +278,12 @@ export default function ResourceDetailPage() {
   }, [resourceId, toast, currentUser]);
 
   useEffect(() => {
-    if(currentUser) {
+    if(currentUser) { // Only fetch if currentUser is available
       fetchResourceData();
-    } else if (currentUser === null && resourceId) {
+    } else if (currentUser === null && resourceId) { // User explicitly logged out or not logged in
         setIsLoading(false);
-        setHasAccess(false);
-        setResource(null);
+        setHasAccess(false); // No user, no access
+        setResource(null); // No resource details if not logged in
     }
   }, [fetchResourceData, currentUser, resourceId]);
 
@@ -321,7 +322,7 @@ export default function ResourceDetailPage() {
 
   useEffect(() => {
     const fetchBookingsForResourceUser = async () => {
-      if (!resourceId || !currentUser?.id || !hasAccess) {
+      if (!resourceId || !currentUser?.id || !hasAccess) { // Also check hasAccess
         setResourceUserBookings([]);
         return;
       }
@@ -583,8 +584,7 @@ export default function ResourceDetailPage() {
                             <span className="font-semibold"> "{resource.name}"</span> from Firestore.
                         </AlertDialogDescription>
                         </AlertDialogHeader>
-                        <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => {setIsAlertOpen(false); setResourceToDeleteId(null);}}>Cancel</AlertDialogCancel>
+                        <AlertDialogFooter className="pt-6 border-t">
                         <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
                             Delete
                         </AlertDialogAction>

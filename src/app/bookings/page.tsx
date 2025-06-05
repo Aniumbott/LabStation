@@ -3,7 +3,7 @@
 
 import React, { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams }from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, X, Search as SearchIcon, FilterX, Eye, Loader2, ListFilter, Info, Clock, Calendar as CalendarIconLucide, User as UserIcon, Package as ResourceIcon, CheckCircle2, Save, CheckCircle, AlertCircle, Users, ToggleLeft, ToggleRight } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, Search as SearchIcon, FilterX, Eye, Loader2, ListFilter, Info, Clock, Calendar as CalendarIconLucide, User as UserIcon, Package as ResourceIcon, CheckCircle2, Save, CheckCircle, AlertCircle, Users, ToggleLeft, ToggleRight } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -782,7 +782,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                     <DialogTrigger asChild><Button variant="outline" size="sm"><ListFilter className="mr-2 h-4 w-4" />Filters {activeFilterCount > 0 && (<Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">{activeFilterCount}</Badge>)}</Button></DialogTrigger>
                     <DialogContent className="w-full sm:max-w-lg">
                         <DialogHeader><DialogTitle>Filter Bookings</DialogTitle><DialogDescription>Refine your list of bookings.</DialogDescription></DialogHeader>
-                        <ScrollArea className="max-h-[60vh] mt-6">
+                        <ScrollArea className="max-h-[60vh] mt-4">
                             <div className="space-y-6 pr-1">
                                 <div>
                                     <Label htmlFor="bookingCalendarDialogDate">Filter by Specific Date (Optional)</Label>
@@ -811,7 +811,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                                 )}
                             </div>
                         </ScrollArea>
-                        <DialogFooter className="pt-6 border-t"><Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters</Button><Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply Filters</Button></DialogFooter>
+                        <DialogFooter className="pt-6 border-t"><Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters</Button><Button onClick={handleApplyDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply Filters</Button></DialogFooter>
                     </DialogContent>
                 </Dialog>
               <Button onClick={() => handleOpenForm(undefined, null, activeSelectedDate || startOfToday())}><PlusCircle className="mr-2 h-4 w-4" /> New Booking</Button>
@@ -910,7 +910,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
       <Dialog open={isFormOpen} onOpenChange={handleDialogClose} key={formKey}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>{currentBooking?.id ? 'Edit Booking' : 'Create New Booking'}</DialogTitle><DialogDescription>Fill in the details below to {currentBooking?.id ? 'update your' : 'schedule a new'} booking.{dialogHeaderDateString && ` For date: ${dialogHeaderDateString}`}</DialogDescription></DialogHeader>
-          {(isLoadingResourcesAndLabs || isLoadingAvailabilityRules || isLoadingUsersForFilter) && isFormOpen ? (<div className="flex justify-center items-center py-10 mt-6"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading form data...</div>
+          {(isLoadingResourcesAndLabs || isLoadingAvailabilityRules || isLoadingUsersForFilter) && isFormOpen ? (<div className="flex justify-center items-center py-10 mt-4"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading form data...</div>
           ) : allAvailableResources.length > 0 && currentUser && currentUser.name && currentUser.role ? (
             <BookingForm
                 initialData={currentBooking}
@@ -921,7 +921,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                 allUsers={allUsersForFilter}
                 selectedDateProp={currentBooking?.startTime ? startOfDay(new Date(currentBooking.startTime)) : (activeSelectedDate || startOfToday())}
             />
-          ) : ( isFormOpen && (<div className="text-center py-6 text-muted-foreground mt-6"><Info className="mx-auto h-8 w-8 mb-2" /><p>No resources are currently available for booking, or user data is missing.</p><p className="text-xs">{ currentUser?.role !== 'Admin' ? "Please ensure you have access to labs via your dashboard." : "Please configure resources and labs in Admin section."}</p></div>))}
+          ) : ( isFormOpen && (<div className="text-center py-6 text-muted-foreground mt-4"><Info className="mx-auto h-8 w-8 mb-2" /><p>No resources are currently available for booking, or user data is missing.</p><p className="text-xs">{ currentUser?.role !== 'Admin' ? "Please ensure you have access to labs via your dashboard." : "Please configure resources and labs in Admin section."}</p></div>))}
         </DialogContent>
       </Dialog>
 
@@ -1042,7 +1042,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUser, allAvailableR
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleRHFSubmit)}>
-        <ScrollArea className="max-h-[60vh] mt-6">
+        <ScrollArea className="max-h-[60vh] mt-4">
           <div className="space-y-4 pr-1">
 
             <FormField
@@ -1082,7 +1082,6 @@ function BookingForm({ initialData, onSave, onCancel, currentUser, allAvailableR
           </div>
         </ScrollArea>
         <DialogFooter className="pt-6 border-t">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={form.formState.isSubmitting}><X className="mr-2 h-4 w-4" /> Cancel</Button>
           <Button type="submit" disabled={form.formState.isSubmitting || (selectedResource && selectedResource.status !== 'Working' && isNewBookingForm) || (allAvailableResources.length === 0 && isNewBookingForm)}>{form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{form.formState.isSubmitting ? "Saving..." : (initialData?.id ? "Save Changes" : "Request Booking")}</Button>
         </DialogFooter>
       </form>

@@ -14,8 +14,6 @@ import { formatDateSafe } from '@/lib/utils';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { User, Tag, Info, CalendarDays, Hash, Database, Fingerprint } from "lucide-react";
-import { Button } from "../ui/button";
-import { X } from "lucide-react";
 
 interface AuditLogDetailsDialogProps {
   logEntry: AuditLogEntry | null;
@@ -78,9 +76,7 @@ export function AuditLogDetailsDialog({ logEntry, isOpen, onOpenChange }: AuditL
           </div>
         </ScrollArea>
         <DialogFooter className="pt-6 border-t">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-                <X className="mr-2 h-4 w-4" /> Close
-            </Button>
+          {/* Close button is handled by the 'X' in DialogContent by default */}
         </DialogFooter>
       </DialogContent>
     </Dialog>

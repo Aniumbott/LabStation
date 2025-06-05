@@ -19,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Save, X, PlusCircle, Network, Info, Loader2 } from 'lucide-react';
+import { Save, PlusCircle, Network, Info, Loader2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Resource, ResourceStatus, ResourceType, Lab } from '@/types';
 import { resourceStatusesList } from '@/lib/app-constants';
@@ -492,9 +492,6 @@ export function ResourceFormDialog({
             </div>
             </ScrollArea>
             <DialogFooter className="pt-6 border-t">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-                    <X className="mr-2 h-4 w-4" /> Cancel
-              </Button>
               <Button type="submit" disabled={isSubmitting || (resourceTypes.length === 0 && !initialResource) || (labs.length === 0 && !initialResource) }>
                 {isSubmitting
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />

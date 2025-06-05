@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { UserPlus, Save, X, Loader2 } from 'lucide-react';
+import { UserPlus, Save, Loader2 } from 'lucide-react';
 import type { User, RoleName } from '@/types';
 import { userRolesList } from '@/lib/app-constants';
 
@@ -141,9 +141,6 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
               )}
             />
             <DialogFooter className="pt-6 border-t">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={form.formState.isSubmitting}>
-                <X className="mr-2 h-4 w-4" /> Cancel
-              </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />

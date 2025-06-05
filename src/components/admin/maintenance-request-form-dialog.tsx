@@ -19,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
+import { Save, PlusCircle, Loader2 } from 'lucide-react';
 import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource, RoleName } from '@/types';
 import { maintenanceRequestStatuses } from '@/lib/app-constants';
 import { Timestamp, serverTimestamp } from 'firebase/firestore';
@@ -280,9 +280,6 @@ export function MaintenanceRequestFormDialog({
             </div>
             </ScrollArea>
             <DialogFooter className="pt-6 border-t">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-                <X className="mr-2 h-4 w-4" /> Cancel
-              </Button>
               <Button type="submit" disabled={isSubmitting || (!!initialRequest && !canAdminister && !canEditAsTechnician && !canOnlyEditDescription) || (availableResourcesForForm.length === 0 && !initialRequest) }>
                 {isSubmitting
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />

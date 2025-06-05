@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { Bell, Check, Trash2, CalendarCheck2, Wrench, AlertTriangle, Clock, CircleEllipsis, CircleCheck, Info, ShieldAlert, Loader2, X } from 'lucide-react';
+import { Bell, Check, Trash2, CalendarCheck2, Wrench, AlertTriangle, Clock, CircleEllipsis, CircleCheck, Info, ShieldAlert, Loader2 } from 'lucide-react';
 import type { Notification as NotificationType } from '@/types'; // Renamed to avoid conflict
 import { useAuth } from '@/components/auth-context';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -253,8 +253,7 @@ export default function NotificationsPage() {
                       This action cannot be undone. This will permanently delete all your notifications.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogFooter className="pt-6 border-t">
                     <AlertDialogAction onClick={handleDeleteAllNotifications} variant="destructive">
                       Yes, Clear All
                     </AlertDialogAction>
@@ -337,4 +336,3 @@ export default function NotificationsPage() {
     </TooltipProvider>
   );
 }
-

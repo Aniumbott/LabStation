@@ -10,7 +10,7 @@ import React, {
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, X, CalendarPlus, CheckCircle2, Building, ListChecks, Edit, Trash2 } from 'lucide-react';
+import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, CheckCircle2, Building, ListChecks, Edit, Trash2 } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType, Lab, LabMembership } from '@/types';
 import { resourceStatusesList } from '@/lib/app-constants';
 import { useAuth } from '@/components/auth-context';
@@ -41,6 +41,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle as AlertDialogTypeTitle, 
+  AlertDialogTrigger,
 }from "@/components/ui/alert-dialog";
 import { Calendar as ShadCNCalendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
@@ -638,7 +639,6 @@ export default function AdminResourcesPage() {
                             </ScrollArea>
                             <DialogFooter className="pt-6 border-t">
                             <Button variant="ghost" onClick={resetResourceDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters</Button>
-                            <Button variant="outline" onClick={() => setIsResourceFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
                             <Button onClick={handleApplyResourceDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply Filters</Button>
                             </DialogFooter>
                         </DialogContent>
@@ -654,7 +654,7 @@ export default function AdminResourcesPage() {
                   {isLoadingData && allResourcesDataSource.length === 0 ? (
                     <div className="flex justify-center items-center py-10 text-muted-foreground"><Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" /> Loading resources...</div>
                   ) : filteredResources.length > 0 ? (
-                    <div className="overflow-x-auto rounded-lg border">
+                    <div className="overflow-x-auto rounded-md border">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -670,12 +670,12 @@ export default function AdminResourcesPage() {
                           {filteredResources.map((resource) => (
                             <TableRow key={resource.id}>
                               <TableCell>
-                                <Link href={`/admin/resources/${resource.id}`}>
+                                <Link href={`/resources/${resource.id}`}>
                                   <Image src={resource.imageUrl || 'https://placehold.co/100x100.png'} alt={resource.name} width={40} height={40} className="rounded-md object-cover h-10 w-10 hover:opacity-80 transition-opacity" data-ai-hint="lab equipment"/>
                                 </Link>
                               </TableCell>
                               <TableCell className="font-medium">
-                                <Link href={`/admin/resources/${resource.id}`} className="hover:text-primary hover:underline">{resource.name}</Link>
+                                <Link href={`/resources/${resource.id}`} className="hover:text-primary hover:underline">{resource.name}</Link>
                               </TableCell>
                               <TableCell>{resource.resourceTypeName || 'N/A'}</TableCell>
                               <TableCell>{resource.labName || 'N/A'}</TableCell>
@@ -683,7 +683,7 @@ export default function AdminResourcesPage() {
                               <TableCell className="text-right">
                                 <Button asChild size="sm" variant="default" disabled={resource.status !== 'Working'} className="h-8 text-xs">
                                   <Link href={`/bookings?resourceId=${resource.id}${activeResourceSelectedDate ? `&date=${format(activeResourceSelectedDate, 'yyyy-MM-dd')}`: ''}`}>
-                                    <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />Book
+                                    <CalendarIconLucide className="mr-1.5 h-3.5 w-3.5" />Book
                                   </Link>
                                 </Button>
                               </TableCell>
@@ -723,7 +723,7 @@ export default function AdminResourcesPage() {
                         <div><Label htmlFor="typeSortDialog">Sort by</Label><Select value={tempResourceTypeSortBy} onValueChange={setTempResourceTypeSortBy}><SelectTrigger id="typeSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{resourceTypeSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
                         </div>
                         </ScrollArea>
-                        <DialogFooter className="pt-6 border-t"><Button variant="ghost" onClick={resetResourceTypeFilterSortDialog} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsResourceTypeFilterSortDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyResourceTypeFilterSort}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></DialogFooter>
+                        <DialogFooter className="pt-6 border-t"><Button variant="ghost" onClick={resetResourceTypeFilterSortDialog} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button onClick={handleApplyResourceTypeFilterSort}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></DialogFooter>
                     </DialogContent>
                     </Dialog>
                     <Button onClick={handleOpenNewResourceTypeDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Type</Button>
@@ -742,7 +742,17 @@ export default function AdminResourcesPage() {
                             <TableCell className="text-center">{type.resourceCount}</TableCell>
                             <TableCell className="text-right space-x-1">
                               <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip></TooltipProvider>
-                              <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}><Trash2 className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent></Tooltip></TooltipProvider>
+                              <AlertDialog open={!!typeToDelete && typeToDelete.id === type.id} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}>
+                                  <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                                      <AlertDialogTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}><Trash2 className="h-4 w-4"/></Button>
+                                      </AlertDialogTrigger>
+                                  </TooltipTrigger><TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent></Tooltip></TooltipProvider>
+                                  <AlertDialogContent>
+                                      <AlertDialogHeader><AlertDialogTypeTitle>Delete "{typeToDelete?.name}"?</AlertDialogTypeTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>
+                                      <AlertDialogFooter className="pt-6 border-t"><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
+                                  </AlertDialogContent>
+                              </AlertDialog>
                             </TableCell>
                         </TableRow>
                         ))}</TableBody>
@@ -766,17 +776,6 @@ export default function AdminResourcesPage() {
       )}
       {isResourceTypeFormDialogOpen && (<ResourceTypeFormDialog open={isResourceTypeFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceTypeFormDialogOpen(isOpen); if (!isOpen) setEditingResourceType(null); }} initialType={editingResourceType} onSave={handleSaveResourceType} />)}
 
-      {canManageResourcesAndTypes && (
-        <>
-          <AlertDialog open={!!typeToDelete} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}>
-            <AlertDialogContent>
-              <AlertDialogHeader><AlertDialogTypeTitle>Delete "{typeToDelete?.name}"?</AlertDialogTypeTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>
-              <AlertDialogFooter className="pt-6 border-t"><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </>
-      )}
     </div>
   );
 }
-

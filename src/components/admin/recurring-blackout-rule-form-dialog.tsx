@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
-import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
+import { Save, PlusCircle, Loader2 } from 'lucide-react';
 import type { RecurringBlackoutRule, DayOfWeek, Lab } from '@/types';
 import { daysOfWeekArray } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -222,9 +222,6 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
               </div>
             </ScrollArea>
             <DialogFooter className="pt-6 border-t">
-               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-                <X className="mr-2 h-4 w-4" /> Cancel
-              </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />

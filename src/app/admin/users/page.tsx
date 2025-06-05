@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, ThumbsUp, ThumbsDown, Loader2, X, CheckCircle2, Settings2 } from 'lucide-react';
+import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, ThumbsUp, ThumbsDown, Loader2, CheckCircle2, Settings2 } from 'lucide-react';
 import type { User, RoleName, UserStatus, Lab } from '@/types';
 import {
   Table,
@@ -405,7 +405,7 @@ export default function UsersPage() {
                     Refine the list of users by applying filters below.
                   </DialogDescription>
                 </DialogHeader>
-                <ScrollArea className="max-h-[60vh] mt-6">
+                <ScrollArea className="max-h-[60vh] mt-4">
                   <div className="space-y-4 pr-1">
                     <div>
                       <Label htmlFor="userSearchDialog">Search (Name/Email)</Label>
@@ -454,7 +454,6 @@ export default function UsersPage() {
                   <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
-                  <Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
                   <Button onClick={handleApplyDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply Filters</Button>
                 </DialogFooter>
               </DialogContent>
@@ -525,10 +524,12 @@ export default function UsersPage() {
                           <AlertDialog open={userToReject?.id === user.id} onOpenChange={(isOpen) => !isOpen && setUserToReject(null)}>
                             <Tooltip>
                               <TooltipTrigger asChild>
+                                <AlertDialogTrigger asChild>
                                 <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToReject(user)} disabled={isLoadingData}>
                                     <ThumbsDown className="h-4 w-4" />
                                     <span className="sr-only">Reject User Signup</span>
                                 </Button>
+                                </AlertDialogTrigger>
                               </TooltipTrigger>
                               <TooltipContent><p>Reject User Signup</p></TooltipContent>
                             </Tooltip>
@@ -540,7 +541,6 @@ export default function UsersPage() {
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter className="pt-6 border-t">
-                                  <AlertDialogCancel onClick={() => setUserToReject(null)}>Cancel</AlertDialogCancel>
                                   <AlertDialogAction variant="destructive" onClick={handleConfirmRejectUser}>
                                     Reject Signup
                                   </AlertDialogAction>
@@ -572,10 +572,12 @@ export default function UsersPage() {
                           <AlertDialog open={userToDelete?.id === user.id} onOpenChange={(isOpen) => !isOpen && setUserToDelete(null)}>
                             <Tooltip>
                               <TooltipTrigger asChild>
+                                <AlertDialogTrigger asChild>
                                   <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToDelete(user)} disabled={isLoadingData}>
                                       <Trash2 className="h-4 w-4" />
                                       <span className="sr-only">Delete User Profile</span>
                                   </Button>
+                                </AlertDialogTrigger>
                               </TooltipTrigger>
                               <TooltipContent><p>Delete User Profile</p></TooltipContent>
                             </Tooltip>
@@ -589,7 +591,6 @@ export default function UsersPage() {
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter className="pt-6 border-t">
-                                    <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
                                     <AlertDialogAction variant="destructive" onClick={() => userToDelete && handleDeleteUser(userToDelete.id)}>
                                     Delete User Profile
                                     </AlertDialogAction>

@@ -19,7 +19,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Save, X, PlusCircle, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
+import { Save, PlusCircle, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import type { BlackoutDate, Lab } from '@/types';
 import { format, parseISO, isValid as isValidDateFn, startOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -202,9 +202,6 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
               )}
             />
             <DialogFooter className="pt-6 border-t">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-                <X className="mr-2 h-4 w-4" /> Cancel
-              </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />

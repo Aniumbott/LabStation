@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
+import { Save, PlusCircle, Loader2 } from 'lucide-react';
 import type { Lab } from '@/types';
 
 const labFormSchema = z.object({
@@ -131,9 +131,6 @@ export function LabFormDialog({ open, onOpenChange, initialLab, onSave }: LabFor
               )}
             />
             <DialogFooter className="pt-6 border-t">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-                <X className="mr-2 h-4 w-4" /> Cancel
-              </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />

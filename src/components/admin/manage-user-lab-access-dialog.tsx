@@ -15,7 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import type { User, Lab, LabMembership, LabMembershipStatus } from '@/types';
-import { Loader2, X, CheckCircle, Ban, PlusCircle, ShieldCheck, ShieldOff, Search } from 'lucide-react';
+import { Loader2, CheckCircle, Ban, PlusCircle, ShieldCheck, ShieldOff, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
@@ -304,9 +304,6 @@ export function ManageUserLabAccessDialog({
           </ScrollArea>
         )}
         <DialogFooter className="pt-6 border-t">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            <X className="mr-2 h-4 w-4" /> Close
-          </Button>
           {isAddManuallyMode && (
             <Button
                 onClick={handleGrantAccessToSelectedUserLocal}

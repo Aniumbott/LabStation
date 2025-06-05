@@ -20,7 +20,7 @@ import { DateRange } from 'react-day-picker';
 import type { Resource, UnavailabilityPeriod } from '@/types';
 import { format, startOfDay, isValid as isValidDateFn, parseISO, isBefore, isSameDay, max, min, formatISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, PlusCircle, Loader2, Save, X } from 'lucide-react';
+import { Trash2, PlusCircle, Loader2, Save } from 'lucide-react';
 
 interface ManageUnavailabilityDialogProps {
   resource: Resource;
@@ -198,9 +198,6 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
           </div>
         </ScrollArea>
         <DialogFooter className="pt-6 border-t">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            <X className="mr-2 h-4 w-4" /> Cancel
-          </Button>
           <Button onClick={handleSaveChanges} disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {isSubmitting ? 'Saving...' : 'Save All Changes'}
