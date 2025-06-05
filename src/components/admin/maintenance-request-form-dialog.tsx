@@ -54,7 +54,7 @@ interface MaintenanceRequestFormDialogProps {
   initialRequest: MaintenanceRequest | null;
   onSave: (data: MaintenanceRequestFormValues) => Promise<void>;
   technicians: User[];
-  resources: Resource[];
+  resources: Resource[]; // All resources passed in
   currentUserRole?: RoleName;
   labContextId?: string; // Optional: To filter resources if adding from a lab-specific context
 }
@@ -75,7 +75,7 @@ export function MaintenanceRequestFormDialog({
     if (labContextId) {
       return resources.filter(r => r.labId === labContextId);
     }
-    return resources;
+    return resources; // If no labContextId, show all resources
   }, [resources, labContextId]);
   
   const form = useForm<MaintenanceRequestFormValues>({
@@ -112,14 +112,14 @@ export function MaintenanceRequestFormDialog({
         dateResolved: '',
       });
     }
-  }, [initialRequest, availableResourcesForForm, form.reset]);
+  }, [initialRequest, availableResourcesForForm, form]); // Removed form.reset from dep array
 
   useEffect(() => {
     if (open) {
       setIsSubmitting(false);
       resetForm();
     }
-  }, [open, resetForm]);
+  }, [open, resetForm]); // Removed initialRequest, availableResourcesForForm from dep array
 
   async function onSubmit(data: MaintenanceRequestFormValues) {
     setIsSubmitting(true);
@@ -142,12 +142,14 @@ export function MaintenanceRequestFormDialog({
     if (!currentUserRole || !initialRequest) return false;
     // This assumes 'reportedByUserId' is available on initialRequest if editing
     // The form itself does not have 'reportedByUserId' as an editable field.
+    // Let's assume initialRequest.reportedByUserId is correctly populated for existing requests.
     return initialRequest.status === 'Open' && currentUserRole === 'Researcher' && initialRequest.reportedByUserId === initialRequest.reportedByUserId;
   }, [currentUserRole, initialRequest]);
 
   const canEditAsTechnician = useMemo(() => {
      if (!currentUserRole || !initialRequest) return false;
      // This assumes 'assignedTechnicianId' is available on initialRequest if editing
+     // And we use the actual ID of the current user (passed in currentUserRole or context if available)
      return currentUserRole === 'Technician' && initialRequest.assignedTechnicianId === initialRequest.assignedTechnicianId;
   }, [currentUserRole, initialRequest]);
 
@@ -183,7 +185,7 @@ export function MaintenanceRequestFormDialog({
                             <FormControl><SelectTrigger><SelectValue placeholder={availableResourcesForForm.length > 0 ? "Select a resource" : (labContextId ? "No resources in this lab" : "No resources available")} /></SelectTrigger></FormControl>
                             <SelectContent>
                             {availableResourcesForForm.map(res => (
-                                <SelectItem key={res.id} value={res.id}>{res.name} {labContextId ? '' : `(${res.labId ? (resources.find(rMain => rMain.labId === res.labId)?.name || 'Unknown Lab') : 'No Lab Assigned'})`}</SelectItem>
+                                <SelectItem key={res.id} value={res.id}>{res.name} {labContextId ? '' : `(${res.labId ? (resources.find(rMain => rMain.id === res.id)?.labName || 'Unknown Lab') : 'No Lab Assigned'})`}</SelectItem>
                             ))}
                             </SelectContent>
                         </Select>
@@ -303,3 +305,4 @@ export function MaintenanceRequestFormDialog({
     </Dialog>
   );
 }
+

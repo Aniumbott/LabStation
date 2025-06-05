@@ -86,7 +86,7 @@ export default function LabOperationsCenterPage() {
 
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [activeContextId, setActiveContextId] = useState<string>(GLOBAL_CONTEXT_VALUE);
-    const [isLabAccessRequestLoading, setIsLabAccessRequestLoading] = useState(true);
+    
 
     // --- Resource Types State ---
     const [resourceTypes, setResourceTypes] = useState<ResourceType[]>([]);
@@ -140,10 +140,10 @@ export default function LabOperationsCenterPage() {
     const [activeLabSpecificClosureSearchTerm, setActiveLabSpecificClosureSearchTerm] = useState('');
 
 
-    // --- Maintenance Requests State ---
+    // --- Maintenance Requests State (Global View) ---
     const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
     const [allTechniciansForMaintenance, setAllTechniciansForMaintenance] = useState<User[]>([]);
-    const [allUsersData, setAllUsersData] = useState<User[]>([]);
+    const [allUsersData, setAllUsersData] = useState<User[]>([]); // For all users data
     const [isMaintenanceFormDialogOpen, setIsMaintenanceFormDialogOpen] = useState(false);
     const [editingMaintenanceRequest, setEditingMaintenanceRequest] = useState<MaintenanceRequest | null>(null);
     const [isMaintenanceFilterDialogOpen, setIsMaintenanceFilterDialogOpen] = useState(false);
@@ -156,11 +156,23 @@ export default function LabOperationsCenterPage() {
     const [activeMaintenanceFilterResourceId, setActiveMaintenanceFilterResourceId] = useState<string>('all');
     const [activeMaintenanceFilterTechnicianId, setActiveMaintenanceFilterTechnicianId] = useState<string>('all');
 
+    // --- Lab-Specific Maintenance Requests State ---
+    const [isLabSpecificMaintenanceFilterDialogOpen, setIsLabSpecificMaintenanceFilterDialogOpen] = useState(false);
+    const [tempLabSpecificMaintenanceSearchTerm, setTempLabSpecificMaintenanceSearchTerm] = useState('');
+    const [activeLabSpecificMaintenanceSearchTerm, setActiveLabSpecificMaintenanceSearchTerm] = useState('');
+    const [tempLabSpecificMaintenanceStatusFilter, setTempLabSpecificMaintenanceStatusFilter] = useState<MaintenanceRequestStatus | 'all'>('all');
+    const [activeLabSpecificMaintenanceStatusFilter, setActiveLabSpecificMaintenanceStatusFilter] = useState<MaintenanceRequestStatus | 'all'>('all');
+    const [tempLabSpecificMaintenanceResourceIdFilter, setTempLabSpecificMaintenanceResourceIdFilter] = useState<string>('all'); // Will be filtered by current lab
+    const [activeLabSpecificMaintenanceResourceIdFilter, setActiveLabSpecificMaintenanceResourceIdFilter] = useState<string>('all');
+    const [tempLabSpecificMaintenanceTechnicianIdFilter, setTempLabSpecificMaintenanceTechnicianIdFilter] = useState<string>('all');
+    const [activeLabSpecificMaintenanceTechnicianIdFilter, setActiveLabSpecificMaintenanceTechnicianIdFilter] = useState<string>('all');
+
 
     // --- Lab Access & Membership State ---
-    const [allLabAccessRequests, setAllLabAccessRequests] = useState<LabMembershipRequest[]>([]);
-    const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]);
+    const [allLabAccessRequests, setAllLabAccessRequests] = useState<LabMembershipRequest[]>([]); // For global tab
+    const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]); // All memberships for various calculations
     const [isProcessingLabAccessAction, setIsProcessingLabAccessAction] = useState<Record<string, boolean>>({});
+    const [isLabAccessRequestLoading, setIsLabAccessRequestLoading] = useState(true);
 
 
     const canManageAny = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
@@ -814,7 +826,7 @@ export default function LabOperationsCenterPage() {
     }, [selectedLabDetails, allResourcesForCountsAndChecks, userLabMemberships, maintenanceRequests]);
 
 
-    // --- Maintenance Requests Logic (System-Wide View) ---
+    // --- Maintenance Requests Logic (Global View) ---
     useEffect(() => {
         if (isMaintenanceFilterDialogOpen) {
             setTempMaintenanceSearchTerm(activeMaintenanceSearchTerm);
@@ -824,7 +836,7 @@ export default function LabOperationsCenterPage() {
         }
     }, [isMaintenanceFilterDialogOpen, activeMaintenanceSearchTerm, activeMaintenanceFilterStatus, activeMaintenanceFilterResourceId, activeMaintenanceFilterTechnicianId]);
 
-    const filteredMaintenanceRequests = useMemo(() => {
+    const filteredMaintenanceRequests = useMemo(() => { // This is for the GLOBAL view
         return maintenanceRequests.map(req => {
             const resource = allResourcesForCountsAndChecks.find(r => r.id === req.resourceId);
             const reporter = allUsersData.find(u => u.id === req.reportedByUserId);
@@ -832,7 +844,7 @@ export default function LabOperationsCenterPage() {
             return {
                 ...req,
                 resourceName: resource?.name || 'Unknown Resource',
-                resourceLabId: resource?.labId, // Needed for filtering by lab context
+                resourceLabId: resource?.labId, 
                 reportedByUserName: reporter?.name || 'Unknown User',
                 assignedTechnicianName: technician?.name,
             };
@@ -857,6 +869,102 @@ export default function LabOperationsCenterPage() {
         });
     }, [maintenanceRequests, allResourcesForCountsAndChecks, allTechniciansForMaintenance, allUsersData, activeMaintenanceSearchTerm, activeMaintenanceFilterStatus, activeMaintenanceFilterResourceId, activeMaintenanceFilterTechnicianId]);
 
+    // --- Lab-Specific Maintenance Requests Logic ---
+    useEffect(() => {
+      if (isLabSpecificMaintenanceFilterDialogOpen) {
+        setTempLabSpecificMaintenanceSearchTerm(activeLabSpecificMaintenanceSearchTerm);
+        setTempLabSpecificMaintenanceStatusFilter(activeLabSpecificMaintenanceStatusFilter);
+        setTempLabSpecificMaintenanceResourceIdFilter(activeLabSpecificMaintenanceResourceIdFilter);
+        setTempLabSpecificMaintenanceTechnicianIdFilter(activeLabSpecificMaintenanceTechnicianIdFilter);
+      }
+    }, [isLabSpecificMaintenanceFilterDialogOpen, activeLabSpecificMaintenanceSearchTerm, activeLabSpecificMaintenanceStatusFilter, activeLabSpecificMaintenanceResourceIdFilter, activeLabSpecificMaintenanceTechnicianIdFilter]);
+    
+    const labSpecificFilteredMaintenanceRequests = useMemo(() => {
+      if (activeContextId === GLOBAL_CONTEXT_VALUE) return []; // Only calculate if a lab is selected
+      
+      return maintenanceRequests
+        .map(req => { // First, map all requests to include details like resource name, reporter, etc.
+            const resource = allResourcesForCountsAndChecks.find(r => r.id === req.resourceId);
+            const reporter = allUsersData.find(u => u.id === req.reportedByUserId);
+            const technician = allTechniciansForMaintenance.find(t => t.id === req.assignedTechnicianId);
+            return {
+                ...req,
+                resourceName: resource?.name || 'Unknown Resource',
+                resourceLabId: resource?.labId,
+                reportedByUserName: reporter?.name || 'Unknown User',
+                assignedTechnicianName: technician?.name,
+            };
+        })
+        .filter(req => req.resourceLabId === activeContextId) // Filter by current lab context
+        .filter(req => { // Apply lab-specific filters
+            const lowerSearchTerm = activeLabSpecificMaintenanceSearchTerm.toLowerCase();
+            const searchMatch = !activeLabSpecificMaintenanceSearchTerm ||
+                (req.resourceName && req.resourceName.toLowerCase().includes(lowerSearchTerm)) ||
+                (req.reportedByUserName && req.reportedByUserName.toLowerCase().includes(lowerSearchTerm)) ||
+                (req.issueDescription && req.issueDescription.toLowerCase().includes(lowerSearchTerm)) ||
+                (req.assignedTechnicianName && req.assignedTechnicianName.toLowerCase().includes(lowerSearchTerm));
+            
+            const statusMatch = activeLabSpecificMaintenanceStatusFilter === 'all' || req.status === activeLabSpecificMaintenanceStatusFilter;
+            
+            const resourceMatch = activeLabSpecificMaintenanceResourceIdFilter === 'all' || req.resourceId === activeLabSpecificMaintenanceResourceIdFilter;
+            
+            let technicianMatch = true;
+            if (activeLabSpecificMaintenanceTechnicianIdFilter !== 'all') {
+                if (activeLabSpecificMaintenanceTechnicianIdFilter === '--unassigned--') {
+                    technicianMatch = !req.assignedTechnicianId;
+                } else {
+                    technicianMatch = req.assignedTechnicianId === activeLabSpecificMaintenanceTechnicianIdFilter;
+                }
+            }
+            return searchMatch && statusMatch && resourceMatch && technicianMatch;
+        });
+    }, [
+      maintenanceRequests, allResourcesForCountsAndChecks, allUsersData, allTechniciansForMaintenance, activeContextId,
+      activeLabSpecificMaintenanceSearchTerm, activeLabSpecificMaintenanceStatusFilter, 
+      activeLabSpecificMaintenanceResourceIdFilter, activeLabSpecificMaintenanceTechnicianIdFilter
+    ]);
+
+    const handleApplyLabSpecificMaintenanceDialogFilters = useCallback(() => {
+      setActiveLabSpecificMaintenanceSearchTerm(tempLabSpecificMaintenanceSearchTerm.toLowerCase());
+      setActiveLabSpecificMaintenanceStatusFilter(tempLabSpecificMaintenanceStatusFilter);
+      setActiveLabSpecificMaintenanceResourceIdFilter(tempLabSpecificMaintenanceResourceIdFilter);
+      setActiveLabSpecificMaintenanceTechnicianIdFilter(tempLabSpecificMaintenanceTechnicianIdFilter);
+      setIsLabSpecificMaintenanceFilterDialogOpen(false);
+    }, [tempLabSpecificMaintenanceSearchTerm, tempLabSpecificMaintenanceStatusFilter, tempLabSpecificMaintenanceResourceIdFilter, tempLabSpecificMaintenanceTechnicianIdFilter]);
+
+    const resetLabSpecificMaintenanceDialogFiltersOnly = useCallback(() => {
+      setTempLabSpecificMaintenanceSearchTerm('');
+      setTempLabSpecificMaintenanceStatusFilter('all');
+      setTempLabSpecificMaintenanceResourceIdFilter('all');
+      setTempLabSpecificMaintenanceTechnicianIdFilter('all');
+    }, []);
+
+    const resetAllActiveLabSpecificMaintenancePageFilters = useCallback(() => {
+      setActiveLabSpecificMaintenanceSearchTerm('');
+      setActiveLabSpecificMaintenanceStatusFilter('all');
+      setActiveLabSpecificMaintenanceResourceIdFilter('all');
+      setActiveLabSpecificMaintenanceTechnicianIdFilter('all');
+      resetLabSpecificMaintenanceDialogFiltersOnly();
+      setIsLabSpecificMaintenanceFilterDialogOpen(false);
+    }, [resetLabSpecificMaintenanceDialogFiltersOnly]);
+    
+    const activeLabSpecificMaintenanceFilterCount = useMemo(() => [
+      activeLabSpecificMaintenanceSearchTerm !== '', 
+      activeLabSpecificMaintenanceStatusFilter !== 'all', 
+      activeLabSpecificMaintenanceResourceIdFilter !== 'all', 
+      activeLabSpecificMaintenanceTechnicianIdFilter !== 'all'
+    ].filter(Boolean).length, [
+      activeLabSpecificMaintenanceSearchTerm, activeLabSpecificMaintenanceStatusFilter, 
+      activeLabSpecificMaintenanceResourceIdFilter, activeLabSpecificMaintenanceTechnicianIdFilter
+    ]);
+
+    const resourcesForLabSpecificMaintenanceFilter = useMemo(() => {
+        if (activeContextId === GLOBAL_CONTEXT_VALUE) return [];
+        return allResourcesForCountsAndChecks.filter(r => r.labId === activeContextId);
+    }, [allResourcesForCountsAndChecks, activeContextId]);
+
+
+    // --- Universal Maintenance Handlers ---
     const handleApplyMaintenanceDialogFilters = useCallback(() => {
         setActiveMaintenanceSearchTerm(tempMaintenanceSearchTerm.toLowerCase());
         setActiveMaintenanceFilterStatus(tempMaintenanceFilterStatus);
@@ -872,7 +980,7 @@ export default function LabOperationsCenterPage() {
         setTempMaintenanceFilterTechnicianId('all');
     }, []);
 
-    const resetAllActiveMaintenancePageFilters = useCallback(() => {
+    const resetAllActiveMaintenancePageFilters = useCallback(() => { // For global view
         setActiveMaintenanceSearchTerm('');
         setActiveMaintenanceFilterStatus('all');
         setActiveMaintenanceFilterResourceId('all');
@@ -1054,7 +1162,7 @@ export default function LabOperationsCenterPage() {
                             <TableCell className="text-center">{(lab as any).memberCount ?? 0}</TableCell>
                             {canManageAny && <TableCell className="text-right space-x-1">
                                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setActiveContextId(lab.id)}><Settings2 className="mr-1.5 h-3.5 w-3.5"/>Manage</Button>
-                              <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditSelectedLabDialog()} disabled={isLoadingData || lab.id !== editingLab?.id && !!editingLab}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Lab Details</TooltipContent></Tooltip>
+                              <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setEditingLab(lab); setIsLabFormDialogOpen(true);}} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Lab Details</TooltipContent></Tooltip>
                               <AlertDialog open={labToDelete?.id === lab.id} onOpenChange={(isOpen) => !isOpen && setLabToDelete(null)}>
                                 <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabToDelete(lab)} disabled={isLoadingData || ((lab as any).resourceCount ?? 0) > 0 || ((lab as any).memberCount ?? 0) > 0}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger>
                                 <TooltipContent>{((lab as any).resourceCount ?? 0) > 0 || ((lab as any).memberCount ?? 0) > 0 ? "Cannot delete: lab has resources or members" : "Delete Lab"}</TooltipContent>
@@ -1514,7 +1622,102 @@ export default function LabOperationsCenterPage() {
                   </CardContent>
                 </Card>
               </TabsContent>
-              <TabsContent value="lab-maintenance" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Maintenance</CardTitle></CardHeader><CardContent><p>Lab-specific maintenance log here.</p></CardContent></Card></TabsContent>
+              <TabsContent value="lab-maintenance" className="mt-6">
+                <Card>
+                  <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <div>
+                      <CardTitle>{selectedLabDetails.name} - Maintenance Log</CardTitle>
+                      <CardDescription>View and manage maintenance requests for resources in this lab.</CardDescription>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                        <FilterSortDialog open={isLabSpecificMaintenanceFilterDialogOpen} onOpenChange={setIsLabSpecificMaintenanceFilterDialogOpen}>
+                          <FilterSortDialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <ListFilter className="mr-2 h-4 w-4" />Filters
+                              {activeLabSpecificMaintenanceFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeLabSpecificMaintenanceFilterCount}</Badge>}
+                            </Button>
+                          </FilterSortDialogTrigger>
+                          <FilterSortDialogContent className="w-full max-w-lg">
+                            <FilterSortDialogHeader><FilterSortDialogTitle>Filter Maintenance for {selectedLabDetails.name}</FilterSortDialogTitle></FilterSortDialogHeader>
+                            <Separator className="my-3" />
+                            <div className="space-y-3">
+                              <div className="relative">
+                                <Label htmlFor="labMaintenanceSearchDialog">Search (Resource/Reporter/Issue/Tech)</Label>
+                                <SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" />
+                                <Input id="labMaintenanceSearchDialog" value={tempLabSpecificMaintenanceSearchTerm} onChange={e => setTempLabSpecificMaintenanceSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                  <Label htmlFor="labMaintenanceStatusDialog">Status</Label>
+                                  <Select value={tempLabSpecificMaintenanceStatusFilter} onValueChange={(v) => setTempLabSpecificMaintenanceStatusFilter(v as MaintenanceRequestStatus | 'all')}>
+                                    <SelectTrigger id="labMaintenanceStatusDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
+                                    <SelectContent><SelectItem value="all">All Statuses</SelectItem>{maintenanceRequestStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <Label htmlFor="labMaintenanceResourceDialog">Resource (in this lab)</Label>
+                                  <Select value={tempLabSpecificMaintenanceResourceIdFilter} onValueChange={setTempLabSpecificMaintenanceResourceIdFilter} disabled={resourcesForLabSpecificMaintenanceFilter.length === 0}>
+                                    <SelectTrigger id="labMaintenanceResourceDialog" className="h-9 mt-1"><SelectValue placeholder={resourcesForLabSpecificMaintenanceFilter.length > 0 ? "Filter by Resource" : "No resources in lab"} /></SelectTrigger>
+                                    <SelectContent><SelectItem value="all">All Resources in {selectedLabDetails.name}</SelectItem>{resourcesForLabSpecificMaintenanceFilter.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                              <div>
+                                <Label htmlFor="labMaintenanceTechnicianDialog">Assigned Technician</Label>
+                                <Select value={tempLabSpecificMaintenanceTechnicianIdFilter} onValueChange={setTempLabSpecificMaintenanceTechnicianIdFilter} disabled={allTechniciansForMaintenance.length === 0}>
+                                  <SelectTrigger id="labMaintenanceTechnicianDialog" className="h-9 mt-1"><SelectValue placeholder={allTechniciansForMaintenance.length > 0 ? "Filter by Technician" : "No technicians"} /></SelectTrigger>
+                                  <SelectContent><SelectItem value="all">All/Any</SelectItem><SelectItem value="--unassigned--">Unassigned</SelectItem>{allTechniciansForMaintenance.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            <FilterSortDialogFooter className="mt-4 pt-4 border-t">
+                              <Button variant="ghost" onClick={resetLabSpecificMaintenanceDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button>
+                              <Button variant="outline" onClick={() => setIsLabSpecificMaintenanceFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
+                              <Button onClick={handleApplyLabSpecificMaintenanceDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button>
+                            </FilterSortDialogFooter>
+                          </FilterSortDialogContent>
+                        </FilterSortDialog>
+                        {canManageAny && <Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Log Request for this Lab</Button>}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {isLoadingData && labSpecificFilteredMaintenanceRequests.length === 0 ? (
+                        <div className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2"/>Fetching requests for {selectedLabDetails.name}...</div>
+                    ) : labSpecificFilteredMaintenanceRequests.length > 0 ? (
+                        <div className="overflow-x-auto border rounded-md">
+                        <Table>
+                            <TableHeader><TableRow>
+                            <TableHead>Resource</TableHead><TableHead className="min-w-[200px]">Issue</TableHead><TableHead>Reported By</TableHead>
+                            <TableHead>Date Reported</TableHead><TableHead>Status</TableHead><TableHead>Assigned To</TableHead>
+                            {canEditAnyMaintenanceRequest && <TableHead className="text-right w-[100px]">Actions</TableHead>}
+                            </TableRow></TableHeader>
+                            <TableBody>{labSpecificFilteredMaintenanceRequests.map((request) => (
+                            <TableRow key={request.id}>
+                                <TableCell className="font-medium">{request.resourceName}</TableCell>
+                                <TableCell className="text-sm text-muted-foreground max-w-xs truncate" title={request.issueDescription}>{request.issueDescription}</TableCell>
+                                <TableCell>{request.reportedByUserName}</TableCell>
+                                <TableCell>{formatDateSafe(request.dateReported, 'N/A', 'MMM dd, yyyy')}</TableCell>
+                                <TableCell>{getMaintenanceStatusBadge(request.status)}</TableCell>
+                                <TableCell>{request.assignedTechnicianName || <span className="text-xs italic text-muted-foreground">Unassigned</span>}</TableCell>
+                                {canEditAnyMaintenanceRequest && (
+                                <TableCell className="text-right space-x-1">
+                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditMaintenanceDialog(request)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Request</TooltipContent></Tooltip>
+                                </TableCell>
+                                )}
+                            </TableRow>
+                            ))}</TableBody>
+                        </Table>
+                        </div>
+                    ) : (
+                        <div className="text-center py-10 text-muted-foreground">
+                        <Wrench className="h-12 w-12 mx-auto mb-3 opacity-50"/>
+                        <p className="font-medium">{activeLabSpecificMaintenanceFilterCount > 0 ? `No requests match filters for ${selectedLabDetails.name}.` : `No maintenance requests for ${selectedLabDetails.name}.`}</p>
+                        {activeLabSpecificMaintenanceFilterCount > 0 ? (<Button variant="outline" size="sm" onClick={resetAllActiveLabSpecificMaintenancePageFilters}><FilterX className="mr-2 h-4 w-4"/>Reset Lab Filters</Button>) : (canManageAny && (<Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Log First Request for this Lab</Button>))}
+                        </div>
+                    )}
+                    </CardContent>
+                </Card>
+              </TabsContent>
               <TabsContent value="lab-members" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Members & Access</CardTitle></CardHeader><CardContent><p>Lab-specific members and access management here.</p></CardContent></Card></TabsContent>
           </Tabs>
         )}
@@ -1539,9 +1742,9 @@ export default function LabOperationsCenterPage() {
             initialRequest={editingMaintenanceRequest}
             onSave={handleSaveMaintenanceRequest}
             technicians={allTechniciansForMaintenance}
-            resources={allResourcesForCountsAndChecks} 
+            resources={allResourcesForCountsAndChecks} // Pass all resources
             currentUserRole={currentUser?.role}
-            labContextId={activeContextId === GLOBAL_CONTEXT_VALUE ? undefined : activeContextId}
+            labContextId={activeContextId === GLOBAL_CONTEXT_VALUE ? undefined : activeContextId} // Pass current lab context
           />
         )}
       </div>
