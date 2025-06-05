@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavailability-dialog';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp, limit } from 'firebase/firestore';
 import { addAuditLog } from '@/lib/firestore-helpers';
 
 
@@ -585,7 +585,6 @@ export default function ResourceDetailPage() {
                         </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => {setIsAlertOpen(false); setResourceToDeleteId(null);}}>Cancel</AlertDialogCancel>
                         <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
                             Delete
                         </AlertDialogAction>
@@ -729,27 +728,6 @@ export default function ResourceDetailPage() {
                 </Button>
             </CardFooter>
           </Card>
-            {resource && resource.status === 'Working' && (
-              <Card className="shadow-lg">
-                <CardHeader>
-                  <CardTitle className="text-xl flex items-center gap-2">
-                    <CalendarDays className="text-primary h-5 w-5" /> General Availability
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    This resource is generally available for booking during standard lab hours unless an unavailability period is active or it's a lab-wide blackout day.
-                  </p>
-                </CardContent>
-                 <CardFooter className="justify-center border-t pt-4">
-                    <Button variant="outline" asChild>
-                        <Link href={`/bookings?resourceId=${resource.id}`}>
-                            View Full Calendar &amp; Book <ExternalLink className="ml-2 h-3 w-3" />
-                        </Link>
-                    </Button>
-                 </CardFooter>
-              </Card>
-           )}
         </div>
       </div>
 
@@ -777,3 +755,4 @@ export default function ResourceDetailPage() {
     </TooltipProvider>
   );
 }
+
