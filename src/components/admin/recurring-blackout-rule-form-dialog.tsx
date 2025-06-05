@@ -114,8 +114,8 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-4">
-            <ScrollArea className="max-h-[60vh]">
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <ScrollArea className="max-h-[60vh] mt-4">
               <div className="space-y-6 pr-1">
                 <FormField
                   control={form.control}
@@ -242,4 +242,3 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
     </Dialog>
   );
 }
-

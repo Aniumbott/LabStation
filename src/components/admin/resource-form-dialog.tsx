@@ -198,8 +198,8 @@ export function ResourceFormDialog({
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-4">
-            <ScrollArea className="max-h-[70vh] overflow-y-auto pr-2">
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <ScrollArea className="max-h-[70vh] mt-4">
             <div className="space-y-6 pr-1">
                 <FormField
                   control={form.control}
@@ -393,7 +393,7 @@ export function ResourceFormDialog({
                  />
 
                 
-                <div className="pt-2"> {/* Added padding top for the separator effect */}
+                <div className="pt-2">
                     <h3 className="text-md font-medium mb-3 flex items-center border-t pt-5 mt-3">
                         <Network className="mr-2 h-5 w-5 text-primary" /> Remote Access Details (Optional)
                     </h3>
@@ -512,4 +512,3 @@ export function ResourceFormDialog({
     </Dialog>
   );
 }
-

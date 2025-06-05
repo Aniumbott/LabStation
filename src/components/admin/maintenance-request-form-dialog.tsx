@@ -112,14 +112,14 @@ export function MaintenanceRequestFormDialog({
         dateResolved: '',
       });
     }
-  }, [initialRequest, availableResourcesForForm, form]); // Removed form.reset from dep array
+  }, [initialRequest, availableResourcesForForm, form]);
 
   useEffect(() => {
     if (open) {
       setIsSubmitting(false);
       resetForm();
     }
-  }, [open, resetForm]); // Removed initialRequest, availableResourcesForForm from dep array
+  }, [open, resetForm]);
 
   async function onSubmit(data: MaintenanceRequestFormValues) {
     setIsSubmitting(true);
@@ -132,7 +132,7 @@ export function MaintenanceRequestFormDialog({
     try {
       await onSave(dataToSave);
     } catch (error) {
-        console.error("Error in MaintenanceRequestFormDialog onSubmit:", error);
+        // Parent handles toast
     } finally {
         setIsSubmitting(false);
     }
@@ -140,16 +140,11 @@ export function MaintenanceRequestFormDialog({
 
   const canOnlyEditDescription = useMemo(() => {
     if (!currentUserRole || !initialRequest) return false;
-    // This assumes 'reportedByUserId' is available on initialRequest if editing
-    // The form itself does not have 'reportedByUserId' as an editable field.
-    // Let's assume initialRequest.reportedByUserId is correctly populated for existing requests.
     return initialRequest.status === 'Open' && currentUserRole === 'Researcher' && initialRequest.reportedByUserId === initialRequest.reportedByUserId;
   }, [currentUserRole, initialRequest]);
 
   const canEditAsTechnician = useMemo(() => {
      if (!currentUserRole || !initialRequest) return false;
-     // This assumes 'assignedTechnicianId' is available on initialRequest if editing
-     // And we use the actual ID of the current user (passed in currentUserRole or context if available)
      return currentUserRole === 'Technician' && initialRequest.assignedTechnicianId === initialRequest.assignedTechnicianId;
   }, [currentUserRole, initialRequest]);
 
@@ -169,8 +164,8 @@ export function MaintenanceRequestFormDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
-            <ScrollArea className="max-h-[60vh] overflow-y-auto pr-2">
-            <div className="space-y-4 py-2 pb-4">
+            <ScrollArea className="max-h-[60vh] mt-4">
+            <div className="space-y-4 pr-1">
                 <FormField
                     control={form.control}
                     name="resourceId"
@@ -284,7 +279,7 @@ export function MaintenanceRequestFormDialog({
                 )}
             </div>
             </ScrollArea>
-            <DialogFooter className="pt-6 border-t mt-4">
+            <DialogFooter className="pt-6 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
@@ -305,4 +300,3 @@ export function MaintenanceRequestFormDialog({
     </Dialog>
   );
 }
-

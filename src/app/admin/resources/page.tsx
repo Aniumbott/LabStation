@@ -40,8 +40,8 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle as AlertDialogTypeTitle, // Aliased to avoid conflict if DialogTitle is also used directly
-  AlertDialogTrigger as AlertDialogTypeTrigger, // Aliased
+  AlertDialogTitle as AlertDialogTypeTitle, 
+  AlertDialogTrigger,
 }from "@/components/ui/alert-dialog";
 import { Calendar as ShadCNCalendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
@@ -51,7 +51,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, Timestamp as FirestoreTimestamp } from 'date-fns';
@@ -555,7 +554,7 @@ export default function AdminResourcesPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Resources"
+        title="Resources & Types"
         description={pageDescription}
         icon={ClipboardList}
         actions={pageHeaderActions}
@@ -581,14 +580,13 @@ export default function AdminResourcesPage() {
                             )}
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="w-full max-w-lg">
+                        <DialogContent className="w-full sm:max-w-lg">
                             <DialogHeader>
                             <DialogTitle>Filter Resources</DialogTitle>
                             <DialogDescription>Refine the list of available lab resources.</DialogDescription>
                             </DialogHeader>
-                            <Separator className="my-4" />
-                            <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
-                            <div className="space-y-6 py-4 px-1">
+                            <ScrollArea className="max-h-[65vh] mt-6">
+                            <div className="space-y-6 pr-1">
                                 <div>
                                 <Label htmlFor="resourceSearchDialog">Search (Name/Keyword)</Label>
                                 <div className="relative mt-1">
@@ -596,7 +594,7 @@ export default function AdminResourcesPage() {
                                     <Input id="resourceSearchDialog" type="search" placeholder="Name, manufacturer, model, type, lab..." value={tempResourceSearchTerm} onChange={(e) => setTempResourceSearchTerm(e.target.value)} className="h-9 pl-8"/>
                                 </div>
                                 </div>
-                                <Separator />
+                                
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <Label htmlFor="resourceTypeFilterDialog">Type</Label>
@@ -625,7 +623,7 @@ export default function AdminResourcesPage() {
                                         <p className="text-xs text-muted-foreground mt-1">You currently have no active lab memberships. Request access via your dashboard.</p>}
                                 </div>
                                 </div>
-                                <Separator />
+                                
                                 <div>
                                     <Label className="mb-2 block text-sm font-medium">Available On (Optional)</Label>
                                     <div className="flex justify-center items-center rounded-md border p-2">
@@ -635,7 +633,7 @@ export default function AdminResourcesPage() {
                                 </div>
                             </div>
                             </ScrollArea>
-                            <DialogFooter className="pt-6 border-t mt-4">
+                            <DialogFooter className="pt-6 border-t">
                             <Button variant="ghost" onClick={resetResourceDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters</Button>
                             <Button variant="outline" onClick={() => setIsResourceFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
                             <Button onClick={handleApplyResourceDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply Filters</Button>
@@ -716,12 +714,12 @@ export default function AdminResourcesPage() {
                     <DialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter & Sort {activeResourceTypeFilterSortCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeResourceTypeFilterSortCount}</Badge>}</Button></DialogTrigger>
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader><DialogTitle>Filter & Sort Resource Types</DialogTitle></DialogHeader>
-                        <Separator className="my-3" />
-                        <div className="space-y-3">
+                        
+                        <div className="mt-6 space-y-3">
                         <div className="relative"><Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="typeSearchDialog" value={tempResourceTypeSearchTerm} onChange={e => setTempResourceTypeSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>
                         <div><Label htmlFor="typeSortDialog">Sort by</Label><Select value={tempResourceTypeSortBy} onValueChange={setTempResourceTypeSortBy}><SelectTrigger id="typeSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{resourceTypeSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
                         </div>
-                        <DialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetResourceTypeFilterSortDialog} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsResourceTypeFilterSortDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyResourceTypeFilterSort}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></DialogFooter>
+                        <DialogFooter className="pt-6 border-t"><Button variant="ghost" onClick={resetResourceTypeFilterSortDialog} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsResourceTypeFilterSortDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyResourceTypeFilterSort}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></DialogFooter>
                     </DialogContent>
                     </Dialog>
                     <Button onClick={handleOpenNewResourceTypeDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Type</Button>
@@ -739,12 +737,10 @@ export default function AdminResourcesPage() {
                             <TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell>
                             <TableCell className="text-center">{type.resourceCount}</TableCell>
                             <TableCell className="text-right space-x-1">
-                                <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip></TooltipProvider>
-                                <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}>
-                                    <Trash2 className="h-4 w-4"/>
-                                    </Button>
-                                </TooltipTrigger><TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent></Tooltip></TooltipProvider>
+                              <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip></TooltipProvider>
+                              
+                              <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}><Trash2 className="h-4 w-4"/></Button>
+                              
                             </TableCell>
                         </TableRow>
                         ))}</TableBody>
@@ -773,7 +769,7 @@ export default function AdminResourcesPage() {
           <AlertDialog open={!!typeToDelete} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}>
             <AlertDialogContent>
               <AlertDialogHeader><AlertDialogTypeTitle>Delete "{typeToDelete?.name}"?</AlertDialogTypeTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>
-              <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
+              <AlertDialogFooter className="pt-6 border-t"><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
         </>
@@ -781,4 +777,3 @@ export default function AdminResourcesPage() {
     </div>
   );
 }
-    

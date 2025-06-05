@@ -66,12 +66,12 @@ export function AuditLogDetailsDialog({ logEntry, isOpen, onOpenChange }: AuditL
             <DetailItem icon={Database} label="Entity Type" value={logEntry.entityType || 'N/A'} />
             <DetailItem icon={Hash} label="Entity ID" value={logEntry.entityId || 'N/A'} />
             
-            <div className="pt-2"> {/* Added padding top for the separator effect */}
-                <div className="flex items-start py-1.5 border-t pt-3 mt-1"> {/* Added border-t for separator */}
+            <div className="pt-2">
+                <div className="flex items-start py-1.5 border-t pt-3 mt-1">
                     <Info className="mr-3 h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
                     <div className="flex-1">
                         <span className="font-medium text-muted-foreground block text-xs">Full Details</span>
-                        <p className="text-sm text-foreground whitespace-pre-wrap break-words bg-muted/50 p-2 rounded-md mt-0.5">{logEntry.details}</p>
+                        <p className="text-sm text-foreground whitespace-pre-wrap bg-muted/50 p-2 rounded-md mt-0.5">{logEntry.details}</p>
                     </div>
                 </div>
             </div>
@@ -86,4 +86,3 @@ export function AuditLogDetailsDialog({ logEntry, isOpen, onOpenChange }: AuditL
     </Dialog>
   );
 }
-

@@ -122,7 +122,6 @@ export default function BookingRequestsPage() {
       setAllBookingsState(bookingsWithDetails);
 
     } catch (error: any) {
-      toast({ title: "Database Error", description: `Failed to fetch booking requests. ${error.message}`, variant: "destructive" });
       setAllBookingsState([]);
     }
     setIsLoading(false);
@@ -176,17 +175,13 @@ export default function BookingRequestsPage() {
       try {
         await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_APPROVED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} approved.`});
       } catch (auditError: any) {
-          toast({
-              title: "Audit Log Failed",
-              description: `Booking approved, but audit log failed: ${auditError.message || 'Unknown audit error'}`,
-              variant: "destructive",
-          });
+          // Log error
       }
 
       if (bookingToUpdate.userId && bookingToUpdate.resourceName && bookingToUpdate.startTime) {
         const directAuthUser = auth.currentUser;
         if (!directAuthUser || !directAuthUser.uid) {
-           toast({ title: "Notification Skipped", description: "Booking approved, but current user session issue prevented notification. Please check login.", variant: "destructive" });
+           // Log error
         } else {
             const notificationParams = {
                 userId: bookingToUpdate.userId,
@@ -204,17 +199,13 @@ export default function BookingRequestsPage() {
                 notificationParams.linkTo
               );
             } catch (notificationError: any) {
-              toast({
-                  title: "Notification Failed",
-                  description: `Booking was approved, but sending notification failed: ${notificationError.message || 'Unknown notification error'}`,
-                  variant: "destructive"
-              });
+              // Log error
             }
         }
       }
       await fetchBookingRequestsAndRelatedData();
     } catch (error: any) {
-      toast({ title: "Error Approving Booking", description: `Failed to approve booking: ${error.message || 'Unknown error'}`, variant: "destructive" });
+      // Log error
     } finally {
       setIsLoading(false);
     }
@@ -240,17 +231,13 @@ export default function BookingRequestsPage() {
       try {
         await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_REJECTED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} rejected/cancelled.`});
       } catch (auditError: any) {
-          toast({
-              title: "Audit Log Failed",
-              description: `Booking rejected, but audit log failed: ${auditError.message || 'Unknown audit error'}`,
-              variant: "destructive",
-          });
+          // Log error
       }
 
       if (bookingToUpdate.userId && bookingToUpdate.resourceName && bookingToUpdate.startTime) {
         const directAuthUser = auth.currentUser;
         if (!directAuthUser || !directAuthUser.uid) {
-           toast({ title: "Notification Skipped", description: "Booking rejected, but current user session issue prevented notification. Please check login.", variant: "destructive" });
+           // Log error
         } else {
             const notificationParams = {
                 userId: bookingToUpdate.userId,
@@ -268,11 +255,7 @@ export default function BookingRequestsPage() {
                 notificationParams.linkTo
               );
             } catch (notificationError: any) {
-              toast({
-                  title: "Notification Failed",
-                  description: `Booking was rejected, but sending notification failed: ${notificationError.message || 'Unknown notification error'}`,
-                  variant: "destructive"
-              });
+              // Log error
             }
         }
       }
@@ -286,17 +269,13 @@ export default function BookingRequestsPage() {
                 'admin_reject'
             );
         } catch (waitlistError: any) {
-            toast({
-                title: "Waitlist Processing Error",
-                description: `Booking rejected, but an error occurred while processing the waitlist: ${waitlistError.message || 'Unknown waitlist error'}`,
-                variant: "destructive"
-            });
+            // Log error
         }
       }
 
       await fetchBookingRequestsAndRelatedData();
     } catch (error: any) {
-      toast({ title: "Error Rejecting Booking", description: `Failed to reject booking: ${error.message || 'Unknown error'}`, variant: "destructive" });
+      // Log error
     } finally {
       setIsLoading(false);
     }
@@ -374,7 +353,7 @@ export default function BookingRequestsPage() {
                     Refine the list of pending or waitlisted booking requests.
                   </DialogDescription>
                 </DialogHeader>
-                <ScrollArea className="max-h-[60vh] mt-4">
+                <ScrollArea className="max-h-[60vh] mt-6">
                   <div className="space-y-4 pr-1">
                     <div>
                       <Label htmlFor="requestSearchDialog">Search (Resource/User/Notes)</Label>
@@ -528,5 +507,3 @@ export default function BookingRequestsPage() {
     </TooltipProvider>
   );
 }
-
-

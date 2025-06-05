@@ -222,4 +222,3 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
     </Dialog>
   );
 }
-

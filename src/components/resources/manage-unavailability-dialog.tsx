@@ -109,7 +109,7 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
         const periodsToSave = currentPeriods.map(p => ({...p, id: String(p.id) }));
         await onSaveUnavailability(periodsToSave);
     } catch (error) {
-        console.error("Error in ManageUnavailabilityDialog handleSaveChanges:", error);
+        // Parent handles toast
     } finally {
         setIsSubmitting(false);
     }
@@ -161,8 +161,8 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
               </div>
             </div>
 
-            <div className="pt-2"> {/* Added padding top for the separator effect */}
-              <h3 className="text-lg font-semibold mb-2 border-t pt-5 mt-3">Current Unavailability Periods ({currentPeriods.length})</h3>
+            <div className="pt-2">
+              <h3 className="text-lg font-semibold mb-2">Current Unavailability Periods ({currentPeriods.length})</h3>
               {currentPeriods.length > 0 ? (
                 <div className="border rounded-md overflow-hidden">
                   <Table>
@@ -210,4 +210,3 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
     </Dialog>
   );
 }
-

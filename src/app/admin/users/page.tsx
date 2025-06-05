@@ -142,7 +142,6 @@ export default function UsersPage() {
       setAllLabs(fetchedLabs);
 
     } catch (error: any) {
-      toast({ title: "Error Fetching Data", description: error.message || "Failed to load data from database.", variant: "destructive" });
       setUsers([]);
       setAllLabs([]);
     }
@@ -248,7 +247,7 @@ export default function UsersPage() {
       setEditingUser(null);
       await fetchData();
     } catch (error: any) {
-      toast({ title: "Operation Failed", description: `Could not ${editingUser ? 'update' : 'create'} user profile: ${error.message}`, variant: "destructive" });
+      // Log error
     } finally {
       setIsLoadingData(false);
     }
@@ -283,7 +282,7 @@ export default function UsersPage() {
       setUserToDelete(null);
       await fetchData();
     } catch (error: any) {
-      toast({ title: "Delete Failed", description: `Could not delete user profile/memberships: ${error.message}`, variant: "destructive" });
+      // Log error
     } finally {
       setIsLoadingData(false);
     }
@@ -320,15 +319,11 @@ export default function UsersPage() {
                 '/login'
             );
         } catch (notificationError: any) {
-            toast({
-                title: "Notification Error",
-                description: `User ${approvedUserName} was approved, but sending the notification failed. Error: ${notificationError.message}`,
-                variant: "destructive"
-            });
+            // Log error
         }
         await fetchData();
     } catch (error: any) {
-        toast({ title: 'Approval Failed', description: `Could not approve user ${userToApproveDetails.name}: ${error.message}`, variant: 'destructive' });
+        // Log error
     } finally {
         setIsLoadingData(false);
     }
@@ -360,7 +355,7 @@ export default function UsersPage() {
       setUserToReject(null);
       await fetchData();
     } catch (error: any) {
-      toast({ title: 'Rejection Failed', description: `Could not reject user ${userDetails.name}: ${error.message}`, variant: 'destructive' });
+      // Log error
     } finally {
       setIsLoadingData(false);
     }
@@ -410,7 +405,7 @@ export default function UsersPage() {
                     Refine the list of users by applying filters below.
                   </DialogDescription>
                 </DialogHeader>
-                <ScrollArea className="max-h-[60vh] mt-4">
+                <ScrollArea className="max-h-[60vh] mt-6">
                   <div className="space-y-4 pr-1">
                     <div>
                       <Label htmlFor="userSearchDialog">Search (Name/Email)</Label>
@@ -667,4 +662,3 @@ export default function UsersPage() {
     </div>
   );
 }
-

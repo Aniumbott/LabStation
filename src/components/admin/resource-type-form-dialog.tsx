@@ -121,4 +121,3 @@ export function ResourceTypeFormDialog({ open, onOpenChange, initialType, onSave
     </Dialog>
   );
 }
-

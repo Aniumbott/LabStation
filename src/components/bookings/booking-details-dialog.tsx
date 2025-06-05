@@ -191,4 +191,3 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
     </>
   );
 }
-

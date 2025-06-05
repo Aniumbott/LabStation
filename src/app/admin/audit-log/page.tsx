@@ -180,7 +180,7 @@ export default function AuditLogPage() {
                   Refine the list of audit log entries.
                 </DialogDescription>
               </DialogHeader>
-              <ScrollArea className="max-h-[60vh] mt-4">
+              <ScrollArea className="max-h-[60vh] mt-6">
                 <div className="space-y-4 pr-1">
                   <div>
                     <Label htmlFor="auditSearchDialog">Search (User, Action, Entity, Details)</Label>
@@ -278,4 +278,3 @@ export default function AuditLogPage() {
     </div>
   );
 }
-    

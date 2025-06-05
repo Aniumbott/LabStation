@@ -151,4 +151,3 @@ export function LabFormDialog({ open, onOpenChange, initialLab, onSave }: LabFor
     </Dialog>
   );
 }
-

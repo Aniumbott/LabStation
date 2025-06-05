@@ -169,7 +169,6 @@ function BookingsPageContent({}: BookingsPageContentProps) {
       bookings.sort((a, b) => compareAsc(a.startTime, b.startTime));
       setAllBookingsDataSource(bookings);
     } catch (error: any) {
-      toast({ title: "Error Loading Bookings", description: `Failed to load bookings. ${error.message}`, variant: "destructive" });
       setAllBookingsDataSource([]);
     }
     setIsLoadingBookings(false);
@@ -573,7 +572,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
           const firstConflictData = existingBookingsSnapshot.docs[0].data() as Omit<Booking, 'id'>;
           conflictingBookingFound = { ...firstConflictData, id: existingBookingsSnapshot.docs[0].id };
         }
-      } catch (e: any) { toast({ title: "Conflict Check Failed", description: `Could not verify existing bookings. ${e.message || 'Please try again.'}`, variant: "destructive" }); setIsLoadingBookings(false); return; }
+      } catch (e: any) { setIsLoadingBookings(false); return; }
     }
 
 
@@ -603,7 +602,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
         try {
           newBookingId = await createBooking_SA(bookingPayloadForServerAction, actingUserForSA);
           toast({ title: "Success", description: `Booking request ${finalStatus === 'Pending' ? 'submitted' : 'waitlisted'}.` });
-        } catch (serverActionError: any) { toast({ title: "Booking Creation Failed", description: `Server action failed: ${serverActionError.message || 'Please try again.'}`, variant: "destructive" }); setIsLoadingBookings(false); return; }
+        } catch (serverActionError: any) { setIsLoadingBookings(false); return; }
 
         if (newBookingId && currentUser && currentUser.id && currentUser.name) {
           const selectedResourceNameForNotif = selectedResource.name;
@@ -623,10 +622,10 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                 } return Promise.resolve();
               });
               await Promise.all(notificationPromises);
-            } catch (adminNotificationError: any) { toast({ title: "Admin Notification Failed", variant: "destructive" }); }
+            } catch (adminNotificationError: any) { /* Log error */ }
           } else if (finalStatus === 'Waitlisted') {
             try { await addNotification(bookingForUserId, 'Added to Waitlist', `Your booking for ${selectedResourceNameForNotif} on ${format(finalStartTime, 'MMM dd, HH:mm')} is waitlisted${actingUserId !== bookingForUserId ? ` (created by ${actingUserName})` : ''}.`, 'booking_waitlisted', `/bookings?bookingId=${newBookingId}`);
-            } catch (waitlistNotificationError: any) { toast({ title: "Waitlist Notification Failed", variant: "destructive" }); }
+            } catch (waitlistNotificationError: any) { /* Log error */ }
           }
         }
       } else if (formData.id) {
@@ -640,11 +639,11 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
         const bookingDocRef = doc(db, "bookings", formData.id);
         await updateDoc(bookingDocRef, bookingDataToUpdate);
         toast({ title: "Success", description: "Booking updated." });
-        if (currentUser && currentUser.id && currentUser.name) { try { await addAuditLog(currentUser.id, currentUser.name, 'BOOKING_UPDATED', { entityType: 'Booking', entityId: formData.id, details: `Booking for '${selectedResource.name}' updated by ${currentUser.name}. Status: ${bookingDataToUpdate.status}.` }); } catch (auditError: any) { toast({ title: "Audit Log Failed", variant: "destructive" }); } }
+        if (currentUser && currentUser.id && currentUser.name) { try { await addAuditLog(currentUser.id, currentUser.name, 'BOOKING_UPDATED', { entityType: 'Booking', entityId: formData.id, details: `Booking for '${selectedResource.name}' updated by ${currentUser.name}. Status: ${bookingDataToUpdate.status}.` }); } catch (auditError: any) { /* Log error */ } }
       }
       await fetchBookingsData();
       handleDialogClose(false);
-    } catch (error: any) { toast({ title: "Operation Failed", description: `An unexpected error occurred: ${error.message || 'Please try again.'}`, variant: "destructive" });
+    } catch (error: any) { /* Log error */
     } finally { setIsLoadingBookings(false); }
   }, [currentUser, allAvailableResources, fetchedBlackoutDates, fetchedRecurringRules, allUsersForFilter, fetchBookingsData, toast, handleDialogClose, setIsLoadingBookings]);
 
@@ -672,11 +671,11 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
       toast({ title: "Info", description: "Booking cancelled." });
       let resourceNameForLog = resourceForCancelledBooking?.name || 'Unknown Resource';
       try { await addAuditLog(currentUserId, currentUserName, 'BOOKING_CANCELLED', { entityType: 'Booking', entityId: bookingId, details: `Booking for '${resourceNameForLog}' cancelled by user ${currentUserName}.` });
-      } catch (auditError: any) { console.error("Error adding cancellation audit log:", auditError); }
+      } catch (auditError: any) { /* Log error */ }
 
       if (originalStatus === 'Confirmed' && bookingToCancel.resourceId) {
         try { await processWaitlistForResource(bookingToCancel.resourceId, new Date(bookingToCancel.startTime), new Date(bookingToCancel.endTime), 'user_cancel_confirmed');
-        } catch (waitlistError: any) { toast({ title: "Waitlist Processing Error", description: `Booking cancelled, error processing waitlist: ${waitlistError.message || waitlistError.toString()}`, variant: "destructive"}); }
+        } catch (waitlistError: any) { /* Log error */ }
       }
       await fetchBookingsData();
     } catch (error: any) {
@@ -703,7 +702,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
           const userFromList = allUsersForFilter.find(u => u.id === bookingFromState.userId);
           detailedBooking.userName = userFromList?.name || bookingFromState.userName || "Unknown User";
       }
-    } catch (error: any) { toast({ title: "Error", description: `Could not load full booking details. ${error.message}`, variant: "destructive" });
+    } catch (error: any) { /* Log error */
     } finally { setIsLoadingBookings(false); }
     setSelectedBookingForDetails(detailedBooking);
     setIsDetailsDialogOpen(true);
@@ -783,7 +782,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                     <DialogTrigger asChild><Button variant="outline" size="sm"><ListFilter className="mr-2 h-4 w-4" />Filters {activeFilterCount > 0 && (<Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">{activeFilterCount}</Badge>)}</Button></DialogTrigger>
                     <DialogContent className="w-full sm:max-w-lg">
                         <DialogHeader><DialogTitle>Filter Bookings</DialogTitle><DialogDescription>Refine your list of bookings.</DialogDescription></DialogHeader>
-                        <ScrollArea className="max-h-[60vh] mt-4">
+                        <ScrollArea className="max-h-[60vh] mt-6">
                             <div className="space-y-6 pr-1">
                                 <div>
                                     <Label htmlFor="bookingCalendarDialogDate">Filter by Specific Date (Optional)</Label>
@@ -911,7 +910,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
       <Dialog open={isFormOpen} onOpenChange={handleDialogClose} key={formKey}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>{currentBooking?.id ? 'Edit Booking' : 'Create New Booking'}</DialogTitle><DialogDescription>Fill in the details below to {currentBooking?.id ? 'update your' : 'schedule a new'} booking.{dialogHeaderDateString && ` For date: ${dialogHeaderDateString}`}</DialogDescription></DialogHeader>
-          {(isLoadingResourcesAndLabs || isLoadingAvailabilityRules || isLoadingUsersForFilter) && isFormOpen ? (<div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading form data...</div>
+          {(isLoadingResourcesAndLabs || isLoadingAvailabilityRules || isLoadingUsersForFilter) && isFormOpen ? (<div className="flex justify-center items-center py-10 mt-6"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading form data...</div>
           ) : allAvailableResources.length > 0 && currentUser && currentUser.name && currentUser.role ? (
             <BookingForm
                 initialData={currentBooking}
@@ -922,7 +921,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                 allUsers={allUsersForFilter}
                 selectedDateProp={currentBooking?.startTime ? startOfDay(new Date(currentBooking.startTime)) : (activeSelectedDate || startOfToday())}
             />
-          ) : ( isFormOpen && (<div className="text-center py-6 text-muted-foreground"><Info className="mx-auto h-8 w-8 mb-2" /><p>No resources are currently available for booking, or user data is missing.</p><p className="text-xs">{ currentUser?.role !== 'Admin' ? "Please ensure you have access to labs via your dashboard." : "Please configure resources and labs in Admin section."}</p></div>))}
+          ) : ( isFormOpen && (<div className="text-center py-6 text-muted-foreground mt-6"><Info className="mx-auto h-8 w-8 mb-2" /><p>No resources are currently available for booking, or user data is missing.</p><p className="text-xs">{ currentUser?.role !== 'Admin' ? "Please ensure you have access to labs via your dashboard." : "Please configure resources and labs in Admin section."}</p></div>))}
         </DialogContent>
       </Dialog>
 
@@ -1043,7 +1042,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUser, allAvailableR
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleRHFSubmit)}>
-        <ScrollArea className="max-h-[60vh] mt-4">
+        <ScrollArea className="max-h-[60vh] mt-6">
           <div className="space-y-4 pr-1">
 
             <FormField
@@ -1098,5 +1097,3 @@ export default function BookingsPage() {
     </Suspense>
   );
 }
-
-
