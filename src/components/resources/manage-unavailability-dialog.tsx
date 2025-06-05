@@ -39,11 +39,11 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
 
   const initializeDialogState = useCallback(() => {
     setIsSubmitting(false);
-    setCurrentPeriods(resource.unavailabilityPeriods ? 
+    setCurrentPeriods(resource.unavailabilityPeriods ?
       [...resource.unavailabilityPeriods.map(p => ({
-        ...p, 
+        ...p,
         id: p.id || (`unavail-${Date.now()}-${Math.random().toString(36).substring(2,9)}`)
-      }))] 
+      }))]
       : []
     );
     setSelectedDateRange(undefined);
@@ -72,8 +72,8 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
 
     const newPeriod: UnavailabilityPeriod = {
       id: `unavail-${Date.now()}-${Math.random().toString(36).substring(2,9)}`,
-      startDate: formatISO(fromDate, { representation: 'date' }), 
-      endDate: formatISO(toDate, { representation: 'date' }),     
+      startDate: formatISO(fromDate, { representation: 'date' }),
+      endDate: formatISO(toDate, { representation: 'date' }),
       reason: reason.trim() || undefined,
     };
 
@@ -81,7 +81,7 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
     const newEnd = toDate;
 
     const overlap = currentPeriods.some(p => {
-        const pStart = parseISO(p.startDate); 
+        const pStart = parseISO(p.startDate);
         const pEnd = parseISO(p.endDate);
         return (newStart <= pEnd && newEnd >= pStart);
     });
@@ -132,16 +132,18 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
               <div className="space-y-4 p-4 border rounded-md">
                 <div>
                   <Label htmlFor="unavailabilityDateRange">Date Range</Label>
-                  <Calendar
-                    id="unavailabilityDateRange"
-                    mode="range"
-                    selected={selectedDateRange}
-                    onSelect={setSelectedDateRange}
-                    numberOfMonths={1}
-                    disabled={(date) => date < startOfDay(new Date())} 
-                    className="rounded-md border p-0 [&_button]:h-8 [&_button]:w-8 [&_caption_label]:text-sm mt-1"
-                  />
-                   <p className="text-xs text-muted-foreground mt-1">
+                  <div className="flex justify-center mt-1"> {/* Added flex justify-center */}
+                    <Calendar
+                      id="unavailabilityDateRange"
+                      mode="range"
+                      selected={selectedDateRange}
+                      onSelect={setSelectedDateRange}
+                      numberOfMonths={1}
+                      disabled={(date) => date < startOfDay(new Date())}
+                      className="rounded-md border p-0 [&_button]:h-8 [&_button]:w-8 [&_caption_label]:text-sm" // Removed mt-1 as parent div handles spacing
+                    />
+                  </div>
+                   <p className="text-xs text-muted-foreground mt-1 text-center"> {/* Added text-center */}
                     Selected: {selectedDateRange?.from ? format(selectedDateRange.from, 'PPP') : 'None'} - {selectedDateRange?.to ? format(selectedDateRange.to, 'PPP') : (selectedDateRange?.from ? format(selectedDateRange.from, 'PPP') : 'None')}
                   </p>
                 </div>
