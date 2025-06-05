@@ -39,14 +39,12 @@ const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Da
     }
     const directDate = new Date(value);
     if (isValid(directDate)) {
-        // console.warn(`[Dashboard] Parsed non-ISO date string for ${fieldName} in booking ${bookingId}:`, value);
         return directDate;
     }
   }
   if (typeof value === 'number') {
      const dateFromNum = new Date(value);
      if (isValid(dateFromNum)) {
-        //  console.warn(`[Dashboard] Converted number to date for ${fieldName} in booking ${bookingId}:`, value);
          return dateFromNum;
      }
   }
@@ -88,23 +86,19 @@ export default function DashboardPage() {
         fetchedLabs = labsSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Lab));
         setAllLabs(fetchedLabs);
     } catch (error: any) {
-        console.error("[Dashboard] Error fetching all labs:", error);
         toast({ title: "Error Loading Labs Data", variant: "destructive" });
     }
 
-    // Only fetch specific user memberships if not an Admin
     if (currentUser && currentUser.id && currentUser.role !== 'Admin') {
         try {
             const membershipsQuery = query(collection(db, 'labMemberships'), where('userId', '==', currentUser.id));
             const membershipsSnapshot = await getDocs(membershipsQuery);
             setUserMemberships(membershipsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as LabMembership)));
         } catch (error: any) {
-            console.error("[Dashboard] Error fetching user lab memberships:", error);
             toast({ title: "Error Loading Your Lab Memberships", variant: "destructive" });
             setUserMemberships([]);
         }
     } else {
-        // For Admins, or if no user, memberships list remains empty as it's not relevant for them.
         setUserMemberships([]);
     }
     setIsLoadingLabsAndMemberships(false);
@@ -122,7 +116,7 @@ export default function DashboardPage() {
           name: data.name || 'Unnamed Resource',
           resourceTypeId: data.resourceTypeId || '',
           labId: data.labId || '',
-          labName: lab?.name || 'Unknown Lab',
+          labName: lab?.name || (data.labId ? 'Unknown Lab' : 'Global/No Lab'),
           status: data.status || 'Working',
           description: data.description || '',
           imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
@@ -339,7 +333,7 @@ export default function DashboardPage() {
         ) : currentUser && upcomingUserBookings.length > 0 ? (
           <Card className="shadow-lg">
             <CardContent className="p-0">
-              <div className="overflow-x-auto border">
+              <div className="overflow-x-auto border rounded-md">
                 <Table>
                   <TableHeader>
                     <TableRow>

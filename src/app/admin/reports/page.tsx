@@ -582,7 +582,7 @@ export default function ReportsPage() {
             {isLoading ? (
                 <div className="text-center py-10 text-muted-foreground">Loading user activity...</div>
             ) : processedUserUsageData.length > 0 ? (
-              <div className="overflow-x-auto border">
+              <div className="overflow-x-auto border rounded-md">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -637,3 +637,4 @@ export default function ReportsPage() {
     </div>
   );
 }
+

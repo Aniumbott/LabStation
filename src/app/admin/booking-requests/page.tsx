@@ -440,7 +440,7 @@ export default function BookingRequestsPage() {
               <CardTitle>Pending & Waitlisted Requests ({bookingsForApproval.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto border">
+              <div className="overflow-x-auto border rounded-md">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -527,3 +527,4 @@ export default function BookingRequestsPage() {
     </TooltipProvider>
   );
 }
+

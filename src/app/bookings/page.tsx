@@ -210,7 +210,7 @@ function BookingsPageContent({}: BookingsPageContentProps) {
         } as Resource;
       });
       if (currentUser && currentUser.role !== 'Admin') {
-        resourcesData = resourcesData.filter(r => activeUserLabIds.includes(r.labId));
+        resourcesData = resourcesData.filter(r => activeUserLabIds.includes(r.labId) || !r.labId); // Include global resources
       }
       setAllAvailableResources(resourcesData);
 
@@ -840,7 +840,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
             {isLoadingAnyData && bookingsToDisplay.length === 0 && allBookingsDataSource.length === 0 ? (
                 <div className="text-center py-10 text-muted-foreground"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary mb-2" />Loading bookings...</div>
             ) : bookingsToDisplay.length > 0 ? (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto border rounded-md">
                 <Table>
                     <TableHeader>
                     <TableRow>
@@ -1101,3 +1101,4 @@ export default function BookingsPage() {
     </Suspense>
   );
 }
+

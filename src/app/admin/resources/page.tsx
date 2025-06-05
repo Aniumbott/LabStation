@@ -41,6 +41,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle as AlertDialogTypeTitle,
+  AlertDialogTrigger as AlertDialogTypeTrigger,
 } from "@/components/ui/alert-dialog";
 import { Calendar as ShadCNCalendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
@@ -178,7 +179,7 @@ export default function AdminResourcesPage() {
       let fetchedResources = await Promise.all(fetchedResourcesPromises);
 
       if (currentUser && currentUser.role !== 'Admin') {
-        fetchedResources = fetchedResources.filter(resource => activeUserLabIds.includes(resource.labId));
+        fetchedResources = fetchedResources.filter(resource => activeUserLabIds.includes(resource.labId) || !resource.labId); // Also include resources with no labId (global)
       }
       setAllResourcesDataSource(fetchedResources);
 
@@ -222,7 +223,7 @@ export default function AdminResourcesPage() {
     return allResourcesDataSource.map(resource => {
       const type = fetchedResourceTypes.find(rt => rt.id === resource.resourceTypeId);
       const lab = fetchedLabs.find(l => l.id === resource.labId);
-      return { ...resource, resourceTypeName: type?.name || 'N/A', labName: lab?.name || 'N/A' };
+      return { ...resource, resourceTypeName: type?.name || 'N/A', labName: lab?.name || (resource.labId ? 'Unknown Lab' : 'Global/No Lab') };
     }).filter(resource => {
       const lowerSearchTerm = activeResourceSearchTerm.toLowerCase();
       const searchMatch = !activeResourceSearchTerm ||
@@ -234,7 +235,11 @@ export default function AdminResourcesPage() {
         (resource.labName && resource.labName.toLowerCase().includes(lowerSearchTerm));
 
       const typeMatch = activeResourceFilterTypeId === 'all' || resource.resourceTypeId === activeResourceFilterTypeId;
-      const labMatch = activeResourceFilterLabId === 'all' || resource.labId === activeResourceFilterLabId;
+      let labMatch = activeResourceFilterLabId === 'all' || resource.labId === activeResourceFilterLabId;
+      if (activeResourceFilterLabId === '--global--') {
+        labMatch = !resource.labId;
+      }
+
 
       let dateMatch = true;
       if (activeResourceSelectedDate) {
@@ -312,10 +317,12 @@ export default function AdminResourcesPage() {
     if (!resourceType) {
       toast({ title: "Invalid Resource Type", variant: "destructive" }); return;
     }
-    const lab = fetchedLabs.find(l => l.id === data.labId);
-    if (!lab) {
-      toast({ title: "Invalid Lab", variant: "destructive" }); return;
+    const labIdForSave = data.labId === '--global--' ? '' : data.labId;
+    const lab = fetchedLabs.find(l => l.id === labIdForSave);
+     if (labIdForSave !== '' && !lab) {
+      toast({ title: "Invalid Lab Selected", variant: "destructive" }); return;
     }
+
 
     let purchaseDateForFirestore: Timestamp | null = null;
     if (data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))) {
@@ -338,7 +345,7 @@ export default function AdminResourcesPage() {
     const firestorePayload: any = {
       name: data.name,
       resourceTypeId: data.resourceTypeId,
-      labId: data.labId,
+      labId: labIdForSave,
       status: data.status,
       description: data.description || '',
       imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
@@ -373,7 +380,8 @@ export default function AdminResourcesPage() {
 
     const isEditing = !!editingResource;
     const auditAction = isEditing ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
-    const auditDetails = `Resource '${data.name}' ${isEditing ? 'updated' : 'created'} by ${currentUser.name}. Status: ${data.status}, Lab: ${lab.name}.`;
+    const labNameForAudit = labIdForSave === '' ? 'Global/No Lab' : (lab?.name || 'Unknown Lab');
+    const auditDetails = `Resource '${data.name}' ${isEditing ? 'updated' : 'created'} by ${currentUser.name}. Status: ${data.status}, Lab: ${labNameForAudit}.`;
 
     setIsLoadingData(true);
     try {
@@ -534,26 +542,27 @@ export default function AdminResourcesPage() {
   const pageDescription = currentUser?.role === 'Admin'
     ? "Browse, filter, add, and manage all lab resources and their types. Click resource name for details."
     : "Browse and filter available lab resources from labs you have access to. Click resource name for details.";
+  
+  const pageHeaderActions = (
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="inline-block">
+      <TabsList className="inline-flex h-9 items-center justify-center rounded-md bg-muted p-0.5 text-muted-foreground">
+        <TabsTrigger value="resources" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Resources</TabsTrigger>
+        {canManageResourcesAndTypes && (<TabsTrigger value="resource-types" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Types</TabsTrigger>)}
+      </TabsList>
+    </Tabs>
+  );
 
 
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Resources & Types"
+        title="Resources"
         description={pageDescription}
         icon={ClipboardList}
-        actions={
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="inline-block">
-            <TabsList className="h-9 p-0.5">
-              <TabsTrigger value="resources" className="px-3 py-1.5 text-sm h-full">Resources</TabsTrigger>
-              <TabsTrigger value="resource-types" disabled={!canManageResourcesAndTypes} className="px-3 py-1.5 text-sm h-full">Types</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        }
+        actions={pageHeaderActions}
       />
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        {/* Original TabsList is removed from here */}
-        <TabsContent value="resources" className="mt-0"> {/* Changed mt-6 to mt-0 */}
+        <TabsContent value="resources" className="mt-0"> 
             <Card>
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <div>
@@ -607,6 +616,7 @@ export default function AdminResourcesPage() {
                                     <SelectTrigger id="resourceLabFilterDialog" className="h-9 mt-1"><SelectValue placeholder={fetchedLabs.length > 0 ? "Filter by Lab" : "No labs available"} /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Labs</SelectItem>
+                                        <SelectItem value="--global--">Global / No Lab</SelectItem>
                                         { (currentUser?.role === 'Admin' ? fetchedLabs : fetchedLabs.filter(lab => userLabMemberships.some(m => m.labId === lab.id && m.status === 'active')))
                                             .map(lab => (<SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>))}
                                     </SelectContent>
@@ -644,7 +654,7 @@ export default function AdminResourcesPage() {
                   {isLoadingData && allResourcesDataSource.length === 0 ? (
                     <div className="flex justify-center items-center py-10 text-muted-foreground"><Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" /> Loading resources...</div>
                   ) : filteredResources.length > 0 ? (
-                    <div className="overflow-x-auto rounded-lg border shadow-sm">
+                    <div className="overflow-x-auto rounded-lg border">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -698,10 +708,10 @@ export default function AdminResourcesPage() {
         </TabsContent>
 
         {canManageResourcesAndTypes && (
-            <TabsContent value="resource-types" className="mt-0"> {/* Changed mt-6 to mt-0 */}
+            <TabsContent value="resource-types" className="mt-0"> 
             <Card>
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                <div><CardTitle className="text-xl">Resource Types</CardTitle><CardDescription>Define categories for lab resources.</CardDescription></div>
+                <div><CardTitle className="text-xl">Manage Resource Types</CardTitle><CardDescription>Define categories for lab resources.</CardDescription></div>
                 <div className="flex gap-2 flex-wrap">
                     <Dialog open={isResourceTypeFilterSortDialogOpen} onOpenChange={setIsResourceTypeFilterSortDialogOpen}>
                     <DialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter & Sort {activeResourceTypeFilterSortCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeResourceTypeFilterSortCount}</Badge>}</Button></DialogTrigger>
@@ -721,7 +731,7 @@ export default function AdminResourcesPage() {
                 <CardContent className="p-0">
                 {isLoadingData && filteredResourceTypesForDisplay.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
                 ) : filteredResourceTypesForDisplay.length > 0 ? (
-                    <div className="overflow-x-auto border rounded-md shadow-sm">
+                    <div className="overflow-x-auto border rounded-md">
                     <Table>
                         <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
                         <TableBody>{filteredResourceTypesForDisplay.map(type => (
