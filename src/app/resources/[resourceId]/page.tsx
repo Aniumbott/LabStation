@@ -87,7 +87,7 @@ function ResourceDetailPageSkeleton() {
               <Skeleton className="h-4 w-1/2 rounded-md bg-muted" />
               <Skeleton className="h-4 w-1/2 rounded-md bg-muted" />
             </CardContent>
-            <CardFooter>
+            <CardFooter className="pt-6 border-t">
                 <Skeleton className="h-10 w-1/3 rounded-md bg-muted" />
             </CardFooter>
           </Card>
@@ -584,7 +584,7 @@ export default function ResourceDetailPage() {
                             <span className="font-semibold"> "{resource.name}"</span> from Firestore.
                         </AlertDialogDescription>
                         </AlertDialogHeader>
-                        <AlertDialogFooter>
+                        <AlertDialogFooter className="pt-6 border-t">
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                           <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
                             Delete
