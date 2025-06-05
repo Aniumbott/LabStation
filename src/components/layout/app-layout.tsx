@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
-  Package, // Changed from ClipboardList
+  Package,
   CalendarDays,
   UserCog,
   Users as UsersIconLucide,
@@ -48,17 +48,14 @@ const PUBLIC_ROUTES = ['/login', '/signup'];
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/admin/resources', label: 'Resources', icon: Package }, // Changed icon
   { href: '/bookings', label: 'Bookings', icon: CalendarDays },
-  { href: '/notifications', label: 'Notifications', icon: Bell },
-  { href: '/profile', label: 'My Profile', icon: UserCog },
-  // { href: '/maintenance', label: 'Maintenance', icon: Wrench, technicianOrAdmin: true }, // Removed this item
   {
     href: '/admin/booking-requests',
     label: 'Booking Requests',
     icon: CheckSquare,
     adminOnly: true,
   },
+  { href: '/admin/resources', label: 'Resources', icon: Package },
   {
     href: '/admin/lab-management-v2',
     label: 'Lab Operations',
@@ -71,6 +68,8 @@ const navItems: NavItem[] = [
     icon: UsersIconLucide,
     adminOnly: true,
   },
+  { href: '/profile', label: 'My Profile', icon: UserCog },
+  { href: '/notifications', label: 'Notifications', icon: Bell },
   {
     href: '/admin/reports',
     label: 'Reports',
@@ -103,7 +102,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
     return navItems.filter(item => {
       if (item.adminOnly) return currentUser.role === 'Admin';
       if (item.technicianOrAdmin) return currentUser.role === 'Admin' || currentUser.role === 'Technician';
-      if (item.href === '/admin/resources') return true;
+      // Ensure regular users can see the /admin/resources path as per previous logic
+      if (item.href === '/admin/resources') return true; 
       return true;
     });
   }, [currentUser]);
