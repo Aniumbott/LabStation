@@ -10,7 +10,7 @@ import React, {
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ClipboardList, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, CheckCircle2, Building, ListChecks, Edit, Trash2 } from 'lucide-react';
+import { Package, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, CheckCircle2, Building, ListChecks, Edit, Trash2 } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType, Lab, LabMembership } from '@/types';
 import { resourceStatusesList } from '@/lib/app-constants';
 import { useAuth } from '@/components/auth-context';
@@ -558,7 +558,7 @@ export default function AdminResourcesPage() {
       <PageHeader
         title="Resources & Types"
         description={pageDescription}
-        icon={ClipboardList}
+        icon={Package}
         actions={pageHeaderActions}
       />
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -693,7 +693,7 @@ export default function AdminResourcesPage() {
                   ) : (
                     <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
                       <CardContent>
-                        <ClipboardList className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                        <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
                         <p className="text-lg font-medium">{activeResourceFilterCount > 0 ? "No Resources Match Filters" : "No Resources Found"}</p>
                         <p className="text-sm mb-4">{activeResourceFilterCount > 0 ? "Try adjusting your filter or search criteria." : (canManageResourcesAndTypes ? "There are currently no resources in the catalog. Add one to get started!" : "There are currently no resources accessible to you. Request lab access via your dashboard or contact an admin.")}</p>
                         {activeResourceFilterCount > 0 ? (<Button variant="outline" onClick={resetAllActiveResourcePageFilters}><FilterX className="mr-2 h-4 w-4" /> Reset All Filters</Button>
@@ -715,8 +715,8 @@ export default function AdminResourcesPage() {
                     <DialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter {activeResourceTypeFilterSortCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeResourceTypeFilterSortCount}</Badge>}</Button></DialogTrigger>
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader className="mt-4"><DialogTitle>Filter & Sort Resource Types</DialogTitle></DialogHeader>
-                        <ScrollArea className="max-h-[60vh] mt-4">
-                        <div className="space-y-6 pl-1 pr-2 pb-2">
+                        
+                        <div className="space-y-3 mt-4 pl-1 pr-2 pb-2">
                              <div>
                                 <Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label>
                                 <div className="relative mt-1">
@@ -732,7 +732,7 @@ export default function AdminResourcesPage() {
                                 </Select>
                             </div>
                         </div>
-                        </ScrollArea>
+                        
                         <DialogFooter className="pt-6 border-t"><Button variant="ghost" onClick={resetResourceTypeFilterSortDialog} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button onClick={handleApplyResourceTypeFilterSort}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></DialogFooter>
                     </DialogContent>
                     </Dialog>

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
-  ClipboardList,
+  Package, // Changed from ClipboardList
   CalendarDays,
   UserCog,
   Users as UsersIconLucide,
@@ -48,7 +48,7 @@ const PUBLIC_ROUTES = ['/login', '/signup'];
 
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/admin/resources', label: 'Resources', icon: ClipboardList }, // Accessible to all logged in users
+  { href: '/admin/resources', label: 'Resources', icon: Package }, // Changed icon
   { href: '/bookings', label: 'Bookings', icon: CalendarDays },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/profile', label: 'My Profile', icon: UserCog },
