@@ -4,445 +4,358 @@
 // All original imports are kept, but most will be unused temporarily.
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon } from 'lucide-react';
-// import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus } from '@/types';
-// import { useAuth } from '@/components/auth-context';
-// import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-// import { Button } from "@/components/ui/button";
-// import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-// import {
-//   Dialog as FilterSortDialog,
-//   DialogContent as FilterSortDialogContent,
-//   DialogDescription as FilterSortDialogDescription,
-//   DialogHeader as FilterSortDialogHeader,
-//   DialogTitle as FilterSortDialogTitle,
-//   DialogFooter as FilterSortDialogFooter,
-//   DialogTrigger as FilterSortDialogTrigger,
-// } from '@/components/ui/dialog';
-// import { useToast } from '@/hooks/use-toast';
-// import { ResourceTypeFormDialog, ResourceTypeFormValues } from '@/components/admin/resource-type-form-dialog';
-// import { LabFormDialog, LabFormValues } from '@/components/admin/lab-form-dialog';
-// import { BlackoutDateFormDialog, BlackoutDateFormValues as BlackoutDateDialogFormValues } from '@/components/admin/blackout-date-form-dialog';
-// import { RecurringBlackoutRuleFormDialog, RecurringBlackoutRuleFormValues as RecurringRuleDialogFormValues } from '@/components/admin/recurring-blackout-rule-form-dialog';
-// import { MaintenanceRequestFormDialog, MaintenanceRequestFormValues as MaintenanceDialogFormValues } from '@/components/admin/maintenance-request-form-dialog';
-// import { ManageUserLabAccessDialog } from '@/components/admin/manage-user-lab-access-dialog';
-// import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-// import { Input } from '@/components/ui/input';
-// import { Label } from '@/components/ui/label';
-// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-// import { Separator } from '@/components/ui/separator';
-// import { Badge } from '@/components/ui/badge';
-// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-// import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-// import { ScrollArea } from '@/components/ui/scroll-area';
-// import { db } from '@/lib/firebase';
-// import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp, writeBatch, where } from 'firebase/firestore';
-// import { addNotification, addAuditLog, manageLabMembership_SA } from '@/lib/firestore-helpers';
-// import { daysOfWeekArray, maintenanceRequestStatuses } from '@/lib/app-constants';
-// import { format, parseISO, isValid as isValidDateFn } from 'date-fns';
-// import { cn, formatDateSafe } from '@/lib/utils';
+import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog } from 'lucide-react';
+import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus } from '@/types';
+import { useAuth } from '@/components/auth-context';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  Dialog as FilterSortDialog,
+  DialogContent as FilterSortDialogContent,
+  DialogDescription as FilterSortDialogDescription,
+  DialogHeader as FilterSortDialogHeader,
+  DialogTitle as FilterSortDialogTitle,
+  DialogFooter as FilterSortDialogFooter,
+  DialogTrigger as FilterSortDialogTrigger,
+} from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+import { ResourceTypeFormDialog, ResourceTypeFormValues } from '@/components/admin/resource-type-form-dialog';
+import { LabFormDialog, LabFormValues } from '@/components/admin/lab-form-dialog';
+import { BlackoutDateFormDialog, BlackoutDateFormValues as BlackoutDateDialogFormValues } from '@/components/admin/blackout-date-form-dialog';
+import { RecurringBlackoutRuleFormDialog, RecurringBlackoutRuleFormValues as RecurringRuleDialogFormValues } from '@/components/admin/recurring-blackout-rule-form-dialog';
+import { MaintenanceRequestFormDialog, MaintenanceRequestFormValues as MaintenanceDialogFormValues } from '@/components/admin/maintenance-request-form-dialog';
+import { ManageUserLabAccessDialog } from '@/components/admin/manage-user-lab-access-dialog';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp, writeBatch, where } from 'firebase/firestore';
+import { addNotification, addAuditLog, manageLabMembership_SA } from '@/lib/firestore-helpers';
+import { daysOfWeekArray, maintenanceRequestStatuses } from '@/lib/app-constants';
+import { format, parseISO, isValid as isValidDateFn } from 'date-fns';
+import { cn, formatDateSafe } from '@/lib/utils';
 
-export default function LabOperationsCenterPage() {
+// Sorting options (moved from commented block)
+type ResourceTypeSortableColumn = 'name' | 'resourceCount' | 'description';
+type LabSortableColumn = 'name' | 'location' | 'resourceCount' | 'memberCount';
+const resourceTypeSortOptions: { value: string; label: string }[] = [
+  { value: 'name-asc', label: 'Name (A-Z)' }, { value: 'name-desc', label: 'Name (Z-A)' },
+  { value: 'resourceCount-asc', label: 'Resources (Low-High)' }, { value: 'resourceCount-desc', label: 'Resources (High-Low)' },
+];
+const labSortOptions: { value: string; label: string }[] = [
+  { value: 'name-asc', label: 'Name (A-Z)' }, { value: 'name-desc', label: 'Name (Z-A)' },
+  { value: 'location-asc', label: 'Location (A-Z)' }, { value: 'location-desc', label: 'Location (Z-A)' },
+  { value: 'resourceCount-asc', label: 'Resources (Low-High)' }, { value: 'resourceCount-desc', label: 'Resources (High-Low)' },
+  { value: 'memberCount-asc', label: 'Members (Low-High)' }, { value: 'memberCount-desc', label: 'Members (High-Low)' },
+];
+
+const GLOBAL_CONTEXT_VALUE = "--system-wide--";
+
+interface LabMembershipRequest extends LabMembership {
+  userName?: string;
+  userEmail?: string;
+  userAvatarUrl?: string;
+  labName?: string;
+}
+
+export default function LabOperationsCenterPage({
+  searchParams,
+}: {
+  searchParams?: { tab?: string; labId?: string };
+}) {
+    const { toast } = useToast();
+    const { currentUser } = useAuth();
+    const [isLoadingData, setIsLoadingData] = useState(true);
+    const [activeContextId, setActiveContextId] = useState<string>(GLOBAL_CONTEXT_VALUE); // For context selector
+    const [isLabAccessRequestLoading, setIsLoadingLabAccessRequestLoading] = useState(true); // Separate loading for access requests
+
+    // Tab state for nested tabs within closure sections
+    const [activeGlobalClosuresTab, setActiveGlobalClosuresTab] = useState('specific-dates-global');
+    const [activeLabSpecificClosuresTab, setActiveLabSpecificClosuresTab] = useState('specific-dates-lab');
+
+
+    // --- Resource Types State ---
+    const [resourceTypes, setResourceTypes] = useState<ResourceType[]>([]);
+    const [allResourcesForCountsAndChecks, setAllResourcesForCountsAndChecks] = useState<Resource[]>([]);
+    const [typeToDelete, setTypeToDelete] = useState<ResourceType | null>(null);
+    const [isResourceTypeFormDialogOpen, setIsResourceTypeFormDialogOpen] = useState(false);
+    const [editingType, setEditingType] = useState<ResourceType | null>(null);
+    const [isResourceTypeFilterDialogOpen, setIsResourceTypeFilterDialogOpen] = useState(false);
+    const [tempResourceTypeSearchTerm, setTempResourceTypeSearchTerm] = useState('');
+    const [activeResourceTypeSearchTerm, setActiveResourceTypeSearchTerm] = useState('');
+    const [tempResourceTypeSortBy, setTempResourceTypeSortBy] = useState<string>('name-asc');
+    const [activeResourceTypeSortBy, setActiveResourceTypeSortBy] = useState<string>('name-asc');
+
+    // --- Labs State ---
+    const [labs, setLabs] = useState<Lab[]>([]);
+    const [labToDelete, setLabToDelete] = useState<Lab | null>(null);
+    const [isLabFormDialogOpen, setIsLabFormDialogOpen] = useState(false);
+    const [editingLab, setEditingLab] = useState<Lab | null>(null);
+    const [isLabFilterDialogOpen, setIsLabFilterDialogOpen] = useState(false);
+    const [tempLabSearchTerm, setTempLabSearchTerm] = useState('');
+    const [activeLabSearchTerm, setActiveLabSearchTerm] = useState('');
+    const [tempLabSortBy, setTempLabSortBy] = useState<string>('name-asc');
+    const [activeLabSortBy, setActiveLabSortBy] = useState<string>('name-asc');
+
+    // --- Blackout Dates & Recurring Rules State ---
+    const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
+    const [recurringRules, setRecurringRules] = useState<RecurringBlackoutRule[]>([]);
+    const [isDateFormDialogOpen, setIsDateFormDialogOpen] = useState(false);
+    const [editingBlackoutDate, setEditingBlackoutDate] = useState<BlackoutDate | null>(null);
+    const [dateToDelete, setDateToDelete] = useState<BlackoutDate | null>(null);
+    const [isRecurringFormDialogOpen, setIsRecurringFormDialogOpen] = useState(false);
+    const [editingRecurringRule, setEditingRecurringRule] = useState<RecurringBlackoutRule | null>(null);
+    const [ruleToDelete, setRuleToDelete] = useState<RecurringBlackoutRule | null>(null);
+    const [isClosureFilterDialogOpen, setIsClosureFilterDialogOpen] = useState(false); // For specific and recurring closures
+    const [tempClosureSearchTerm, setTempClosureSearchTerm] = useState(''); // For specific and recurring closures
+    const [activeClosureSearchTerm, setActiveClosureSearchTerm] = useState(''); // For specific and recurring closures
+
+    // --- Maintenance Requests State ---
+    const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
+    const [allTechniciansForMaintenance, setAllTechniciansForMaintenance] = useState<User[]>([]);
+    const [allUsersData, setAllUsersData] = useState<User[]>([]); // All users for reporter names, lab access etc.
+    const [isMaintenanceFormDialogOpen, setIsMaintenanceFormDialogOpen] = useState(false);
+    const [editingMaintenanceRequest, setEditingMaintenanceRequest] = useState<MaintenanceRequest | null>(null);
+    const [isMaintenanceFilterDialogOpen, setIsMaintenanceFilterDialogOpen] = useState(false);
+    const [tempMaintenanceSearchTerm, setTempMaintenanceSearchTerm] = useState('');
+    const [tempMaintenanceFilterStatus, setTempMaintenanceFilterStatus] = useState<MaintenanceRequestStatus | 'all'>('all');
+    const [tempMaintenanceFilterResourceId, setTempMaintenanceFilterResourceId] = useState<string>('all');
+    const [tempMaintenanceFilterTechnicianId, setTempMaintenanceFilterTechnicianId] = useState<string>('all');
+    const [tempMaintenanceFilterLabId, setTempMaintenanceFilterLabId] = useState<string>('all'); // Used when in global context
+    const [activeMaintenanceSearchTerm, setActiveMaintenanceSearchTerm] = useState('');
+    const [activeMaintenanceFilterStatus, setActiveMaintenanceFilterStatus] = useState<MaintenanceRequestStatus | 'all'>('all');
+    const [activeMaintenanceFilterResourceId, setActiveMaintenanceFilterResourceId] = useState<string>('all');
+    const [activeMaintenanceFilterTechnicianId, setActiveMaintenanceFilterTechnicianId] = useState<string>('all');
+    const [activeMaintenanceFilterLabId, setActiveMaintenanceFilterLabId] = useState<string>('all'); // Used when in global context
+
+    // --- Lab Access Requests & Management State ---
+    const [allLabAccessRequests, setAllLabAccessRequests] = useState<LabMembershipRequest[]>([]); // Pending requests system-wide
+    const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]); // All membership docs for calculations
+    const [isProcessingAction, setIsProcessingAction] = useState<Record<string, {action: 'grant' | 'revoke' | 'approve_request' | 'reject_request', loading: boolean}>>({}); // For individual user-lab actions
+    const [isManualAddMemberDialogOpen, setIsManualAddMemberDialogOpen] = useState(false); // Dialog state for manual grant
+    // Filters for "System-Wide Lab Access Requests" table (when activeContextId is GLOBAL_CONTEXT_VALUE)
+    const [isSystemWideAccessRequestsFilterOpen, setIsSystemWideAccessRequestsFilterOpen] = useState(false);
+    const [tempSystemWideAccessRequestsFilterLabId, setTempSystemWideAccessRequestsFilterLabId] = useState('all');
+    const [activeSystemWideAccessRequestsFilterLabId, setActiveSystemWideAccessRequestsFilterLabId] = useState('all');
+    const [tempSystemWideAccessRequestsFilterUser, setTempSystemWideAccessRequestsFilterUser] = useState('');
+    const [activeSystemWideAccessRequestsFilterUser, setActiveSystemWideAccessRequestsFilterUser] = useState('');
+
+    const canManageAny = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
+
+    const fetchAllAdminData = useCallback(async () => {
+      if (!canManageAny) {
+        setIsLoadingData(false);
+        setIsLabAccessRequestLoading(false); // Ensure this is also set
+        return;
+      }
+      setIsLoadingData(true);
+      setIsLabAccessRequestLoading(true); // Set specific loader for access requests
+      try {
+        // Use Promise.all to fetch data concurrently
+        const [labsSnapshot, typesSnapshot, resourcesSnapshot, usersSnapshot, techniciansSnapshot, maintenanceSnapshot, boSnapshot, rrSnapshot, membershipsSnapshot] = await Promise.all([
+          getDocs(query(collection(db, "labs"), orderBy("name", "asc"))),
+          getDocs(query(collection(db, "resourceTypes"), orderBy("name", "asc"))),
+          getDocs(query(collection(db, "resources"))), // No specific order needed here, just for counts/checks
+          getDocs(query(collection(db, "users"), orderBy("name", "asc"))),
+          getDocs(query(collection(db, "users"), where("role", "==", "Technician"), orderBy("name", "asc"))),
+          getDocs(query(collection(db, "maintenanceRequests"), orderBy("dateReported", "desc"))),
+          getDocs(query(collection(db, "blackoutDates"), orderBy("date", "asc"))),
+          getDocs(query(collection(db, "recurringBlackoutRules"), orderBy("name", "asc"))),
+          getDocs(query(collection(db, 'labMemberships'))), // Fetch all memberships
+        ]);
+
+        const fetchedLabs = labsSnapshot.docs.map(docSnap => ({id: docSnap.id, ...docSnap.data(), createdAt: (docSnap.data().createdAt as Timestamp)?.toDate(), lastUpdatedAt: (docSnap.data().lastUpdatedAt as Timestamp)?.toDate()} as Lab));
+        setLabs(fetchedLabs);
+
+        setResourceTypes(typesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as ResourceType)));
+
+        const fetchedResourcesAll = resourcesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Resource));
+        setAllResourcesForCountsAndChecks(fetchedResourcesAll);
+
+        const fetchedUsersAll = usersSnapshot.docs.map(d => ({id: d.id, ...d.data(), createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date()} as User));
+        setAllUsersData(fetchedUsersAll); // Used by Maintenance and Lab Access Requests
+
+        setAllTechniciansForMaintenance(techniciansSnapshot.docs.map(d => ({id: d.id, ...d.data(), createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date()} as User)));
+
+        setMaintenanceRequests(maintenanceSnapshot.docs.map(docSnap => {
+            const data = docSnap.data();
+            return { id: docSnap.id, ...data, dateReported: (data.dateReported as Timestamp)?.toDate() || new Date(), dateResolved: (data.dateResolved as Timestamp)?.toDate() } as MaintenanceRequest;
+        }));
+
+        setBlackoutDates(boSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate))); // labId will be null or string
+        setRecurringRules(rrSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as RecurringBlackoutRule))); // labId will be null or string
+
+        // Process all memberships
+        const allFetchedMemberships = membershipsSnapshot.docs.map(mDoc => ({ id: mDoc.id, ...mDoc.data() } as LabMembership));
+        setUserLabMemberships(allFetchedMemberships); // Store all for calculations (e.g., lab member counts)
+
+        // Populate pending lab access requests (LabMembershipRequest type)
+        const pendingRequestsPromises = allFetchedMemberships
+            .filter(m => m.status === 'pending_approval')
+            .map(async (membershipData) => {
+                const user = fetchedUsersAll.find(u => u.id === membershipData.userId);
+                const lab = fetchedLabs.find(l => l.id === membershipData.labId);
+                return {
+                    ...membershipData,
+                    id: membershipData.id!, // Assuming all fetched docs have an ID
+                    userName: user?.name || 'Unknown User',
+                    userEmail: user?.email || 'N/A',
+                    userAvatarUrl: user?.avatarUrl,
+                    labName: lab?.name || 'Unknown Lab',
+                    requestedAt: (membershipData.requestedAt as Timestamp)?.toDate()
+                } as LabMembershipRequest;
+            });
+        setAllLabAccessRequests(await Promise.all(pendingRequestsPromises));
+
+      } catch (error: any) {
+        console.error("Error fetching admin data:", error);
+        toast({ title: "Error", description: `Failed to load data: ${error.message}`, variant: "destructive" });
+        setIsLabAccessRequestLoading(false); // Ensure this is set on error too
+      } finally {
+        setIsLoadingData(false);
+        setIsLabAccessRequestLoading(false); // All data, including access requests, done loading
+      }
+    }, [toast, canManageAny]);
+
+    useEffect(() => { fetchAllAdminData(); }, [fetchAllAdminData]);
+
+    useEffect(() => {
+        const preselectedLabId = searchParams?.labId;
+        if (preselectedLabId && labs.find(l => l.id === preselectedLabId)) {
+          setActiveContextId(preselectedLabId);
+        } else if (preselectedLabId) {
+          // If labId in URL doesn't exist, default to global or show error?
+          // For now, defaulting to global if labId is invalid/not found.
+          setActiveContextId(GLOBAL_CONTEXT_VALUE);
+        }
+      }, [searchParams, labs]);
+
+    const selectedLabDetails = useMemo(() => labs.find(lab => lab.id === activeContextId), [labs, activeContextId]);
+
+    const pageHeaderActionsContent = (
+      <div className="flex items-center gap-2">
+        <Select value={activeContextId} onValueChange={setActiveContextId}>
+            <SelectTrigger
+                id="labContextSelectPageHeader"
+                className={cn(
+                    "w-auto min-w-[200px] sm:min-w-[240px] h-9 text-sm",
+                    activeContextId === GLOBAL_CONTEXT_VALUE ? "bg-primary/10 border-primary/30 font-semibold" : ""
+                )}
+            >
+                <SelectValue placeholder="Select Context..." />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value={GLOBAL_CONTEXT_VALUE} className="text-sm py-1.5">
+                    <Globe className="inline-block mr-2 h-4 w-4 text-muted-foreground"/>System-Wide Settings
+                </SelectItem>
+                {labs.length > 0 && <Separator className="my-1"/>}
+                {labs.map(lab => (
+                    <SelectItem key={lab.id} value={lab.id} className="text-sm py-1.5">
+                        <Building className="inline-block mr-2 h-4 w-4 text-muted-foreground"/>{lab.name}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+      </div>
+    );
+
+    // --- Universal Section Logic (Rendered Based on Context) ---
+    // Placeholder for Resource Types (System-Wide only)
+    // Placeholder for Labs List (System-Wide only)
+    // Placeholder for Lab Closures (System-Wide or Lab-Specific)
+    // Placeholder for Maintenance (System-Wide or Lab-Specific based on resource's lab)
+    // Placeholder for Lab Access (System-Wide requests or Lab-Specific members)
+
+    // --- Resource Types Logic (Only for GLOBAL_CONTEXT_VALUE) ---
+    // ... (all existing Resource Types logic from original file)
+
+    // --- Labs List Logic (Only for GLOBAL_CONTEXT_VALUE) ---
+    // ... (all existing Labs List logic from original file)
+
+    // --- Lab Closures Logic (Context-Aware) ---
+    // ... (all existing Blackout Dates & Recurring Rules logic, adapted for context)
+
+    // --- Maintenance Requests Logic (Context-Aware) ---
+    // ... (all existing Maintenance Requests logic, adapted for context)
+
+    // --- Lab Access & Membership Logic (Context-Aware) ---
+    // ... (all existing Lab Access Requests logic, adapted for context)
+
+    // This is the permission check immediately before the main return
+    if (!currentUser || !canManageAny) {
+      return ( <div className="space-y-8"><PageHeader title="Lab Operations Center" icon={Cog} description="Access Denied." /><Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission.</p></CardContent></Card></div>);
+    }
+
+
+  // The `maintenanceForSelectedLab` and other dependent useMemos that were previously commented out
+  // will be restored in subsequent steps once their dependencies are confirmed to be error-free.
+  // For now, they remain commented to ensure the parsing error is not from them.
+
   /*
-    // ALL COMPONENT LOGIC IS COMMENTED OUT FOR DIAGNOSIS
-    // const { toast } = useToast();
-    // const { currentUser } = useAuth();
-    // const [isLoadingData, setIsLoadingData] = useState(true);
-    // const [activeContextId, setActiveContextId] = useState<string>(GLOBAL_CONTEXT_VALUE);
-    // const [isLabAccessRequestLoading, setIsLoadingLabAccessRequestLoading] = useState(true);
-    // const [activeGlobalClosuresTab, setActiveGlobalClosuresTab] = useState('specific-dates-global');
-    // const [activeLabSpecificClosuresTab, setActiveLabSpecificClosuresTab] = useState('specific-dates-lab');
+    // const filteredLabAccessRequests = useMemo(() => {
+    //   // ... logic ...
+    // }, [allLabAccessRequests, activeContextId, activeSystemWideAccessRequestsFilterLabId, activeSystemWideAccessRequestsFilterUser]);
 
+    // const activeLabMembers = useMemo(() => {
+    //   // ... logic ...
+    // }, [userLabMemberships, allUsersData, activeContextId]);
 
-    // const [resourceTypes, setResourceTypes] = useState<ResourceType[]>([]);
-    // const [allResourcesForCountsAndChecks, setAllResourcesForCountsAndChecks] = useState<Resource[]>([]);
-    // const [typeToDelete, setTypeToDelete] = useState<ResourceType | null>(null);
-    // const [isResourceTypeFormDialogOpen, setIsResourceTypeFormDialogOpen] = useState(false);
-    // const [editingType, setEditingType] = useState<ResourceType | null>(null);
-    // const [isResourceTypeFilterDialogOpen, setIsResourceTypeFilterDialogOpen] = useState(false);
-    // const [tempResourceTypeSearchTerm, setTempResourceTypeSearchTerm] = useState('');
-    // const [activeResourceTypeSearchTerm, setActiveResourceTypeSearchTerm] = useState('');
-    // const [tempResourceTypeSortBy, setTempResourceTypeSortBy] = useState<string>('name-asc');
-    // const [activeResourceTypeSortBy, setActiveResourceTypeSortBy] = useState<string>('name-asc');
+    // const resourcesInSelectedLab = useMemo(() => allResourcesForCountsAndChecks.filter(r => r.labId === activeContextId), [allResourcesForCountsAndChecks, activeContextId]);
 
-    // const [labs, setLabs] = useState<Lab[]>([]);
-    // const [labToDelete, setLabToDelete] = useState<Lab | null>(null);
-    // const [isLabFormDialogOpen, setIsLabFormDialogOpen] = useState(false);
-    // const [editingLab, setEditingLab] = useState<Lab | null>(null);
-    // const [isLabFilterDialogOpen, setIsLabFilterDialogOpen] = useState(false);
-    // const [tempLabSearchTerm, setTempLabSearchTerm] = useState('');
-    // const [activeLabSearchTerm, setActiveLabSearchTerm] = useState('');
-    // const [tempLabSortBy, setTempLabSortBy] = useState<string>('name-asc');
-    // const [activeLabSortBy, setActiveLabSortBy] = useState<string>('name-asc');
-
-    // const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
-    // const [recurringRules, setRecurringRules] = useState<RecurringBlackoutRule[]>([]);
-    // const [isDateFormDialogOpen, setIsDateFormDialogOpen] = useState(false);
-    // const [editingBlackoutDate, setEditingBlackoutDate] = useState<BlackoutDate | null>(null);
-    // const [dateToDelete, setDateToDelete] = useState<BlackoutDate | null>(null);
-    // const [isRecurringFormDialogOpen, setIsRecurringFormDialogOpen] = useState(false);
-    // const [editingRecurringRule, setEditingRecurringRule] = useState<RecurringBlackoutRule | null>(null);
-    // const [ruleToDelete, setRuleToDelete] = useState<RecurringBlackoutRule | null>(null);
-    // const [isClosureFilterDialogOpen, setIsClosureFilterDialogOpen] = useState(false);
-    // const [tempClosureSearchTerm, setTempClosureSearchTerm] = useState('');
-    // const [activeClosureSearchTerm, setActiveClosureSearchTerm] = useState('');
-
-    // const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
-    // const [allTechniciansForMaintenance, setAllTechniciansForMaintenance] = useState<User[]>([]);
-    // const [allUsersData, setAllUsersData] = useState<User[]>([]);
-    // const [isMaintenanceFormDialogOpen, setIsMaintenanceFormDialogOpen] = useState(false);
-    // const [editingMaintenanceRequest, setEditingMaintenanceRequest] = useState<MaintenanceRequest | null>(null);
-    // const [isMaintenanceFilterDialogOpen, setIsMaintenanceFilterDialogOpen] = useState(false);
-    // const [tempMaintenanceSearchTerm, setTempMaintenanceSearchTerm] = useState('');
-    // const [tempMaintenanceFilterStatus, setTempMaintenanceFilterStatus] = useState<MaintenanceRequestStatus | 'all'>('all');
-    // const [tempMaintenanceFilterResourceId, setTempMaintenanceFilterResourceId] = useState<string>('all');
-    // const [tempMaintenanceFilterTechnicianId, setTempMaintenanceFilterTechnicianId] = useState<string>('all');
-    // const [tempMaintenanceFilterLabId, setTempMaintenanceFilterLabId] = useState<string>('all');
-    // const [activeMaintenanceSearchTerm, setActiveMaintenanceSearchTerm] = useState('');
-    // const [activeMaintenanceFilterStatus, setActiveMaintenanceFilterStatus] = useState<MaintenanceRequestStatus | 'all'>('all');
-    // const [activeMaintenanceFilterResourceId, setActiveMaintenanceFilterResourceId] = useState<string>('all');
-    // const [activeMaintenanceFilterTechnicianId, setActiveMaintenanceFilterTechnicianId] = useState<string>('all');
-    // const [activeMaintenanceFilterLabId, setActiveMaintenanceFilterLabId] = useState<string>('all');
-
-    // const [allLabAccessRequests, setAllLabAccessRequests] = useState<LabMembershipRequest[]>([]);
-    // const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]);
-    // const [isProcessingAction, setIsProcessingAction] = useState<Record<string, {action: 'grant' | 'revoke' | 'approve_request' | 'reject_request', loading: boolean}>>({});
-    // const [isManualAddMemberDialogOpen, setIsManualAddMemberDialogOpen] = useState(false);
-    // const [isSystemWideAccessRequestsFilterOpen, setIsSystemWideAccessRequestsFilterOpen] = useState(false);
-    // const [tempSystemWideAccessRequestsFilterLabId, setTempSystemWideAccessRequestsFilterLabId] = useState('all');
-    // const [activeSystemWideAccessRequestsFilterLabId, setActiveSystemWideAccessRequestsFilterLabId] = useState('all');
-    // const [tempSystemWideAccessRequestsFilterUser, setTempSystemWideAccessRequestsFilterUser] = useState('');
-    // const [activeSystemWideAccessRequestsFilterUser, setActiveSystemWideAccessRequestsFilterUser] = useState('');
-
-
-    // const canManageAny = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
-
-    // const fetchAllAdminData = useCallback(async () => {
-    //   if (!canManageAny) {
-    //     setIsLoadingData(false);
-    //     setIsLoadingLabAccessRequestLoading(false);
-    //     return;
-    //   }
-    //   setIsLoadingData(true);
-    //   setIsLoadingLabAccessRequestLoading(true);
-    //   try {
-    //     const [labsSnapshot, typesSnapshot, resourcesSnapshot, usersSnapshot, techniciansSnapshot, maintenanceSnapshot, boSnapshot, rrSnapshot, membershipsSnapshot] = await Promise.all([
-    //       getDocs(query(collection(db, "labs"), orderBy("name", "asc"))),
-    //       getDocs(query(collection(db, "resourceTypes"), orderBy("name", "asc"))),
-    //       getDocs(query(collection(db, "resources"))),
-    //       getDocs(query(collection(db, "users"), orderBy("name", "asc"))),
-    //       getDocs(query(collection(db, "users"), where("role", "==", "Technician"), orderBy("name", "asc"))),
-    //       getDocs(query(collection(db, "maintenanceRequests"), orderBy("dateReported", "desc"))),
-    //       getDocs(query(collection(db, "blackoutDates"), orderBy("date", "asc"))),
-    //       getDocs(query(collection(db, "recurringBlackoutRules"), orderBy("name", "asc"))),
-    //       getDocs(query(collection(db, 'labMemberships'))),
-    //     ]);
-
-    //     const fetchedLabs = labsSnapshot.docs.map(docSnap => ({id: docSnap.id, ...docSnap.data(), createdAt: (docSnap.data().createdAt as Timestamp)?.toDate(), lastUpdatedAt: (docSnap.data().lastUpdatedAt as Timestamp)?.toDate()} as Lab));
-    //     setLabs(fetchedLabs);
-    //     setResourceTypes(typesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as ResourceType)));
-    //     const fetchedResourcesAll = resourcesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Resource));
-    //     setAllResourcesForCountsAndChecks(fetchedResourcesAll);
-    //     const fetchedUsersAll = usersSnapshot.docs.map(d => ({id: d.id, ...d.data(), createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date()} as User));
-    //     setAllUsersData(fetchedUsersAll);
-    //     setAllTechniciansForMaintenance(techniciansSnapshot.docs.map(d => ({id: d.id, ...d.data(), createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date()} as User)));
-    //     setMaintenanceRequests(maintenanceSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data(), dateReported: (docSnap.data().dateReported as Timestamp)?.toDate() || new Date(), dateResolved: (docSnap.data().dateResolved as Timestamp)?.toDate() } as MaintenanceRequest)));
-    //     setBlackoutDates(boSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate)));
-    //     setRecurringRules(rrSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as RecurringBlackoutRule)));
-
-    //     const allFetchedMemberships = membershipsSnapshot.docs.map(mDoc => ({ id: mDoc.id, ...mDoc.data() } as LabMembership));
-    //     setUserLabMemberships(allFetchedMemberships);
-
-    //     const pendingRequestsPromises = allFetchedMemberships.filter(m => m.status === 'pending_approval').map(async (membershipData) => {
-    //         const user = fetchedUsersAll.find(u => u.id === membershipData.userId);
-    //         const lab = fetchedLabs.find(l => l.id === membershipData.labId);
-    //         return { ...membershipData, id: membershipData.id, userName: user?.name || 'Unknown User', userEmail: user?.email || 'N/A', userAvatarUrl: user?.avatarUrl, labName: lab?.name || 'Unknown Lab', requestedAt: (membershipData.requestedAt as Timestamp)?.toDate()} as LabMembershipRequest;
-    //     });
-    //     setAllLabAccessRequests(await Promise.all(pendingRequestsPromises));
-
-    //   } catch (error: any) {
-    //     console.error("Error fetching admin data:", error);
-    //     toast({ title: "Error", description: `Failed to load data: ${error.message}`, variant: "destructive" });
-    //     setIsLoadingLabAccessRequestLoading(false);
-    //   } finally {
-    //     setIsLoadingData(false);
-    //     setIsLoadingLabAccessRequestLoading(false);
-    //   }
-    // }, [toast, canManageAny]);
-
-    // useEffect(() => { fetchAllAdminData(); }, [fetchAllAdminData]);
-
-    // const selectedLabDetails = useMemo(() => labs.find(lab => lab.id === activeContextId), [labs, activeContextId]);
-
-    // const pageHeaderActionsContent = (
-    //   <div className="flex items-center gap-2">
-    //     <Select value={activeContextId} onValueChange={setActiveContextId}>
-    //         <SelectTrigger
-    //             id="labContextSelectPageHeader"
-    //             className={cn(
-    //                 "w-auto min-w-[200px] sm:min-w-[240px] h-9 text-sm",
-    //                 activeContextId === GLOBAL_CONTEXT_VALUE ? "bg-primary/10 border-primary/30 font-semibold" : ""
-    //             )}
-    //         >
-    //             <SelectValue placeholder="Select Context..." />
-    //         </SelectTrigger>
-    //         <SelectContent>
-    //             <SelectItem value={GLOBAL_CONTEXT_VALUE} className="text-sm py-1.5">
-    //                 <Globe className="inline-block mr-2 h-4 w-4 text-muted-foreground"/>System-Wide Settings
-    //             </SelectItem>
-    //             {labs.length > 0 && <Separator className="my-1"/>}
-    //             {labs.map(lab => (
-    //                 <SelectItem key={lab.id} value={lab.id} className="text-sm py-1.5">
-    //                     <Building className="inline-block mr-2 h-4 w-4 text-muted-foreground"/>{lab.name}
-    //                 </SelectItem>
-    //             ))}
-    //         </SelectContent>
-    //     </Select>
-    //   </div>
-    // );
-
-    // const handleMembershipAction = useCallback(async (
-    //   targetUserId: string, targetUserName: string, labId: string, labName: string,
-    //   action: 'grant' | 'revoke' | 'approve_request' | 'reject_request', membershipDocIdToUpdate?: string
-    // ) => {
-    //   if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Authentication Error", variant: "destructive" }); return; }
-    //   const uniqueActionId = membershipDocIdToUpdate || `${labId}-${targetUserId}`;
-    //   setIsProcessingAction(prev => ({...prev, [uniqueActionId]: {action, loading: true}}));
-    //   try {
-    //     const result = await manageLabMembership_SA( currentUser.id, currentUser.name, targetUserId, targetUserName, labId, labName, action, membershipDocIdToUpdate );
-    //     if (result.success) { toast({ title: "Success", description: result.message }); fetchAllAdminData(); }
-    //     else { toast({ title: "Action Failed", description: result.message, variant: "destructive" }); }
-    //   } catch (error: any) { toast({ title: "Error", description: `Failed to process request: ${error.message}`, variant: "destructive" }); }
-    //   finally { setIsProcessingAction(prev => ({...prev, [uniqueActionId]: {action, loading: false}})); }
-    // }, [currentUser, fetchAllAdminData, toast]);
-
-    // // Resource Types Logic
-    // useEffect(() => { if (isResourceTypeFilterDialogOpen) { setTempResourceTypeSearchTerm(activeResourceTypeSearchTerm); setTempResourceTypeSortBy(activeResourceTypeSortBy);}}, [isResourceTypeFilterDialogOpen, activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
-    // const filteredResourceTypesWithCount = useMemo(() => {
-    //   let currentTypes = [...resourceTypes]; const lowerSearchTerm = activeResourceTypeSearchTerm.toLowerCase(); if (activeResourceTypeSearchTerm) { currentTypes = currentTypes.filter(type => type.name.toLowerCase().includes(lowerSearchTerm) || (type.description && type.description.toLowerCase().includes(lowerSearchTerm)));} const [column, direction] = activeResourceTypeSortBy.split('-') as [ResourceTypeSortableColumn, 'asc' | 'desc']; let typesWithCount = currentTypes.map(type => ({ ...type, resourceCount: allResourcesForCountsAndChecks.filter(res => res.resourceTypeId === type.id).length, })); typesWithCount.sort((a, b) => { let comparison = 0; const valA = a[column]; const valB = b[column]; if (column === 'resourceCount') comparison = (valA as number) - (valB as number); else if (column === 'name') comparison = (valA as string).toLowerCase().localeCompare((valB as string).toLowerCase()); return direction === 'asc' ? comparison : -comparison; }); return typesWithCount;
-    // }, [resourceTypes, allResourcesForCountsAndChecks, activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
-    // const handleApplyResourceTypeDialogFilters = useCallback(() => { setActiveResourceTypeSearchTerm(tempResourceTypeSearchTerm); setActiveResourceTypeSortBy(tempResourceTypeSortBy); setIsResourceTypeFilterDialogOpen(false);}, [tempResourceTypeSearchTerm, tempResourceTypeSortBy]);
-    // const resetResourceTypeDialogFiltersOnly = useCallback(() => { setTempResourceTypeSearchTerm(''); setTempResourceTypeSortBy('name-asc'); }, []);
-    // const resetAllActiveResourceTypePageFilters = useCallback(() => { setActiveResourceTypeSearchTerm(''); setActiveResourceTypeSortBy('name-asc'); resetResourceTypeDialogFiltersOnly(); setIsResourceTypeFilterDialogOpen(false);}, [resetResourceTypeDialogFiltersOnly]);
-    // const handleOpenNewResourceTypeDialog = () => { setEditingType(null); setIsResourceTypeFormDialogOpen(true); };
-    // const handleOpenEditResourceTypeDialog = (type: ResourceType) => { setEditingType(type); setIsResourceTypeFormDialogOpen(true); };
-    // const handleSaveResourceType = async (data: ResourceTypeFormValues) => {
-    //   if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } setIsLoadingData(true); try { const typeDataToSave = { name: data.name, description: data.description || null }; const auditAction = editingType ? 'RESOURCE_TYPE_UPDATED' : 'RESOURCE_TYPE_CREATED'; let entityId = editingType ? editingType.id : ''; if (editingType) { await updateDoc(doc(db, "resourceTypes", entityId), typeDataToSave); } else { const docRef = await addDoc(collection(db, "resourceTypes"), typeDataToSave); entityId = docRef.id; } await addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'ResourceType', entityId, details: `Resource Type '${data.name}' ${editingType ? 'updated' : 'created'}.` }); toast({ title: `Resource Type ${editingType ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingType ? 'updated' : 'created'}.` }); setIsResourceTypeFormDialogOpen(false); setEditingType(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Error", description: `Could not save resource type: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
-    // };
-    // const handleDeleteResourceType = async (typeId: string) => {
-    //   if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } const deletedType = resourceTypes.find(rt => rt.id === typeId); if (!deletedType) { toast({ title: "Error", description: "Resource type not found.", variant: "destructive" }); return; } const resourcesOfThisType = allResourcesForCountsAndChecks.filter(res => res.resourceTypeId === typeId).length; if (resourcesOfThisType > 0) { toast({ title: "Deletion Blocked", description: `Cannot delete "${deletedType.name}" as ${resourcesOfThisType} resource(s) are assigned. Reassign them first.`, variant: "destructive", duration: 7000 }); setTypeToDelete(null); return; } setIsLoadingData(true); try { await deleteDoc(doc(db, "resourceTypes", typeId)); await addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_DELETED', { entityType: 'ResourceType', entityId: typeId, details: `Resource Type '${deletedType.name}' deleted.` }); toast({ title: "Resource Type Deleted", description: `"${deletedType.name}" removed.`, variant: "destructive" }); setTypeToDelete(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Delete Error", description: `Could not delete resource type: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
-    // };
-    // const activeResourceTypeFilterCount = useMemo(() => [activeResourceTypeSearchTerm !== '', activeResourceTypeSortBy !== 'name-asc'].filter(Boolean).length, [activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
-
-    // // Labs Logic
-    // useEffect(() => { if (isLabFilterDialogOpen) { setTempLabSearchTerm(activeLabSearchTerm); setTempLabSortBy(activeLabSortBy);}}, [isLabFilterDialogOpen, activeLabSearchTerm, activeLabSortBy]);
-    // const filteredLabsWithCounts = useMemo(() => {
-    //   let currentLabs = [...labs]; const lowerSearchTerm = activeLabSearchTerm.toLowerCase(); if (activeLabSearchTerm) { currentLabs = currentLabs.filter(lab => lab.name.toLowerCase().includes(lowerSearchTerm) || (lab.location && lab.location.toLowerCase().includes(lowerSearchTerm)) || (lab.description && lab.description.toLowerCase().includes(lowerSearchTerm)));} const [column, direction] = activeLabSortBy.split('-') as [LabSortableColumn, 'asc' | 'desc']; let labsWithData = currentLabs.map(lab => ({ ...lab, resourceCount: allResourcesForCountsAndChecks.filter(r => r.labId === lab.id).length, memberCount: userLabMemberships.filter(m => m.labId === lab.id && m.status === 'active').length })); labsWithData.sort((a, b) => { let comparison = 0; if (column === 'name') comparison = a.name.toLowerCase().localeCompare(b.name.toLowerCase()); else if (column === 'location') comparison = (a.location || '').toLowerCase().localeCompare((b.location || '').toLowerCase()); else if (column === 'resourceCount') comparison = a.resourceCount - b.resourceCount; else if (column === 'memberCount') comparison = a.memberCount - b.memberCount; return direction === 'asc' ? comparison : -comparison; }); return labsWithData;
-    // }, [labs, activeLabSearchTerm, activeLabSortBy, allResourcesForCountsAndChecks, userLabMemberships]);
-    // const handleApplyLabDialogFilters = useCallback(() => { setActiveLabSearchTerm(tempLabSearchTerm); setActiveLabSortBy(tempLabSortBy); setIsLabFilterDialogOpen(false);}, [tempLabSearchTerm, tempLabSortBy]);
-    // const resetLabDialogFiltersOnly = useCallback(() => { setTempLabSearchTerm(''); setTempLabSortBy('name-asc'); }, []);
-    // const resetAllActiveLabPageFilters = useCallback(() => { setActiveLabSearchTerm(''); setActiveLabSortBy('name-asc'); resetLabDialogFiltersOnly(); setIsLabFilterDialogOpen(false);}, [resetLabDialogFiltersOnly]);
-    // const handleOpenNewLabDialog = () => { setEditingLab(null); setIsLabFormDialogOpen(true); };
-    // const handleOpenEditLabDialog = (lab: Lab) => { setEditingLab(lab); setIsLabFormDialogOpen(true); };
-    // const handleSaveLab = async (data: LabFormValues) => {
-    //   if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } setIsLoadingData(true); try { const labDataToSave: Partial<Omit<Lab, 'id' | 'createdAt' | 'lastUpdatedAt'>> & { lastUpdatedAt?: any, createdAt?: any } = { name: data.name, location: data.location || null, description: data.description || null, }; const auditAction = editingLab ? 'LAB_UPDATED' : 'LAB_CREATED'; let entityId = editingLab ? editingLab.id : ''; if (editingLab) { labDataToSave.lastUpdatedAt = serverTimestamp(); await updateDoc(doc(db, "labs", entityId), labDataToSave as any); } else { labDataToSave.createdAt = serverTimestamp(); const docRef = await addDoc(collection(db, "labs"), labDataToSave as any); entityId = docRef.id; } await addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'Lab', entityId, details: `Lab '${data.name}' ${editingLab ? 'updated' : 'created'}.` }); toast({ title: `Lab ${editingLab ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingLab ? 'updated' : 'created'}.` }); setIsLabFormDialogOpen(false); setEditingLab(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Error", description: `Could not save lab: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
-    // };
-    // const handleDeleteLab = async (labId: string) => {
-    //   if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; } const deletedLab = labs.find(lab => lab.id === labId); if (!deletedLab) { toast({ title: "Error", description: "Lab not found.", variant: "destructive" }); return; } const resourcesInThisLab = allResourcesForCountsAndChecks.filter(res => res.labId === labId).length; if (resourcesInThisLab > 0) { toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as ${resourcesInThisLab} resource(s) are assigned. Reassign them first.`, variant: "destructive", duration: 7000 }); setLabToDelete(null); return; } const activeMemberships = userLabMemberships.filter(m => m.labId === labId && m.status === 'active').length; if (activeMemberships > 0) { toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as it has ${activeMemberships} active member(s). Revoke their access first.`, variant: "destructive", duration: 7000 }); setLabToDelete(null); return; } setIsLoadingData(true); try { await deleteDoc(doc(db, "labs", labId)); await addAuditLog(currentUser.id, currentUser.name, 'LAB_DELETED', { entityType: 'Lab', entityId: labId, details: `Lab '${deletedLab.name}' deleted.` }); toast({ title: "Lab Deleted", description: `Lab "${deletedLab.name}" removed.`, variant: "destructive" }); setLabToDelete(null); await fetchAllAdminData(); if(activeContextId === labId) setActiveContextId(GLOBAL_CONTEXT_VALUE); } catch (error: any) { toast({ title: "Delete Error", description: `Could not delete lab: ${error.message}`, variant: "destructive" }); } finally { setIsLoadingData(false); }
-    // };
-    // const activeLabFilterCount = useMemo(() => [activeLabSearchTerm !== '', activeLabSortBy !== 'name-asc'].filter(Boolean).length, [activeLabSearchTerm, activeLabSortBy]);
-
-    // // Closures Logic (Contextual)
-    // useEffect(() => { if (isClosureFilterDialogOpen) { setTempClosureSearchTerm(activeClosureSearchTerm); }}, [isClosureFilterDialogOpen, activeClosureSearchTerm]);
-    // const filteredBlackoutDates = useMemo(() => {
-    //   return blackoutDates.filter(bd => {
-    //       const labMatch = activeContextId === GLOBAL_CONTEXT_VALUE ? !bd.labId : bd.labId === activeContextId;
-    //       const lowerSearchTerm = activeClosureSearchTerm.toLowerCase();
-    //       const reasonMatch = bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm);
-    //       const dateMatch = bd.date && isValidDateFn(parseISO(bd.date)) && format(parseISO(bd.date), 'PPP').toLowerCase().includes(lowerSearchTerm);
-    //       return labMatch && (!activeClosureSearchTerm || reasonMatch || dateMatch);
-    //   });
-    // }, [blackoutDates, activeContextId, activeClosureSearchTerm]);
-    // const filteredRecurringRules = useMemo(() => {
-    //   return recurringRules.filter(rule => {
-    //       const labMatch = activeContextId === GLOBAL_CONTEXT_VALUE ? !rule.labId : rule.labId === activeContextId;
-    //       const lowerSearchTerm = activeClosureSearchTerm.toLowerCase();
-    //       const nameMatch = rule.name && rule.name.toLowerCase().includes(lowerSearchTerm);
-    //       const reasonMatch = rule.reason && rule.reason.toLowerCase().includes(lowerSearchTerm);
-    //       return labMatch && (!activeClosureSearchTerm || nameMatch || reasonMatch);
-    //   });
-    // }, [recurringRules, activeContextId, activeClosureSearchTerm]);
-    // const handleOpenNewDateDialog = useCallback(() => { setEditingBlackoutDate(null); setIsDateFormDialogOpen(true); }, []);
-    // const handleOpenEditDateDialog = useCallback((bd: BlackoutDate) => { setEditingBlackoutDate(bd); setIsDateFormDialogOpen(true); }, []);
-    // const handleSaveBlackoutDate = useCallback(async (data: BlackoutDateDialogFormValues) => {
-    //   if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; } const formattedDateOnly = format(data.date, 'yyyy-MM-dd'); const displayDate = format(data.date, 'PPP'); const blackoutDataToSave: Omit<BlackoutDate, 'id'> = { labId: data.labId === GLOBAL_CONTEXT_VALUE ? null : data.labId, date: formattedDateOnly, reason: data.reason || undefined, }; setIsLoadingData(true); try { if (editingBlackoutDate) { await updateDoc(doc(db, "blackoutDates", editingBlackoutDate.id), blackoutDataToSave as any); await addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_UPDATED', { entityType: 'BlackoutDate', entityId: editingBlackoutDate.id, details: `Blackout Date for ${displayDate} updated. Lab: ${blackoutDataToSave.labId || 'Global'}. Reason: ${data.reason || 'N/A'}`}); toast({ title: 'Blackout Date Updated'}); } else { const docRef = await addDoc(collection(db, "blackoutDates"), blackoutDataToSave); await addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_CREATED', { entityType: 'BlackoutDate', entityId: docRef.id, details: `Blackout Date for ${displayDate} created. Lab: ${blackoutDataToSave.labId || 'Global'}. Reason: ${data.reason || 'N/A'}`}); toast({ title: 'Blackout Date Added'}); } setIsDateFormDialogOpen(false); setEditingBlackoutDate(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Failed", variant: "destructive"});} finally { setIsLoadingData(false); }
-    // }, [currentUser, editingBlackoutDate, fetchAllAdminData, toast]);
-    // const handleDeleteBlackoutDate = useCallback(async (blackoutDateId: string) => {
-    //   if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; } const deletedDateObj = blackoutDates.find(bd => bd.id === blackoutDateId); if (!deletedDateObj) return; setIsLoadingData(true); try { await deleteDoc(doc(db, "blackoutDates", blackoutDateId)); await addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Blackout Date for ${format(parseISO(deletedDateObj.date), 'PPP')} (Lab: ${deletedDateObj.labId || 'Global'}, Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`}); toast({ title: "Blackout Date Removed", variant: "destructive" }); setDateToDelete(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Delete Failed", variant: "destructive"});} finally { setIsLoadingData(false); }
-    // }, [currentUser, blackoutDates, fetchAllAdminData, toast]);
-    // const handleApplyClosureDialogFilters = useCallback(() => { setActiveClosureSearchTerm(tempClosureSearchTerm); setIsClosureFilterDialogOpen(false); }, [tempClosureSearchTerm]);
-    // const resetClosureDialogFiltersOnly = useCallback(() => { setTempClosureSearchTerm(''); }, []);
-    // const resetAllActiveClosurePageFilters = useCallback(() => { setActiveClosureSearchTerm(''); resetClosureDialogFiltersOnly(); setIsClosureFilterDialogOpen(false); }, [resetClosureDialogFiltersOnly]);
-    // const activeClosureFilterCount = useMemo(() => [activeClosureSearchTerm !== ''].filter(Boolean).length, [activeClosureSearchTerm]);
-    // const handleOpenNewRecurringDialog = useCallback(() => { setEditingRecurringRule(null); setIsRecurringFormDialogOpen(true); }, []);
-    // const handleOpenEditRecurringDialog = useCallback((rule: RecurringBlackoutRule) => { setEditingRecurringRule(rule); setIsRecurringFormDialogOpen(true); }, []);
-    // const handleSaveRecurringRule = useCallback(async (data: RecurringRuleDialogFormValues) => {
-    //   if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; } const ruleDataToSave: Omit<RecurringBlackoutRule, 'id'> = { labId: data.labId === GLOBAL_CONTEXT_VALUE ? null : data.labId, name: data.name, daysOfWeek: data.daysOfWeek, reason: data.reason || undefined, }; setIsLoadingData(true); try { if (editingRecurringRule) { await updateDoc(doc(db, "recurringBlackoutRules", editingRecurringRule.id), ruleDataToSave as any); await addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_UPDATED', { entityType: 'RecurringBlackoutRule', entityId: editingRecurringRule.id, details: `Recurring rule '${data.name}' updated. Lab: ${ruleDataToSave.labId || 'Global'}.`}); toast({ title: 'Recurring Rule Updated'}); } else { const docRef = await addDoc(collection(db, "recurringBlackoutRules"), ruleDataToSave); await addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_CREATED', { entityType: 'RecurringBlackoutRule', entityId: docRef.id, details: `Recurring rule '${data.name}' created. Lab: ${ruleDataToSave.labId || 'Global'}.`}); toast({ title: 'Recurring Rule Added'}); } setIsRecurringFormDialogOpen(false); setEditingRecurringRule(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Save Failed", variant: "destructive"});} finally { setIsLoadingData(false); }
-    // }, [currentUser, editingRecurringRule, fetchAllAdminData, toast]);
-    // const handleDeleteRecurringRule = useCallback(async (ruleId: string) => {
-    //   if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; } const deletedRuleObj = recurringRules.find(r => r.id === ruleId); if (!deletedRuleObj) return; setIsLoadingData(true); try { await deleteDoc(doc(db, "recurringBlackoutRules", ruleId)); await addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Recurring rule '${deletedRuleObj.name}' (Lab: ${deletedRuleObj.labId || 'Global'}) deleted.`}); toast({ title: "Recurring Rule Removed", variant: "destructive" }); setRuleToDelete(null); await fetchAllAdminData(); } catch (error: any) { toast({ title: "Delete Failed", variant: "destructive"});} finally { setIsLoadingData(false); }
-    // }, [currentUser, recurringRules, fetchAllAdminData, toast]);
-
-    // // Maintenance Logic
-    // useEffect(() => { if (isMaintenanceFilterDialogOpen) { setTempMaintenanceSearchTerm(activeMaintenanceSearchTerm); setTempMaintenanceFilterStatus(activeMaintenanceFilterStatus); setTempMaintenanceFilterResourceId(activeMaintenanceFilterResourceId); setTempMaintenanceFilterTechnicianId(activeMaintenanceFilterTechnicianId); setTempMaintenanceFilterLabId(activeMaintenanceFilterLabId); }}, [isMaintenanceFilterDialogOpen, activeMaintenanceSearchTerm, activeMaintenanceFilterStatus, activeMaintenanceFilterResourceId, activeMaintenanceFilterTechnicianId, activeMaintenanceFilterLabId]);
-    // const filteredMaintenanceRequests = useMemo(() => {
-    //   return maintenanceRequests.map(req => {
-    //     const resource = allResourcesForCountsAndChecks.find(r => r.id === req.resourceId);
-    //     const reporter = allUsersData.find(u => u.id === req.reportedByUserId);
-    //     const technician = allTechniciansForMaintenance.find(t => t.id === req.assignedTechnicianId);
-    //     return { ...req, resourceName: resource?.name || 'Unknown Resource', resourceLabId: resource?.labId, reportedByUserName: reporter?.name || 'Unknown User', assignedTechnicianName: technician?.name, };
-    //   }).filter(req => {
-    //     const lowerSearchTerm = activeMaintenanceSearchTerm.toLowerCase();
-    //     const searchMatch = !activeMaintenanceSearchTerm || (req.resourceName && req.resourceName.toLowerCase().includes(lowerSearchTerm)) || (req.reportedByUserName && req.reportedByUserName.toLowerCase().includes(lowerSearchTerm)) || (req.issueDescription && req.issueDescription.toLowerCase().includes(lowerSearchTerm)) || (req.assignedTechnicianName && req.assignedTechnicianName.toLowerCase().includes(lowerSearchTerm));
-    //     const statusMatch = activeMaintenanceFilterStatus === 'all' || req.status === activeMaintenanceFilterStatus;
-    //     const resourceMatch = activeMaintenanceFilterResourceId === 'all' || req.resourceId === activeMaintenanceFilterResourceId;
-    //     let labMatch = true;
-    //     if (activeContextId === GLOBAL_CONTEXT_VALUE) {
-    //         if (activeMaintenanceFilterLabId !== 'all') {
-    //             if (activeMaintenanceFilterLabId === '--global--') {
-    //                 labMatch = !req.resourceLabId;
-    //             } else {
-    //                 labMatch = req.resourceLabId === activeMaintenanceFilterLabId;
-    //             }
-    //         }
-    //     } else {
-    //         labMatch = req.resourceLabId === activeContextId;
-    //     }
-    //     let technicianMatch = true;
-    //     if (activeMaintenanceFilterTechnicianId !== 'all') {
-    //       if (activeMaintenanceFilterTechnicianId === '--unassigned--') {
-    //         technicianMatch = !req.assignedTechnicianId;
-    //       } else {
-    //         technicianMatch = req.assignedTechnicianId === activeMaintenanceFilterTechnicianId;
-    //       }
-    //     }
-    //     return searchMatch && statusMatch && resourceMatch && labMatch && technicianMatch;
-    //   });
-    // }, [maintenanceRequests, allResourcesForCountsAndChecks, allTechniciansForMaintenance, allUsersData, activeMaintenanceSearchTerm, activeMaintenanceFilterStatus, activeMaintenanceFilterResourceId, activeMaintenanceFilterTechnicianId, activeMaintenanceFilterLabId, activeContextId]);
-    // const handleApplyMaintenanceDialogFilters = useCallback(() => { setActiveMaintenanceSearchTerm(tempMaintenanceSearchTerm.toLowerCase()); setActiveMaintenanceFilterStatus(tempMaintenanceFilterStatus); setActiveMaintenanceFilterResourceId(tempMaintenanceFilterResourceId); setActiveMaintenanceFilterTechnicianId(tempMaintenanceFilterTechnicianId); setActiveMaintenanceFilterLabId(tempMaintenanceFilterLabId); setIsMaintenanceFilterDialogOpen(false); }, [tempMaintenanceSearchTerm, tempMaintenanceFilterStatus, tempMaintenanceFilterResourceId, tempMaintenanceFilterTechnicianId, tempMaintenanceFilterLabId]);
-    // const resetMaintenanceDialogFiltersOnly = useCallback(() => { setTempMaintenanceSearchTerm(''); setTempMaintenanceFilterStatus('all'); setTempMaintenanceFilterResourceId('all'); setTempMaintenanceFilterTechnicianId('all'); setTempMaintenanceFilterLabId(activeContextId === GLOBAL_CONTEXT_VALUE ? 'all' : activeContextId); }, [activeContextId]);
-    // const resetAllActiveMaintenancePageFilters = useCallback(() => { setActiveMaintenanceSearchTerm(''); setActiveMaintenanceFilterStatus('all'); setActiveMaintenanceFilterResourceId('all'); setActiveMaintenanceFilterTechnicianId('all'); setActiveMaintenanceFilterLabId(activeContextId === GLOBAL_CONTEXT_VALUE ? 'all' : activeContextId); resetMaintenanceDialogFiltersOnly(); setIsMaintenanceFilterDialogOpen(false); }, [resetMaintenanceDialogFiltersOnly, activeContextId]);
-    // const handleOpenNewMaintenanceDialog = useCallback(() => { if (!currentUser) return; setEditingMaintenanceRequest(null); setIsMaintenanceFormDialogOpen(true); }, [currentUser]);
-    // const handleOpenEditMaintenanceDialog = useCallback((request: MaintenanceRequest) => { setEditingMaintenanceRequest(request); setIsMaintenanceFormDialogOpen(true); }, []);
-    // const handleSaveMaintenanceRequest = useCallback(async (data: MaintenanceDialogFormValues) => {
-    //   if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Error", variant: "destructive"}); return;}
-    //   const resource = allResourcesForCountsAndChecks.find(r => r.id === data.resourceId);
-    //   if (!resource) { toast({ title: "Error", variant: "destructive" }); return;}
-    //   let dateResolvedForFirestore: Timestamp | null = null;
-    //   if ((data.status === 'Resolved' || data.status === 'Closed') && data.dateResolved && isValidDateFn(new Date(data.dateResolved))) { dateResolvedForFirestore = Timestamp.fromDate(new Date(data.dateResolved)); }
-    //   else if ((data.status === 'Resolved' || data.status === 'Closed') && !editingMaintenanceRequest?.dateResolved) { dateResolvedForFirestore = serverTimestamp() as Timestamp; }
-    //   else if (editingMaintenanceRequest?.dateResolved && (data.status === 'Resolved' || data.status === 'Closed')) { dateResolvedForFirestore = Timestamp.fromDate(editingMaintenanceRequest.dateResolved); }
-
-    //   const requestDataToSave: any = {
-    //     resourceId: data.resourceId,
-    //     issueDescription: data.issueDescription,
-    //     status: data.status,
-    //     assignedTechnicianId: data.assignedTechnicianId === '--unassigned--' || !data.assignedTechnicianId ? null : data.assignedTechnicianId,
-    //     resolutionNotes: data.resolutionNotes || null,
-    //     dateResolved: dateResolvedForFirestore
-    //   };
-    //   setIsLoadingData(true);
-    //   try {
-    //     if (editingMaintenanceRequest) {
-    //       await updateDoc(doc(db, "maintenanceRequests", editingMaintenanceRequest.id), requestDataToSave);
-    //       await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingMaintenanceRequest.id, details: `Maintenance request for '${resource.name}' updated. Status: ${data.status}.`});
-    //       toast({ title: 'Request Updated'});
-    //       if ((data.status === 'Resolved' && editingMaintenanceRequest.status !== 'Resolved') && editingMaintenanceRequest.reportedByUserId !== currentUser.id && editingMaintenanceRequest.reportedByUserId) {
-    //         await addNotification( editingMaintenanceRequest.reportedByUserId, 'Maintenance Resolved', `Issue for ${resource.name} resolved.`, 'maintenance_resolved', '/maintenance');
-    //       }
-    //       if (data.assignedTechnicianId && data.assignedTechnicianId !== editingMaintenanceRequest.assignedTechnicianId && data.assignedTechnicianId !== '--unassigned--') {
-    //         await addNotification( data.assignedTechnicianId, 'Maintenance Task Assigned', `Task for ${resource.name}: ${data.issueDescription.substring(0,50)}...`, 'maintenance_assigned', '/maintenance');
-    //       }
-    //     } else {
-    //       const newRequestPayload = { ...requestDataToSave, reportedByUserId: currentUser.id, dateReported: serverTimestamp(), };
-    //       const docRef = await addDoc(collection(db, "maintenanceRequests"), newRequestPayload);
-    //       await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New request for '${resource.name}' by ${currentUser.name}.`});
-    //       toast({ title: 'Request Logged'});
-    //       const techIdForNotification = requestDataToSave.assignedTechnicianId;
-    //       if(techIdForNotification && techIdForNotification !== '--unassigned--'){
-    //         await addNotification( techIdForNotification, 'New Maintenance Request Assigned', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... assigned.`, 'maintenance_assigned', '/maintenance');
-    //       } else {
-    //         const usersToNotifyQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Technician']), orderBy('name', 'asc'));
-    //         const usersToNotifySnapshot = await getDocs(usersToNotifyQuery);
-    //         const notificationPromises = usersToNotifySnapshot.docs.map(userDoc => {
-    //           if(userDoc.id !== currentUser?.id) {
-    //             return addNotification( userDoc.id, 'New Unassigned Maintenance Request', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`, 'maintenance_new', '/maintenance');
-    //           }
-    //           return Promise.resolve();
-    //         });
-    //         await Promise.all(notificationPromises);
-    //       }
-    //     }
-    //     setIsMaintenanceFormDialogOpen(false);
-    //     setEditingMaintenanceRequest(null);
-    //     await fetchAllAdminData();
-    //   } catch (error: any) {
-    //     toast({ title: `${editingMaintenanceRequest ? "Update" : "Logging"} Failed`, variant: "destructive" });
-    //   } finally {
-    //     setIsLoadingData(false);
-    //   }
-    // }, [currentUser, editingMaintenanceRequest, allResourcesForCountsAndChecks, fetchAllAdminData, toast]);
-    // const activeMaintenanceFilterCount = useMemo(() => [activeMaintenanceSearchTerm !== '', activeMaintenanceFilterStatus !== 'all', activeMaintenanceFilterResourceId !== 'all', activeMaintenanceFilterTechnicianId !== 'all', (activeContextId === GLOBAL_CONTEXT_VALUE && activeMaintenanceFilterLabId !== 'all')].filter(Boolean).length, [activeMaintenanceSearchTerm, activeMaintenanceFilterStatus, activeMaintenanceFilterResourceId, activeMaintenanceFilterTechnicianId, activeMaintenanceFilterLabId, activeContextId]);
-    // const canEditAnyMaintenanceRequest = useMemo(() => currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Technician'), [currentUser]);
-
-    // // Lab Access Requests Logic (Contextual)
-    // const handleApplySystemWideAccessRequestsFilter = useCallback(() => {
-    //   setActiveSystemWideAccessRequestsFilterLabId(tempSystemWideAccessRequestsFilterLabId);
-    //   setActiveSystemWideAccessRequestsFilterUser(tempSystemWideAccessRequestsFilterUser);
-    //   setIsSystemWideAccessRequestsFilterOpen(false);
-    // }, [tempSystemWideAccessRequestsFilterLabId, tempSystemWideAccessRequestsFilterUser]);
-
-    // const resetSystemWideAccessRequestsFilterOnly = useCallback(() => {
-    //   setTempSystemWideAccessRequestsFilterLabId('all');
-    //   setTempSystemWideAccessRequestsFilterUser('');
-    // }, []);
-
-    // const activeSystemWideAccessRequestsFilterCount = useMemo(() => [
-    //   activeSystemWideAccessRequestsFilterLabId !== 'all',
-    //   activeSystemWideAccessRequestsFilterUser !== ''
-    // ].filter(Boolean).length, [activeSystemWideAccessRequestsFilterLabId, activeSystemWideAccessRequestsFilterUser]);
-
-    // // const filteredLabAccessRequests = useMemo(() => {
-    // // }, [allLabAccessRequests, activeContextId, activeSystemWideAccessRequestsFilterLabId, activeSystemWideAccessRequestsFilterUser]);
-
-    // // const activeLabMembers = useMemo(() => {
-    // // }, [userLabMemberships, allUsersData, activeContextId]);
-
-    // // const resourcesInSelectedLab = useMemo(() => {
-    // // }, [allResourcesForCountsAndChecks, activeContextId]);
-
-    // // const maintenanceForSelectedLab = useMemo(() => {
-    // //    return maintenanceRequests.filter(mr => resourcesInSelectedLab.some(r => r.id === mr.resourceId));
-    // // }, [maintenanceRequests, resourcesInSelectedLab]);
-    // //
-    // //   // if (!currentUser || !canManageAny) {
-    // //   //   return ( <div className="space-y-8"><PageHeader title="Lab Operations Center" icon={Cog} description="Access Denied." /><Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission.</p></CardContent></Card></div>);
-    // //   // }
+    // const maintenanceForSelectedLab = useMemo(() => {
+    //   return maintenanceRequests.filter(mr => resourcesInSelectedLab.some(r => r.id === mr.resourceId));
+    // }, [maintenanceRequests, resourcesInSelectedLab]);
   */
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Lab Operations Center"
-        description="Manage all aspects of your lab operations (page under diagnosis for parsing error)."
+        description="Manage all aspects of your lab operations, from system-wide settings to individual lab details."
         icon={Cog}
+        actions={pageHeaderActionsContent}
       />
-      <div className="flex justify-center items-center py-20">
-        <Loader2 className="h-12 w-12 animate-spin text-primary"/>
-        <p className="ml-4 text-lg">Page content significantly reduced for extreme parsing error diagnosis...</p>
-        <p className="ml-4 text-sm">If this renders, the error is in the commented out JavaScript, not the file structure or imports.</p>
-      </div>
+      {/* The rest of the UI (Tabs, Cards, etc.) will be restored in subsequent steps */}
+      {isLoadingData && (
+        <div className="flex justify-center items-center py-20">
+            <Loader2 className="h-12 w-12 animate-spin text-primary"/>
+            <p className="ml-4 text-lg text-muted-foreground">Loading Lab Operations Data...</p>
+        </div>
+      )}
+
+      {!isLoadingData && activeContextId === GLOBAL_CONTEXT_VALUE && (
+        <Tabs defaultValue={searchParams?.tab || "labs"} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
+            <TabsTrigger value="labs">Manage Labs</TabsTrigger>
+            <TabsTrigger value="resource-types">Resource Types</TabsTrigger>
+            <TabsTrigger value="global-closures">Global Closures</TabsTrigger>
+            <TabsTrigger value="maintenance-log">Maintenance Log</TabsTrigger>
+            <TabsTrigger value="lab-access-requests">Lab Access Requests</TabsTrigger>
+          </TabsList>
+          {/* Content for GLOBAL_CONTEXT_VALUE tabs will be restored here */}
+        </Tabs>
+      )}
+
+      {!isLoadingData && activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
+         <Tabs defaultValue={searchParams?.tab || "lab-details"} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
+                <TabsTrigger value="lab-details">Lab Overview</TabsTrigger>
+                <TabsTrigger value="lab-closures">Closures</TabsTrigger>
+                <TabsTrigger value="lab-maintenance">Maintenance</TabsTrigger>
+                <TabsTrigger value="lab-members">Members & Access</TabsTrigger>
+            </TabsList>
+            {/* Content for Lab-Specific context tabs will be restored here */}
+        </Tabs>
+      )}
+
+      {/* Dialogs will be restored here */}
     </div>
   );
 }
-    
