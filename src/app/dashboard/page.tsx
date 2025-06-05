@@ -288,7 +288,7 @@ export default function DashboardPage() {
                 <CardHeader className="p-0 pb-3">
                   <div className="flex justify-between items-start">
                     <CardTitle className="text-lg hover:text-primary transition-colors">
-                      <Link href={`/resources/${resource.id}`}>
+                      <Link href={`/admin/resources/${resource.id}`}>
                         {resource.name}
                       </Link>
                     </CardTitle>
@@ -372,7 +372,7 @@ export default function DashboardPage() {
               </div>
             </CardContent>
             {upcomingUserBookings.length > 0 && (
-              <CardFooter className="justify-end pt-4 border-t">
+              <CardFooter className="justify-end pt-4">
                 <Button variant="outline" asChild>
                   <Link href="/bookings">View All Bookings <ChevronRight className="ml-2 h-4 w-4" /></Link>
                 </Button>
