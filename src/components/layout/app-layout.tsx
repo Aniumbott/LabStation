@@ -11,12 +11,11 @@ import {
   UserCog,
   Users as UsersIconLucide,
   CheckSquare,
-  Wrench,
   Bell,
   Loader2,
   BarChart3,
   History,
-  Cog, 
+  Cog,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
@@ -53,7 +52,7 @@ const navItems: NavItem[] = [
   { href: '/bookings', label: 'Bookings', icon: CalendarDays },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/profile', label: 'My Profile', icon: UserCog },
-  { href: '/maintenance', label: 'Maintenance', icon: Wrench, technicianOrAdmin: true }, // Technicians and Admins
+  // { href: '/maintenance', label: 'Maintenance', icon: Wrench, technicianOrAdmin: true }, // Removed this item
   {
     href: '/admin/booking-requests',
     label: 'Booking Requests',
@@ -61,9 +60,9 @@ const navItems: NavItem[] = [
     adminOnly: true,
   },
   {
-    href: '/admin/lab-management-v2', 
-    label: 'Lab Operations', // UPDATED LABEL
-    icon: Cog,               // UPDATED ICON
+    href: '/admin/lab-management-v2',
+    label: 'Lab Operations',
+    icon: Cog,
     adminOnly: true,
   },
   {
@@ -104,9 +103,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     return navItems.filter(item => {
       if (item.adminOnly) return currentUser.role === 'Admin';
       if (item.technicianOrAdmin) return currentUser.role === 'Admin' || currentUser.role === 'Technician';
-      // For /admin/resources, if not adminOnly and not technicianOrAdmin, it's visible to all logged-in users.
-      // The /admin/resources route itself should handle authorization if non-admins need restricted views.
-      if (item.href === '/admin/resources') return true; 
+      if (item.href === '/admin/resources') return true;
       return true;
     });
   }, [currentUser]);
