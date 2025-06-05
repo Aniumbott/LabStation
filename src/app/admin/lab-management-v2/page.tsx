@@ -44,9 +44,9 @@ import { daysOfWeekArray, maintenanceRequestStatuses } from '@/lib/app-constants
 import { format, parseISO, isValid as isValidDateFn } from 'date-fns';
 import { cn, formatDateSafe } from '@/lib/utils';
 
-// Sorting options (moved from commented block)
+// Sorting options
 type ResourceTypeSortableColumn = 'name' | 'resourceCount' | 'description';
-type LabSortableColumn = 'name' | 'location' | 'resourceCount' | 'memberCount';
+type LabSortableColumn = 'name' | 'location' | 'resourceCount' | 'memberCount'; // Added resourceCount, memberCount
 const resourceTypeSortOptions: { value: string; label: string }[] = [
   { value: 'name-asc', label: 'Name (A-Z)' }, { value: 'name-desc', label: 'Name (Z-A)' },
   { value: 'resourceCount-asc', label: 'Resources (Low-High)' }, { value: 'resourceCount-desc', label: 'Resources (High-Low)' },
@@ -93,14 +93,15 @@ export default function LabOperationsCenterPage() {
 
     // --- Labs State ---
     const [labs, setLabs] = useState<Lab[]>([]);
-    // const [labToDelete, setLabToDelete] = useState<Lab | null>(null);
-    // const [isLabFormDialogOpen, setIsLabFormDialogOpen] = useState(false);
-    // const [editingLab, setEditingLab] = useState<Lab | null>(null);
-    // const [isLabFilterDialogOpen, setIsLabFilterDialogOpen] = useState(false);
-    // const [tempLabSearchTerm, setTempLabSearchTerm] = useState('');
-    // const [activeLabSearchTerm, setActiveLabSearchTerm] = useState('');
-    // const [tempLabSortBy, setTempLabSortBy] = useState<string>('name-asc');
-    // const [activeLabSortBy, setActiveLabSortBy] = useState<string>('name-asc');
+    const [labToDelete, setLabToDelete] = useState<Lab | null>(null);
+    const [isLabFormDialogOpen, setIsLabFormDialogOpen] = useState(false);
+    const [editingLab, setEditingLab] = useState<Lab | null>(null);
+    const [isLabFilterDialogOpen, setIsLabFilterDialogOpen] = useState(false);
+    const [tempLabSearchTerm, setTempLabSearchTerm] = useState('');
+    const [activeLabSearchTerm, setActiveLabSearchTerm] = useState('');
+    const [tempLabSortBy, setTempLabSortBy] = useState<string>('name-asc');
+    const [activeLabSortBy, setActiveLabSortBy] = useState<string>('name-asc');
+
 
     // --- Blackout Dates & Recurring Rules State ---
     const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
@@ -224,10 +225,9 @@ export default function LabOperationsCenterPage() {
         if (preselectedLabId && labs.find(l => l.id === preselectedLabId)) {
           setActiveContextId(preselectedLabId);
         } else if (preselectedLabId) {
-          // If labId in URL is invalid or not found, default to global
           setActiveContextId(GLOBAL_CONTEXT_VALUE);
         }
-      }, [searchParamsObj, labs]); // Added labs to dependency array
+      }, [searchParamsObj, labs]);
 
     const selectedLabDetails = useMemo(() => labs.find(lab => lab.id === activeContextId), [labs, activeContextId]);
 
@@ -378,13 +378,132 @@ export default function LabOperationsCenterPage() {
 
 
     // --- Labs List Logic (Only for GLOBAL_CONTEXT_VALUE) ---
-    // ... (Currently Commented Out) ...
+    useEffect(() => {
+        if (isLabFilterDialogOpen) {
+            setTempLabSearchTerm(activeLabSearchTerm);
+            setTempLabSortBy(activeLabSortBy);
+        }
+    }, [isLabFilterDialogOpen, activeLabSearchTerm, activeLabSortBy]);
+
+    const filteredLabs = useMemo(() => {
+        let currentLabs = [...labs];
+        const lowerSearchTerm = activeLabSearchTerm.toLowerCase();
+        if (activeLabSearchTerm) {
+            currentLabs = currentLabs.filter(lab =>
+                lab.name.toLowerCase().includes(lowerSearchTerm) ||
+                (lab.location && lab.location.toLowerCase().includes(lowerSearchTerm)) ||
+                (lab.description && lab.description.toLowerCase().includes(lowerSearchTerm))
+            );
+        }
+        const [column, direction] = activeLabSortBy.split('-') as [LabSortableColumn, 'asc' | 'desc'];
+        const labsWithCounts = currentLabs.map(lab => ({
+            ...lab,
+            resourceCount: allResourcesForCountsAndChecks.filter(res => res.labId === lab.id).length,
+            memberCount: userLabMemberships.filter(mem => mem.labId === lab.id && mem.status === 'active').length,
+        }));
+
+        labsWithCounts.sort((a, b) => {
+            let comparison = 0;
+            if (column === 'name') comparison = a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+            else if (column === 'location') comparison = (a.location || '').toLowerCase().localeCompare((b.location || '').toLowerCase());
+            else if (column === 'resourceCount') comparison = a.resourceCount - b.resourceCount;
+            else if (column === 'memberCount') comparison = a.memberCount - b.memberCount;
+            return direction === 'asc' ? comparison : -comparison;
+        });
+        return labsWithCounts;
+    }, [labs, activeLabSearchTerm, activeLabSortBy, allResourcesForCountsAndChecks, userLabMemberships]);
+
+    const handleApplyLabDialogFilters = useCallback(() => {
+        setActiveLabSearchTerm(tempLabSearchTerm);
+        setActiveLabSortBy(tempLabSortBy);
+        setIsLabFilterDialogOpen(false);
+    }, [tempLabSearchTerm, tempLabSortBy]);
+
+    const resetLabDialogFiltersOnly = useCallback(() => {
+        setTempLabSearchTerm('');
+        setTempLabSortBy('name-asc');
+    }, []);
+
+    const resetAllActiveLabPageFilters = useCallback(() => {
+        setActiveLabSearchTerm('');
+        setActiveLabSortBy('name-asc');
+        resetLabDialogFiltersOnly();
+        setIsLabFilterDialogOpen(false);
+    }, [resetLabDialogFiltersOnly]);
+
+    const handleOpenNewLabDialog = useCallback(() => {
+        setEditingLab(null);
+        setIsLabFormDialogOpen(true);
+    }, [setEditingLab, setIsLabFormDialogOpen]);
+
+    const handleOpenEditLabDialog = useCallback((lab: Lab) => {
+        setEditingLab(lab);
+        setIsLabFormDialogOpen(true);
+    }, [setEditingLab, setIsLabFormDialogOpen]);
+
+    const handleSaveLab = useCallback(async (data: LabFormValues) => {
+        if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
+        setIsLoadingData(true);
+        try {
+            const labDataToSave: Partial<Omit<Lab, 'id' | 'createdAt' | 'lastUpdatedAt'>> & { lastUpdatedAt?: any, createdAt?: any } = {
+                name: data.name,
+                location: data.location || null,
+                description: data.description || null,
+            };
+            const auditAction = editingLab ? 'LAB_UPDATED' : 'LAB_CREATED';
+            let entityId = editingLab ? editingLab.id : '';
+            if (editingLab) {
+                labDataToSave.lastUpdatedAt = serverTimestamp();
+                await updateDoc(doc(db, "labs", entityId), labDataToSave as any);
+            } else {
+                labDataToSave.createdAt = serverTimestamp();
+                const docRef = await addDoc(collection(db, "labs"), labDataToSave as any);
+                entityId = docRef.id;
+            }
+            await addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'Lab', entityId, details: `Lab '${data.name}' ${editingLab ? 'updated' : 'created'}.` });
+            toast({ title: `Lab ${editingLab ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingLab ? 'updated' : 'created'}.` });
+            setIsLabFormDialogOpen(false);
+            setEditingLab(null);
+            await fetchAllAdminData();
+        } catch (error: any) {
+            toast({ title: "Save Error", description: `Could not save lab: ${error.message}`, variant: "destructive" });
+        } finally {
+            setIsLoadingData(false);
+        }
+    }, [currentUser, canManageAny, editingLab, fetchAllAdminData, toast, setIsLoadingData, setIsLabFormDialogOpen, setEditingLab]);
+
+    const handleDeleteLab = useCallback(async (labId: string) => {
+        if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
+        const deletedLab = labs.find(lab => lab.id === labId);
+        if (!deletedLab) { toast({ title: "Error", description: "Lab not found.", variant: "destructive" }); return; }
+        const resourcesInThisLab = allResourcesForCountsAndChecks.filter(res => res.labId === labId).length;
+        if (resourcesInThisLab > 0) {
+            toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as ${resourcesInThisLab} resource(s) are assigned. Reassign them first.`, variant: "destructive", duration: 7000 });
+            setLabToDelete(null);
+            return;
+        }
+        setIsLoadingData(true);
+        try {
+            await deleteDoc(doc(db, "labs", labId));
+            await addAuditLog(currentUser.id, currentUser.name, 'LAB_DELETED', { entityType: 'Lab', entityId: labId, details: `Lab '${deletedLab.name}' deleted.` });
+            toast({ title: "Lab Deleted", description: `Lab "${deletedLab.name}" removed.`, variant: "destructive" });
+            setLabToDelete(null);
+            await fetchAllAdminData();
+        } catch (error: any) {
+            toast({ title: "Delete Error", description: `Could not delete lab: ${error.message}`, variant: "destructive" });
+        } finally {
+            setIsLoadingData(false);
+        }
+    }, [currentUser, canManageAny, labs, allResourcesForCountsAndChecks, fetchAllAdminData, toast, setIsLoadingData, setLabToDelete]);
+
+    const activeLabFilterCount = useMemo(() => [activeLabSearchTerm !== '', activeLabSortBy !== 'name-asc'].filter(Boolean).length, [activeLabSearchTerm, activeLabSortBy]);
+
 
     // --- Lab Closures Logic (Context-Aware) ---
-    // ... (Currently Commented Out) ...
+    // ... (Commented out for now) ...
 
     // --- Maintenance Requests Logic (Context-Aware) ---
-    // ... (Currently Commented Out) ...
+    // ... (Commented out for now) ...
 
     // --- Lab Access & Membership Logic (Context-Aware) ---
     const handleMembershipAction = useCallback(async (
@@ -396,8 +515,7 @@ export default function LabOperationsCenterPage() {
           toast({ title: "Authentication Error", variant: "destructive" });
           return;
         }
-        // const actionKey = membershipDocIdToUpdate || `${targetUserId}-${labId}-${action}`;
-        // setIsProcessingAction(prev => ({ ...prev, [actionKey]: { action, loading: true } })); // Assuming setIsProcessingAction is defined
+        // setIsProcessingAction(prev => ({ ...prev, [actionKey]: { action, loading: true } }));
 
         try {
           const result = await manageLabMembership_SA(
@@ -415,11 +533,32 @@ export default function LabOperationsCenterPage() {
         } catch (error: any) {
           toast({ title: "Error", description: `Failed to process request: ${error.message}`, variant: "destructive" });
         } finally {
-          // setIsProcessingAction(prev => ({ ...prev, [actionKey]: { action, loading: false } })); // Assuming setIsProcessingAction is defined
+          // setIsProcessingAction(prev => ({ ...prev, [actionKey]: { action, loading: false } }));
         }
     }, [currentUser, fetchAllAdminData, toast]);
 
-    // ... (Other commented out sections for Labs, Closures, Maintenance, Access/Membership) ...
+    // --- Filtered data for context-aware views (Lab specific) ---
+    // const filteredLabAccessRequests = useMemo(() => {
+    //    if (activeContextId === GLOBAL_CONTEXT_VALUE) return []; // Not for global view in this specific list
+    //    return allLabAccessRequests.filter(req => req.labId === activeContextId);
+    // }, [allLabAccessRequests, activeContextId]);
+
+    // const activeLabMembers = useMemo(() => {
+    //   if (activeContextId === GLOBAL_CONTEXT_VALUE) return [];
+    //   return userLabMemberships
+    //     .filter(mem => mem.labId === activeContextId && mem.status === 'active')
+    //     .map(mem => {
+    //       const userDetail = allUsersData.find(u => u.id === mem.userId);
+    //       return { ...mem, userName: userDetail?.name || 'Unknown', userAvatarUrl: userDetail?.avatarUrl, userEmail: userDetail?.email || 'N/A' };
+    //     });
+    // }, [userLabMemberships, allUsersData, activeContextId]);
+
+    // const resourcesInSelectedLab = useMemo(() => allResourcesForCountsAndChecks.filter(r => r.labId === activeContextId), [allResourcesForCountsAndChecks, activeContextId]);
+    
+    // const maintenanceForSelectedLab = useMemo(() => {
+    //   return maintenanceRequests.filter(mr => resourcesInSelectedLab.some(r => r.id === mr.resourceId));
+    // }, [maintenanceRequests, resourcesInSelectedLab]);
+
 
     if (!currentUser || !canManageAny) { // Main permission check for the whole page
       return ( <div className="space-y-8"><PageHeader title="Lab Operations Center" icon={Cog} description="Access Denied." /><Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission.</p></CardContent></Card></div>);
@@ -427,7 +566,7 @@ export default function LabOperationsCenterPage() {
 
   return (
     <TooltipProvider>
-      <div className="space-y-6">
+    <div className="space-y-6">
         <PageHeader
           title="Lab Operations Center"
           description="Manage all aspects of your lab operations, from system-wide settings to individual lab details."
@@ -451,7 +590,67 @@ export default function LabOperationsCenterPage() {
               <TabsTrigger value="lab-access-requests">Lab Access Requests</TabsTrigger>
             </TabsList>
 
-            {/* System-Wide View: Resource Types Tab */}
+            <TabsContent value="labs" className="mt-6">
+              <Card>
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <div><CardTitle className="text-xl">Labs</CardTitle><p className="text-sm text-muted-foreground mt-1">Define laboratory locations and view their resource/member counts.</p></div>
+                  <div className="flex gap-2 flex-wrap">
+                    <FilterSortDialog open={isLabFilterDialogOpen} onOpenChange={setIsLabFilterDialogOpen}>
+                      <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter & Sort {activeLabFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeLabFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
+                      <FilterSortDialogContent className="sm:max-w-md">
+                        <FilterSortDialogHeader><FilterSortDialogTitle>Filter & Sort Labs</FilterSortDialogTitle></FilterSortDialogHeader>
+                        <Separator className="my-3" />
+                        <div className="space-y-3">
+                          <div className="relative"><Label htmlFor="labSearchDialog">Search (Name/Loc/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="labSearchDialog" value={tempLabSearchTerm} onChange={e => setTempLabSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>
+                          <div><Label htmlFor="labSortDialog">Sort by</Label><Select value={tempLabSortBy} onValueChange={setTempLabSortBy}><SelectTrigger id="labSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{labSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
+                        </div>
+                        <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsLabFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyLabDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
+                      </FilterSortDialogContent>
+                    </FilterSortDialog>
+                    {canManageAny && <Button onClick={handleOpenNewLabDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Lab</Button>}
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {isLoadingData && filteredLabs.length === 0 && !activeLabSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
+                  ) : filteredLabs.length > 0 ? (
+                    <div className="overflow-x-auto rounded-md border shadow-sm">
+                      <Table>
+                        <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead className="text-center">Resources</TableHead><TableHead className="text-center">Members</TableHead>{canManageAny && <TableHead className="text-right w-[140px]">Actions</TableHead>}</TableRow></TableHeader>
+                        <TableBody>{filteredLabs.map(lab => (
+                          <TableRow key={lab.id}>
+                            <TableCell className="font-medium">{lab.name}</TableCell>
+                            <TableCell>{lab.location || 'N/A'}</TableCell>
+                            <TableCell className="text-center">{(lab as any).resourceCount ?? 0}</TableCell>
+                            <TableCell className="text-center">{(lab as any).memberCount ?? 0}</TableCell>
+                            {canManageAny && <TableCell className="text-right space-x-1">
+                               <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setActiveContextId(lab.id)}><Settings2 className="mr-1.5 h-3.5 w-3.5"/>Manage</Button>
+                              <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditLabDialog(lab)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Lab Details</TooltipContent></Tooltip>
+                              <AlertDialog open={labToDelete?.id === lab.id} onOpenChange={(isOpen) => !isOpen && setLabToDelete(null)}>
+                                <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabToDelete(lab)} disabled={isLoadingData || ((lab as any).resourceCount ?? 0) > 0 || ((lab as any).memberCount ?? 0) > 0}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger>
+                                <TooltipContent>{((lab as any).resourceCount ?? 0) > 0 || ((lab as any).memberCount ?? 0) > 0 ? "Cannot delete: lab has resources or members" : "Delete Lab"}</TooltipContent>
+                                </Tooltip>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader><AlertDialogTitle>Delete "{labToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources are assigned and no members are active.</AlertDialogDescription></AlertDialogHeader>
+                                  <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => labToDelete && handleDeleteLab(labToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </TableCell>}
+                          </TableRow>
+                        ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <Building className="h-12 w-12 mx-auto mb-3 opacity-50"/>
+                      <p className="font-medium">{activeLabFilterCount > 0 ? "No labs match criteria." : "No labs defined."}</p>
+                      {activeLabFilterCount > 0 && <Button variant="link" onClick={resetAllActiveLabPageFilters} className="mt-2 text-xs"><FilterX className="mr-1.5 h-3.5 w-3.5"/>Reset Filters</Button>}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
             <TabsContent value="resource-types" className="mt-6">
               <Card>
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
@@ -486,7 +685,9 @@ export default function LabOperationsCenterPage() {
                             {canManageAny && <TableCell className="text-right space-x-1">
                               <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip>
                               <AlertDialog open={typeToDelete?.id === type.id} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}>
-                                <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Type</TooltipContent></Tooltip>
+                                <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger>
+                                <TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent>
+                                </Tooltip>
                                 <AlertDialogContent>
                                   <AlertDialogHeader><AlertDialogTitle>Delete "{typeToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>
                                   <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
@@ -508,8 +709,6 @@ export default function LabOperationsCenterPage() {
                 </CardContent>
               </Card>
             </TabsContent>
-             {/* Placeholder for other system-wide tabs */}
-            <TabsContent value="labs" className="mt-6"><Card><CardHeader><CardTitle>Manage Labs</CardTitle></CardHeader><CardContent><p>Lab management UI (list, add, edit, delete labs) will be here.</p></CardContent></Card></TabsContent>
             <TabsContent value="global-closures" className="mt-6"><Card><CardHeader><CardTitle>Global Closures</CardTitle></CardHeader><CardContent><p>Global blackout dates and recurring rules UI will be here.</p></CardContent></Card></TabsContent>
             <TabsContent value="maintenance-log" className="mt-6"><Card><CardHeader><CardTitle>System-Wide Maintenance Log</CardTitle></CardHeader><CardContent><p>Full maintenance log UI will be here.</p></CardContent></Card></TabsContent>
             <TabsContent value="lab-access-requests" className="mt-6"><Card><CardHeader><CardTitle>System-Wide Lab Access Requests</CardTitle></CardHeader><CardContent><p>Lab access requests management UI will be here.</p></CardContent></Card></TabsContent>
@@ -534,7 +733,7 @@ export default function LabOperationsCenterPage() {
 
 
         {isResourceTypeFormDialogOpen && currentUser && (<ResourceTypeFormDialog open={isResourceTypeFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceTypeFormDialogOpen(isOpen); if (!isOpen) setEditingType(null); }} initialType={editingType} onSave={handleSaveResourceType} />)}
-        {/* {isLabFormDialogOpen && currentUser && (<LabFormDialog open={isLabFormDialogOpen} onOpenChange={(isOpen) => { setIsLabFormDialogOpen(isOpen); if (!isOpen) setEditingLab(null); }} initialLab={editingLab} onSave={handleSaveLab} />)} */}
+        {isLabFormDialogOpen && currentUser && (<LabFormDialog open={isLabFormDialogOpen} onOpenChange={(isOpen) => { setIsLabFormDialogOpen(isOpen); if (!isOpen) setEditingLab(null); }} initialLab={editingLab} onSave={handleSaveLab} />)}
         {/* {isDateFormDialogOpen && currentUser && (<BlackoutDateFormDialog open={isDateFormDialogOpen} onOpenChange={setIsDateFormDialogOpen} initialBlackoutDate={editingBlackoutDate} onSave={handleSaveBlackoutDate} labs={labs} currentLabContextId={activeContextId} />)} */}
         {/* {isRecurringFormDialogOpen && currentUser && (<RecurringBlackoutRuleFormDialog open={isRecurringFormDialogOpen} onOpenChange={setIsRecurringFormDialogOpen} initialRule={editingRecurringRule} onSave={handleSaveRecurringRule} labs={labs} currentLabContextId={activeContextId} />)} */}
         {/* {isMaintenanceFormDialogOpen && currentUser && (<MaintenanceRequestFormDialog open={isMaintenanceFormDialogOpen} onOpenChange={(isOpen) => { setIsMaintenanceFormDialogOpen(isOpen); if (!isOpen) setEditingMaintenanceRequest(null);}} initialRequest={editingMaintenanceRequest} onSave={handleSaveMaintenanceRequest} technicians={allTechniciansForMaintenance} resources={allResourcesForCountsAndChecks} currentUserRole={currentUser?.role} labContextId={activeContextId !== GLOBAL_CONTEXT_VALUE ? activeContextId : undefined}/> )} */}
@@ -547,7 +746,7 @@ export default function LabOperationsCenterPage() {
                   setIsManualAddMemberDialogOpen(isOpen);
               }}
               onMembershipUpdate={fetchAllAdminData}
-              performMembershipAction={handleMembershipAction} // Pass the correctly scoped action handler
+              performMembershipAction={handleMembershipAction} 
               preselectedLabId={activeContextId !== GLOBAL_CONTEXT_VALUE ? activeContextId : undefined}
           />
         )} */}
@@ -555,3 +754,4 @@ export default function LabOperationsCenterPage() {
     </TooltipProvider>
   );
 }
+
