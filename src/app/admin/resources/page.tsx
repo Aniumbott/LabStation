@@ -588,7 +588,7 @@ export default function AdminResourcesPage() {
                             <DialogDescription>Refine the list of available lab resources.</DialogDescription>
                             </DialogHeader>
                             <ScrollArea className="max-h-[60vh] mt-4">
-                            <div className="space-y-6 pl-1 pr-1">
+                            <div className="space-y-6 pl-1 pr-2 pb-2">
                                 <div>
                                 <Label htmlFor="resourceSearchDialog">Search (Name/Keyword)</Label>
                                 <div className="relative mt-1">
@@ -716,9 +716,21 @@ export default function AdminResourcesPage() {
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader className="mt-4"><DialogTitle>Filter & Sort Resource Types</DialogTitle></DialogHeader>
                         <ScrollArea className="max-h-[60vh] mt-4">
-                        <div className="space-y-6 pl-1 pr-1">
-                        <div className="relative"><Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="typeSearchDialog" value={tempResourceTypeSearchTerm} onChange={e => setTempResourceTypeSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>
-                        <div><Label htmlFor="typeSortDialog">Sort by</Label><Select value={tempResourceTypeSortBy} onValueChange={setTempResourceTypeSortBy}><SelectTrigger id="typeSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{resourceTypeSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
+                        <div className="space-y-6 pl-1 pr-2 pb-2">
+                            <div>
+                                <Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label>
+                                <div className="relative mt-1">
+                                    <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <Input id="typeSearchDialog" value={tempResourceTypeSearchTerm} onChange={e => setTempResourceTypeSearchTerm(e.target.value)} placeholder="Keyword..." className="h-9 pl-8"/>
+                                </div>
+                            </div>
+                            <div>
+                                <Label htmlFor="typeSortDialog">Sort by</Label>
+                                <Select value={tempResourceTypeSortBy} onValueChange={setTempResourceTypeSortBy}>
+                                    <SelectTrigger id="typeSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger>
+                                    <SelectContent>{resourceTypeSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </div>
                         </div>
                         </ScrollArea>
                         <DialogFooter className="pt-6 border-t"><Button variant="ghost" onClick={resetResourceTypeFilterSortDialog} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button onClick={handleApplyResourceTypeFilterSort}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></DialogFooter>
