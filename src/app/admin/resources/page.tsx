@@ -369,7 +369,7 @@ export default function AdminResourcesPage() {
             }
         });
         const ra = firestorePayload.remoteAccess;
-        const allRemoteAccessEffectivelyNull = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && ra.port === null && !ra.notes;
+        const allRemoteAccessEffectivelyNull = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && (ra.port === undefined || ra.port === null) && !ra.notes;
         if (allRemoteAccessEffectivelyNull) {
             firestorePayload.remoteAccess = undefined;
         }
@@ -563,7 +563,7 @@ export default function AdminResourcesPage() {
       />
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsContent value="resources" className="mt-0">
-            <Card>
+            <Card className="shadow-none">
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <div>
                         <CardTitle className="text-xl">Resource Catalog</CardTitle>
@@ -707,7 +707,7 @@ export default function AdminResourcesPage() {
 
         {canManageResourcesAndTypes && (
             <TabsContent value="types" className="mt-0">
-            <Card>
+            <Card className="shadow-none">
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div><CardTitle className="text-xl">Manage Resource Types</CardTitle><CardDescription>Define categories for lab resources.</CardDescription></div>
                 <div className="flex gap-2 flex-wrap">
@@ -717,7 +717,7 @@ export default function AdminResourcesPage() {
                         <DialogHeader className="mt-4"><DialogTitle>Filter & Sort Resource Types</DialogTitle></DialogHeader>
                         <ScrollArea className="max-h-[60vh] mt-4">
                         <div className="space-y-6 pl-1 pr-2 pb-2">
-                            <div>
+                             <div>
                                 <Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label>
                                 <div className="relative mt-1">
                                     <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
