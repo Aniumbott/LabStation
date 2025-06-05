@@ -20,6 +20,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { UserPlus, Save, Loader2 } from 'lucide-react';
 import type { User, RoleName } from '@/types';
 import { userRolesList } from '@/lib/app-constants';
+import { Separator } from '@/components/ui/separator';
 
 const userFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, "Name cannot exceed 100 characters."),

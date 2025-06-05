@@ -22,6 +22,7 @@ import { Save, PlusCircle, Loader2 } from 'lucide-react';
 import type { RecurringBlackoutRule, DayOfWeek, Lab } from '@/types';
 import { daysOfWeekArray } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 
 
 const recurringBlackoutRuleFormSchema = z.object({
@@ -116,7 +117,7 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <ScrollArea className="max-h-[60vh] mt-4">
-              <div className="space-y-6 pr-1">
+              <div className="space-y-6 pl-1 pr-1">
                 <FormField
                   control={form.control}
                   name="labId"

@@ -19,11 +19,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Save, PlusCircle, Loader2 } from 'lucide-react';
+import { Save, PlusCircle, Loader2, X } from 'lucide-react';
 import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource, RoleName } from '@/types';
 import { maintenanceRequestStatuses } from '@/lib/app-constants';
 import { Timestamp, serverTimestamp } from 'firebase/firestore';
 import { format, parseISO, isValid as isValidDateFn } from 'date-fns';
+import { Separator } from '@/components/ui/separator';
 
 const UNASSIGNED_TECHNICIAN_VALUE = "--unassigned--";
 
@@ -165,7 +166,7 @@ export function MaintenanceRequestFormDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <ScrollArea className="max-h-[60vh] mt-4">
-            <div className="space-y-4 pr-1">
+            <div className="space-y-4 pl-1 pr-1">
                 <FormField
                     control={form.control}
                     name="resourceId"

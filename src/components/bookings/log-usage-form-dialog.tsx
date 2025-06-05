@@ -24,6 +24,7 @@ import { BookingUsageOutcomes } from '@/types';
 import { format, parseISO, isValid } from 'date-fns';
 import { ScrollArea } from '../ui/scroll-area';
 import { Save } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 
 const logUsageFormSchema = z.object({
   actualStartTime: z.string().optional().refine(val => !val || isValid(parseISO(val)), {
@@ -113,7 +114,7 @@ export function LogUsageFormDialog({ booking, open, onOpenChange, onSaveUsage }:
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <ScrollArea className="max-h-[60vh] mt-4">
-              <div className="space-y-4 pr-1">
+              <div className="space-y-4 pl-1 pr-1">
                 <FormField
                   control={form.control}
                   name="actualStartTime"

@@ -3,7 +3,7 @@
 
 import React, { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams }from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, Search as SearchIcon, FilterX, Eye, Loader2, ListFilter, Info, Clock, Calendar as CalendarIconLucide, User as UserIcon, Package as ResourceIcon, CheckCircle2, Save, CheckCircle, AlertCircle, Users, ToggleLeft, ToggleRight } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, Search as SearchIcon, FilterX, Eye, Loader2, ListFilter, Info, Clock, Calendar as CalendarIconLucide, User as UserIcon, Package as ResourceIcon, CheckCircle2, Save, CheckCircle, AlertCircle, Users, ToggleLeft, ToggleRight, X } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -40,6 +40,7 @@ import { useAuth } from '@/components/auth-context';
 import { db, auth } from '@/lib/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp, Timestamp, getDoc, orderBy, limit, writeBatch, addDoc } from 'firebase/firestore';
 import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 
 
 function BookingsPageLoader() {
@@ -783,7 +784,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                     <DialogContent className="w-full sm:max-w-lg">
                         <DialogHeader><DialogTitle>Filter Bookings</DialogTitle><DialogDescription>Refine your list of bookings.</DialogDescription></DialogHeader>
                         <ScrollArea className="max-h-[60vh] mt-4">
-                            <div className="space-y-6 pr-1">
+                            <div className="space-y-6 pl-1 pr-1">
                                 <div>
                                     <Label htmlFor="bookingCalendarDialogDate">Filter by Specific Date (Optional)</Label>
                                     <div className="flex justify-center items-center rounded-md border p-2 mt-1"><Calendar mode="single" selected={tempSelectedDateForDialog} onSelect={(date) => setTempSelectedDateForDialog(date ? startOfDay(date) : undefined)} month={currentCalendarMonthInDialog} onMonthChange={setCurrentCalendarMonthInDialog} className="rounded-md" classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }} footer={tempSelectedDateForDialog && <Button variant="ghost" size="sm" onClick={() => { setTempSelectedDateForDialog(undefined); setCurrentCalendarMonthInDialog(startOfDay(new Date())); }} className="w-full mt-2 text-xs"><FilterX className="mr-2 h-4 w-4" /> Clear Date Selection</Button>} /></div>
@@ -1043,7 +1044,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUser, allAvailableR
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleRHFSubmit)}>
         <ScrollArea className="max-h-[60vh] mt-4">
-          <div className="space-y-4 pr-1">
+          <div className="space-y-4 pl-1 pr-1">
 
             <FormField
               control={form.control}

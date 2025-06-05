@@ -35,7 +35,6 @@ import {
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -73,6 +72,7 @@ import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/layout/page-header';
 import { addAuditLog } from '@/lib/firestore-helpers';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Separator } from '@/components/ui/separator';
 
 
 type ResourceTypeSortableColumn = 'name' | 'resourceCount' | 'description';
@@ -590,7 +590,7 @@ export default function AdminResourcesPage() {
                             <DialogDescription>Refine the list of available lab resources.</DialogDescription>
                             </DialogHeader>
                             <ScrollArea className="max-h-[60vh] mt-4">
-                            <div className="space-y-6 pr-1">
+                            <div className="space-y-6 pl-1 pr-1">
                                 <div>
                                 <Label htmlFor="resourceSearchDialog">Search (Name/Keyword)</Label>
                                 <div className="relative mt-1">
@@ -654,7 +654,7 @@ export default function AdminResourcesPage() {
                   {isLoadingData && allResourcesDataSource.length === 0 ? (
                     <div className="flex justify-center items-center py-10 text-muted-foreground"><Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" /> Loading resources...</div>
                   ) : filteredResources.length > 0 ? (
-                    <div className="overflow-x-auto rounded-md border">
+                    <div className="overflow-x-auto rounded-lg border">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -670,12 +670,12 @@ export default function AdminResourcesPage() {
                           {filteredResources.map((resource) => (
                             <TableRow key={resource.id}>
                               <TableCell>
-                                <Link href={`/resources/${resource.id}`}>
+                                <Link href={`/admin/resources/${resource.id}`}>
                                   <Image src={resource.imageUrl || 'https://placehold.co/100x100.png'} alt={resource.name} width={40} height={40} className="rounded-md object-cover h-10 w-10 hover:opacity-80 transition-opacity" data-ai-hint="lab equipment"/>
                                 </Link>
                               </TableCell>
                               <TableCell className="font-medium">
-                                <Link href={`/resources/${resource.id}`} className="hover:text-primary hover:underline">{resource.name}</Link>
+                                <Link href={`/admin/resources/${resource.id}`} className="hover:text-primary hover:underline">{resource.name}</Link>
                               </TableCell>
                               <TableCell>{resource.resourceTypeName || 'N/A'}</TableCell>
                               <TableCell>{resource.labName || 'N/A'}</TableCell>
@@ -718,12 +718,12 @@ export default function AdminResourcesPage() {
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader><DialogTitle>Filter & Sort Resource Types</DialogTitle></DialogHeader>
                         <ScrollArea className="max-h-[60vh] mt-4">
-                        <div className="space-y-6 pr-1">
+                        <div className="space-y-6 pl-1 pr-1">
                         <div className="relative"><Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="typeSearchDialog" value={tempResourceTypeSearchTerm} onChange={e => setTempResourceTypeSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>
                         <div><Label htmlFor="typeSortDialog">Sort by</Label><Select value={tempResourceTypeSortBy} onValueChange={setTempResourceTypeSortBy}><SelectTrigger id="typeSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{resourceTypeSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
                         </div>
                         </ScrollArea>
-                        <DialogFooter className="pt-6 border-t"><Button variant="ghost" onClick={resetResourceTypeFilterSortDialog} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button onClick={handleApplyResourceTypeFilterSort}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></DialogFooter>
+                        <DialogFooter className="pt-6 border-t"><Button variant="ghost" onClick={resetResourceTypeFilterSortDialog} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset Dialog Filters</Button><Button onClick={handleApplyResourceTypeFilterSort}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply Filters</Button></DialogFooter>
                     </DialogContent>
                     </Dialog>
                     <Button onClick={handleOpenNewResourceTypeDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Type</Button>
@@ -732,7 +732,7 @@ export default function AdminResourcesPage() {
                 <CardContent className="p-0">
                 {isLoadingData && filteredResourceTypesForDisplay.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
                 ) : filteredResourceTypesForDisplay.length > 0 ? (
-                    <div className="overflow-x-auto rounded-md border">
+                    <div className="overflow-x-auto rounded-lg border">
                     <Table>
                         <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
                         <TableBody>{filteredResourceTypesForDisplay.map(type => (
@@ -744,9 +744,7 @@ export default function AdminResourcesPage() {
                               <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip></TooltipProvider>
                               <AlertDialog open={!!typeToDelete && typeToDelete.id === type.id} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}>
                                   <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                                      <AlertDialogTrigger asChild>
                                           <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}><Trash2 className="h-4 w-4"/></Button>
-                                      </AlertDialogTrigger>
                                   </TooltipTrigger><TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent></Tooltip></TooltipProvider>
                                   <AlertDialogContent>
                                       <AlertDialogHeader><AlertDialogTypeTitle>Delete "{typeToDelete?.name}"?</AlertDialogTypeTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>

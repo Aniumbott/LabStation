@@ -34,6 +34,7 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
 import { AuditLogDetailsDialog } from '@/components/admin/audit-log-details-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 
 const auditActionTypesForFilter: AuditActionType[] = [
   'USER_CREATED', 'USER_UPDATED', 'USER_DELETED', 'USER_APPROVED', 'USER_REJECTED',
@@ -181,7 +182,7 @@ export default function AuditLogPage() {
                 </DialogDescription>
               </DialogHeader>
               <ScrollArea className="max-h-[60vh] mt-4">
-                <div className="space-y-4 pr-1">
+                <div className="space-y-4 pl-1 pr-1">
                   <div>
                     <Label htmlFor="auditSearchDialog">Search (User, Action, Entity, Details)</Label>
                     <div className="relative mt-1">

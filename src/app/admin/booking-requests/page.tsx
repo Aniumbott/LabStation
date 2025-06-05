@@ -42,6 +42,7 @@ import { cn, formatDateSafe } from '@/lib/utils';
 import { db, auth } from '@/lib/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy, Timestamp, serverTimestamp } from 'firebase/firestore';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 
 
 const bookingStatusesForApprovalFilter: Array<'all' | 'Pending' | 'Waitlisted'> = ['all', 'Pending', 'Waitlisted'];
@@ -354,7 +355,7 @@ export default function BookingRequestsPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <ScrollArea className="max-h-[60vh] mt-4">
-                  <div className="space-y-4 pr-1">
+                  <div className="space-y-4 pl-1 pr-1">
                     <div>
                       <Label htmlFor="requestSearchDialog">Search (Resource/User/Notes)</Label>
                         <div className="relative mt-1">

@@ -25,6 +25,7 @@ import type { Resource, ResourceStatus, ResourceType, Lab } from '@/types';
 import { resourceStatusesList } from '@/lib/app-constants';
 import { parseISO, format, isValid as isValidDateFn } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
+import { Separator } from '@/components/ui/separator';
 
 const VALID_REMOTE_PROTOCOLS = ['RDP', 'SSH', 'VNC', 'Other'] as const;
 const NONE_PROTOCOL_VALUE = "--none-protocol--";
@@ -200,7 +201,7 @@ export function ResourceFormDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <ScrollArea className="max-h-[70vh] mt-4">
-            <div className="space-y-6 pr-1">
+            <div className="space-y-6 pl-1 pr-1">
                 <FormField
                   control={form.control}
                   name="name"

@@ -21,6 +21,7 @@ import type { Resource, UnavailabilityPeriod } from '@/types';
 import { format, startOfDay, isValid as isValidDateFn, parseISO, isBefore, isSameDay, max, min, formatISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Trash2, PlusCircle, Loader2, Save } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 
 interface ManageUnavailabilityDialogProps {
   resource: Resource;
@@ -125,7 +126,7 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="max-h-[65vh] mt-4">
-          <div className="space-y-6 pr-1">
+          <div className="space-y-6 pl-1 pr-1">
             <div>
               <h3 className="text-lg font-semibold mb-2">Add New Unavailability Period</h3>
               <div className="space-y-4 p-4 border rounded-md">

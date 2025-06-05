@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Save, PlusCircle, Loader2 } from 'lucide-react';
 import type { ResourceType } from '@/types';
+import { Separator } from '@/components/ui/separator';
 
 const resourceTypeFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(50, { message: 'Name cannot exceed 50 characters.' }),

@@ -18,6 +18,7 @@ import { Calendar, Clock, User, Info, Tag, StickyNote, Activity, CheckCircle, Al
 import { cn } from '@/lib/utils';
 import { LogUsageFormDialog } from './log-usage-form-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 
 interface BookingDetailsDialogProps {
   booking: Booking | null;
@@ -104,7 +105,7 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
             </DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh] mt-4"> 
-            <div className="space-y-3 text-sm pr-1">
+            <div className="space-y-3 text-sm pl-1 pr-1">
               <div className="flex items-center">
                 <Info className="mr-3 h-5 w-5 text-muted-foreground" />
                 <span className="font-medium text-muted-foreground w-28">Resource:</span>
@@ -146,7 +147,7 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
 
             {currentBookingDetails.usageDetails && (
               <>
-                <div className="space-y-3 text-sm pr-1 pt-3 mt-3 border-t">
+                <div className="space-y-3 text-sm pl-1 pr-1 pt-3 mt-3 border-t">
                   <h3 className="text-md font-semibold flex items-center">
                     <Activity className="mr-2 h-5 w-5 text-primary" /> Usage Details
                   </h3>

@@ -25,7 +25,6 @@ import {
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -55,6 +54,7 @@ import { addNotification, addAuditLog } from '@/lib/firestore-helpers';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, Timestamp, query, orderBy, where, writeBatch as firestoreWriteBatch } from 'firebase/firestore';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 
 
 const userStatusesListForFilter: (UserStatus | 'all')[] = ['all', 'active', 'pending_approval', 'suspended'];
@@ -406,7 +406,7 @@ export default function UsersPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <ScrollArea className="max-h-[60vh] mt-4">
-                  <div className="space-y-4 pr-1">
+                  <div className="space-y-4 pl-1 pr-1">
                     <div>
                       <Label htmlFor="userSearchDialog">Search (Name/Email)</Label>
                       <div className="relative mt-1">

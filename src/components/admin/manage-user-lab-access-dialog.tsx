@@ -23,6 +23,7 @@ import { useAuth } from '@/components/auth-context';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { manageLabMembership_SA } from '@/lib/firestore-helpers';
+import { Separator } from '@/components/ui/separator';
 
 interface ManageUserLabAccessDialogProps {
   targetUser: User | null;
@@ -276,7 +277,7 @@ export function ManageUserLabAccessDialog({
             </div>
         ) : (
           <ScrollArea className="max-h-[60vh] mt-4">
-            <div className="space-y-0 pr-1"> 
+            <div className="space-y-0 pl-1 pr-1"> 
               <Table>
                 <TableHeader><TableRow><TableHead>Lab Name</TableHead><TableHead>Current Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                 <TableBody>
