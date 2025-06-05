@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter, Clock, Info, Loader2, User as UserIcon, Package as ResourceIcon, CheckCircle2 } from 'lucide-react';
+import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, ListFilter, Clock, Info, Loader2, User as UserIcon, Package as ResourceIcon, CheckCircle2, StickyNote } from 'lucide-react';
 import type { Booking, Resource, User, ResourceStatus } from '@/types';
 import { addNotification, addAuditLog, processWaitlistForResource } from '@/lib/firestore-helpers';
 import { useAuth } from '@/components/auth-context';
@@ -438,7 +438,7 @@ export default function BookingRequestsPage() {
                       <TableHead><UserIcon className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Booked By</TableHead>
                       <TableHead><Clock className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Date & Time</TableHead>
                       <TableHead><Info className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Status</TableHead>
-                      <TableHead>Notes</TableHead>
+                      <TableHead><StickyNote className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Notes</TableHead>
                       <TableHead className="text-right w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
