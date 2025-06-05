@@ -209,7 +209,7 @@ export default function ProfilePage() {
                 <div>
                   <Label htmlFor="profileEmail" className="font-medium">Email Address</Label>
                   <div className="flex items-center mt-1">
-                    <Input id="profileEmail" type="email" value={currentUser.email} readOnly className="bg-muted/10 flex-grow" />
+                    <Input id="profileEmail" type="email" value={currentUser.email} readOnly disabled className="bg-muted/10 flex-grow" />
                   </div>
                 </div>
               </div>
