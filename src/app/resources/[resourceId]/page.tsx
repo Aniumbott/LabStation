@@ -585,9 +585,10 @@ export default function ResourceDetailPage() {
                         </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                        <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
                             Delete
-                        </AlertDialogAction>
+                          </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                   )}
