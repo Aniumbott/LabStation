@@ -715,7 +715,7 @@ export default function AdminResourcesPage() {
             <TabsContent value="types" className="mt-0">
             <Card className="shadow-none">
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                <div><CardTitle className="text-xl">Manage Resource Types</CardTitle><CardDescription>Define categories for lab resources.</CardDescription></div>
+                <div><CardTitle className="text-xl">Resource Types</CardTitle><CardDescription>Define categories for lab resources.</CardDescription></div>
                 <div className="flex gap-2 flex-wrap">
                     <Dialog open={isResourceTypeFilterSortDialogOpen} onOpenChange={setIsResourceTypeFilterSortDialogOpen}>
                     <DialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter {activeResourceTypeFilterSortCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeResourceTypeFilterSortCount}</Badge>}</Button></DialogTrigger>
