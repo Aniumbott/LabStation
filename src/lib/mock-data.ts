@@ -1,4 +1,3 @@
 
-// This file is being deleted.
-// Its contents have been moved to src/lib/app-constants.ts and src/lib/firestore-helpers.ts
-// All imports will be updated.
+// This file is no longer needed and can be deleted.
+// Its contents were moved to app-constants.ts or are no longer used.

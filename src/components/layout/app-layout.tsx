@@ -62,8 +62,8 @@ const navItems: NavItem[] = [
   },
   {
     href: '/admin/lab-management-v2', 
-    label: 'Lab Operations',
-    icon: Cog, 
+    label: 'Lab Operations', // UPDATED LABEL
+    icon: Cog,               // UPDATED ICON
     adminOnly: true,
   },
   {

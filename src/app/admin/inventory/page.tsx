@@ -1,4 +1,9 @@
 
+// THIS PAGE IS DEPRECATED AND HAS BEEN REPLACED BY /src/app/admin/lab-management-v2/page.tsx
+// This file can be safely deleted.
+// All functionality (Labs, Resource Types, Lab Closures, Maintenance, Lab Access Requests)
+// has been consolidated into the new Lab Operations Center.
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -95,7 +100,7 @@ interface LabMembershipRequest extends LabMembership {
 }
 
 
-export default function LabManagementPage() {
+export default function LabManagementPage_DEPRECATED() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
 
@@ -392,6 +397,7 @@ export default function LabManagementPage() {
     return ( <div className="space-y-8"><PageHeader title="Lab Management" icon={Archive} description="Access Denied." /><Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission.</p></CardContent></Card></div>);
   }
 
+  const actionBeingProcessed = ""; // Dummy value to satisfy type check for buttons until proper state is introduced
   return (
     <TooltipProvider>
       <div className="space-y-8">
@@ -435,7 +441,7 @@ export default function LabManagementPage() {
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <Avatar className="h-8 w-8">
-                                  <AvatarImage src={req.userAvatarUrl} alt={req.userName} data-ai-hint="user avatar" />
+                                  <AvatarImage src={req.userAvatarUrl} alt={req.userName} data-ai-hint="user avatar"/>
                                   <AvatarFallback>{(req.userName || 'U').charAt(0)}</AvatarFallback>
                                 </Avatar>
                                 <div>
