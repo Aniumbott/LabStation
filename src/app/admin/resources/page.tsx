@@ -546,8 +546,14 @@ export default function AdminResourcesPage() {
   const pageHeaderActions = (
     <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="inline-flex h-9 items-center justify-center rounded-md bg-muted p-0.5 text-muted-foreground">
-            <TabsTrigger value="resources" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Resources</TabsTrigger>
-            {canManageResourcesAndTypes && (<TabsTrigger value="types" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Types</TabsTrigger>)}
+            <TabsTrigger value="resources" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex items-center gap-2">
+              <Package className="h-4 w-4" /> Resources
+            </TabsTrigger>
+            {canManageResourcesAndTypes && (
+            <TabsTrigger value="types" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex items-center gap-2">
+              <ListChecks className="h-4 w-4" /> Types
+            </TabsTrigger>
+            )}
         </TabsList>
     </Tabs>
   );
@@ -695,7 +701,7 @@ export default function AdminResourcesPage() {
                       <CardContent>
                         <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
                         <p className="text-lg font-medium">{activeResourceFilterCount > 0 ? "No Resources Match Filters" : "No Resources Found"}</p>
-                        <p className="text-sm mb-4">{activeResourceFilterCount > 0 ? "Try adjusting your filter or search criteria." : (canManageResourcesAndTypes ? "There are currently no resources in the catalog. Add one to get started!" : "There are currently no resources accessible to you. Request lab access via your dashboard or contact an admin.")}</p>
+                        <p className="text-sm mb-4">{activeResourceFilterCount > 0 ? "Try adjusting your filter or search criteria." : (canManageResourcesAndTypes ? "There are currently no resources in the catalog. Add one to get started!" : "There are currently no resources accessible to you. Request lab access via your dashboard.")}</p>
                         {activeResourceFilterCount > 0 ? (<Button variant="outline" onClick={resetAllActiveResourcePageFilters}><FilterX className="mr-2 h-4 w-4" /> Reset All Filters</Button>
                         ): (!isLoadingData && allResourcesDataSource.length === 0 && canManageResourcesAndTypes && (<Button onClick={handleOpenNewResourceDialog}><PlusCircle className="mr-2 h-4 w-4" /> Add First Resource</Button>))}
                       </CardContent>
