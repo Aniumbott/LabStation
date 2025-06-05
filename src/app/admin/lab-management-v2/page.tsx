@@ -1080,7 +1080,15 @@ export default function LabOperationsCenterPage() {
                             <TableCell className="text-center">{(lab as any).resourceCount ?? 0}</TableCell>
                             <TableCell className="text-center">{(lab as any).memberCount ?? 0}</TableCell>
                             {canManageAny && <TableCell className="text-right space-x-1">
-                               <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setActiveContextId(lab.id)}><Settings2 className="mr-1.5 h-3.5 w-3.5"/>Manage</Button>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setActiveContextId(lab.id)}>
+                                      <Settings2 className="h-4 w-4"/>
+                                      <span className="sr-only">Manage Lab</span>
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent><p>Manage Lab</p></TooltipContent>
+                                </Tooltip>
                               <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setEditingLab(lab); setIsLabFormDialogOpen(true);}} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Lab Details</TooltipContent></Tooltip>
                               <AlertDialog open={labToDelete?.id === lab.id} onOpenChange={(isOpen) => !isOpen && setLabToDelete(null)}>
                                 <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabToDelete(lab)} disabled={isLoadingData || ((lab as any).resourceCount ?? 0) > 0 || ((lab as any).memberCount ?? 0) > 0}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger>
