@@ -40,7 +40,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle as AlertDialogTypeTitle,
+  AlertDialogTitle as AlertDialogTypeTitle, 
 } from "@/components/ui/alert-dialog";
 import { Calendar as ShadCNCalendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
@@ -52,6 +52,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Added Tabs imports
 import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, Timestamp as FirestoreTimestamp } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { db } from '@/lib/firebase';
@@ -91,6 +92,7 @@ export default function AdminResourcesPage() {
   const [fetchedLabs, setFetchedLabs] = useState<Lab[]>([]);
   const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [activeTab, setActiveTab] = useState("resources"); // State for active tab
 
   const [isResourceFormDialogOpen, setIsResourceFormDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
@@ -107,7 +109,6 @@ export default function AdminResourcesPage() {
   const [activeResourceFilterLabId, setActiveResourceFilterLabId] = useState<string>('all');
   const [activeResourceSelectedDate, setActiveResourceSelectedDate] = useState<Date | undefined>(undefined);
 
-  // State for Resource Type Management
   const [typeToDelete, setTypeToDelete] = useState<ResourceType | null>(null);
   const [isResourceTypeFormDialogOpen, setIsResourceTypeFormDialogOpen] = useState(false);
   const [editingResourceType, setEditingResourceType] = useState<ResourceType | null>(null);
@@ -134,7 +135,7 @@ export default function AdminResourcesPage() {
       setFetchedLabs(rLabs);
 
       let activeUserLabIds: string[] = [];
-      if (currentUser && currentUser.role !== 'Admin') {
+      if (currentUser && currentUser.id && currentUser.role !== 'Admin') {
         const membershipsQuery = query(collection(db, 'labMemberships'), where('userId', '==', currentUser.id), where('status', '==', 'active'));
         const membershipsSnapshot = await getDocs(membershipsQuery);
         const memberships = membershipsSnapshot.docs.map(mDoc => mDoc.data() as LabMembership);
@@ -286,7 +287,8 @@ export default function AdminResourcesPage() {
 
   const handleOpenNewResourceDialog = useCallback(() => {
     if (fetchedResourceTypes.length === 0 && canManageResourcesAndTypes) {
-        toast({ title: "No Resource Types Defined", description: "Please add resource types below before adding a resource.", variant: "destructive" });
+        toast({ title: "No Resource Types Defined", description: "Please add resource types before adding a resource.", variant: "destructive" });
+        setActiveTab("resource-types");
         return;
     }
     if (fetchedLabs.length === 0 && canManageResourcesAndTypes) {
@@ -411,8 +413,6 @@ export default function AdminResourcesPage() {
     activeResourceSelectedDate !== undefined
   ].filter(Boolean).length, [activeResourceSearchTerm, activeResourceFilterTypeId, activeResourceFilterLabId, activeResourceSelectedDate]);
 
-
-  // Resource Type Management Logic
   useEffect(() => {
     if (isResourceTypeFilterSortDialogOpen) {
         setTempResourceTypeSearchTerm(activeResourceTypeSearchTerm);
@@ -539,204 +539,224 @@ export default function AdminResourcesPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Resources"
+        title="Resources & Types"
         description={pageDescription}
         icon={ClipboardList}
-        actions={
-          <div className="flex items-center gap-2">
-            <Dialog open={isResourceFilterDialogOpen} onOpenChange={setIsResourceFilterDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <FilterIcon className="mr-2 h-4 w-4" />
-                  Filter Resources
-                  {activeResourceFilterCount > 0 && (
-                    <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
-                      {activeResourceFilterCount}
-                    </Badge>
-                  )}
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="w-full max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>Filter Resources</DialogTitle>
-                  <DialogDescription>Refine the list of available lab resources.</DialogDescription>
-                </DialogHeader>
-                <Separator className="my-4" />
-                <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
-                  <div className="space-y-6 py-4 px-1">
-                    <div>
-                      <Label htmlFor="resourceSearchDialog">Search (Name/Keyword)</Label>
-                      <div className="relative mt-1">
-                          <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                          <Input id="resourceSearchDialog" type="search" placeholder="Name, manufacturer, model, type, lab..." value={tempResourceSearchTerm} onChange={(e) => setTempResourceSearchTerm(e.target.value)} className="h-9 pl-8"/>
-                      </div>
-                    </div>
-                    <Separator />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="resourceTypeFilterDialog">Type</Label>
-                        <Select value={tempResourceFilterTypeId} onValueChange={setTempResourceFilterTypeId} disabled={fetchedResourceTypes.length === 0}>
-                          <SelectTrigger id="resourceTypeFilterDialog" className="h-9 mt-1"><SelectValue placeholder={fetchedResourceTypes.length > 0 ? "Filter by Type" : "No types available"} /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Types</SelectItem>
-                            {fetchedResourceTypes.map(type => (<SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>))}
-                          </SelectContent>
-                        </Select>
-                         {fetchedResourceTypes.length === 0 && <p className="text-xs text-muted-foreground mt-1">No resource types found. Add types below or in Lab Operations.</p>}
-                      </div>
-                      <div>
-                        <Label htmlFor="resourceLabFilterDialog">Lab</Label>
-                        <Select value={tempResourceFilterLabId} onValueChange={setTempResourceFilterLabId} disabled={fetchedLabs.length === 0}>
-                          <SelectTrigger id="resourceLabFilterDialog" className="h-9 mt-1"><SelectValue placeholder={fetchedLabs.length > 0 ? "Filter by Lab" : "No labs available"} /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Labs</SelectItem>
-                            { (currentUser?.role === 'Admin' ? fetchedLabs : fetchedLabs.filter(lab => userLabMemberships.some(m => m.labId === lab.id && m.status === 'active')))
-                                .map(lab => (<SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>))}
-                          </SelectContent>
-                        </Select>
-                        {fetchedLabs.length === 0 && <p className="text-xs text-muted-foreground mt-1">No labs found. Add labs in Lab Operations.</p>}
-                        {currentUser?.role !== 'Admin' && fetchedLabs.filter(lab => userLabMemberships.some(m => m.labId === lab.id && m.status === 'active')).length === 0 && fetchedLabs.length > 0 &&
-                            <p className="text-xs text-muted-foreground mt-1">You currently have no active lab memberships. Request access via your dashboard.</p>}
-                      </div>
-                    </div>
-                    <Separator />
-                    <div>
-                        <Label className="mb-2 block text-sm font-medium">Available On (Optional)</Label>
-                        <div className="flex justify-center items-center rounded-md border p-2">
-                          <ShadCNCalendar mode="single" selected={tempResourceSelectedDate} onSelect={setTempResourceSelectedDate} month={currentMonthInResourceDialog} onMonthChange={setCurrentMonthInResourceDialog} disabled={(date) => date < startOfDay(new Date()) } footer={ tempResourceSelectedDate && <Button variant="ghost" size="sm" onClick={() => { setTempResourceSelectedDate(undefined); setCurrentMonthInResourceDialog(startOfDay(new Date()));} } className="w-full mt-2 text-xs"><FilterX className="mr-2 h-4 w-4" /> Reset Date Filter</Button>} classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }} />
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">Filters for resources with status 'Working' on selected date, excluding unavailability.</p>
-                    </div>
-                  </div>
-                </ScrollArea>
-                <DialogFooter className="pt-6 border-t mt-4">
-                   <Button variant="ghost" onClick={resetResourceDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters</Button>
-                  <Button variant="outline" onClick={() => setIsResourceFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
-                  <Button onClick={handleApplyResourceDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply Filters</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-            {canManageResourcesAndTypes && (
-                <Button onClick={handleOpenNewResourceDialog}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Resource
-                </Button>
-            )}
-          </div>
-        }
       />
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="resources">Manage Resources</TabsTrigger>
+          <TabsTrigger value="resource-types" disabled={!canManageResourcesAndTypes}>Manage Resource Types</TabsTrigger>
+        </TabsList>
 
-      {isLoadingData && allResourcesDataSource.length === 0 ? (
-        <div className="flex justify-center items-center py-10 text-muted-foreground"><Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" /> Loading resources...</div>
-      ) : filteredResources.length > 0 ? (
-        <div className="overflow-x-auto rounded-lg border shadow-sm">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[60px]">Image</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Lab</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right w-[100px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredResources.map((resource) => (
-                <TableRow key={resource.id}>
-                  <TableCell>
-                    <Link href={`/admin/resources/${resource.id}`}>
-                      <Image src={resource.imageUrl || 'https://placehold.co/100x100.png'} alt={resource.name} width={40} height={40} className="rounded-md object-cover h-10 w-10 hover:opacity-80 transition-opacity" data-ai-hint="lab equipment"/>
-                    </Link>
-                  </TableCell>
-                  <TableCell className="font-medium">
-                     <Link href={`/admin/resources/${resource.id}`} className="hover:text-primary hover:underline">{resource.name}</Link>
-                  </TableCell>
-                  <TableCell>{resource.resourceTypeName || 'N/A'}</TableCell>
-                  <TableCell>{resource.labName || 'N/A'}</TableCell>
-                  <TableCell>{getResourceStatusBadge(resource.status)}</TableCell>
-                  <TableCell className="text-right">
-                    <Button asChild size="sm" variant="default" disabled={resource.status !== 'Working'} className="h-8 text-xs">
-                      <Link href={`/bookings?resourceId=${resource.id}${activeResourceSelectedDate ? `&date=${format(activeResourceSelectedDate, 'yyyy-MM-dd')}`: ''}`}>
-                        <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />Book
-                      </Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      ) : (
-         <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
-          <CardContent>
-            <ClipboardList className="mx-auto h-12 w-12 mb-4 opacity-50" />
-            <p className="text-lg font-medium">{activeResourceFilterCount > 0 ? "No Resources Match Filters" : "No Resources Found"}</p>
-            <p className="text-sm mb-4">{activeResourceFilterCount > 0 ? "Try adjusting your filter or search criteria." : (canManageResourcesAndTypes ? "There are currently no resources in the catalog. Add one to get started!" : "There are currently no resources accessible to you. Request lab access via your dashboard or contact an admin.")}</p>
-            {activeResourceFilterCount > 0 ? (<Button variant="outline" onClick={resetAllActiveResourcePageFilters}><FilterX className="mr-2 h-4 w-4" /> Reset All Filters</Button>
-            ): (!isLoadingData && allResourcesDataSource.length === 0 && canManageResourcesAndTypes && (<Button onClick={handleOpenNewResourceDialog}><PlusCircle className="mr-2 h-4 w-4" /> Add First Resource</Button>))}
-          </CardContent>
-        </Card>
-      )}
+        <TabsContent value="resources" className="mt-6">
+            <Card>
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <div>
+                        <CardTitle className="text-xl">Resource Catalog</CardTitle>
+                        <CardDescription>View and manage all lab resources.</CardDescription>
+                    </div>
+                     <div className="flex items-center gap-2 flex-wrap">
+                        <Dialog open={isResourceFilterDialogOpen} onOpenChange={setIsResourceFilterDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                            <FilterIcon className="mr-2 h-4 w-4" />
+                            Filter Resources
+                            {activeResourceFilterCount > 0 && (
+                                <Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">
+                                {activeResourceFilterCount}
+                                </Badge>
+                            )}
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="w-full max-w-lg">
+                            <DialogHeader>
+                            <DialogTitle>Filter Resources</DialogTitle>
+                            <DialogDescription>Refine the list of available lab resources.</DialogDescription>
+                            </DialogHeader>
+                            <Separator className="my-4" />
+                            <ScrollArea className="max-h-[65vh] overflow-y-auto pr-2">
+                            <div className="space-y-6 py-4 px-1">
+                                <div>
+                                <Label htmlFor="resourceSearchDialog">Search (Name/Keyword)</Label>
+                                <div className="relative mt-1">
+                                    <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <Input id="resourceSearchDialog" type="search" placeholder="Name, manufacturer, model, type, lab..." value={tempResourceSearchTerm} onChange={(e) => setTempResourceSearchTerm(e.target.value)} className="h-9 pl-8"/>
+                                </div>
+                                </div>
+                                <Separator />
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <Label htmlFor="resourceTypeFilterDialog">Type</Label>
+                                    <Select value={tempResourceFilterTypeId} onValueChange={setTempResourceFilterTypeId} disabled={fetchedResourceTypes.length === 0}>
+                                    <SelectTrigger id="resourceTypeFilterDialog" className="h-9 mt-1"><SelectValue placeholder={fetchedResourceTypes.length > 0 ? "Filter by Type" : "No types available"} /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Types</SelectItem>
+                                        {fetchedResourceTypes.map(type => (<SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>))}
+                                    </SelectContent>
+                                    </Select>
+                                    {fetchedResourceTypes.length === 0 && <p className="text-xs text-muted-foreground mt-1">No resource types found. Add types in the 'Resource Types' tab.</p>}
+                                </div>
+                                <div>
+                                    <Label htmlFor="resourceLabFilterDialog">Lab</Label>
+                                    <Select value={tempResourceFilterLabId} onValueChange={setTempResourceFilterLabId} disabled={fetchedLabs.length === 0}>
+                                    <SelectTrigger id="resourceLabFilterDialog" className="h-9 mt-1"><SelectValue placeholder={fetchedLabs.length > 0 ? "Filter by Lab" : "No labs available"} /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Labs</SelectItem>
+                                        { (currentUser?.role === 'Admin' ? fetchedLabs : fetchedLabs.filter(lab => userLabMemberships.some(m => m.labId === lab.id && m.status === 'active')))
+                                            .map(lab => (<SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>))}
+                                    </SelectContent>
+                                    </Select>
+                                    {fetchedLabs.length === 0 && <p className="text-xs text-muted-foreground mt-1">No labs found. Add labs in Lab Operations.</p>}
+                                    {currentUser?.role !== 'Admin' && fetchedLabs.filter(lab => userLabMemberships.some(m => m.labId === lab.id && m.status === 'active')).length === 0 && fetchedLabs.length > 0 &&
+                                        <p className="text-xs text-muted-foreground mt-1">You currently have no active lab memberships. Request access via your dashboard.</p>}
+                                </div>
+                                </div>
+                                <Separator />
+                                <div>
+                                    <Label className="mb-2 block text-sm font-medium">Available On (Optional)</Label>
+                                    <div className="flex justify-center items-center rounded-md border p-2">
+                                    <ShadCNCalendar mode="single" selected={tempResourceSelectedDate} onSelect={setTempResourceSelectedDate} month={currentMonthInResourceDialog} onMonthChange={setCurrentMonthInResourceDialog} disabled={(date) => date < startOfDay(new Date()) } footer={ tempResourceSelectedDate && <Button variant="ghost" size="sm" onClick={() => { setTempResourceSelectedDate(undefined); setCurrentMonthInResourceDialog(startOfDay(new Date()));} } className="w-full mt-2 text-xs"><FilterX className="mr-2 h-4 w-4" /> Reset Date Filter</Button>} classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }} />
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">Filters for resources with status 'Working' on selected date, excluding unavailability.</p>
+                                </div>
+                            </div>
+                            </ScrollArea>
+                            <DialogFooter className="pt-6 border-t mt-4">
+                            <Button variant="ghost" onClick={resetResourceDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters</Button>
+                            <Button variant="outline" onClick={() => setIsResourceFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
+                            <Button onClick={handleApplyResourceDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply Filters</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                        </Dialog>
+                        {canManageResourcesAndTypes && (
+                            <Button onClick={handleOpenNewResourceDialog} size="sm">
+                            <PlusCircle className="mr-2 h-4 w-4" /> Add Resource
+                            </Button>
+                        )}
+                    </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {isLoadingData && allResourcesDataSource.length === 0 ? (
+                    <div className="flex justify-center items-center py-10 text-muted-foreground"><Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" /> Loading resources...</div>
+                  ) : filteredResources.length > 0 ? (
+                    <div className="overflow-x-auto rounded-lg border shadow-sm">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[60px]">Image</TableHead>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Lab</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right w-[100px]">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredResources.map((resource) => (
+                            <TableRow key={resource.id}>
+                              <TableCell>
+                                <Link href={`/admin/resources/${resource.id}`}>
+                                  <Image src={resource.imageUrl || 'https://placehold.co/100x100.png'} alt={resource.name} width={40} height={40} className="rounded-md object-cover h-10 w-10 hover:opacity-80 transition-opacity" data-ai-hint="lab equipment"/>
+                                </Link>
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                <Link href={`/admin/resources/${resource.id}`} className="hover:text-primary hover:underline">{resource.name}</Link>
+                              </TableCell>
+                              <TableCell>{resource.resourceTypeName || 'N/A'}</TableCell>
+                              <TableCell>{resource.labName || 'N/A'}</TableCell>
+                              <TableCell>{getResourceStatusBadge(resource.status)}</TableCell>
+                              <TableCell className="text-right">
+                                <Button asChild size="sm" variant="default" disabled={resource.status !== 'Working'} className="h-8 text-xs">
+                                  <Link href={`/bookings?resourceId=${resource.id}${activeResourceSelectedDate ? `&date=${format(activeResourceSelectedDate, 'yyyy-MM-dd')}`: ''}`}>
+                                    <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />Book
+                                  </Link>
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
+                      <CardContent>
+                        <ClipboardList className="mx-auto h-12 w-12 mb-4 opacity-50" />
+                        <p className="text-lg font-medium">{activeResourceFilterCount > 0 ? "No Resources Match Filters" : "No Resources Found"}</p>
+                        <p className="text-sm mb-4">{activeResourceFilterCount > 0 ? "Try adjusting your filter or search criteria." : (canManageResourcesAndTypes ? "There are currently no resources in the catalog. Add one to get started!" : "There are currently no resources accessible to you. Request lab access via your dashboard or contact an admin.")}</p>
+                        {activeResourceFilterCount > 0 ? (<Button variant="outline" onClick={resetAllActiveResourcePageFilters}><FilterX className="mr-2 h-4 w-4" /> Reset All Filters</Button>
+                        ): (!isLoadingData && allResourcesDataSource.length === 0 && canManageResourcesAndTypes && (<Button onClick={handleOpenNewResourceDialog}><PlusCircle className="mr-2 h-4 w-4" /> Add First Resource</Button>))}
+                      </CardContent>
+                    </Card>
+                  )}
+                </CardContent>
+            </Card>
+        </TabsContent>
+
+        {canManageResourcesAndTypes && (
+            <TabsContent value="resource-types" className="mt-6">
+            <Card>
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div><CardTitle className="text-xl">Resource Types</CardTitle><CardDescription>Define categories for lab resources.</CardDescription></div>
+                <div className="flex gap-2 flex-wrap">
+                    <Dialog open={isResourceTypeFilterSortDialogOpen} onOpenChange={setIsResourceTypeFilterSortDialogOpen}>
+                    <DialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter & Sort {activeResourceTypeFilterSortCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeResourceTypeFilterSortCount}</Badge>}</Button></DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader><DialogTitle>Filter & Sort Resource Types</DialogTitle></DialogHeader>
+                        <Separator className="my-3" />
+                        <div className="space-y-3">
+                        <div className="relative"><Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="typeSearchDialog" value={tempResourceTypeSearchTerm} onChange={e => setTempResourceTypeSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>
+                        <div><Label htmlFor="typeSortDialog">Sort by</Label><Select value={tempResourceTypeSortBy} onValueChange={setTempResourceTypeSortBy}><SelectTrigger id="typeSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{resourceTypeSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
+                        </div>
+                        <DialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetResourceTypeFilterSortDialog} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsResourceTypeFilterSortDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyResourceTypeFilterSort}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></DialogFooter>
+                    </DialogContent>
+                    </Dialog>
+                    <Button onClick={handleOpenNewResourceTypeDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Type</Button>
+                </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                {isLoadingData && filteredResourceTypesForDisplay.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
+                ) : filteredResourceTypesForDisplay.length > 0 ? (
+                    <div className="overflow-x-auto border rounded-md shadow-sm">
+                    <Table>
+                        <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
+                        <TableBody>{filteredResourceTypesForDisplay.map(type => (
+                        <TableRow key={type.id}>
+                            <TableCell className="font-medium">{type.name}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell>
+                            <TableCell className="text-center">{type.resourceCount}</TableCell>
+                            <TableCell className="text-right space-x-1">
+                            <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip></TooltipProvider>
+                                <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}>
+                                    <Trash2 className="h-4 w-4"/>
+                                    </Button>
+                                </TooltipTrigger><TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent></Tooltip></TooltipProvider>
+                            </TableCell>
+                        </TableRow>
+                        ))}</TableBody>
+                    </Table>
+                    </div>
+                ) : (
+                    <div className="text-center py-10 text-muted-foreground">
+                    <ListChecks className="h-12 w-12 mx-auto mb-3 opacity-50"/>
+                    <p className="font-medium">{activeResourceTypeFilterSortCount > 0 ? "No types match criteria." : "No resource types defined."}</p>
+                    {activeResourceTypeFilterSortCount > 0 && <Button variant="link" onClick={resetAllActiveResourceTypePageFiltersSort} className="mt-2 text-xs"><FilterX className="mr-1.5 h-3.5 w-3.5"/>Reset Filters</Button>}
+                    </div>
+                )}
+                </CardContent>
+            </Card>
+            </TabsContent>
+        )}
+      </Tabs>
 
       {isResourceFormDialogOpen && (
         <ResourceFormDialog open={isResourceFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceFormDialogOpen(isOpen); if (!isOpen) setEditingResource(null);}} initialResource={editingResource} onSave={handleSaveResource} resourceTypes={fetchedResourceTypes} labs={currentUser?.role === 'Admin' ? fetchedLabs : fetchedLabs.filter(lab => userLabMemberships.some(m => m.labId === lab.id && m.status === 'active'))}/>
       )}
-
+      {isResourceTypeFormDialogOpen && (<ResourceTypeFormDialog open={isResourceTypeFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceTypeFormDialogOpen(isOpen); if (!isOpen) setEditingResourceType(null); }} initialType={editingResourceType} onSave={handleSaveResourceType} />)}
+      
       {canManageResourcesAndTypes && (
         <>
-          <Separator className="my-10" />
-          <Card>
-            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <div><CardTitle className="text-xl">Resource Types</CardTitle><CardDescription>Define categories for lab resources.</CardDescription></div>
-              <div className="flex gap-2 flex-wrap">
-                <Dialog open={isResourceTypeFilterSortDialogOpen} onOpenChange={setIsResourceTypeFilterSortDialogOpen}>
-                  <DialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter & Sort {activeResourceTypeFilterSortCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeResourceTypeFilterSortCount}</Badge>}</Button></DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader><DialogTitle>Filter & Sort Resource Types</DialogTitle></DialogHeader>
-                    <Separator className="my-3" />
-                    <div className="space-y-3">
-                      <div className="relative"><Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="typeSearchDialog" value={tempResourceTypeSearchTerm} onChange={e => setTempResourceTypeSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>
-                      <div><Label htmlFor="typeSortDialog">Sort by</Label><Select value={tempResourceTypeSortBy} onValueChange={setTempResourceTypeSortBy}><SelectTrigger id="typeSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{resourceTypeSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
-                    </div>
-                    <DialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetResourceTypeFilterSortDialog} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsResourceTypeFilterSortDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyResourceTypeFilterSort}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></DialogFooter>
-                  </DialogContent>
-                </Dialog>
-                <Button onClick={handleOpenNewResourceTypeDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Type</Button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              {isLoadingData && filteredResourceTypesForDisplay.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
-              ) : filteredResourceTypesForDisplay.length > 0 ? (
-                <div className="overflow-x-auto border rounded-md shadow-sm">
-                  <Table>
-                    <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
-                    <TableBody>{filteredResourceTypesForDisplay.map(type => (
-                      <TableRow key={type.id}>
-                        <TableCell className="font-medium">{type.name}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell>
-                        <TableCell className="text-center">{type.resourceCount}</TableCell>
-                        <TableCell className="text-right space-x-1">
-                          <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip></TooltipProvider>
-                          <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}>
-                              <Trash2 className="h-4 w-4"/>
-                            </Button>
-                          </TooltipTrigger><TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent></Tooltip></TooltipProvider>
-                        </TableCell>
-                      </TableRow>
-                    ))}</TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <div className="text-center py-10 text-muted-foreground">
-                  <ListChecks className="h-12 w-12 mx-auto mb-3 opacity-50"/>
-                  <p className="font-medium">{activeResourceTypeFilterSortCount > 0 ? "No types match criteria." : "No resource types defined."}</p>
-                  {activeResourceTypeFilterSortCount > 0 && <Button variant="link" onClick={resetAllActiveResourceTypePageFiltersSort} className="mt-2 text-xs"><FilterX className="mr-1.5 h-3.5 w-3.5"/>Reset Filters</Button>}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          {isResourceTypeFormDialogOpen && (<ResourceTypeFormDialog open={isResourceTypeFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceTypeFormDialogOpen(isOpen); if (!isOpen) setEditingResourceType(null); }} initialType={editingResourceType} onSave={handleSaveResourceType} />)}
           <AlertDialog open={!!typeToDelete} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}>
             <AlertDialogContent>
               <AlertDialogHeader><AlertDialogTypeTitle>Delete "{typeToDelete?.name}"?</AlertDialogTypeTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>
