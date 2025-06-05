@@ -5,7 +5,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation'; // Added
 import { PageHeader } from '@/components/layout/page-header';
-import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck } from 'lucide-react';
+import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare } from 'lucide-react';
 import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus, DayOfWeek } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -126,6 +126,19 @@ export default function LabOperationsCenterPage() {
     const [isGlobalClosureFilterDialogOpen, setIsGlobalClosureFilterDialogOpen] = useState(false);
     const [tempGlobalClosureSearchTerm, setTempGlobalClosureSearchTerm] = useState('');
     const [activeGlobalClosureSearchTerm, setActiveGlobalClosureSearchTerm] = useState('');
+    
+    // --- Lab-Specific Closures State ---
+    const [activeLabClosuresTab, setActiveLabClosuresTab] = useState('specific-dates-lab');
+    const [isLabSpecificDateFormDialogOpen, setIsLabSpecificDateFormDialogOpen] = useState(false);
+    const [editingLabSpecificBlackoutDate, setEditingLabSpecificBlackoutDate] = useState<BlackoutDate | null>(null);
+    const [labSpecificDateToDelete, setLabSpecificDateToDelete] = useState<BlackoutDate | null>(null);
+    const [isLabSpecificRecurringFormDialogOpen, setIsLabSpecificRecurringFormDialogOpen] = useState(false);
+    const [editingLabSpecificRecurringRule, setEditingLabSpecificRecurringRule] = useState<RecurringBlackoutRule | null>(null);
+    const [labSpecificRuleToDelete, setLabSpecificRuleToDelete] = useState<RecurringBlackoutRule | null>(null);
+    const [isLabSpecificClosureFilterDialogOpen, setIsLabSpecificClosureFilterDialogOpen] = useState(false);
+    const [tempLabSpecificClosureSearchTerm, setTempLabSpecificClosureSearchTerm] = useState('');
+    const [activeLabSpecificClosureSearchTerm, setActiveLabSpecificClosureSearchTerm] = useState('');
+
 
     // --- Maintenance Requests State ---
     const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
@@ -325,12 +338,12 @@ export default function LabOperationsCenterPage() {
     const handleOpenNewResourceTypeDialog = useCallback(() => {
         setEditingType(null);
         setIsResourceTypeFormDialogOpen(true);
-    }, [setEditingType, setIsResourceTypeFormDialogOpen]);
+    }, []);
 
     const handleOpenEditResourceTypeDialog = useCallback((type: ResourceType) => {
         setEditingType(type);
         setIsResourceTypeFormDialogOpen(true);
-    }, [setEditingType, setIsResourceTypeFormDialogOpen]);
+    }, []);
 
     const handleSaveResourceType = useCallback(async (data: ResourceTypeFormValues) => {
         if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
@@ -438,15 +451,17 @@ export default function LabOperationsCenterPage() {
         setIsLabFilterDialogOpen(false);
     }, [resetLabDialogFiltersOnly]);
 
-    const handleOpenNewLabDialog = useCallback(() => {
+    const handleOpenNewLabDialog = useCallback(() => { // For adding a new lab (global context)
         setEditingLab(null);
         setIsLabFormDialogOpen(true);
-    }, [setEditingLab, setIsLabFormDialogOpen]);
-
-    const handleOpenEditLabDialog = useCallback((lab: Lab) => {
-        setEditingLab(lab);
-        setIsLabFormDialogOpen(true);
-    }, [setEditingLab, setIsLabFormDialogOpen]);
+    }, []);
+    
+    const handleOpenEditSelectedLabDialog = useCallback(() => { // For editing the currently selected lab
+        if (selectedLabDetails) {
+          setEditingLab(selectedLabDetails);
+          setIsLabFormDialogOpen(true);
+        }
+    }, [selectedLabDetails]);
 
     const handleSaveLab = useCallback(async (data: LabFormValues) => {
         if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
@@ -457,12 +472,13 @@ export default function LabOperationsCenterPage() {
                 location: data.location || null,
                 description: data.description || null,
             };
+            // 'editingLab' state is used here to determine if it's an update or create
             const auditAction = editingLab ? 'LAB_UPDATED' : 'LAB_CREATED';
             let entityId = editingLab ? editingLab.id : '';
-            if (editingLab) {
+            if (editingLab) { // This implies an update
                 labDataToSave.lastUpdatedAt = serverTimestamp();
                 await updateDoc(doc(db, "labs", entityId), labDataToSave as any);
-            } else {
+            } else { // This implies a creation (from global context)
                 labDataToSave.createdAt = serverTimestamp();
                 const docRef = await addDoc(collection(db, "labs"), labDataToSave as any);
                 entityId = docRef.id;
@@ -470,7 +486,7 @@ export default function LabOperationsCenterPage() {
             await addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'Lab', entityId, details: `Lab '${data.name}' ${editingLab ? 'updated' : 'created'}.` });
             toast({ title: `Lab ${editingLab ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingLab ? 'updated' : 'created'}.` });
             setIsLabFormDialogOpen(false);
-            setEditingLab(null);
+            setEditingLab(null); // Clear editing state
             await fetchAllAdminData();
         } catch (error: any) {
             toast({ title: "Save Error", description: `Could not save lab: ${error.message}`, variant: "destructive" });
@@ -650,6 +666,153 @@ export default function LabOperationsCenterPage() {
 
     const activeGlobalClosureFilterCount = useMemo(() => [activeGlobalClosureSearchTerm !== ''].filter(Boolean).length, [activeGlobalClosureSearchTerm]);
 
+    // --- Lab-Specific Closures Logic ---
+    useEffect(() => {
+        if (isLabSpecificClosureFilterDialogOpen) {
+            setTempLabSpecificClosureSearchTerm(activeLabSpecificClosureSearchTerm);
+        }
+    }, [isLabSpecificClosureFilterDialogOpen, activeLabSpecificClosureSearchTerm]);
+
+    const filteredLabSpecificBlackoutDates = useMemo(() => {
+        return allBlackoutDates.filter(bd => {
+            const isForCurrentLab = bd.labId === activeContextId;
+            const lowerSearchTerm = activeLabSpecificClosureSearchTerm.toLowerCase();
+            const reasonMatch = bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm);
+            const dateString = typeof bd.date === 'string' ? bd.date : (bd.date as unknown as Timestamp)?.toDate()?.toISOString().split('T')[0];
+            const dateMatch = dateString && isValidDateFn(parseISO(dateString)) && format(parseISO(dateString), 'PPP').toLowerCase().includes(lowerSearchTerm);
+            return isForCurrentLab && (!activeLabSpecificClosureSearchTerm || reasonMatch || dateMatch);
+        });
+    }, [allBlackoutDates, activeContextId, activeLabSpecificClosureSearchTerm]);
+
+    const filteredLabSpecificRecurringRules = useMemo(() => {
+        return allRecurringRules.filter(rule => {
+            const isForCurrentLab = rule.labId === activeContextId;
+            const lowerSearchTerm = activeLabSpecificClosureSearchTerm.toLowerCase();
+            const nameMatch = rule.name && rule.name.toLowerCase().includes(lowerSearchTerm);
+            const reasonMatch = rule.reason && rule.reason.toLowerCase().includes(lowerSearchTerm);
+            return isForCurrentLab && (!activeLabSpecificClosureSearchTerm || nameMatch || reasonMatch);
+        });
+    }, [allRecurringRules, activeContextId, activeLabSpecificClosureSearchTerm]);
+
+    const handleOpenNewLabSpecificDateDialog = useCallback(() => { setEditingLabSpecificBlackoutDate(null); setIsLabSpecificDateFormDialogOpen(true); }, []);
+    const handleOpenEditLabSpecificDateDialog = useCallback((bd: BlackoutDate) => { setEditingLabSpecificBlackoutDate(bd); setIsLabSpecificDateFormDialogOpen(true); }, []);
+
+    const handleSaveLabSpecificBlackoutDate = useCallback(async (data: BlackoutDateDialogFormValues) => {
+        if (!currentUser || !currentUser.id || !currentUser.name || activeContextId === GLOBAL_CONTEXT_VALUE) { toast({ title: "Error", description: "Cannot save lab-specific date without lab context or auth.", variant: "destructive" }); return; }
+        const formattedDateOnly = format(data.date, 'yyyy-MM-dd');
+        const displayDate = format(data.date, 'PPP');
+        const blackoutDataToSave: Omit<BlackoutDate, 'id'> = {
+            labId: activeContextId, // Ensure it's scoped to the current lab
+            date: formattedDateOnly,
+            reason: data.reason || undefined,
+        };
+        setIsLoadingData(true);
+        try {
+            if (editingLabSpecificBlackoutDate) {
+                await updateDoc(doc(db, "blackoutDates", editingLabSpecificBlackoutDate.id), blackoutDataToSave as any);
+                addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_UPDATED', { entityType: 'BlackoutDate', entityId: editingLabSpecificBlackoutDate.id, details: `Lab-specific Blackout Date for ${displayDate} (Lab ID: ${activeContextId}) updated. Reason: ${data.reason || 'N/A'}`});
+                toast({ title: 'Lab Blackout Date Updated'});
+            } else {
+                const docRef = await addDoc(collection(db, "blackoutDates"), blackoutDataToSave);
+                addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_CREATED', { entityType: 'BlackoutDate', entityId: docRef.id, details: `Lab-specific Blackout Date for ${displayDate} (Lab ID: ${activeContextId}) created. Reason: ${data.reason || 'N/A'}`});
+                toast({ title: 'Lab Blackout Date Added'});
+            }
+            setIsLabSpecificDateFormDialogOpen(false);
+            setEditingLabSpecificBlackoutDate(null);
+            await fetchAllAdminData();
+        } catch (error: any) { toast({ title: "Save Failed", description: `Failed to save lab-specific blackout date: ${error.message}`, variant: "destructive"});
+        } finally { setIsLoadingData(false); }
+    }, [currentUser, editingLabSpecificBlackoutDate, activeContextId, fetchAllAdminData, toast]);
+
+    const handleDeleteLabSpecificBlackoutDate = useCallback(async (blackoutDateId: string) => {
+        if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
+        const deletedDateObj = allBlackoutDates.find(bd => bd.id === blackoutDateId);
+        if (!deletedDateObj) return;
+        const dateString = typeof deletedDateObj.date === 'string' ? deletedDateObj.date : (deletedDateObj.date as unknown as Timestamp)?.toDate()?.toISOString().split('T')[0];
+        setIsLoadingData(true);
+        try {
+            await deleteDoc(doc(db, "blackoutDates", blackoutDateId));
+            addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Lab-specific Blackout Date for ${dateString ? format(parseISO(dateString), 'PPP') : 'Invalid Date'} (Lab ID: ${deletedDateObj.labId}, Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`});
+            toast({ title: "Lab Blackout Date Removed", variant: "destructive" });
+            setLabSpecificDateToDelete(null);
+            await fetchAllAdminData();
+        } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete lab-specific blackout date: ${error.message}`, variant: "destructive"});
+        } finally { setIsLoadingData(false); }
+    }, [currentUser, allBlackoutDates, fetchAllAdminData, toast]);
+
+    const handleOpenNewLabSpecificRecurringDialog = useCallback(() => { setEditingLabSpecificRecurringRule(null); setIsLabSpecificRecurringFormDialogOpen(true); }, []);
+    const handleOpenEditLabSpecificRecurringDialog = useCallback((rule: RecurringBlackoutRule) => { setEditingLabSpecificRecurringRule(rule); setIsLabSpecificRecurringFormDialogOpen(true); }, []);
+
+    const handleSaveLabSpecificRecurringRule = useCallback(async (data: RecurringRuleDialogFormValues) => {
+        if (!currentUser || !currentUser.id || !currentUser.name || activeContextId === GLOBAL_CONTEXT_VALUE) { toast({ title: "Error", description: "Cannot save lab-specific rule without lab context or auth.", variant: "destructive" }); return; }
+        const ruleDataToSave: Omit<RecurringBlackoutRule, 'id'> = {
+            labId: activeContextId, // Ensure it's scoped
+            name: data.name,
+            daysOfWeek: data.daysOfWeek,
+            reason: data.reason || undefined,
+        };
+        setIsLoadingData(true);
+        try {
+            if (editingLabSpecificRecurringRule) {
+                await updateDoc(doc(db, "recurringBlackoutRules", editingLabSpecificRecurringRule.id), ruleDataToSave as any);
+                addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_UPDATED', { entityType: 'RecurringBlackoutRule', entityId: editingLabSpecificRecurringRule.id, details: `Lab-specific recurring rule '${data.name}' (Lab ID: ${activeContextId}) updated.`});
+                toast({ title: 'Lab Recurring Rule Updated'});
+            } else {
+                const docRef = await addDoc(collection(db, "recurringBlackoutRules"), ruleDataToSave);
+                addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_CREATED', { entityType: 'RecurringBlackoutRule', entityId: docRef.id, details: `Lab-specific recurring rule '${data.name}' (Lab ID: ${activeContextId}) created.`});
+                toast({ title: 'Lab Recurring Rule Added'});
+            }
+            setIsLabSpecificRecurringFormDialogOpen(false);
+            setEditingLabSpecificRecurringRule(null);
+            await fetchAllAdminData();
+        } catch (error: any) { toast({ title: "Save Failed", description: `Failed to save lab-specific recurring rule: ${error.message}`, variant: "destructive"});
+        } finally { setIsLoadingData(false); }
+    }, [currentUser, editingLabSpecificRecurringRule, activeContextId, fetchAllAdminData, toast]);
+
+    const handleDeleteLabSpecificRecurringRule = useCallback(async (ruleId: string) => {
+        if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
+        const deletedRuleObj = allRecurringRules.find(r => r.id === ruleId);
+        if (!deletedRuleObj) return;
+        setIsLoadingData(true);
+        try {
+            await deleteDoc(doc(db, "recurringBlackoutRules", ruleId));
+            addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Lab-specific recurring rule '${deletedRuleObj.name}' (Lab ID: ${deletedRuleObj.labId}) deleted.`});
+            toast({ title: "Lab Recurring Rule Removed", variant: "destructive" });
+            setLabSpecificRuleToDelete(null);
+            await fetchAllAdminData();
+        } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete lab-specific recurring rule: ${error.message}`, variant: "destructive"});
+        } finally { setIsLoadingData(false); }
+    }, [currentUser, allRecurringRules, fetchAllAdminData, toast]);
+
+    const handleApplyLabSpecificClosureDialogFilters = useCallback(() => {
+        setActiveLabSpecificClosureSearchTerm(tempLabSpecificClosureSearchTerm);
+        setIsLabSpecificClosureFilterDialogOpen(false);
+    }, [tempLabSpecificClosureSearchTerm]);
+
+    const resetLabSpecificClosureDialogFiltersOnly = useCallback(() => {
+        setTempLabSpecificClosureSearchTerm('');
+    }, []);
+
+    const resetAllActiveLabSpecificClosurePageFilters = useCallback(() => {
+        setActiveLabSpecificClosureSearchTerm('');
+        resetLabSpecificClosureDialogFiltersOnly();
+        setIsLabSpecificClosureFilterDialogOpen(false);
+    }, [resetLabSpecificClosureDialogFiltersOnly]);
+    
+    const activeLabSpecificClosureFilterCount = useMemo(() => [activeLabSpecificClosureSearchTerm !== ''].filter(Boolean).length, [activeLabSpecificClosureSearchTerm]);
+
+    // --- Lab-Specific Stats ---
+    const labSpecificStats = useMemo(() => {
+        if (!selectedLabDetails) return { resourceCount: 0, activeMemberCount: 0, openMaintenanceCount: 0 };
+        const resourceCount = allResourcesForCountsAndChecks.filter(res => res.labId === selectedLabDetails.id).length;
+        const activeMemberCount = userLabMemberships.filter(mem => mem.labId === selectedLabDetails.id && mem.status === 'active').length;
+        const openMaintenanceCount = maintenanceRequests.filter(req => {
+            const resourceForRequest = allResourcesForCountsAndChecks.find(r => r.id === req.resourceId);
+            return resourceForRequest?.labId === selectedLabDetails.id && req.status === 'Open';
+        }).length;
+        return { resourceCount, activeMemberCount, openMaintenanceCount };
+    }, [selectedLabDetails, allResourcesForCountsAndChecks, userLabMemberships, maintenanceRequests]);
+
 
     // --- Maintenance Requests Logic (System-Wide View) ---
     useEffect(() => {
@@ -674,7 +837,6 @@ export default function LabOperationsCenterPage() {
                 assignedTechnicianName: technician?.name,
             };
         }).filter(req => {
-            // For global view, no lab context filter is applied here. It will be applied for lab-specific view.
             const lowerSearchTerm = activeMaintenanceSearchTerm.toLowerCase();
             const searchMatch = !activeMaintenanceSearchTerm ||
                 (req.resourceName && req.resourceName.toLowerCase().includes(lowerSearchTerm)) ||
@@ -892,7 +1054,7 @@ export default function LabOperationsCenterPage() {
                             <TableCell className="text-center">{(lab as any).memberCount ?? 0}</TableCell>
                             {canManageAny && <TableCell className="text-right space-x-1">
                                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setActiveContextId(lab.id)}><Settings2 className="mr-1.5 h-3.5 w-3.5"/>Manage</Button>
-                              <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditLabDialog(lab)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Lab Details</TooltipContent></Tooltip>
+                              <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditSelectedLabDialog()} disabled={isLoadingData || lab.id !== editingLab?.id && !!editingLab}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Lab Details</TooltipContent></Tooltip>
                               <AlertDialog open={labToDelete?.id === lab.id} onOpenChange={(isOpen) => !isOpen && setLabToDelete(null)}>
                                 <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabToDelete(lab)} disabled={isLoadingData || ((lab as any).resourceCount ?? 0) > 0 || ((lab as any).memberCount ?? 0) > 0}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger>
                                 <TooltipContent>{((lab as any).resourceCount ?? 0) > 0 || ((lab as any).memberCount ?? 0) > 0 ? "Cannot delete: lab has resources or members" : "Delete Lab"}</TooltipContent>
@@ -1180,7 +1342,7 @@ export default function LabOperationsCenterPage() {
                               <TableCell>
                                 <div className="flex items-center gap-2">
                                   <Avatar className="h-8 w-8">
-                                    <AvatarImage src={req.userAvatarUrl} alt={req.userName} data-ai-hint="user avatar" />
+                                    <AvatarImage src={req.userAvatarUrl} alt={req.userName} data-ai-hint="user avatar"/>
                                     <AvatarFallback>{(req.userName || 'U').charAt(0)}</AvatarFallback>
                                   </Avatar>
                                   <div>
@@ -1237,8 +1399,121 @@ export default function LabOperationsCenterPage() {
                   <TabsTrigger value="lab-members">Members & Access</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="lab-details" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Overview</CardTitle></CardHeader><CardContent><p>Lab-specific overview content here.</p></CardContent></Card></TabsContent>
-              <TabsContent value="lab-closures" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Closures</CardTitle></CardHeader><CardContent><p>Lab-specific closures management here.</p></CardContent></Card></TabsContent>
+              <TabsContent value="lab-details" className="mt-6">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle>{selectedLabDetails.name} - Overview</CardTitle>
+                        <Button variant="outline" size="sm" onClick={handleOpenEditSelectedLabDialog}><Edit className="mr-2 h-4 w-4"/>Edit Lab Details</Button>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div>
+                            <h4 className="font-medium text-md">Location</h4>
+                            <p className="text-sm text-muted-foreground">{selectedLabDetails.location || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <h4 className="font-medium text-md">Description</h4>
+                            <p className="text-sm text-muted-foreground">{selectedLabDetails.description || 'No description provided.'}</p>
+                        </div>
+                        <Separator />
+                        <h4 className="font-medium text-md pt-2">Key Statistics</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <Card className="bg-muted/30">
+                                <CardHeader className="p-4 pb-0"><CardTitle className="text-sm font-medium flex items-center gap-2"><PackageIcon className="h-4 w-4 text-muted-foreground"/>Resources</CardTitle></CardHeader>
+                                <CardContent className="p-4 pt-1"><p className="text-2xl font-bold">{labSpecificStats.resourceCount}</p></CardContent>
+                            </Card>
+                            <Card className="bg-muted/30">
+                                <CardHeader className="p-4 pb-0"><CardTitle className="text-sm font-medium flex items-center gap-2"><UsersRound className="h-4 w-4 text-muted-foreground"/>Active Members</CardTitle></CardHeader>
+                                <CardContent className="p-4 pt-1"><p className="text-2xl font-bold">{labSpecificStats.activeMemberCount}</p></CardContent>
+                            </Card>
+                            <Card className="bg-muted/30">
+                                <CardHeader className="p-4 pb-0"><CardTitle className="text-sm font-medium flex items-center gap-2"><ActivitySquare className="h-4 w-4 text-muted-foreground"/>Open Maintenance</CardTitle></CardHeader>
+                                <CardContent className="p-4 pt-1"><p className="text-2xl font-bold">{labSpecificStats.openMaintenanceCount}</p></CardContent>
+                            </Card>
+                        </div>
+                    </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent value="lab-closures" className="mt-6">
+                <Card>
+                  <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <div>
+                        <CardTitle>{selectedLabDetails.name} - Closures</CardTitle>
+                        <CardDescription>Manage specific and recurring unavailability for this lab.</CardDescription>
+                    </div>
+                    <FilterSortDialog open={isLabSpecificClosureFilterDialogOpen} onOpenChange={setIsLabSpecificClosureFilterDialogOpen}>
+                        <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter Lab Closures {activeLabSpecificClosureFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeLabSpecificClosureFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
+                        <FilterSortDialogContent className="sm:max-w-md">
+                            <FilterSortDialogHeader><FilterSortDialogTitle>Filter Closures for {selectedLabDetails.name}</FilterSortDialogTitle></FilterSortDialogHeader>
+                            <Separator className="my-3" />
+                            <div className="space-y-3">
+                            <div className="relative"><Label htmlFor="labSpecificClosureSearchDialog">Search (Reason/Name/Date)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="labSpecificClosureSearchDialog" value={tempLabSpecificClosureSearchTerm} onChange={e => setTempLabSpecificClosureSearchTerm(e.target.value)} placeholder="e.g., Holiday, Weekend, Jan 1" className="mt-1 h-9 pl-8"/></div>
+                            </div>
+                            <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabSpecificClosureDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsLabSpecificClosureFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyLabSpecificClosureDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
+                        </FilterSortDialogContent>
+                    </FilterSortDialog>
+                  </CardHeader>
+                  <CardContent>
+                    <Tabs value={activeLabClosuresTab} onValueChange={setActiveLabClosuresTab} className="w-full">
+                      <TabsList className="grid w-full grid-cols-2 mb-4">
+                        <TabsTrigger value="specific-dates-lab"><CalendarDays className="mr-2 h-4 w-4"/>Specific Dates</TabsTrigger>
+                        <TabsTrigger value="recurring-rules-lab"><Repeat className="mr-2 h-4 w-4"/>Recurring Rules</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="specific-dates-lab">
+                        <div className="flex justify-end mb-3">
+                          <Button onClick={handleOpenNewLabSpecificDateDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Date for {selectedLabDetails.name}</Button>
+                        </div>
+                        {isLoadingData && filteredLabSpecificBlackoutDates.length === 0 && !activeLabSpecificClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
+                        ) : filteredLabSpecificBlackoutDates.length > 0 ? (
+                          <div className="overflow-x-auto border rounded-md shadow-sm">
+                            <Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Reason</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
+                            <TableBody>{filteredLabSpecificBlackoutDates.map(bd => (
+                              <TableRow key={bd.id}><TableCell className="font-medium">{formatDateSafe(parseISO(bd.date), 'Invalid Date', 'PPP')}</TableCell><TableCell className="text-sm text-muted-foreground">{bd.reason || 'N/A'}</TableCell>
+                              <TableCell className="text-right space-x-1">
+                                <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditLabSpecificDateDialog(bd)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Date</TooltipContent></Tooltip>
+                                <AlertDialog open={labSpecificDateToDelete?.id === bd.id} onOpenChange={(isOpen) => !isOpen && setLabSpecificDateToDelete(null)}>
+                                  <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabSpecificDateToDelete(bd)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Date</TooltipContent></Tooltip>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader><AlertDialogTitle>Delete Blackout on {formatDateSafe(labSpecificDateToDelete ? parseISO(labSpecificDateToDelete.date) : new Date(), '', 'PPP')} for {selectedLabDetails.name}?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => labSpecificDateToDelete && handleDeleteLabSpecificBlackoutDate(labSpecificDateToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </TableCell></TableRow>
+                            ))}</TableBody></Table>
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-muted-foreground"><CalendarOff className="h-10 w-10 mx-auto mb-2 opacity-50"/><p className="font-medium">{activeLabSpecificClosureSearchTerm ? "No dates match filter." : `No specific blackout dates for ${selectedLabDetails.name}.`}</p></div>
+                        )}
+                      </TabsContent>
+                      <TabsContent value="recurring-rules-lab">
+                         <div className="flex justify-end mb-3">
+                          <Button onClick={handleOpenNewLabSpecificRecurringDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Rule for {selectedLabDetails.name}</Button>
+                        </div>
+                        {isLoadingData && filteredLabSpecificRecurringRules.length === 0 && !activeLabSpecificClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
+                        ) : filteredLabSpecificRecurringRules.length > 0 ? (
+                          <div className="overflow-x-auto border rounded-md shadow-sm">
+                            <Table><TableHeader><TableRow><TableHead>Rule Name</TableHead><TableHead>Days</TableHead><TableHead>Reason</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
+                            <TableBody>{filteredLabSpecificRecurringRules.map(rule => (
+                              <TableRow key={rule.id}><TableCell className="font-medium">{rule.name}</TableCell><TableCell className="text-sm text-muted-foreground">{rule.daysOfWeek.join(', ')}</TableCell><TableCell className="text-sm text-muted-foreground">{rule.reason || 'N/A'}</TableCell>
+                              <TableCell className="text-right space-x-1">
+                                <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditLabSpecificRecurringDialog(rule)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Rule</TooltipContent></Tooltip>
+                                <AlertDialog open={labSpecificRuleToDelete?.id === rule.id} onOpenChange={(isOpen) => !isOpen && setLabSpecificRuleToDelete(null)}>
+                                  <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabSpecificRuleToDelete(rule)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Rule</TooltipContent></Tooltip>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader><AlertDialogTitle>Delete Rule "{labSpecificRuleToDelete?.name}" for {selectedLabDetails.name}?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => labSpecificRuleToDelete && handleDeleteLabSpecificRecurringRule(labSpecificRuleToDelete.id)}>Delete Rule</AlertDialogAction></AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </TableCell></TableRow>
+                            ))}</TableBody></Table>
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-muted-foreground"><Repeat className="h-10 w-10 mx-auto mb-2 opacity-50"/><p className="font-medium">{activeLabSpecificClosureSearchTerm ? "No rules match filter." : `No recurring closure rules for ${selectedLabDetails.name}.`}</p></div>
+                        )}
+                      </TabsContent>
+                    </Tabs>
+                  </CardContent>
+                </Card>
+              </TabsContent>
               <TabsContent value="lab-maintenance" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Maintenance</CardTitle></CardHeader><CardContent><p>Lab-specific maintenance log here.</p></CardContent></Card></TabsContent>
               <TabsContent value="lab-members" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Members & Access</CardTitle></CardHeader><CardContent><p>Lab-specific members and access management here.</p></CardContent></Card></TabsContent>
           </Tabs>
@@ -1250,6 +1525,9 @@ export default function LabOperationsCenterPage() {
         
         {isGlobalDateFormDialogOpen && currentUser && (<BlackoutDateFormDialog open={isGlobalDateFormDialogOpen} onOpenChange={setIsGlobalDateFormDialogOpen} initialBlackoutDate={editingGlobalBlackoutDate} onSave={handleSaveGlobalBlackoutDate} labs={labs} currentLabContextId={GLOBAL_CONTEXT_VALUE} />)}
         {isGlobalRecurringFormDialogOpen && currentUser && (<RecurringBlackoutRuleFormDialog open={isGlobalRecurringFormDialogOpen} onOpenChange={setIsGlobalRecurringFormDialogOpen} initialRule={editingGlobalRecurringRule} onSave={handleSaveGlobalRecurringRule} labs={labs} currentLabContextId={GLOBAL_CONTEXT_VALUE} />)}
+
+        {isLabSpecificDateFormDialogOpen && currentUser && activeContextId !== GLOBAL_CONTEXT_VALUE && (<BlackoutDateFormDialog open={isLabSpecificDateFormDialogOpen} onOpenChange={setIsLabSpecificDateFormDialogOpen} initialBlackoutDate={editingLabSpecificBlackoutDate} onSave={handleSaveLabSpecificBlackoutDate} labs={labs} currentLabContextId={activeContextId} />)}
+        {isLabSpecificRecurringFormDialogOpen && currentUser && activeContextId !== GLOBAL_CONTEXT_VALUE && (<RecurringBlackoutRuleFormDialog open={isLabSpecificRecurringFormDialogOpen} onOpenChange={setIsLabSpecificRecurringFormDialogOpen} initialRule={editingLabSpecificRecurringRule} onSave={handleSaveLabSpecificRecurringRule} labs={labs} currentLabContextId={activeContextId} />)}
         
         {isMaintenanceFormDialogOpen && currentUser && (
           <MaintenanceRequestFormDialog
@@ -1261,9 +1539,9 @@ export default function LabOperationsCenterPage() {
             initialRequest={editingMaintenanceRequest}
             onSave={handleSaveMaintenanceRequest}
             technicians={allTechniciansForMaintenance}
-            resources={allResourcesForCountsAndChecks} // Pass all resources for global context
+            resources={allResourcesForCountsAndChecks} 
             currentUserRole={currentUser?.role}
-            labContextId={activeContextId === GLOBAL_CONTEXT_VALUE ? undefined : activeContextId} // Pass lab context if specific lab is selected
+            labContextId={activeContextId === GLOBAL_CONTEXT_VALUE ? undefined : activeContextId}
           />
         )}
       </div>
