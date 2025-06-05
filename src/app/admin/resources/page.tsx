@@ -38,11 +38,10 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter,
+  AlertDialogFooter, 
   AlertDialogHeader,
   AlertDialogTitle as AlertDialogTypeTitle,
-  AlertDialogTrigger as AlertDialogTypeTrigger,
-} from "@/components/ui/alert-dialog";
+}from "@/components/ui/alert-dialog";
 import { Calendar as ShadCNCalendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { ResourceFormDialog, ResourceFormValues } from '@/components/admin/resource-form-dialog';
@@ -179,7 +178,7 @@ export default function AdminResourcesPage() {
       let fetchedResources = await Promise.all(fetchedResourcesPromises);
 
       if (currentUser && currentUser.role !== 'Admin') {
-        fetchedResources = fetchedResources.filter(resource => activeUserLabIds.includes(resource.labId) || !resource.labId); // Also include resources with no labId (global)
+        fetchedResources = fetchedResources.filter(resource => activeUserLabIds.includes(resource.labId) || !resource.labId); 
       }
       setAllResourcesDataSource(fetchedResources);
 
@@ -293,7 +292,7 @@ export default function AdminResourcesPage() {
   const handleOpenNewResourceDialog = useCallback(() => {
     if (fetchedResourceTypes.length === 0 && canManageResourcesAndTypes) {
         toast({ title: "No Resource Types Defined", description: "Please add resource types before adding a resource.", variant: "destructive" });
-        setActiveTab("resource-types");
+        setActiveTab("types");
         return;
     }
     if (fetchedLabs.length === 0 && canManageResourcesAndTypes) {
@@ -547,7 +546,7 @@ export default function AdminResourcesPage() {
     <Tabs value={activeTab} onValueChange={setActiveTab} className="inline-block">
       <TabsList className="inline-flex h-9 items-center justify-center rounded-md bg-muted p-0.5 text-muted-foreground">
         <TabsTrigger value="resources" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Resources</TabsTrigger>
-        {canManageResourcesAndTypes && (<TabsTrigger value="resource-types" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Types</TabsTrigger>)}
+        {canManageResourcesAndTypes && (<TabsTrigger value="types" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Types</TabsTrigger>)}
       </TabsList>
     </Tabs>
   );
@@ -654,7 +653,7 @@ export default function AdminResourcesPage() {
                   {isLoadingData && allResourcesDataSource.length === 0 ? (
                     <div className="flex justify-center items-center py-10 text-muted-foreground"><Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" /> Loading resources...</div>
                   ) : filteredResources.length > 0 ? (
-                    <div className="overflow-x-auto rounded-lg border">
+                    <div className="overflow-x-auto border rounded-md">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -708,7 +707,7 @@ export default function AdminResourcesPage() {
         </TabsContent>
 
         {canManageResourcesAndTypes && (
-            <TabsContent value="resource-types" className="mt-0"> 
+            <TabsContent value="types" className="mt-0"> 
             <Card>
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div><CardTitle className="text-xl">Manage Resource Types</CardTitle><CardDescription>Define categories for lab resources.</CardDescription></div>
