@@ -38,10 +38,9 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter, // Added AlertDialogFooter
+  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle as AlertDialogTypeTitle,
-  AlertDialogTrigger as AlertDialogTypeTrigger,
 } from "@/components/ui/alert-dialog";
 import { Calendar as ShadCNCalendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
@@ -413,7 +412,7 @@ export default function AdminResourcesPage() {
   ].filter(Boolean).length, [activeResourceSearchTerm, activeResourceFilterTypeId, activeResourceFilterLabId, activeResourceSelectedDate]);
 
 
-  // Resource Type Management Logic (Ported)
+  // Resource Type Management Logic
   useEffect(() => {
     if (isResourceTypeFilterSortDialogOpen) {
         setTempResourceTypeSearchTerm(activeResourceTypeSearchTerm);
@@ -497,7 +496,7 @@ export default function AdminResourcesPage() {
           toast({ title: `Resource Type ${editingResourceType ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingResourceType ? 'updated' : 'created'}.` });
           setIsResourceTypeFormDialogOpen(false);
           setEditingResourceType(null);
-          await fetchInitialData(); // Refresh resource types list
+          await fetchInitialData();
       } catch (error: any) {
           toast({ title: "Save Error", description: `Could not save resource type: ${error.message}`, variant: "destructive" });
       } finally {
@@ -521,7 +520,7 @@ export default function AdminResourcesPage() {
           await addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_DELETED', { entityType: 'ResourceType', entityId: typeId, details: `Resource Type '${deletedType.name}' deleted.` });
           toast({ title: "Resource Type Deleted", description: `"${deletedType.name}" removed.`, variant: "destructive" });
           setTypeToDelete(null);
-          await fetchInitialData(); // Refresh resource types list
+          await fetchInitialData();
       } catch (error: any) {
           toast({ title: "Delete Error", description: `Could not delete resource type: ${error.message}`, variant: "destructive" });
       } finally {
@@ -718,9 +717,11 @@ export default function AdminResourcesPage() {
                         <TableCell className="text-center">{type.resourceCount}</TableCell>
                         <TableCell className="text-right space-x-1">
                           <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip></TooltipProvider>
-                          <AlertDialogTypeTrigger asChild>
-                            <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}><Trash2 className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent></Tooltip></TooltipProvider>
-                          </AlertDialogTypeTrigger>
+                          <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}>
+                              <Trash2 className="h-4 w-4"/>
+                            </Button>
+                          </TooltipTrigger><TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent></Tooltip></TooltipProvider>
                         </TableCell>
                       </TableRow>
                     ))}</TableBody>
