@@ -166,7 +166,7 @@ export default function ProfilePage() {
           <CardHeader className="items-center text-center p-6">
             <div className="relative group mb-4">
               <Avatar className="w-32 h-32 mx-auto border-4 border-primary/20 shadow-md group-hover:opacity-80 transition-opacity">
-                <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} />
+                <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} data-ai-hint="user avatar" />
                 <AvatarFallback className="text-4xl">{currentUser.name.split(' ').map(n => n[0]).join('').toUpperCase()}</AvatarFallback>
               </Avatar>
               <Tooltip>
@@ -314,7 +314,7 @@ export default function ProfilePage() {
             </div>
           </CardContent>
           <Separator />
-          <CardFooter className="p-6 flex justify-start">
+          <CardFooter className="p-6 flex justify-end">
             <Button variant="destructive" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Logout
