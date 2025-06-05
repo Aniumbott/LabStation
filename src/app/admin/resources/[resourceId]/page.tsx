@@ -17,7 +17,7 @@ import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, type ResourceFormValues } from '@/components/admin/resource-form-dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import {
   Tooltip,
@@ -87,7 +87,7 @@ function ResourceDetailPageSkeleton() {
               <Skeleton className="h-4 w-1/2 rounded-md bg-muted" />
               <Skeleton className="h-4 w-1/2 rounded-md bg-muted" />
             </CardContent>
-            <CardFooter>
+            <CardFooter className="pt-6 border-t">
                 <Skeleton className="h-10 w-1/3 rounded-md bg-muted" />
             </CardFooter>
           </Card>
@@ -495,7 +495,7 @@ export default function ResourceDetailPage() {
     }
     try {
       const resourceDocRef = doc(db, "resources", resource.id);
-      const periodsToSave = updatedPeriods.map(p => ({...p, id: String(p.id)}));
+      const periodsToSave = updatedPeriods.map(p => ({...p, id: String(p.id) }));
       await updateDoc(resourceDocRef, { unavailabilityPeriods: periodsToSave, lastUpdatedAt: serverTimestamp() });
       addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Unavailability periods for resource '${resource.name}' updated by ${currentUser.name}.`});
       toast({ title: 'Unavailability Updated', description: `Unavailability periods for ${resource.name} have been updated.` });
@@ -687,7 +687,7 @@ export default function ResourceDetailPage() {
                 <p className="text-sm text-muted-foreground italic">No description provided.</p>
               )}
 
-              <Separator className="my-4"/>
+              <Separator className="my-4" />
               <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><SlidersHorizontal className="text-primary h-5 w-5"/> Specifications</h3>
               <div className="space-y-1">
                 <DetailItem icon={Wrench} label="Manufacturer" value={resource.manufacturer} />
@@ -698,7 +698,7 @@ export default function ResourceDetailPage() {
 
               {resource.remoteAccess && (Object.values(resource.remoteAccess).some(val => val || typeof val === 'number') || resource.remoteAccess.port !== undefined) && (
                 <>
-                  <Separator className="my-4"/>
+                  <Separator className="my-4" />
                   <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><Network className="text-primary h-5 w-5"/> Remote Access</h3>
                   <div className="space-y-1">
                     <DetailItem icon={Globe} label="IP Address" value={resource.remoteAccess.ipAddress} isLink={!!resource.remoteAccess.ipAddress} />
@@ -713,13 +713,13 @@ export default function ResourceDetailPage() {
 
               {resource.notes && (
                 <>
-                  <Separator className="my-4"/>
+                  <Separator className="my-4" />
                   <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><FileText className="text-primary h-5 w-5"/> General Notes</h3>
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{resource.notes}</p>
                 </>
               )}
             </CardContent>
-            <CardFooter className="border-t pt-6">
+            <CardFooter className="pt-6 border-t">
                  <Button asChild className="w-full sm:w-auto" disabled={!canBookResource}>
                     <Link href={`/bookings?resourceId=${resource.id}`}>
                         <CalendarPlus className="mr-2 h-4 w-4" />
@@ -740,7 +740,7 @@ export default function ResourceDetailPage() {
                     This resource is generally available for booking during standard lab hours unless an unavailability period is active or it's a lab-wide blackout day.
                   </p>
                 </CardContent>
-                 <CardFooter className="justify-center border-t pt-4">
+                 <CardFooter className="justify-center pt-4 border-t">
                     <Button variant="outline" asChild>
                         <Link href={`/bookings?resourceId=${resource.id}`}>
                             View Full Calendar &amp; Book <ExternalLink className="ml-2 h-3 w-3" />
@@ -776,3 +776,6 @@ export default function ResourceDetailPage() {
     </TooltipProvider>
   );
 }
+
+
+    
