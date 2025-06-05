@@ -200,301 +200,300 @@ export function ResourceFormDialog({
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <ScrollArea className="max-h-[65vh] mt-4">
-            <div className="space-y-6 pl-1 pr-2 pb-6">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                      <FormItem>
-                      <FormLabel>Resource Name <span className="text-destructive">*</span></FormLabel>
-                      <FormControl><Input placeholder="e.g., Keysight Oscilloscope MSOX3054T" {...field} disabled={isSubmitting}/></FormControl>
-                      <FormMessage />
-                      </FormItem>
-                  )}
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
+          <ScrollArea className="max-h-[65vh] mt-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} id="resource-form-id" className="pr-1"> {/* Add pr-1 to form if scrollbar is inside form's direct scrollarea */}
+              <div className="space-y-6 pl-1 pr-2 pb-6">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Resource Name <span className="text-destructive">*</span></FormLabel>
+                        <FormControl><Input placeholder="e.g., Keysight Oscilloscope MSOX3054T" {...field} disabled={isSubmitting}/></FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                  />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="resourceTypeId"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Resource Type <span className="text-destructive">*</span></FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || ''} disabled={resourceTypes.length === 0 || isSubmitting}>
+                                <FormControl><SelectTrigger>
+                                    <SelectValue placeholder={resourceTypes.length > 0 ? "Select a type" : "No types defined"} />
+                                </SelectTrigger></FormControl>
+                                <SelectContent>
+                                {resourceTypes.length > 0 ? resourceTypes.map(type => (
+                                    <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
+                                )) : <SelectItem value="disabled_placeholder_no_types" disabled>No resource types available. Add types in Lab Management.</SelectItem>}
+                                </SelectContent>
+                            </Select>
+                            {resourceTypes.length === 0 && <FormDescription className="text-destructive">Please define resource types in Admin &gt; Resources.</FormDescription>}
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="labId"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Lab <span className="text-destructive">*</span></FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || ''} disabled={labs.length === 0 || isSubmitting}>
+                                <FormControl><SelectTrigger><SelectValue placeholder={labs.length > 0 ? "Select a lab" : "No labs defined"} /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                {labs.length > 0 ? labs.map(lab => (
+                                    <SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>
+                                )) : <SelectItem value="disabled_placeholder_no_labs" disabled>No labs available. Add labs in Lab Management.</SelectItem>}
+                                </SelectContent>
+                            </Select>
+                             {labs.length === 0 && <FormDescription className="text-destructive">Please define labs in Admin &gt; Lab Operations.</FormDescription>}
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                      />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Description (Optional)</FormLabel>
+                        <FormControl><Textarea placeholder="Detailed description of the resource..." {...field} value={field.value ?? ''} rows={3} disabled={isSubmitting}/></FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                  />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                          control={form.control}
+                          name="imageUrl"
+                          render={({ field }) => (
+                              <FormItem>
+                              <FormLabel>Image URL (Optional)</FormLabel>
+                              <FormControl><Input type="url" placeholder="https://placehold.co/600x400.png" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
+                              <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                       <FormField
+                          control={form.control}
+                          name="purchaseDate"
+                          render={({ field }) => (
+                              <FormItem>
+                              <FormLabel>Purchase Date (Optional)</FormLabel>
+                              <FormControl><Input type="date" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
+                              <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField
+                          control={form.control}
+                          name="manufacturer"
+                          render={({ field }) => (
+                              <FormItem>
+                              <FormLabel>Manufacturer (Optional)</FormLabel>
+                              <FormControl><Input placeholder="e.g., Keysight" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
+                              <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                      <FormField
+                          control={form.control}
+                          name="model"
+                          render={({ field }) => (
+                              <FormItem>
+                              <FormLabel>Model (Optional)</FormLabel>
+                              <FormControl><Input placeholder="e.g., MSOX3054T" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
+                              <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                      <FormField
+                          control={form.control}
+                          name="serialNumber"
+                          render={({ field }) => (
+                              <FormItem>
+                              <FormLabel>Serial Number (Optional)</FormLabel>
+                              <FormControl><Input placeholder="e.g., MY58012345" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
+                              <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                  </div>
+
+                  <FormField
                       control={form.control}
-                      name="resourceTypeId"
+                      name="status"
                       render={({ field }) => (
                           <FormItem>
-                          <FormLabel>Resource Type <span className="text-destructive">*</span></FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ''} disabled={resourceTypes.length === 0 || isSubmitting}>
-                              <FormControl><SelectTrigger>
-                                  <SelectValue placeholder={resourceTypes.length > 0 ? "Select a type" : "No types defined"} />
-                              </SelectTrigger></FormControl>
+                          <FormLabel>Operational Status <span className="text-destructive">*</span></FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || 'Working'} disabled={isSubmitting}>
+                              <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
                               <SelectContent>
-                              {resourceTypes.length > 0 ? resourceTypes.map(type => (
-                                  <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-                              )) : <SelectItem value="disabled_placeholder_no_types" disabled>No resource types available. Add types in Lab Management.</SelectItem>}
+                              {resourceStatusesList.map(statusVal => (
+                                  <SelectItem key={statusVal} value={statusVal}>{statusVal}</SelectItem>
+                              ))}
                               </SelectContent>
                           </Select>
-                          {resourceTypes.length === 0 && <FormDescription className="text-destructive">Please define resource types in Admin &gt; Resources.</FormDescription>}
                           <FormMessage />
                           </FormItem>
                       )}
-                    />
-                    <FormField
+                  />
+
+                  <FormField
                       control={form.control}
-                      name="labId"
+                      name="features"
                       render={({ field }) => (
                           <FormItem>
-                          <FormLabel>Lab <span className="text-destructive">*</span></FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ''} disabled={labs.length === 0 || isSubmitting}>
-                              <FormControl><SelectTrigger><SelectValue placeholder={labs.length > 0 ? "Select a lab" : "No labs defined"} /></SelectTrigger></FormControl>
-                              <SelectContent>
-                              {labs.length > 0 ? labs.map(lab => (
-                                  <SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>
-                              )) : <SelectItem value="disabled_placeholder_no_labs" disabled>No labs available. Add labs in Lab Management.</SelectItem>}
-                              </SelectContent>
-                          </Select>
-                           {labs.length === 0 && <FormDescription className="text-destructive">Please define labs in Admin &gt; Lab Operations.</FormDescription>}
+                          <FormLabel>Key Features (Optional)</FormLabel>
+                          <FormControl><Textarea placeholder="e.g., 500 MHz Bandwidth, 4 Analog Channels, 16 Digital Channels" {...field} value={field.value ?? ''} rows={2} disabled={isSubmitting}/></FormControl>
+                          <FormDescription>Enter comma-separated values.</FormDescription>
                           <FormMessage />
                           </FormItem>
                       )}
-                    />
-                </div>
+                  />
+                  <FormField
+                      control={form.control}
+                      name="notes"
+                      render={({ field }) => (
+                          <FormItem>
+                          <FormLabel>General Notes (Optional)</FormLabel>
+                          <FormControl><Textarea placeholder="Any additional notes or special instructions..." {...field} value={field.value ?? ''} rows={2} disabled={isSubmitting}/></FormControl>
+                          <FormMessage />
+                          </FormItem>
+                      )}
+                  />
+                   <FormField
+                      control={form.control}
+                      name="allowQueueing"
+                      render={({ field }) => (
+                          <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 shadow-sm bg-background">
+                          <FormControl>
+                              <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              disabled={isSubmitting}
+                              />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                              <FormLabel className="cursor-pointer">
+                              Allow Waitlisting/Queueing
+                              </FormLabel>
+                              <FormDescription>
+                              Permit users to join a waitlist if this resource is already booked.
+                              </FormDescription>
+                          </div>
+                          </FormItem>
+                      )}
+                   />
 
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                      <FormItem>
-                      <FormLabel>Description (Optional)</FormLabel>
-                      <FormControl><Textarea placeholder="Detailed description of the resource..." {...field} value={field.value ?? ''} rows={3} disabled={isSubmitting}/></FormControl>
-                      <FormMessage />
-                      </FormItem>
-                  )}
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                        control={form.control}
-                        name="imageUrl"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Image URL (Optional)</FormLabel>
-                            <FormControl><Input type="url" placeholder="https://placehold.co/600x400.png" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                     <FormField
-                        control={form.control}
-                        name="purchaseDate"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Purchase Date (Optional)</FormLabel>
-                            <FormControl><Input type="date" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField
-                        control={form.control}
-                        name="manufacturer"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Manufacturer (Optional)</FormLabel>
-                            <FormControl><Input placeholder="e.g., Keysight" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="model"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Model (Optional)</FormLabel>
-                            <FormControl><Input placeholder="e.g., MSOX3054T" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="serialNumber"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Serial Number (Optional)</FormLabel>
-                            <FormControl><Input placeholder="e.g., MY58012345" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                </div>
-
-                <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Operational Status <span className="text-destructive">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || 'Working'} disabled={isSubmitting}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
-                            <SelectContent>
-                            {resourceStatusesList.map(statusVal => (
-                                <SelectItem key={statusVal} value={statusVal}>{statusVal}</SelectItem>
-                            ))}
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
-                <FormField
-                    control={form.control}
-                    name="features"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Key Features (Optional)</FormLabel>
-                        <FormControl><Textarea placeholder="e.g., 500 MHz Bandwidth, 4 Analog Channels, 16 Digital Channels" {...field} value={field.value ?? ''} rows={2} disabled={isSubmitting}/></FormControl>
-                        <FormDescription>Enter comma-separated values.</FormDescription>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                />
-                <FormField
-                    control={form.control}
-                    name="notes"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>General Notes (Optional)</FormLabel>
-                        <FormControl><Textarea placeholder="Any additional notes or special instructions..." {...field} value={field.value ?? ''} rows={2} disabled={isSubmitting}/></FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                />
-                 <FormField
-                    control={form.control}
-                    name="allowQueueing"
-                    render={({ field }) => (
-                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 shadow-sm bg-background">
-                        <FormControl>
-                            <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            disabled={isSubmitting}
-                            />
-                        </FormControl>
-                        <div className="space-y-1 leading-none">
-                            <FormLabel className="cursor-pointer">
-                            Allow Waitlisting/Queueing
-                            </FormLabel>
-                            <FormDescription>
-                            Permit users to join a waitlist if this resource is already booked.
-                            </FormDescription>
-                        </div>
-                        </FormItem>
-                    )}
-                 />
-
-                
-                <div className="pt-2">
-                    <h3 className="text-md font-medium mb-3 flex items-center border-t pt-5 mt-3">
-                        <Network className="mr-2 h-5 w-5 text-primary" /> Remote Access Details (Optional)
-                    </h3>
-                    <div className="space-y-4 pl-2 border-l-2 border-muted ml-2.5">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField
-                                control={form.control}
-                                name="remoteAccess.ipAddress"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>IP Address (Optional)</FormLabel>
-                                    <FormControl><Input placeholder="e.g., 192.168.1.100" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="remoteAccess.hostname"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Hostname (Optional)</FormLabel>
-                                    <FormControl><Input placeholder="e.g., scope-01.lab.internal" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                        </div>
-                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <FormField
-                                control={form.control}
-                                name="remoteAccess.protocol"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Protocol (Optional)</FormLabel>
-                                    <Select
-                                      onValueChange={(v) => field.onChange(v === NONE_PROTOCOL_VALUE ? '' : v)}
-                                      value={field.value === '' || field.value === undefined || field.value === null ? NONE_PROTOCOL_VALUE : field.value}
-                                      disabled={isSubmitting}
-                                    >
-                                        <FormControl><SelectTrigger><SelectValue placeholder="Select protocol" /></SelectTrigger></FormControl>
-                                        <SelectContent>
-                                            <SelectItem value={NONE_PROTOCOL_VALUE}>None</SelectItem>
-                                            {VALID_REMOTE_PROTOCOLS.map(p => (
-                                                <SelectItem key={p} value={p}>{p}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                             <FormField
-                                control={form.control}
-                                name="remoteAccess.port"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Port (Optional)</FormLabel>
-                                    <FormControl><Input
-                                        type="text"
-                                        placeholder="e.g., 22, 3389"
-                                        {...field}
-                                        value={field.value === null || field.value === undefined ? '' : String(field.value)}
-                                        onChange={e => field.onChange(e.target.value)}
+                  
+                  <div className="pt-2">
+                      <h3 className="text-md font-medium mb-3 flex items-center border-t pt-5 mt-3">
+                          <Network className="mr-2 h-5 w-5 text-primary" /> Remote Access Details (Optional)
+                      </h3>
+                      <div className="space-y-4 pl-2 border-l-2 border-muted ml-2.5">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField
+                                  control={form.control}
+                                  name="remoteAccess.ipAddress"
+                                  render={({ field }) => (
+                                      <FormItem>
+                                      <FormLabel>IP Address (Optional)</FormLabel>
+                                      <FormControl><Input placeholder="e.g., 192.168.1.100" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
+                                      <FormMessage />
+                                      </FormItem>
+                                  )}
+                              />
+                              <FormField
+                                  control={form.control}
+                                  name="remoteAccess.hostname"
+                                  render={({ field }) => (
+                                      <FormItem>
+                                      <FormLabel>Hostname (Optional)</FormLabel>
+                                      <FormControl><Input placeholder="e.g., scope-01.lab.internal" {...field} value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
+                                      <FormMessage />
+                                      </FormItem>
+                                  )}
+                              />
+                          </div>
+                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <FormField
+                                  control={form.control}
+                                  name="remoteAccess.protocol"
+                                  render={({ field }) => (
+                                      <FormItem>
+                                      <FormLabel>Protocol (Optional)</FormLabel>
+                                      <Select
+                                        onValueChange={(v) => field.onChange(v === NONE_PROTOCOL_VALUE ? '' : v)}
+                                        value={field.value === '' || field.value === undefined || field.value === null ? NONE_PROTOCOL_VALUE : field.value}
                                         disabled={isSubmitting}
-                                     /></FormControl>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="remoteAccess.username"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Username (Optional)</FormLabel>
-                                    <FormControl><Input placeholder="e.g., labuser" {...field}  value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                        </div>
-                        <FormField
-                            control={form.control}
-                            name="remoteAccess.notes"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Connection Notes (Optional)</FormLabel>
-                                <FormControl><Textarea placeholder="e.g., VPN required, specific client versions, credential location..." {...field} value={field.value ?? ''} rows={2} disabled={isSubmitting}/></FormControl>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    </div>
-                </div>
-            </div>
-            </ScrollArea>
-            {/* DialogFooter moved outside the form */}
-          </form>
+                                      >
+                                          <FormControl><SelectTrigger><SelectValue placeholder="Select protocol" /></SelectTrigger></FormControl>
+                                          <SelectContent>
+                                              <SelectItem value={NONE_PROTOCOL_VALUE}>None</SelectItem>
+                                              {VALID_REMOTE_PROTOCOLS.map(p => (
+                                                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                                              ))}
+                                          </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                      </FormItem>
+                                  )}
+                              />
+                               <FormField
+                                  control={form.control}
+                                  name="remoteAccess.port"
+                                  render={({ field }) => (
+                                      <FormItem>
+                                      <FormLabel>Port (Optional)</FormLabel>
+                                      <FormControl><Input
+                                          type="text"
+                                          placeholder="e.g., 22, 3389"
+                                          {...field}
+                                          value={field.value === null || field.value === undefined ? '' : String(field.value)}
+                                          onChange={e => field.onChange(e.target.value)}
+                                          disabled={isSubmitting}
+                                       /></FormControl>
+                                      <FormMessage />
+                                      </FormItem>
+                                  )}
+                              />
+                              <FormField
+                                  control={form.control}
+                                  name="remoteAccess.username"
+                                  render={({ field }) => (
+                                      <FormItem>
+                                      <FormLabel>Username (Optional)</FormLabel>
+                                      <FormControl><Input placeholder="e.g., labuser" {...field}  value={field.value ?? ''} disabled={isSubmitting}/></FormControl>
+                                      <FormMessage />
+                                      </FormItem>
+                                  )}
+                              />
+                          </div>
+                          <FormField
+                              control={form.control}
+                              name="remoteAccess.notes"
+                              render={({ field }) => (
+                                  <FormItem>
+                                  <FormLabel>Connection Notes (Optional)</FormLabel>
+                                  <FormControl><Textarea placeholder="e.g., VPN required, specific client versions, credential location..." {...field} value={field.value ?? ''} rows={2} disabled={isSubmitting}/></FormControl>
+                                  <FormMessage />
+                                  </FormItem>
+                              )}
+                          />
+                      </div>
+                  </div>
+              </div>
+            </form>
+          </ScrollArea>
         </Form>
         <DialogFooter className="pt-6 border-t">
           <Button type="submit" form="resource-form-id" disabled={isSubmitting || (resourceTypes.length === 0 && !initialResource) || (labs.length === 0 && !initialResource) }>
