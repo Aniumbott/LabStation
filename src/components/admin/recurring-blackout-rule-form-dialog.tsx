@@ -21,7 +21,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
 import type { RecurringBlackoutRule, DayOfWeek, Lab } from '@/types';
 import { daysOfWeekArray } from '@/types';
-import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 
@@ -114,11 +113,10 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
             {dialogDescription}
           </DialogDescription>
         </DialogHeader>
-        <Separator className="my-4" />
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-4">
             <ScrollArea className="max-h-[60vh]">
-              <div className="space-y-6">
+              <div className="space-y-6 pr-1">
                 <FormField
                   control={form.control}
                   name="labId"
@@ -223,7 +221,7 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
                 />
               </div>
             </ScrollArea>
-            <DialogFooter className="pt-4">
+            <DialogFooter className="pt-6 border-t">
                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
@@ -244,3 +242,4 @@ export function RecurringBlackoutRuleFormDialog({ open, onOpenChange, initialRul
     </Dialog>
   );
 }
+

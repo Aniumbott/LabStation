@@ -38,7 +38,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
 import { cn, formatDateSafe } from '@/lib/utils';
 import { db, auth } from '@/lib/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy, Timestamp, serverTimestamp } from 'firebase/firestore';
@@ -375,9 +374,8 @@ export default function BookingRequestsPage() {
                     Refine the list of pending or waitlisted booking requests.
                   </DialogDescription>
                 </DialogHeader>
-                <Separator className="my-4" />
-                <ScrollArea className="max-h-[60vh]">
-                  <div className="space-y-4">
+                <ScrollArea className="max-h-[60vh] mt-4">
+                  <div className="space-y-4 pr-1">
                     <div>
                       <Label htmlFor="requestSearchDialog">Search (Resource/User/Notes)</Label>
                         <div className="relative mt-1">
@@ -423,7 +421,7 @@ export default function BookingRequestsPage() {
                     </div>
                   </div>
                 </ScrollArea>
-                <DialogFooter className="pt-4">
+                <DialogFooter className="pt-6 border-t">
                     <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
@@ -530,4 +528,5 @@ export default function BookingRequestsPage() {
     </TooltipProvider>
   );
 }
+
 

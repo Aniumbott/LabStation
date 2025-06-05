@@ -49,7 +49,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
 import { userRolesList } from '@/lib/app-constants';
 import { addNotification, addAuditLog } from '@/lib/firestore-helpers';
@@ -411,9 +410,8 @@ export default function UsersPage() {
                     Refine the list of users by applying filters below.
                   </DialogDescription>
                 </DialogHeader>
-                <Separator className="my-4" />
-                <ScrollArea className="max-h-[60vh]">
-                  <div className="space-y-4">
+                <ScrollArea className="max-h-[60vh] mt-4">
+                  <div className="space-y-4 pr-1">
                     <div>
                       <Label htmlFor="userSearchDialog">Search (Name/Email)</Label>
                       <div className="relative mt-1">
@@ -457,7 +455,7 @@ export default function UsersPage() {
                     </div>
                   </div>
                 </ScrollArea>
-                <DialogFooter className="pt-4">
+                <DialogFooter className="pt-6 border-t">
                   <Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto">
                     <FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters
                   </Button>
@@ -546,7 +544,7 @@ export default function UsersPage() {
                                     This will remove the signup request for <span className="font-semibold">{userToReject?.name}</span>. This action cannot be undone from the UI (Auth user might persist if they completed Firebase Auth part).
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
-                                <AlertDialogFooter>
+                                <AlertDialogFooter className="pt-6 border-t">
                                   <AlertDialogCancel onClick={() => setUserToReject(null)}>Cancel</AlertDialogCancel>
                                   <AlertDialogAction variant="destructive" onClick={handleConfirmRejectUser}>
                                     Reject Signup
@@ -595,7 +593,7 @@ export default function UsersPage() {
                                     The Firebase Auth account may need to be deleted separately.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
-                                <AlertDialogFooter>
+                                <AlertDialogFooter className="pt-6 border-t">
                                     <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
                                     <AlertDialogAction variant="destructive" onClick={() => userToDelete && handleDeleteUser(userToDelete.id)}>
                                     Delete User Profile
@@ -669,3 +667,4 @@ export default function UsersPage() {
     </div>
   );
 }
+

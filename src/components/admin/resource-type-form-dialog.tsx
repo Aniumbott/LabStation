@@ -19,7 +19,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
 import type { ResourceType } from '@/types';
-import { Separator } from '@/components/ui/separator';
 
 const resourceTypeFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(50, { message: 'Name cannot exceed 50 characters.' }),
@@ -73,9 +72,8 @@ export function ResourceTypeFormDialog({ open, onOpenChange, initialType, onSave
             {initialType ? `Modify details for "${initialType.name}".` : 'Provide information for the new resource category.'}
           </DialogDescription>
         </DialogHeader>
-        <Separator className="my-4" />
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-4 space-y-4">
             <FormField
               control={form.control}
               name="name"
@@ -102,7 +100,7 @@ export function ResourceTypeFormDialog({ open, onOpenChange, initialType, onSave
                 </FormItem>
               )}
             />
-            <DialogFooter className="pt-4">
+            <DialogFooter className="pt-6 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={form.formState.isSubmitting}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
@@ -123,3 +121,4 @@ export function ResourceTypeFormDialog({ open, onOpenChange, initialType, onSave
     </Dialog>
   );
 }
+

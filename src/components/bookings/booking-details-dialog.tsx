@@ -14,9 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { Booking, BookingUsageDetails } from '@/types';
 import { format, isValid, parseISO, isPast } from 'date-fns';
-import { Calendar, Clock, User, Info, Tag, StickyNote, Activity, CheckCircle, AlertCircle, XCircle, FileText, Edit2 } from 'lucide-react';
+import { Calendar, Clock, User, Info, Tag, StickyNote, Activity, CheckCircle, AlertCircle, XCircle, FileText, Edit2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Separator } from '../ui/separator';
 import { LogUsageFormDialog } from './log-usage-form-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -104,9 +103,8 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
               Full information for your booking of {currentBookingDetails.resourceName}.
             </DialogDescription>
           </DialogHeader>
-          <Separator className="my-4"/>
-          <ScrollArea className="max-h-[60vh]"> 
-            <div className="space-y-3 text-sm">
+          <ScrollArea className="max-h-[60vh] mt-4"> 
+            <div className="space-y-3 text-sm pr-1">
               <div className="flex items-center">
                 <Info className="mr-3 h-5 w-5 text-muted-foreground" />
                 <span className="font-medium text-muted-foreground w-28">Resource:</span>
@@ -148,8 +146,7 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
 
             {currentBookingDetails.usageDetails && (
               <>
-                <Separator className="my-4" />
-                <div className="space-y-3 text-sm">
+                <div className="space-y-3 text-sm pr-1 pt-3 mt-3 border-t">
                   <h3 className="text-md font-semibold flex items-center">
                     <Activity className="mr-2 h-5 w-5 text-primary" /> Usage Details
                   </h3>
@@ -170,15 +167,14 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
               </>
             )}
           </ScrollArea> 
-          <Separator className="my-4"/>
-          <DialogFooter className="pt-4">
+          <DialogFooter className="pt-6 border-t">
             {canLogUsage && (
               <Button variant="secondary" onClick={() => setIsLogUsageFormOpen(true)}>
                 <Edit2 className="mr-2 h-4 w-4" /> {currentBookingDetails.usageDetails ? 'Edit Usage Log' : 'Log Usage'}
               </Button>
             )}
             <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Close
+              <X className="mr-2 h-4 w-4" /> Close
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -195,3 +191,4 @@ export function BookingDetailsDialog({ booking: bookingProp, isOpen, onOpenChang
     </>
   );
 }
+

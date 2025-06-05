@@ -20,7 +20,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { UserPlus, Save, X, Loader2 } from 'lucide-react';
 import type { User, RoleName } from '@/types';
 import { userRolesList } from '@/lib/app-constants';
-import { Separator } from '@/components/ui/separator';
 
 const userFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, "Name cannot exceed 100 characters."),
@@ -83,9 +82,8 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
             {initialUser ? `Modify the Firestore profile for ${initialUser.name}. Email cannot be changed here.` : 'Fill in the information for the new user profile. This does not create a Firebase Auth account.'}
           </DialogDescription>
         </DialogHeader>
-        <Separator className="my-4" />
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-4 space-y-4">
             <FormField
               control={form.control}
               name="name"
@@ -142,7 +140,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
                 </FormItem>
               )}
             />
-            <DialogFooter className="pt-4">
+            <DialogFooter className="pt-6 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={form.formState.isSubmitting}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
@@ -163,3 +161,4 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
     </Dialog>
   );
 }
+

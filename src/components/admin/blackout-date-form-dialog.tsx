@@ -23,7 +23,6 @@ import { Save, X, PlusCircle, Calendar as CalendarIcon, Loader2 } from 'lucide-r
 import type { BlackoutDate, Lab } from '@/types';
 import { format, parseISO, isValid as isValidDateFn, startOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Separator } from '@/components/ui/separator';
 
 const blackoutDateFormSchema = z.object({
   labId: z.string().optional().nullable(),
@@ -121,9 +120,8 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
             {dialogDescription}
           </DialogDescription>
         </DialogHeader>
-        <Separator className="my-4" />
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-4 space-y-4">
             <FormField
               control={form.control}
               name="labId"
@@ -203,7 +201,7 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
                 </FormItem>
               )}
             />
-            <DialogFooter className="pt-4">
+            <DialogFooter className="pt-6 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
@@ -224,3 +222,4 @@ export function BlackoutDateFormDialog({ open, onOpenChange, initialBlackoutDate
     </Dialog>
   );
 }
+

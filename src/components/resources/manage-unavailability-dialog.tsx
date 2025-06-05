@@ -20,7 +20,6 @@ import { DateRange } from 'react-day-picker';
 import type { Resource, UnavailabilityPeriod } from '@/types';
 import { format, startOfDay, isValid as isValidDateFn, parseISO, isBefore, isSameDay, max, min, formatISO } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import { Separator } from '@/components/ui/separator';
 import { Trash2, PlusCircle, Loader2, Save, X } from 'lucide-react';
 
 interface ManageUnavailabilityDialogProps {
@@ -125,9 +124,8 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
             Define periods when this resource will be unavailable for booking.
           </DialogDescription>
         </DialogHeader>
-        <Separator className="my-4" />
-        <ScrollArea className="max-h-[65vh]">
-          <div className="space-y-6">
+        <ScrollArea className="max-h-[65vh] mt-4">
+          <div className="space-y-6 pr-1">
             <div>
               <h3 className="text-lg font-semibold mb-2">Add New Unavailability Period</h3>
               <div className="space-y-4 p-4 border rounded-md">
@@ -163,10 +161,8 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
               </div>
             </div>
 
-            <Separator />
-
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Current Unavailability Periods ({currentPeriods.length})</h3>
+            <div className="pt-2"> {/* Added padding top for the separator effect */}
+              <h3 className="text-lg font-semibold mb-2 border-t pt-5 mt-3">Current Unavailability Periods ({currentPeriods.length})</h3>
               {currentPeriods.length > 0 ? (
                 <div className="border rounded-md overflow-hidden">
                   <Table>
@@ -201,8 +197,7 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
             </div>
           </div>
         </ScrollArea>
-        <Separator className="my-4" />
-        <DialogFooter className="pt-4">
+        <DialogFooter className="pt-6 border-t">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             <X className="mr-2 h-4 w-4" /> Cancel
           </Button>
@@ -215,3 +210,4 @@ export function ManageUnavailabilityDialog({ resource, open, onOpenChange, onSav
     </Dialog>
   );
 }
+

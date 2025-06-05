@@ -25,7 +25,6 @@ import type { Resource, ResourceStatus, ResourceType, Lab } from '@/types';
 import { resourceStatusesList } from '@/lib/app-constants';
 import { parseISO, format, isValid as isValidDateFn } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
-import { Separator } from '@/components/ui/separator';
 
 const VALID_REMOTE_PROTOCOLS = ['RDP', 'SSH', 'VNC', 'Other'] as const;
 const NONE_PROTOCOL_VALUE = "--none-protocol--";
@@ -199,9 +198,9 @@ export function ResourceFormDialog({
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-4">
             <ScrollArea className="max-h-[70vh] overflow-y-auto pr-2">
-            <div className="space-y-6 py-2 pb-4 px-1">
+            <div className="space-y-6 pr-1">
                 <FormField
                   control={form.control}
                   name="name"
@@ -230,7 +229,7 @@ export function ResourceFormDialog({
                               )) : <SelectItem value="disabled_placeholder_no_types" disabled>No resource types available. Add types in Lab Management.</SelectItem>}
                               </SelectContent>
                           </Select>
-                          {resourceTypes.length === 0 && <FormDescription className="text-destructive">Please define resource types in Admin &gt; Lab Management.</FormDescription>}
+                          {resourceTypes.length === 0 && <FormDescription className="text-destructive">Please define resource types in Admin &gt; Resources.</FormDescription>}
                           <FormMessage />
                           </FormItem>
                       )}
@@ -249,7 +248,7 @@ export function ResourceFormDialog({
                               )) : <SelectItem value="disabled_placeholder_no_labs" disabled>No labs available. Add labs in Lab Management.</SelectItem>}
                               </SelectContent>
                           </Select>
-                           {labs.length === 0 && <FormDescription className="text-destructive">Please define labs in Admin &gt; Lab Management.</FormDescription>}
+                           {labs.length === 0 && <FormDescription className="text-destructive">Please define labs in Admin &gt; Lab Operations.</FormDescription>}
                           <FormMessage />
                           </FormItem>
                       )}
@@ -393,9 +392,11 @@ export function ResourceFormDialog({
                     )}
                  />
 
-                <Separator />
-                <div>
-                    <h3 className="text-md font-medium mb-3 flex items-center"><Network className="mr-2 h-5 w-5 text-primary" /> Remote Access Details (Optional)</h3>
+                
+                <div className="pt-2"> {/* Added padding top for the separator effect */}
+                    <h3 className="text-md font-medium mb-3 flex items-center border-t pt-5 mt-3">
+                        <Network className="mr-2 h-5 w-5 text-primary" /> Remote Access Details (Optional)
+                    </h3>
                     <div className="space-y-4 pl-2 border-l-2 border-muted ml-2.5">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <FormField
@@ -490,7 +491,7 @@ export function ResourceFormDialog({
                 </div>
             </div>
             </ScrollArea>
-            <DialogFooter className="pt-6 border-t mt-4">
+            <DialogFooter className="pt-6 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                     <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
@@ -511,3 +512,4 @@ export function ResourceFormDialog({
     </Dialog>
   );
 }
+

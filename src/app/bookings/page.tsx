@@ -28,7 +28,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { cn, formatDateSafe } from '@/lib/utils';
 import { BookingDetailsDialog } from '@/components/bookings/booking-details-dialog';
-import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { bookingStatusesForFilter, bookingStatusesForForm } from '@/lib/app-constants';
@@ -784,14 +783,12 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                     <DialogTrigger asChild><Button variant="outline" size="sm"><ListFilter className="mr-2 h-4 w-4" />Filters {activeFilterCount > 0 && (<Badge variant="secondary" className="ml-2 rounded-full px-1.5 py-0.5 text-xs">{activeFilterCount}</Badge>)}</Button></DialogTrigger>
                     <DialogContent className="w-full sm:max-w-lg">
                         <DialogHeader><DialogTitle>Filter Bookings</DialogTitle><DialogDescription>Refine your list of bookings.</DialogDescription></DialogHeader>
-                        <Separator className="my-4" />
-                        <ScrollArea className="max-h-[60vh]">
-                            <div className="space-y-6">
+                        <ScrollArea className="max-h-[60vh] mt-4">
+                            <div className="space-y-6 pr-1">
                                 <div>
                                     <Label htmlFor="bookingCalendarDialogDate">Filter by Specific Date (Optional)</Label>
                                     <div className="flex justify-center items-center rounded-md border p-2 mt-1"><Calendar mode="single" selected={tempSelectedDateForDialog} onSelect={(date) => setTempSelectedDateForDialog(date ? startOfDay(date) : undefined)} month={currentCalendarMonthInDialog} onMonthChange={setCurrentCalendarMonthInDialog} className="rounded-md" classNames={{ caption_label: "text-base font-semibold", day: "h-10 w-10", head_cell: "w-10" }} footer={tempSelectedDateForDialog && <Button variant="ghost" size="sm" onClick={() => { setTempSelectedDateForDialog(undefined); setCurrentCalendarMonthInDialog(startOfDay(new Date())); }} className="w-full mt-2 text-xs"><FilterX className="mr-2 h-4 w-4" /> Clear Date Selection</Button>} /></div>
                                 </div>
-                                <Separator />
                                 <div>
                                     <Label htmlFor="bookingSearchDialog">Search ({displayScope === 'all' && canViewAllBookings ? 'Resource/User/Notes' : 'Resource/Notes'})</Label>
                                     <div className="relative mt-1"><SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input id="bookingSearchDialog" type="search" placeholder="Keyword..." className="h-9 pl-8" value={tempSearchTerm} onChange={(e) => setTempSearchTerm(e.target.value)} /></div>
@@ -815,7 +812,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                                 )}
                             </div>
                         </ScrollArea>
-                        <DialogFooter className="pt-4"><Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters</Button><Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply Filters</Button></DialogFooter>
+                        <DialogFooter className="pt-6 border-t"><Button variant="ghost" onClick={resetDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4" /> Reset Dialog Filters</Button><Button variant="outline" onClick={() => setIsFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply Filters</Button></DialogFooter>
                     </DialogContent>
                 </Dialog>
               <Button onClick={() => handleOpenForm(undefined, null, activeSelectedDate || startOfToday())}><PlusCircle className="mr-2 h-4 w-4" /> New Booking</Button>
@@ -1046,9 +1043,8 @@ function BookingForm({ initialData, onSave, onCancel, currentUser, allAvailableR
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleRHFSubmit)}>
-        <Separator className="my-4" />
-        <ScrollArea className="max-h-[60vh]">
-          <div className="space-y-4">
+        <ScrollArea className="max-h-[60vh] mt-4">
+          <div className="space-y-4 pr-1">
 
             <FormField
               control={form.control}
@@ -1086,8 +1082,7 @@ function BookingForm({ initialData, onSave, onCancel, currentUser, allAvailableR
             <FormField control={form.control} name="notes" render={({ field }) => (<FormItem><FormLabel>Notes (Optional)</FormLabel><FormControl><Textarea placeholder="Any specific requirements or notes for this booking..." {...field} value={field.value || ''} rows={3} disabled={form.formState.isSubmitting}/></FormControl><FormMessage /></FormItem>)} />
           </div>
         </ScrollArea>
-        <Separator className="my-4" />
-        <DialogFooter className="pt-4">
+        <DialogFooter className="pt-6 border-t">
           <Button type="button" variant="outline" onClick={onCancel} disabled={form.formState.isSubmitting}><X className="mr-2 h-4 w-4" /> Cancel</Button>
           <Button type="submit" disabled={form.formState.isSubmitting || (selectedResource && selectedResource.status !== 'Working' && isNewBookingForm) || (allAvailableResources.length === 0 && isNewBookingForm)}>{form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{form.formState.isSubmitting ? "Saving..." : (initialData?.id ? "Save Changes" : "Request Booking")}</Button>
         </DialogFooter>
@@ -1103,4 +1098,5 @@ export default function BookingsPage() {
     </Suspense>
   );
 }
+
 

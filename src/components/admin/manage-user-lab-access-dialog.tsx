@@ -23,7 +23,6 @@ import { useAuth } from '@/components/auth-context';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { manageLabMembership_SA } from '@/lib/firestore-helpers';
-import { Separator } from '@/components/ui/separator';
 
 interface ManageUserLabAccessDialogProps {
   targetUser: User | null;
@@ -228,12 +227,11 @@ export function ManageUserLabAccessDialog({
           <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
-        <Separator className="my-4" />
-
+        
         {isLoadingMemberships ? (
-          <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading data...</div>
+          <div className="flex justify-center items-center py-10 mt-4"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading data...</div>
         ) : isAddManuallyMode ? (
-            <div className="space-y-4">
+            <div className="space-y-4 mt-4">
                 <div className="relative">
                      <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
@@ -277,8 +275,8 @@ export function ManageUserLabAccessDialog({
                 )}
             </div>
         ) : (
-          <ScrollArea className="max-h-[60vh]">
-            <div className="space-y-0"> {/* No space-y on the direct div to let Table handle its structure */}
+          <ScrollArea className="max-h-[60vh] mt-4">
+            <div className="space-y-0 pr-1"> 
               <Table>
                 <TableHeader><TableRow><TableHead>Lab Name</TableHead><TableHead>Current Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                 <TableBody>
@@ -305,7 +303,7 @@ export function ManageUserLabAccessDialog({
             </div>
           </ScrollArea>
         )}
-        <DialogFooter className="pt-4">
+        <DialogFooter className="pt-6 border-t">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             <X className="mr-2 h-4 w-4" /> Close
           </Button>
@@ -323,3 +321,4 @@ export function ManageUserLabAccessDialog({
     </Dialog>
   );
 }
+

@@ -19,7 +19,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Save, X, PlusCircle, Loader2 } from 'lucide-react';
 import type { Lab } from '@/types';
-import { Separator } from '@/components/ui/separator';
 
 const labFormSchema = z.object({
   name: z.string().min(2, { message: 'Lab name must be at least 2 characters.' }).max(100, { message: 'Name cannot exceed 100 characters.' }),
@@ -90,9 +89,8 @@ export function LabFormDialog({ open, onOpenChange, initialLab, onSave }: LabFor
             {initialLab ? `Modify details for "${initialLab.name}".` : 'Provide information for the new lab.'}
           </DialogDescription>
         </DialogHeader>
-        <Separator className="my-4" />
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-4 space-y-4">
             <FormField
               control={form.control}
               name="name"
@@ -132,7 +130,7 @@ export function LabFormDialog({ open, onOpenChange, initialLab, onSave }: LabFor
                 </FormItem>
               )}
             />
-            <DialogFooter className="pt-4">
+            <DialogFooter className="pt-6 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
@@ -153,3 +151,4 @@ export function LabFormDialog({ open, onOpenChange, initialLab, onSave }: LabFor
     </Dialog>
   );
 }
+

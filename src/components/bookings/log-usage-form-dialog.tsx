@@ -24,7 +24,6 @@ import { BookingUsageOutcomes } from '@/types';
 import { format, parseISO, isValid } from 'date-fns';
 import { ScrollArea } from '../ui/scroll-area';
 import { Save, X } from 'lucide-react';
-import { Separator } from '../ui/separator';
 
 const logUsageFormSchema = z.object({
   actualStartTime: z.string().optional().refine(val => !val || isValid(parseISO(val)), {
@@ -111,11 +110,10 @@ export function LogUsageFormDialog({ booking, open, onOpenChange, onSaveUsage }:
             Record details for the booking on {format(new Date(booking.startTime), 'PPP')}.
           </DialogDescription>
         </DialogHeader>
-        <Separator className="my-4" />
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-4">
             <ScrollArea className="max-h-[60vh]">
-              <div className="space-y-4">
+              <div className="space-y-4 pr-1">
                 <FormField
                   control={form.control}
                   name="actualStartTime"
@@ -194,8 +192,7 @@ export function LogUsageFormDialog({ booking, open, onOpenChange, onSaveUsage }:
                 />
               </div>
             </ScrollArea>
-            <Separator className="my-4" />
-            <DialogFooter className="pt-4">
+            <DialogFooter className="pt-6 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 <X className="mr-2 h-4 w-4" /> Cancel
               </Button>
@@ -209,3 +206,4 @@ export function LogUsageFormDialog({ booking, open, onOpenChange, onSaveUsage }:
     </Dialog>
   );
 }
+
