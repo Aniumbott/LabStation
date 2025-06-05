@@ -26,6 +26,7 @@ import { resourceStatusesList } from '@/lib/app-constants';
 import { parseISO, format, isValid as isValidDateFn } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 const VALID_REMOTE_PROTOCOLS = ['RDP', 'SSH', 'VNC', 'Other'] as const;
 const NONE_PROTOCOL_VALUE = "--none-protocol--";
@@ -191,17 +192,17 @@ export function ResourceFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>{initialResource ? 'Edit Resource' : 'Add New Resource'}</DialogTitle>
           <DialogDescription>
             {initialResource ? `Modify details for "${initialResource.name}".` : 'Provide information for the new lab resource.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <ScrollArea className="max-h-[70vh] mt-4">
-            <div className="space-y-6 pl-1 pr-1">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col overflow-hidden flex-grow min-h-0">
+            <ScrollArea className="mt-4 flex-grow min-h-0">
+            <div className="space-y-6 pl-1 pr-2">
                 <FormField
                   control={form.control}
                   name="name"
@@ -492,7 +493,7 @@ export function ResourceFormDialog({
                 </div>
             </div>
             </ScrollArea>
-            <DialogFooter className="pt-6 border-t">
+            <DialogFooter className="pt-6 border-t flex-shrink-0">
               <Button type="submit" disabled={isSubmitting || (resourceTypes.length === 0 && !initialResource) || (labs.length === 0 && !initialResource) }>
                 {isSubmitting
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -510,3 +511,5 @@ export function ResourceFormDialog({
     </Dialog>
   );
 }
+
+    
