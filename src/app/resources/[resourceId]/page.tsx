@@ -495,7 +495,7 @@ export default function ResourceDetailPage() {
     }
     try {
       const resourceDocRef = doc(db, "resources", resource.id);
-      const periodsToSave = updatedPeriods.map(p => ({...p, id: String(p.id)}));
+      const periodsToSave = updatedPeriods.map(p => ({...p, id: String(p.id) }));
       await updateDoc(resourceDocRef, { unavailabilityPeriods: periodsToSave, lastUpdatedAt: serverTimestamp() });
       addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Unavailability periods for resource '${resource.name}' updated by ${currentUser.name}.`});
       toast({ title: 'Unavailability Updated', description: `Unavailability periods for ${resource.name} have been updated.` });
