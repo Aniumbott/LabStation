@@ -5,8 +5,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation'; // Added
 import { PageHeader } from '@/components/layout/page-header';
-import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog } from 'lucide-react';
-import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus } from '@/types';
+import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, ListFilter, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck } from 'lucide-react';
+import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus, DayOfWeek } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -76,9 +76,6 @@ export default function LabOperationsCenterPage() {
     const [activeContextId, setActiveContextId] = useState<string>(GLOBAL_CONTEXT_VALUE);
     const [isLabAccessRequestLoading, setIsLabAccessRequestLoading] = useState(true);
 
-    const [activeGlobalClosuresTab, setActiveGlobalClosuresTab] = useState('specific-dates-global');
-    const [activeLabSpecificClosuresTab, setActiveLabSpecificClosuresTab] = useState('specific-dates-lab');
-
     // --- Resource Types State ---
     const [resourceTypes, setResourceTypes] = useState<ResourceType[]>([]);
     const [allResourcesForCountsAndChecks, setAllResourcesForCountsAndChecks] = useState<Resource[]>([]);
@@ -103,47 +100,31 @@ export default function LabOperationsCenterPage() {
     const [activeLabSortBy, setActiveLabSortBy] = useState<string>('name-asc');
 
 
-    // --- Blackout Dates & Recurring Rules State ---
-    const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([]);
-    const [recurringRules, setRecurringRules] = useState<RecurringBlackoutRule[]>([]);
-    // const [isDateFormDialogOpen, setIsDateFormDialogOpen] = useState(false);
-    // const [editingBlackoutDate, setEditingBlackoutDate] = useState<BlackoutDate | null>(null);
-    // const [dateToDelete, setDateToDelete] = useState<BlackoutDate | null>(null);
-    // const [isRecurringFormDialogOpen, setIsRecurringFormDialogOpen] = useState(false);
-    // const [editingRecurringRule, setEditingRecurringRule] = useState<RecurringBlackoutRule | null>(null);
-    // const [ruleToDelete, setRuleToDelete] = useState<RecurringBlackoutRule | null>(null);
-    // const [isClosureFilterDialogOpen, setIsClosureFilterDialogOpen] = useState(false);
-    // const [tempClosureSearchTerm, setTempClosureSearchTerm] = useState('');
-    // const [activeClosureSearchTerm, setActiveClosureSearchTerm] = useState('');
+    // --- Blackout Dates & Recurring Rules State (Used by both Global and Lab-Specific) ---
+    const [allBlackoutDates, setAllBlackoutDates] = useState<BlackoutDate[]>([]);
+    const [allRecurringRules, setAllRecurringRules] = useState<RecurringBlackoutRule[]>([]);
+
+    // --- Global Closures State ---
+    const [activeGlobalClosuresTab, setActiveGlobalClosuresTab] = useState('specific-dates-global');
+    const [isGlobalDateFormDialogOpen, setIsGlobalDateFormDialogOpen] = useState(false);
+    const [editingGlobalBlackoutDate, setEditingGlobalBlackoutDate] = useState<BlackoutDate | null>(null);
+    const [globalDateToDelete, setGlobalDateToDelete] = useState<BlackoutDate | null>(null);
+    const [isGlobalRecurringFormDialogOpen, setIsGlobalRecurringFormDialogOpen] = useState(false);
+    const [editingGlobalRecurringRule, setEditingGlobalRecurringRule] = useState<RecurringBlackoutRule | null>(null);
+    const [globalRuleToDelete, setGlobalRuleToDelete] = useState<RecurringBlackoutRule | null>(null);
+    const [isGlobalClosureFilterDialogOpen, setIsGlobalClosureFilterDialogOpen] = useState(false);
+    const [tempGlobalClosureSearchTerm, setTempGlobalClosureSearchTerm] = useState('');
+    const [activeGlobalClosureSearchTerm, setActiveGlobalClosureSearchTerm] = useState('');
+
 
     // --- Maintenance Requests State ---
     const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
     const [allTechniciansForMaintenance, setAllTechniciansForMaintenance] = useState<User[]>([]);
     const [allUsersData, setAllUsersData] = useState<User[]>([]);
-    // const [isMaintenanceFormDialogOpen, setIsMaintenanceFormDialogOpen] = useState(false);
-    // const [editingMaintenanceRequest, setEditingMaintenanceRequest] = useState<MaintenanceRequest | null>(null);
-    // const [isMaintenanceFilterDialogOpen, setIsMaintenanceFilterDialogOpen] = useState(false);
-    // const [tempMaintenanceSearchTerm, setTempMaintenanceSearchTerm] = useState('');
-    // const [tempMaintenanceFilterStatus, setTempMaintenanceFilterStatus] = useState<MaintenanceRequestStatus | 'all'>('all');
-    // const [tempMaintenanceFilterResourceId, setTempMaintenanceFilterResourceId] = useState<string>('all');
-    // const [tempMaintenanceFilterTechnicianId, setTempMaintenanceFilterTechnicianId] = useState<string>('all');
-    // const [tempMaintenanceFilterLabId, setTempMaintenanceFilterLabId] = useState<string>('all');
-    // const [activeMaintenanceSearchTerm, setActiveMaintenanceSearchTerm] = useState('');
-    // const [activeMaintenanceFilterStatus, setActiveMaintenanceFilterStatus] = useState<MaintenanceRequestStatus | 'all'>('all');
-    // const [activeMaintenanceFilterResourceId, setActiveMaintenanceFilterResourceId] = useState<string>('all');
-    // const [activeMaintenanceFilterTechnicianId, setActiveMaintenanceFilterTechnicianId] = useState<string>('all');
-    // const [activeMaintenanceFilterLabId, setActiveMaintenanceFilterLabId] = useState<string>('all');
 
     // --- Lab Access & Membership State ---
     const [allLabAccessRequests, setAllLabAccessRequests] = useState<LabMembershipRequest[]>([]);
     const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]);
-    // const [isProcessingAction, setIsProcessingAction] = useState<Record<string, {action: 'grant' | 'revoke' | 'approve_request' | 'reject_request', loading: boolean}>>({});
-    // const [isManualAddMemberDialogOpen, setIsManualAddMemberDialogOpen] = useState(false);
-    // const [isSystemWideAccessRequestsFilterOpen, setIsSystemWideAccessRequestsFilterOpen] = useState(false);
-    // const [tempSystemWideAccessRequestsFilterLabId, setTempSystemWideAccessRequestsFilterLabId] = useState('all');
-    // const [activeSystemWideAccessRequestsFilterLabId, setActiveSystemWideAccessRequestsFilterLabId] = useState('all');
-    // const [tempSystemWideAccessRequestsFilterUser, setTempSystemWideAccessRequestsFilterUser] = useState('');
-    // const [activeSystemWideAccessRequestsFilterUser, setActiveSystemWideAccessRequestsFilterUser] = useState('');
 
     const canManageAny = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
 
@@ -186,8 +167,8 @@ export default function LabOperationsCenterPage() {
             return { id: docSnap.id, ...data, dateReported: (data.dateReported as Timestamp)?.toDate() || new Date(), dateResolved: (data.dateResolved as Timestamp)?.toDate() } as MaintenanceRequest;
         }));
 
-        setBlackoutDates(boSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate)));
-        setRecurringRules(rrSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as RecurringBlackoutRule)));
+        setAllBlackoutDates(boSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate)));
+        setAllRecurringRules(rrSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as RecurringBlackoutRule)));
 
         const allFetchedMemberships = membershipsSnapshot.docs.map(mDoc => ({ id: mDoc.id, ...mDoc.data() } as LabMembership));
         setUserLabMemberships(allFetchedMemberships);
@@ -482,6 +463,14 @@ export default function LabOperationsCenterPage() {
             setLabToDelete(null);
             return;
         }
+        // Also check for members before deleting
+        const membersInThisLab = userLabMemberships.filter(mem => mem.labId === labId && mem.status === 'active').length;
+        if (membersInThisLab > 0) {
+            toast({ title: "Deletion Blocked", description: `Cannot delete lab "${deletedLab.name}" as it has ${membersInThisLab} active member(s). Please remove or reassign members first.`, variant: "destructive", duration: 7000 });
+            setLabToDelete(null);
+            return;
+        }
+
         setIsLoadingData(true);
         try {
             await deleteDoc(doc(db, "labs", labId));
@@ -489,21 +478,152 @@ export default function LabOperationsCenterPage() {
             toast({ title: "Lab Deleted", description: `Lab "${deletedLab.name}" removed.`, variant: "destructive" });
             setLabToDelete(null);
             await fetchAllAdminData();
+             // If the deleted lab was the active context, switch to global
+            if (activeContextId === labId) {
+                setActiveContextId(GLOBAL_CONTEXT_VALUE);
+            }
         } catch (error: any) {
             toast({ title: "Delete Error", description: `Could not delete lab: ${error.message}`, variant: "destructive" });
         } finally {
             setIsLoadingData(false);
         }
-    }, [currentUser, canManageAny, labs, allResourcesForCountsAndChecks, fetchAllAdminData, toast, setIsLoadingData, setLabToDelete]);
+    }, [currentUser, canManageAny, labs, allResourcesForCountsAndChecks, userLabMemberships, fetchAllAdminData, toast, setIsLoadingData, setLabToDelete, activeContextId, setActiveContextId]);
 
     const activeLabFilterCount = useMemo(() => [activeLabSearchTerm !== '', activeLabSortBy !== 'name-asc'].filter(Boolean).length, [activeLabSearchTerm, activeLabSortBy]);
 
 
-    // --- Lab Closures Logic (Context-Aware) ---
-    // ... (Commented out for now) ...
+    // --- Global Closures Logic ---
+    useEffect(() => {
+        if (isGlobalClosureFilterDialogOpen) {
+            setTempGlobalClosureSearchTerm(activeGlobalClosureSearchTerm);
+        }
+    }, [isGlobalClosureFilterDialogOpen, activeGlobalClosureSearchTerm]);
+    
+    const filteredGlobalBlackoutDates = useMemo(() => {
+        return allBlackoutDates.filter(bd => {
+            const isGlobal = !bd.labId;
+            const lowerSearchTerm = activeGlobalClosureSearchTerm.toLowerCase();
+            const reasonMatch = bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm);
+            const dateMatch = bd.date && isValidDateFn(parseISO(bd.date)) && format(parseISO(bd.date), 'PPP').toLowerCase().includes(lowerSearchTerm);
+            return isGlobal && (!activeGlobalClosureSearchTerm || reasonMatch || dateMatch);
+        });
+    }, [allBlackoutDates, activeGlobalClosureSearchTerm]);
 
-    // --- Maintenance Requests Logic (Context-Aware) ---
-    // ... (Commented out for now) ...
+    const filteredGlobalRecurringRules = useMemo(() => {
+        return allRecurringRules.filter(rule => {
+            const isGlobal = !rule.labId;
+            const lowerSearchTerm = activeGlobalClosureSearchTerm.toLowerCase();
+            const nameMatch = rule.name && rule.name.toLowerCase().includes(lowerSearchTerm);
+            const reasonMatch = rule.reason && rule.reason.toLowerCase().includes(lowerSearchTerm);
+            return isGlobal && (!activeGlobalClosureSearchTerm || nameMatch || reasonMatch);
+        });
+    }, [allRecurringRules, activeGlobalClosureSearchTerm]);
+
+    const handleOpenNewGlobalDateDialog = useCallback(() => { setEditingGlobalBlackoutDate(null); setIsGlobalDateFormDialogOpen(true); }, []);
+    const handleOpenEditGlobalDateDialog = useCallback((bd: BlackoutDate) => { setEditingGlobalBlackoutDate(bd); setIsGlobalDateFormDialogOpen(true); }, []);
+    
+    const handleSaveGlobalBlackoutDate = useCallback(async (data: BlackoutDateDialogFormValues) => {
+        if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
+        const formattedDateOnly = format(data.date, 'yyyy-MM-dd');
+        const displayDate = format(data.date, 'PPP');
+        const blackoutDataToSave: Omit<BlackoutDate, 'id'> = {
+            labId: null, // Explicitly global
+            date: formattedDateOnly,
+            reason: data.reason || undefined,
+        };
+        setIsLoadingData(true);
+        try {
+            if (editingGlobalBlackoutDate) {
+                await updateDoc(doc(db, "blackoutDates", editingGlobalBlackoutDate.id), blackoutDataToSave as any);
+                addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_UPDATED', { entityType: 'BlackoutDate', entityId: editingGlobalBlackoutDate.id, details: `Global Blackout Date for ${displayDate} updated. Reason: ${data.reason || 'N/A'}`});
+                toast({ title: 'Global Blackout Date Updated'});
+            } else {
+                const docRef = await addDoc(collection(db, "blackoutDates"), blackoutDataToSave);
+                addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_CREATED', { entityType: 'BlackoutDate', entityId: docRef.id, details: `Global Blackout Date for ${displayDate} created. Reason: ${data.reason || 'N/A'}`});
+                toast({ title: 'Global Blackout Date Added'});
+            }
+            setIsGlobalDateFormDialogOpen(false);
+            setEditingGlobalBlackoutDate(null);
+            await fetchAllAdminData();
+        } catch (error: any) { toast({ title: "Save Failed", description: `Failed to save global blackout date: ${error.message}`, variant: "destructive"});
+        } finally { setIsLoadingData(false); }
+    }, [currentUser, editingGlobalBlackoutDate, fetchAllAdminData, toast]);
+
+    const handleDeleteGlobalBlackoutDate = useCallback(async (blackoutDateId: string) => {
+        if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
+        const deletedDateObj = allBlackoutDates.find(bd => bd.id === blackoutDateId);
+        if (!deletedDateObj) return;
+        setIsLoadingData(true);
+        try {
+            await deleteDoc(doc(db, "blackoutDates", blackoutDateId));
+            addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Global Blackout Date for ${format(parseISO(deletedDateObj.date), 'PPP')} (Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`});
+            toast({ title: "Global Blackout Date Removed", variant: "destructive" });
+            setGlobalDateToDelete(null);
+            await fetchAllAdminData();
+        } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete global blackout date: ${error.message}`, variant: "destructive"});
+        } finally { setIsLoadingData(false); }
+    }, [currentUser, allBlackoutDates, fetchAllAdminData, toast]);
+
+    const handleOpenNewGlobalRecurringDialog = useCallback(() => { setEditingGlobalRecurringRule(null); setIsGlobalRecurringFormDialogOpen(true); }, []);
+    const handleOpenEditGlobalRecurringDialog = useCallback((rule: RecurringBlackoutRule) => { setEditingGlobalRecurringRule(rule); setIsGlobalRecurringFormDialogOpen(true); }, []);
+
+    const handleSaveGlobalRecurringRule = useCallback(async (data: RecurringRuleDialogFormValues) => {
+        if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
+        const ruleDataToSave: Omit<RecurringBlackoutRule, 'id'> = {
+            labId: null, // Explicitly global
+            name: data.name,
+            daysOfWeek: data.daysOfWeek,
+            reason: data.reason || undefined,
+        };
+        setIsLoadingData(true);
+        try {
+            if (editingGlobalRecurringRule) {
+                await updateDoc(doc(db, "recurringBlackoutRules", editingGlobalRecurringRule.id), ruleDataToSave as any);
+                addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_UPDATED', { entityType: 'RecurringBlackoutRule', entityId: editingGlobalRecurringRule.id, details: `Global recurring rule '${data.name}' updated.`});
+                toast({ title: 'Global Recurring Rule Updated'});
+            } else {
+                const docRef = await addDoc(collection(db, "recurringBlackoutRules"), ruleDataToSave);
+                addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_CREATED', { entityType: 'RecurringBlackoutRule', entityId: docRef.id, details: `Global recurring rule '${data.name}' created.`});
+                toast({ title: 'Global Recurring Rule Added'});
+            }
+            setIsGlobalRecurringFormDialogOpen(false);
+            setEditingGlobalRecurringRule(null);
+            await fetchAllAdminData();
+        } catch (error: any) { toast({ title: "Save Failed", description: `Failed to save global recurring rule: ${error.message}`, variant: "destructive"});
+        } finally { setIsLoadingData(false); }
+    }, [currentUser, editingGlobalRecurringRule, fetchAllAdminData, toast]);
+
+    const handleDeleteGlobalRecurringRule = useCallback(async (ruleId: string) => {
+        if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
+        const deletedRuleObj = allRecurringRules.find(r => r.id === ruleId);
+        if (!deletedRuleObj) return;
+        setIsLoadingData(true);
+        try {
+            await deleteDoc(doc(db, "recurringBlackoutRules", ruleId));
+            addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Global recurring rule '${deletedRuleObj.name}' deleted.`});
+            toast({ title: "Global Recurring Rule Removed", variant: "destructive" });
+            setGlobalRuleToDelete(null);
+            await fetchAllAdminData();
+        } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete global recurring rule: ${error.message}`, variant: "destructive"});
+        } finally { setIsLoadingData(false); }
+    }, [currentUser, allRecurringRules, fetchAllAdminData, toast]);
+    
+    const handleApplyGlobalClosureDialogFilters = useCallback(() => {
+        setActiveGlobalClosureSearchTerm(tempGlobalClosureSearchTerm);
+        setIsGlobalClosureFilterDialogOpen(false);
+    }, [tempGlobalClosureSearchTerm]);
+
+    const resetGlobalClosureDialogFiltersOnly = useCallback(() => {
+        setTempGlobalClosureSearchTerm('');
+    }, []);
+    
+    const resetAllActiveGlobalClosurePageFilters = useCallback(() => {
+        setActiveGlobalClosureSearchTerm('');
+        resetGlobalClosureDialogFiltersOnly();
+        setIsGlobalClosureFilterDialogOpen(false);
+    }, [resetGlobalClosureDialogFiltersOnly]);
+
+    const activeGlobalClosureFilterCount = useMemo(() => [activeGlobalClosureSearchTerm !== ''].filter(Boolean).length, [activeGlobalClosureSearchTerm]);
 
     // --- Lab Access & Membership Logic (Context-Aware) ---
     const handleMembershipAction = useCallback(async (
@@ -537,30 +657,8 @@ export default function LabOperationsCenterPage() {
         }
     }, [currentUser, fetchAllAdminData, toast]);
 
-    // --- Filtered data for context-aware views (Lab specific) ---
-    // const filteredLabAccessRequests = useMemo(() => {
-    //    if (activeContextId === GLOBAL_CONTEXT_VALUE) return []; // Not for global view in this specific list
-    //    return allLabAccessRequests.filter(req => req.labId === activeContextId);
-    // }, [allLabAccessRequests, activeContextId]);
 
-    // const activeLabMembers = useMemo(() => {
-    //   if (activeContextId === GLOBAL_CONTEXT_VALUE) return [];
-    //   return userLabMemberships
-    //     .filter(mem => mem.labId === activeContextId && mem.status === 'active')
-    //     .map(mem => {
-    //       const userDetail = allUsersData.find(u => u.id === mem.userId);
-    //       return { ...mem, userName: userDetail?.name || 'Unknown', userAvatarUrl: userDetail?.avatarUrl, userEmail: userDetail?.email || 'N/A' };
-    //     });
-    // }, [userLabMemberships, allUsersData, activeContextId]);
-
-    // const resourcesInSelectedLab = useMemo(() => allResourcesForCountsAndChecks.filter(r => r.labId === activeContextId), [allResourcesForCountsAndChecks, activeContextId]);
-    
-    // const maintenanceForSelectedLab = useMemo(() => {
-    //   return maintenanceRequests.filter(mr => resourcesInSelectedLab.some(r => r.id === mr.resourceId));
-    // }, [maintenanceRequests, resourcesInSelectedLab]);
-
-
-    if (!currentUser || !canManageAny) { // Main permission check for the whole page
+    if (!currentUser || !canManageAny) {
       return ( <div className="space-y-8"><PageHeader title="Lab Operations Center" icon={Cog} description="Access Denied." /><Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission.</p></CardContent></Card></div>);
     }
 
@@ -709,13 +807,91 @@ export default function LabOperationsCenterPage() {
                 </CardContent>
               </Card>
             </TabsContent>
-            <TabsContent value="global-closures" className="mt-6"><Card><CardHeader><CardTitle>Global Closures</CardTitle></CardHeader><CardContent><p>Global blackout dates and recurring rules UI will be here.</p></CardContent></Card></TabsContent>
+            
+            <TabsContent value="global-closures" className="mt-6">
+              <Card>
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <div><CardTitle className="text-xl">Global Lab Closures</CardTitle><p className="text-sm text-muted-foreground mt-1">Manage blackout dates and recurring rules that apply system-wide (to all labs).</p></div>
+                     <FilterSortDialog open={isGlobalClosureFilterDialogOpen} onOpenChange={setIsGlobalClosureFilterDialogOpen}>
+                      <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter Closures {activeGlobalClosureFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeGlobalClosureFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
+                      <FilterSortDialogContent className="sm:max-w-md">
+                        <FilterSortDialogHeader><FilterSortDialogTitle>Filter Global Closures</FilterSortDialogTitle></FilterSortDialogHeader>
+                        <Separator className="my-3" />
+                        <div className="space-y-3">
+                          <div className="relative"><Label htmlFor="globalClosureSearchDialog">Search (Reason/Name)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="globalClosureSearchDialog" value={tempGlobalClosureSearchTerm} onChange={e => setTempGlobalClosureSearchTerm(e.target.value)} placeholder="e.g., Holiday, Weekend" className="mt-1 h-9 pl-8"/></div>
+                        </div>
+                        <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetGlobalClosureDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsGlobalClosureFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyGlobalClosureDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
+                      </FilterSortDialogContent>
+                    </FilterSortDialog>
+                </CardHeader>
+                <CardContent>
+                  <Tabs value={activeGlobalClosuresTab} onValueChange={setActiveGlobalClosuresTab} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 mb-4">
+                      <TabsTrigger value="specific-dates-global"><CalendarDays className="mr-2 h-4 w-4"/>Specific Dates</TabsTrigger>
+                      <TabsTrigger value="recurring-rules-global"><Repeat className="mr-2 h-4 w-4"/>Recurring Rules</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="specific-dates-global">
+                      <div className="flex justify-end mb-3">
+                        <Button onClick={handleOpenNewGlobalDateDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Global Date</Button>
+                      </div>
+                      {isLoadingData && filteredGlobalBlackoutDates.length === 0 && !activeGlobalClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
+                      ) : filteredGlobalBlackoutDates.length > 0 ? (
+                        <div className="overflow-x-auto border rounded-md shadow-sm">
+                          <Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Reason</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
+                          <TableBody>{filteredGlobalBlackoutDates.map(bd => (
+                            <TableRow key={bd.id}><TableCell className="font-medium">{formatDateSafe(parseISO(bd.date), 'Invalid Date', 'PPP')}</TableCell><TableCell className="text-sm text-muted-foreground">{bd.reason || 'N/A'}</TableCell>
+                            <TableCell className="text-right space-x-1">
+                              <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditGlobalDateDialog(bd)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Date</TooltipContent></Tooltip>
+                              <AlertDialog open={globalDateToDelete?.id === bd.id} onOpenChange={(isOpen) => !isOpen && setGlobalDateToDelete(null)}>
+                                <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setGlobalDateToDelete(bd)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Date</TooltipContent></Tooltip>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader><AlertDialogTitle>Delete Global Blackout on {formatDateSafe(globalDateToDelete ? parseISO(globalDateToDelete.date) : new Date(), '', 'PPP')}?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                                  <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => globalDateToDelete && handleDeleteGlobalBlackoutDate(globalDateToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </TableCell></TableRow>
+                          ))}</TableBody></Table>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground"><CalendarOff className="h-10 w-10 mx-auto mb-2 opacity-50"/><p className="font-medium">{activeGlobalClosureSearchTerm ? "No global dates match filter." : "No global specific blackout dates."}</p></div>
+                      )}
+                    </TabsContent>
+                    <TabsContent value="recurring-rules-global">
+                       <div className="flex justify-end mb-3">
+                        <Button onClick={handleOpenNewGlobalRecurringDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Global Rule</Button>
+                      </div>
+                      {isLoadingData && filteredGlobalRecurringRules.length === 0 && !activeGlobalClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
+                      ) : filteredGlobalRecurringRules.length > 0 ? (
+                        <div className="overflow-x-auto border rounded-md shadow-sm">
+                          <Table><TableHeader><TableRow><TableHead>Rule Name</TableHead><TableHead>Days</TableHead><TableHead>Reason</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
+                          <TableBody>{filteredGlobalRecurringRules.map(rule => (
+                            <TableRow key={rule.id}><TableCell className="font-medium">{rule.name}</TableCell><TableCell className="text-sm text-muted-foreground">{rule.daysOfWeek.join(', ')}</TableCell><TableCell className="text-sm text-muted-foreground">{rule.reason || 'N/A'}</TableCell>
+                            <TableCell className="text-right space-x-1">
+                              <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditGlobalRecurringDialog(rule)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Rule</TooltipContent></Tooltip>
+                              <AlertDialog open={globalRuleToDelete?.id === rule.id} onOpenChange={(isOpen) => !isOpen && setGlobalRuleToDelete(null)}>
+                                <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setGlobalRuleToDelete(rule)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Rule</TooltipContent></Tooltip>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader><AlertDialogTitle>Delete Global Rule "{globalRuleToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                                  <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => globalRuleToDelete && handleDeleteGlobalRecurringRule(globalRuleToDelete.id)}>Delete Rule</AlertDialogAction></AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </TableCell></TableRow>
+                          ))}</TableBody></Table>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground"><Repeat className="h-10 w-10 mx-auto mb-2 opacity-50"/><p className="font-medium">{activeGlobalClosureSearchTerm ? "No global rules match filter." : "No global recurring closure rules."}</p></div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            </TabsContent>
             <TabsContent value="maintenance-log" className="mt-6"><Card><CardHeader><CardTitle>System-Wide Maintenance Log</CardTitle></CardHeader><CardContent><p>Full maintenance log UI will be here.</p></CardContent></Card></TabsContent>
             <TabsContent value="lab-access-requests" className="mt-6"><Card><CardHeader><CardTitle>System-Wide Lab Access Requests</CardTitle></CardHeader><CardContent><p>Lab access requests management UI will be here.</p></CardContent></Card></TabsContent>
           </Tabs>
         )}
 
-        {/* {!isLoadingData && activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
+        {!isLoadingData && activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
            <Tabs defaultValue={searchParamsObj.get('tab') || "lab-details"} className="w-full">
               <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
                   <TabsTrigger value="lab-details">Lab Overview</TabsTrigger>
@@ -729,29 +905,19 @@ export default function LabOperationsCenterPage() {
               <TabsContent value="lab-maintenance" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Maintenance</CardTitle></CardHeader><CardContent><p>Lab-specific maintenance log here.</p></CardContent></Card></TabsContent>
               <TabsContent value="lab-members" className="mt-6"><Card><CardHeader><CardTitle>{selectedLabDetails.name} - Members & Access</CardTitle></CardHeader><CardContent><p>Lab-specific members and access management here.</p></CardContent></Card></TabsContent>
           </Tabs>
-        )} */}
+        )}
 
 
         {isResourceTypeFormDialogOpen && currentUser && (<ResourceTypeFormDialog open={isResourceTypeFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceTypeFormDialogOpen(isOpen); if (!isOpen) setEditingType(null); }} initialType={editingType} onSave={handleSaveResourceType} />)}
         {isLabFormDialogOpen && currentUser && (<LabFormDialog open={isLabFormDialogOpen} onOpenChange={(isOpen) => { setIsLabFormDialogOpen(isOpen); if (!isOpen) setEditingLab(null); }} initialLab={editingLab} onSave={handleSaveLab} />)}
-        {/* {isDateFormDialogOpen && currentUser && (<BlackoutDateFormDialog open={isDateFormDialogOpen} onOpenChange={setIsDateFormDialogOpen} initialBlackoutDate={editingBlackoutDate} onSave={handleSaveBlackoutDate} labs={labs} currentLabContextId={activeContextId} />)} */}
-        {/* {isRecurringFormDialogOpen && currentUser && (<RecurringBlackoutRuleFormDialog open={isRecurringFormDialogOpen} onOpenChange={setIsRecurringFormDialogOpen} initialRule={editingRecurringRule} onSave={handleSaveRecurringRule} labs={labs} currentLabContextId={activeContextId} />)} */}
-        {/* {isMaintenanceFormDialogOpen && currentUser && (<MaintenanceRequestFormDialog open={isMaintenanceFormDialogOpen} onOpenChange={(isOpen) => { setIsMaintenanceFormDialogOpen(isOpen); if (!isOpen) setEditingMaintenanceRequest(null);}} initialRequest={editingMaintenanceRequest} onSave={handleSaveMaintenanceRequest} technicians={allTechniciansForMaintenance} resources={allResourcesForCountsAndChecks} currentUserRole={currentUser?.role} labContextId={activeContextId !== GLOBAL_CONTEXT_VALUE ? activeContextId : undefined}/> )} */}
-        {/* {isManualAddMemberDialogOpen && currentUser && (
-          <ManageUserLabAccessDialog
-              targetUser={null}
-              allLabs={labs}
-              open={isManualAddMemberDialogOpen}
-              onOpenChange={(isOpen) => {
-                  setIsManualAddMemberDialogOpen(isOpen);
-              }}
-              onMembershipUpdate={fetchAllAdminData}
-              performMembershipAction={handleMembershipAction} 
-              preselectedLabId={activeContextId !== GLOBAL_CONTEXT_VALUE ? activeContextId : undefined}
-          />
-        )} */}
+        
+        {isGlobalDateFormDialogOpen && currentUser && (<BlackoutDateFormDialog open={isGlobalDateFormDialogOpen} onOpenChange={setIsGlobalDateFormDialogOpen} initialBlackoutDate={editingGlobalBlackoutDate} onSave={handleSaveGlobalBlackoutDate} labs={labs} currentLabContextId={GLOBAL_CONTEXT_VALUE} />)}
+        {isGlobalRecurringFormDialogOpen && currentUser && (<RecurringBlackoutRuleFormDialog open={isGlobalRecurringFormDialogOpen} onOpenChange={setIsGlobalRecurringFormDialogOpen} initialRule={editingGlobalRecurringRule} onSave={handleSaveGlobalRecurringRule} labs={labs} currentLabContextId={GLOBAL_CONTEXT_VALUE} />)}
+        
       </div>
     </TooltipProvider>
   );
 }
 
+
+    
