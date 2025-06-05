@@ -38,9 +38,10 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter, 
+  AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle as AlertDialogTypeTitle,
+  AlertDialogTitle as AlertDialogTypeTitle, // Aliased to avoid conflict if DialogTitle is also used directly
+  AlertDialogTrigger as AlertDialogTypeTrigger, // Aliased
 }from "@/components/ui/alert-dialog";
 import { Calendar as ShadCNCalendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
@@ -178,7 +179,7 @@ export default function AdminResourcesPage() {
       let fetchedResources = await Promise.all(fetchedResourcesPromises);
 
       if (currentUser && currentUser.role !== 'Admin') {
-        fetchedResources = fetchedResources.filter(resource => activeUserLabIds.includes(resource.labId) || !resource.labId); 
+        fetchedResources = fetchedResources.filter(resource => activeUserLabIds.includes(resource.labId) || !resource.labId);
       }
       setAllResourcesDataSource(fetchedResources);
 
@@ -192,21 +193,20 @@ export default function AdminResourcesPage() {
       setFetchedResourceTypes(rTypes);
 
     } catch (error: any) {
-      toast({ title: "Database Error", description: `Failed to fetch data: ${error.message}`, variant: "destructive" });
       setAllResourcesDataSource([]);
       setFetchedResourceTypes([]);
       setFetchedLabs([]);
       setUserLabMemberships([]);
     }
     setIsLoadingData(false);
-  }, [toast, currentUser]);
+  }, [currentUser]);
 
 
   useEffect(() => {
-    if (currentUser) { 
+    if (currentUser) {
         fetchInitialData();
     }
-  }, [fetchInitialData, currentUser]); 
+  }, [fetchInitialData, currentUser]);
 
   useEffect(() => {
     if (isResourceFilterDialogOpen) {
@@ -406,7 +406,7 @@ export default function AdminResourcesPage() {
       setEditingResource(null);
       await fetchInitialData();
     } catch (error: any) {
-        toast({ title: "Database Error", description: `Failed to ${isEditing ? 'update' : 'create'} resource: ${error.message}`, variant: "destructive" });
+        setIsLoadingData(false);
     } finally {
       setIsLoadingData(false);
     }
@@ -505,7 +505,7 @@ export default function AdminResourcesPage() {
           setEditingResourceType(null);
           await fetchInitialData();
       } catch (error: any) {
-          toast({ title: "Save Error", description: `Could not save resource type: ${error.message}`, variant: "destructive" });
+          setIsLoadingData(false);
       } finally {
           setIsLoadingData(false);
       }
@@ -529,7 +529,7 @@ export default function AdminResourcesPage() {
           setTypeToDelete(null);
           await fetchInitialData();
       } catch (error: any) {
-          toast({ title: "Delete Error", description: `Could not delete resource type: ${error.message}`, variant: "destructive" });
+          setIsLoadingData(false);
       } finally {
           setIsLoadingData(false);
       }
@@ -541,13 +541,13 @@ export default function AdminResourcesPage() {
   const pageDescription = currentUser?.role === 'Admin'
     ? "Browse, filter, add, and manage all lab resources and their types. Click resource name for details."
     : "Browse and filter available lab resources from labs you have access to. Click resource name for details.";
-  
+
   const pageHeaderActions = (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="inline-block">
-      <TabsList className="inline-flex h-9 items-center justify-center rounded-md bg-muted p-0.5 text-muted-foreground">
-        <TabsTrigger value="resources" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Resources</TabsTrigger>
-        {canManageResourcesAndTypes && (<TabsTrigger value="types" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Types</TabsTrigger>)}
-      </TabsList>
+        <TabsList className="inline-flex h-9 items-center justify-center rounded-md bg-muted p-0.5 text-muted-foreground">
+            <TabsTrigger value="resources" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Resources</TabsTrigger>
+            {canManageResourcesAndTypes && (<TabsTrigger value="types" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Types</TabsTrigger>)}
+        </TabsList>
     </Tabs>
   );
 
@@ -561,7 +561,7 @@ export default function AdminResourcesPage() {
         actions={pageHeaderActions}
       />
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsContent value="resources" className="mt-0"> 
+        <TabsContent value="resources" className="mt-0">
             <Card>
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                     <div>
@@ -653,7 +653,7 @@ export default function AdminResourcesPage() {
                   {isLoadingData && allResourcesDataSource.length === 0 ? (
                     <div className="flex justify-center items-center py-10 text-muted-foreground"><Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" /> Loading resources...</div>
                   ) : filteredResources.length > 0 ? (
-                    <div className="overflow-x-auto border rounded-md">
+                    <div className="overflow-x-auto rounded-md border">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -707,7 +707,7 @@ export default function AdminResourcesPage() {
         </TabsContent>
 
         {canManageResourcesAndTypes && (
-            <TabsContent value="types" className="mt-0"> 
+            <TabsContent value="types" className="mt-0">
             <Card>
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div><CardTitle className="text-xl">Manage Resource Types</CardTitle><CardDescription>Define categories for lab resources.</CardDescription></div>
@@ -730,7 +730,7 @@ export default function AdminResourcesPage() {
                 <CardContent className="p-0">
                 {isLoadingData && filteredResourceTypesForDisplay.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
                 ) : filteredResourceTypesForDisplay.length > 0 ? (
-                    <div className="overflow-x-auto border rounded-md">
+                    <div className="overflow-x-auto rounded-md border">
                     <Table>
                         <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
                         <TableBody>{filteredResourceTypesForDisplay.map(type => (
@@ -739,7 +739,7 @@ export default function AdminResourcesPage() {
                             <TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell>
                             <TableCell className="text-center">{type.resourceCount}</TableCell>
                             <TableCell className="text-right space-x-1">
-                            <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip></TooltipProvider>
+                                <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip></TooltipProvider>
                                 <TooltipProvider><Tooltip><TooltipTrigger asChild>
                                     <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}>
                                     <Trash2 className="h-4 w-4"/>
@@ -767,7 +767,7 @@ export default function AdminResourcesPage() {
         <ResourceFormDialog open={isResourceFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceFormDialogOpen(isOpen); if (!isOpen) setEditingResource(null);}} initialResource={editingResource} onSave={handleSaveResource} resourceTypes={fetchedResourceTypes} labs={currentUser?.role === 'Admin' ? fetchedLabs : fetchedLabs.filter(lab => userLabMemberships.some(m => m.labId === lab.id && m.status === 'active'))}/>
       )}
       {isResourceTypeFormDialogOpen && (<ResourceTypeFormDialog open={isResourceTypeFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceTypeFormDialogOpen(isOpen); if (!isOpen) setEditingResourceType(null); }} initialType={editingResourceType} onSave={handleSaveResourceType} />)}
-      
+
       {canManageResourcesAndTypes && (
         <>
           <AlertDialog open={!!typeToDelete} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}>
@@ -781,4 +781,4 @@ export default function AdminResourcesPage() {
     </div>
   );
 }
-
+    

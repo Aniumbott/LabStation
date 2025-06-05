@@ -79,7 +79,6 @@ export default function AuditLogPage() {
       });
       setAuditLogs(fetchedLogs);
     } catch (error: any) {
-      console.error("Error fetching audit logs:", error);
       setAuditLogs([]);
     }
     setIsLoading(false);
@@ -175,7 +174,7 @@ export default function AuditLogPage() {
                 )}
               </Button>
             </DialogTrigger>
-            <DialogContent className="w-full max-w-md">
+            <DialogContent className="w-full sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>Filter Audit Logs</DialogTitle>
                 <DialogDescription>
@@ -281,3 +280,4 @@ export default function AuditLogPage() {
     </div>
   );
 }
+    
