@@ -39,7 +39,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle as AlertDialogTypeTitle, 
+  AlertDialogTitle,
   AlertDialogTrigger,
 }from "@/components/ui/alert-dialog";
 import { Calendar as ShadCNCalendar } from '@/components/ui/calendar';
@@ -590,7 +590,7 @@ export default function AdminResourcesPage() {
                             <DialogDescription>Refine the list of available lab resources.</DialogDescription>
                             </DialogHeader>
                             <ScrollArea className="max-h-[60vh] mt-4">
-                            <div className="space-y-6 pl-1 pr-1">
+                            <div className="space-y-6 p-1">
                                 <div>
                                 <Label htmlFor="resourceSearchDialog">Search (Name/Keyword)</Label>
                                 <div className="relative mt-1">
@@ -654,7 +654,7 @@ export default function AdminResourcesPage() {
                   {isLoadingData && allResourcesDataSource.length === 0 ? (
                     <div className="flex justify-center items-center py-10 text-muted-foreground"><Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" /> Loading resources...</div>
                   ) : filteredResources.length > 0 ? (
-                    <div className="overflow-x-auto rounded-lg border">
+                    <div className="overflow-x-auto rounded-b-lg border">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -718,7 +718,7 @@ export default function AdminResourcesPage() {
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader><DialogTitle>Filter & Sort Resource Types</DialogTitle></DialogHeader>
                         <ScrollArea className="max-h-[60vh] mt-4">
-                        <div className="space-y-6 pl-1 pr-1">
+                        <div className="space-y-6 p-1">
                         <div className="relative"><Label htmlFor="typeSearchDialog">Search (Name/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="typeSearchDialog" value={tempResourceTypeSearchTerm} onChange={e => setTempResourceTypeSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>
                         <div><Label htmlFor="typeSortDialog">Sort by</Label><Select value={tempResourceTypeSortBy} onValueChange={setTempResourceTypeSortBy}><SelectTrigger id="typeSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{resourceTypeSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
                         </div>
@@ -732,7 +732,7 @@ export default function AdminResourcesPage() {
                 <CardContent className="p-0">
                 {isLoadingData && filteredResourceTypesForDisplay.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
                 ) : filteredResourceTypesForDisplay.length > 0 ? (
-                    <div className="overflow-x-auto rounded-lg border">
+                    <div className="overflow-x-auto rounded-b-md border">
                     <Table>
                         <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
                         <TableBody>{filteredResourceTypesForDisplay.map(type => (
@@ -747,7 +747,7 @@ export default function AdminResourcesPage() {
                                           <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}><Trash2 className="h-4 w-4"/></Button>
                                   </TooltipTrigger><TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent></Tooltip></TooltipProvider>
                                   <AlertDialogContent>
-                                      <AlertDialogHeader><AlertDialogTypeTitle>Delete "{typeToDelete?.name}"?</AlertDialogTypeTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>
+                                      <AlertDialogHeader><AlertDialogTitle>Delete "{typeToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>
                                       <AlertDialogFooter className="pt-6 border-t"><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
                                   </AlertDialogContent>
                               </AlertDialog>
