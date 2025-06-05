@@ -147,6 +147,8 @@ export default function LabOperationsCenterPage() {
     // --- Lab Access & Membership State ---
     const [allLabAccessRequests, setAllLabAccessRequests] = useState<LabMembershipRequest[]>([]);
     const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]);
+    const [isProcessingLabAccessAction, setIsProcessingLabAccessAction] = useState<Record<string, boolean>>({});
+
 
     const canManageAny = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
 
@@ -323,12 +325,12 @@ export default function LabOperationsCenterPage() {
     const handleOpenNewResourceTypeDialog = useCallback(() => {
         setEditingType(null);
         setIsResourceTypeFormDialogOpen(true);
-    }, []);
+    }, [setEditingType, setIsResourceTypeFormDialogOpen]);
 
     const handleOpenEditResourceTypeDialog = useCallback((type: ResourceType) => {
         setEditingType(type);
         setIsResourceTypeFormDialogOpen(true);
-    }, []);
+    }, [setEditingType, setIsResourceTypeFormDialogOpen]);
 
     const handleSaveResourceType = useCallback(async (data: ResourceTypeFormValues) => {
         if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
@@ -439,12 +441,12 @@ export default function LabOperationsCenterPage() {
     const handleOpenNewLabDialog = useCallback(() => {
         setEditingLab(null);
         setIsLabFormDialogOpen(true);
-    }, []);
+    }, [setEditingLab, setIsLabFormDialogOpen]);
 
     const handleOpenEditLabDialog = useCallback((lab: Lab) => {
         setEditingLab(lab);
         setIsLabFormDialogOpen(true);
-    }, []);
+    }, [setEditingLab, setIsLabFormDialogOpen]);
 
     const handleSaveLab = useCallback(async (data: LabFormValues) => {
         if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
@@ -801,7 +803,9 @@ export default function LabOperationsCenterPage() {
           toast({ title: "Authentication Error", variant: "destructive" });
           return;
         }
-        // setIsProcessingAction(prev => ({ ...prev, [actionKey]: { action, loading: true } }));
+        
+        const actionKey = membershipDocIdToUpdate || `${targetUserId}-${labId}-${action}`;
+        setIsProcessingLabAccessAction(prev => ({ ...prev, [actionKey]: true }));
 
         try {
           const result = await manageLabMembership_SA(
@@ -812,14 +816,14 @@ export default function LabOperationsCenterPage() {
           );
           if (result.success) {
             toast({ title: "Success", description: result.message });
-            fetchAllAdminData();
+            fetchAllAdminData(); // Refreshes allLabAccessRequests and userLabMemberships
           } else {
             toast({ title: "Action Failed", description: result.message, variant: "destructive" });
           }
         } catch (error: any) {
           toast({ title: "Error", description: `Failed to process request: ${error.message}`, variant: "destructive" });
         } finally {
-          // setIsProcessingAction(prev => ({ ...prev, [actionKey]: { action, loading: false } }));
+          setIsProcessingLabAccessAction(prev => ({ ...prev, [actionKey]: false }));
         }
     }, [currentUser, fetchAllAdminData, toast]);
 
@@ -1150,7 +1154,77 @@ export default function LabOperationsCenterPage() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="lab-access-requests" className="mt-6"><Card><CardHeader><CardTitle>System-Wide Lab Access Requests</CardTitle></CardHeader><CardContent><p>Lab access requests management UI will be here.</p></CardContent></Card></TabsContent>
+            <TabsContent value="lab-access-requests" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>System-Wide Lab Access Requests</CardTitle>
+                  <CardDescription>Review and manage pending requests for lab access from all users for all labs.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {isLabAccessRequestLoading ? (
+                    <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
+                  ) : allLabAccessRequests.length > 0 ? (
+                    <div className="overflow-x-auto border rounded-md shadow-sm">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>User</TableHead>
+                            <TableHead>Lab Requested</TableHead>
+                            <TableHead>Date Requested</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {allLabAccessRequests.map(req => (
+                            <TableRow key={req.id}>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-8 w-8">
+                                    <AvatarImage src={req.userAvatarUrl} alt={req.userName} data-ai-hint="user avatar" />
+                                    <AvatarFallback>{(req.userName || 'U').charAt(0)}</AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                    <div className="font-medium">{req.userName}</div>
+                                    <div className="text-xs text-muted-foreground">{req.userEmail}</div>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>{req.labName}</TableCell>
+                              <TableCell>{req.requestedAt ? formatDateSafe(req.requestedAt, 'N/A', 'PPP p') : 'N/A'}</TableCell>
+                              <TableCell className="text-right space-x-1">
+                                 <Tooltip>
+                                  <TooltipTrigger asChild>
+                                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'approve_request', req.id)} disabled={isProcessingLabAccessAction[req.id!]}>
+                                          {isProcessingLabAccessAction[req.id!] ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsUp className="h-4 w-4 text-green-600" />}
+                                          <span className="sr-only">Approve Request</span>
+                                      </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent><p>Approve Request</p></TooltipContent>
+                                 </Tooltip>
+                                 <Tooltip>
+                                  <TooltipTrigger asChild>
+                                      <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'reject_request', req.id)} disabled={isProcessingLabAccessAction[req.id!]}>
+                                           {isProcessingLabAccessAction[req.id!] ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsDown className="h-4 w-4" />}
+                                          <span className="sr-only">Reject Request</span>
+                                      </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent><p>Reject Request</p></TooltipContent>
+                                 </Tooltip>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <Users className="h-12 w-12 mx-auto mb-3 opacity-50"/>
+                      <p className="font-medium">No pending lab access requests system-wide.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
           </Tabs>
         )}
 
@@ -1196,3 +1270,4 @@ export default function LabOperationsCenterPage() {
     </TooltipProvider>
   );
 }
+
