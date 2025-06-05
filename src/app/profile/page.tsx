@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from '@/components/layout/page-header';
-import { UserCog, Shield, KeyRound, Image as ImageIcon, Save, Info, LogOut, Loader2, Edit3, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { UserCog, Shield, KeyRound, Image as ImageIcon, Save, Info, LogOut, Loader2, Edit3, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 import type { User } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -209,20 +209,8 @@ export default function ProfilePage() {
                 <div>
                   <Label htmlFor="profileEmail" className="font-medium">Email Address</Label>
                   <div className="flex items-center mt-1">
-                    <Input id="profileEmail" type="email" value={currentUser.email} readOnly className="bg-muted/10" />
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="ml-2 text-muted-foreground hover:text-primary h-8 w-8 cursor-not-allowed opacity-50" disabled>
-                          <Edit3 className="h-4 w-4" />
-                          <span className="sr-only">Edit Email (Not available)</span>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Changing email is not available in this version.</p>
-                      </TooltipContent>
-                    </Tooltip>
+                    <Input id="profileEmail" type="email" value={currentUser.email} readOnly className="bg-muted/10 flex-grow" />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">Email address cannot be changed currently.</p>
                 </div>
               </div>
             </div>
