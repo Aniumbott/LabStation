@@ -80,6 +80,17 @@ const getMaintenanceStatusBadge = (status: MaintenanceRequestStatus) => {
   }
 };
 
+const getLabMembershipStatusBadgeClasses = (status: LabMembershipStatus): string => {
+    switch (status) {
+      case 'active': return 'bg-green-500 text-white hover:bg-green-600 border-transparent';
+      case 'pending_approval': return 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600 border-transparent';
+      case 'rejected':
+      case 'revoked':
+        return 'bg-red-500 text-white hover:bg-red-600 border-transparent';
+      default: return 'bg-gray-500 text-white hover:bg-gray-600 border-transparent';
+    }
+};
+
 
 export default function LabOperationsCenterPage() {
     const { toast } = useToast();
@@ -1061,7 +1072,7 @@ export default function LabOperationsCenterPage() {
                           <div className="relative"><Label htmlFor="labSearchDialog">Search (Name/Loc/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="labSearchDialog" value={tempLabSearchTerm} onChange={e => setTempLabSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>
                           <div><Label htmlFor="labSortDialog">Sort by</Label><Select value={tempLabSortBy} onValueChange={setTempLabSortBy}><SelectTrigger id="labSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{labSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
                         </div>
-                        <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsLabFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyLabDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
+                        <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><AlertDialogCancel>Cancel</AlertDialogCancel><Button onClick={handleApplyLabDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
                       </FilterSortDialogContent>
                     </FilterSortDialog>
                     {canManageAny && <Button onClick={handleOpenNewLabDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Lab</Button>}
@@ -1128,7 +1139,7 @@ export default function LabOperationsCenterPage() {
                         <div className="space-y-3">
                           <div className="relative"><Label htmlFor="globalClosureSearchDialog">Search (Reason/Name/Date)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="globalClosureSearchDialog" value={tempGlobalClosureSearchTerm} onChange={e => setTempGlobalClosureSearchTerm(e.target.value)} placeholder="e.g., Holiday, Weekend, Jan 1" className="mt-1 h-9 pl-8"/></div>
                         </div>
-                        <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetGlobalClosureDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsGlobalClosureFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyGlobalClosureDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
+                        <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetGlobalClosureDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><AlertDialogCancel>Cancel</AlertDialogCancel><Button onClick={handleApplyGlobalClosureDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
                       </FilterSortDialogContent>
                     </FilterSortDialog>
                 </CardHeader>
@@ -1245,8 +1256,7 @@ export default function LabOperationsCenterPage() {
                         </div>
                         <FilterSortDialogFooter className="mt-4 pt-4 border-t">
                           <Button variant="ghost" onClick={resetMaintenanceDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button>
-                          <Button variant="outline" onClick={() => setIsMaintenanceFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
-                          <Button onClick={handleApplyMaintenanceDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel><Button onClick={handleApplyMaintenanceDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button>
                         </FilterSortDialogFooter>
                       </FilterSortDialogContent>
                     </FilterSortDialog>
@@ -1461,7 +1471,7 @@ export default function LabOperationsCenterPage() {
                             <div className="space-y-3">
                             <div className="relative"><Label htmlFor="labSpecificClosureSearchDialog">Search (Reason/Name/Date)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="labSpecificClosureSearchDialog" value={tempLabSpecificClosureSearchTerm} onChange={e => setTempLabSpecificClosureSearchTerm(e.target.value)} placeholder="e.g., Holiday, Weekend, Jan 1" className="mt-1 h-9 pl-8"/></div>
                             </div>
-                            <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabSpecificClosureDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button variant="outline" onClick={() => setIsLabSpecificClosureFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button><Button onClick={handleApplyLabSpecificClosureDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
+                            <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabSpecificClosureDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><AlertDialogCancel>Cancel</AlertDialogCancel><Button onClick={handleApplyLabSpecificClosureDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
                         </FilterSortDialogContent>
                     </FilterSortDialog>
                   </CardHeader>
@@ -1577,8 +1587,7 @@ export default function LabOperationsCenterPage() {
                             </div>
                             <FilterSortDialogFooter className="mt-4 pt-4 border-t">
                               <Button variant="ghost" onClick={resetLabSpecificMaintenanceDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button>
-                              <Button variant="outline" onClick={() => setIsLabSpecificMaintenanceFilterDialogOpen(false)}><X className="mr-2 h-4 w-4"/>Cancel</Button>
-                              <Button onClick={handleApplyLabSpecificMaintenanceDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel><Button onClick={handleApplyLabSpecificMaintenanceDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button>
                             </FilterSortDialogFooter>
                           </FilterSortDialogContent>
                         </FilterSortDialog>
@@ -1664,11 +1673,7 @@ export default function LabOperationsCenterPage() {
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge variant={
-                                                        member.status === 'active' ? 'default' :
-                                                        member.status === 'pending_approval' ? 'secondary' :
-                                                        'destructive'
-                                                    } className={cn(member.status === 'active' && "bg-green-500 text-white")}>
+                                                    <Badge className={cn("capitalize", getLabMembershipStatusBadgeClasses(member.status))}>
                                                         {member.status.replace('_', ' ')}
                                                     </Badge>
                                                 </TableCell>
@@ -1734,7 +1739,6 @@ export default function LabOperationsCenterPage() {
             open={isLabSpecificMemberAddDialogOpen}
             onOpenChange={setIsLabSpecificMemberAddDialogOpen}
             onMembershipUpdate={fetchAllAdminData}
-            //performMembershipAction={handleMembershipAction} 
             preselectedLabId={activeContextId} 
           />
         )}

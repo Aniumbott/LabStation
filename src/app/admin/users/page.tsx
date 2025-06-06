@@ -31,7 +31,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 }from "@/components/ui/alert-dialog";
 import {
   Dialog,
@@ -56,6 +55,7 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, Timestamp, query, orderBy, where, writeBatch as firestoreWriteBatch } from 'firebase/firestore';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 
 const userStatusesListForFilter: (UserStatus | 'all')[] = ['all', 'active', 'pending_approval', 'suspended'];
@@ -75,12 +75,12 @@ const getRoleBadgeVariant = (role: RoleName): "default" | "secondary" | "destruc
     }
 };
 
-const getStatusBadgeVariant = (status: UserStatus): "default" | "secondary" | "destructive" | "outline" => {
+const getStatusBadgeClasses = (status: UserStatus): string => {
     switch (status) {
-      case 'active': return 'default';
-      case 'pending_approval': return 'secondary';
-      case 'suspended': return 'destructive';
-      default: return 'outline';
+      case 'active': return 'bg-green-500 text-white hover:bg-green-600 border-transparent';
+      case 'pending_approval': return 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600 border-transparent';
+      case 'suspended': return 'bg-red-500 text-white hover:bg-red-600 border-transparent'; // Consistent with destructive variant's typical color
+      default: return 'bg-gray-500 text-white hover:bg-gray-600 border-transparent'; // Fallback for any unexpected status
     }
 };
 
@@ -507,7 +507,7 @@ export default function UsersPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={getStatusBadgeVariant(user.status)} className="capitalize">
+                      <Badge className={cn("capitalize", getStatusBadgeClasses(user.status))}>
                         {user.status.replace('_', ' ')}
                       </Badge>
                     </TableCell>
