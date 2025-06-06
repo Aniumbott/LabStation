@@ -5,7 +5,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation'; // Added
 import { PageHeader } from '@/components/layout/page-header';
-import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare, UserPlus2, Briefcase } from 'lucide-react';
+import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare, UserPlus2, Briefcase, MapPin, Tag, FileText, CalendarClock, User as UserIconLucide, AlertTriangle } from 'lucide-react';
 import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus, DayOfWeek } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -1081,9 +1081,17 @@ export default function LabOperationsCenterPage() {
                 <CardContent className="p-0">
                   {isLoadingData && filteredLabs.length === 0 && !activeLabSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
                   ) : filteredLabs.length > 0 ? (
-                    <div className="overflow-x-auto rounded-md border">
+                    <div className="overflow-x-auto rounded-b-md border">
                       <Table>
-                        <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead className="text-center">Resources</TableHead><TableHead className="text-center">Members</TableHead>{canManageAny && <TableHead className="text-right w-[100px]">Actions</TableHead>}</TableRow></TableHeader>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead><div className="flex items-center gap-1"><Building className="h-4 w-4 text-muted-foreground"/>Name</div></TableHead>
+                            <TableHead><div className="flex items-center gap-1"><MapPin className="h-4 w-4 text-muted-foreground"/>Location</div></TableHead>
+                            <TableHead className="text-center"><div className="flex items-center justify-center gap-1"><PackageIcon className="h-4 w-4 text-muted-foreground"/>Resources</div></TableHead>
+                            <TableHead className="text-center"><div className="flex items-center justify-center gap-1"><UsersRound className="h-4 w-4 text-muted-foreground"/>Members</div></TableHead>
+                            {canManageAny && <TableHead className="text-right w-[100px]">Actions</TableHead>}
+                          </TableRow>
+                        </TableHeader>
                         <TableBody>{filteredLabs.map(lab => (
                           <TableRow key={lab.id}>
                             <TableCell className="font-medium">{lab.name}</TableCell>
@@ -1154,8 +1162,15 @@ export default function LabOperationsCenterPage() {
                       </div>
                       {isLoadingData && filteredGlobalBlackoutDates.length === 0 && !activeGlobalClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
                       ) : filteredGlobalBlackoutDates.length > 0 ? (
-                        <div className="overflow-x-auto border rounded-md">
-                          <Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Reason</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
+                        <div className="overflow-x-auto rounded-b-md border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead><div className="flex items-center gap-1"><CalendarDays className="h-4 w-4 text-muted-foreground"/>Date</div></TableHead>
+                                <TableHead><div className="flex items-center gap-1"><FileText className="h-4 w-4 text-muted-foreground"/>Reason</div></TableHead>
+                                <TableHead className="text-right w-[100px]">Actions</TableHead>
+                              </TableRow>
+                            </TableHeader>
                           <TableBody>{filteredGlobalBlackoutDates.map(bd => (
                             <TableRow key={bd.id}><TableCell className="font-medium">{formatDateSafe(parseISO(bd.date), 'Invalid Date', 'PPP')}</TableCell><TableCell className="text-sm text-muted-foreground">{bd.reason || 'N/A'}</TableCell>
                             <TableCell className="text-right space-x-1">
@@ -1180,8 +1195,16 @@ export default function LabOperationsCenterPage() {
                       </div>
                       {isLoadingData && filteredGlobalRecurringRules.length === 0 && !activeGlobalClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
                       ) : filteredGlobalRecurringRules.length > 0 ? (
-                        <div className="overflow-x-auto border rounded-md">
-                          <Table><TableHeader><TableRow><TableHead>Rule Name</TableHead><TableHead>Days</TableHead><TableHead>Reason</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
+                        <div className="overflow-x-auto rounded-b-md border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead><div className="flex items-center gap-1"><Tag className="h-4 w-4 text-muted-foreground"/>Rule Name</div></TableHead>
+                                <TableHead><div className="flex items-center gap-1"><Repeat className="h-4 w-4 text-muted-foreground"/>Days</div></TableHead>
+                                <TableHead><div className="flex items-center gap-1"><FileText className="h-4 w-4 text-muted-foreground"/>Reason</div></TableHead>
+                                <TableHead className="text-right w-[100px]">Actions</TableHead>
+                              </TableRow>
+                            </TableHeader>
                           <TableBody>{filteredGlobalRecurringRules.map(rule => (
                             <TableRow key={rule.id}><TableCell className="font-medium">{rule.name}</TableCell><TableCell className="text-sm text-muted-foreground">{rule.daysOfWeek.join(', ')}</TableCell><TableCell className="text-sm text-muted-foreground">{rule.reason || 'N/A'}</TableCell>
                             <TableCell className="text-right space-x-1">
@@ -1266,13 +1289,19 @@ export default function LabOperationsCenterPage() {
                   {isLoadingData && filteredMaintenanceRequests.length === 0 ? (
                     <div className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2"/>Fetching requests...</div>
                   ) : filteredMaintenanceRequests.length > 0 ? (
-                    <div className="overflow-x-auto border rounded-md">
+                    <div className="overflow-x-auto rounded-b-md border">
                       <Table>
-                        <TableHeader><TableRow>
-                          <TableHead>Resource</TableHead><TableHead className="min-w-[200px]">Issue</TableHead><TableHead>Reported By</TableHead>
-                          <TableHead>Date Reported</TableHead><TableHead>Status</TableHead><TableHead>Assigned To</TableHead>
-                          {canEditAnyMaintenanceRequest && <TableHead className="text-right w-[100px]">Actions</TableHead>}
-                        </TableRow></TableHeader>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead><div className="flex items-center gap-1"><PackageIcon className="h-4 w-4 text-muted-foreground"/>Resource</div></TableHead>
+                            <TableHead className="min-w-[200px]"><div className="flex items-center gap-1"><AlertTriangle className="h-4 w-4 text-muted-foreground"/>Issue</div></TableHead>
+                            <TableHead><div className="flex items-center gap-1"><UserIconLucide className="h-4 w-4 text-muted-foreground"/>Reported By</div></TableHead>
+                            <TableHead><div className="flex items-center gap-1"><CalendarClock className="h-4 w-4 text-muted-foreground"/>Date Reported</div></TableHead>
+                            <TableHead><div className="flex items-center gap-1"><InfoIcon className="h-4 w-4 text-muted-foreground"/>Status</div></TableHead>
+                            <TableHead><div className="flex items-center gap-1"><UserCog className="h-4 w-4 text-muted-foreground"/>Assigned To</div></TableHead>
+                            {canEditAnyMaintenanceRequest && <TableHead className="text-right w-[100px]">Actions</TableHead>}
+                          </TableRow>
+                        </TableHeader>
                         <TableBody>{filteredMaintenanceRequests.map((request) => (
                           <TableRow key={request.id}>
                             <TableCell className="font-medium">{request.resourceName}</TableCell>
@@ -1311,13 +1340,13 @@ export default function LabOperationsCenterPage() {
                   {isLabAccessRequestLoading ? (
                     <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
                   ) : allLabAccessRequests.length > 0 ? (
-                    <div className="overflow-x-auto border rounded-md">
+                    <div className="overflow-x-auto rounded-b-md border">
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>User</TableHead>
-                            <TableHead>Lab Requested</TableHead>
-                            <TableHead>Date Requested</TableHead>
+                            <TableHead><div className="flex items-center gap-1"><UserRound className="h-4 w-4 text-muted-foreground"/>User</div></TableHead>
+                            <TableHead><div className="flex items-center gap-1"><Building className="h-4 w-4 text-muted-foreground"/>Lab Requested</div></TableHead>
+                            <TableHead><div className="flex items-center gap-1"><CalendarClock className="h-4 w-4 text-muted-foreground"/>Date Requested</div></TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -1486,7 +1515,7 @@ export default function LabOperationsCenterPage() {
                         </div>
                         {isLoadingData && filteredLabSpecificBlackoutDates.length === 0 && !activeLabSpecificClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
                         ) : filteredLabSpecificBlackoutDates.length > 0 ? (
-                          <div className="overflow-x-auto border rounded-md">
+                          <div className="overflow-x-auto border rounded-b-md">
                             <Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Reason</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
                             <TableBody>{filteredLabSpecificBlackoutDates.map(bd => (
                               <TableRow key={bd.id}><TableCell className="font-medium">{formatDateSafe(parseISO(bd.date), 'Invalid Date', 'PPP')}</TableCell><TableCell className="text-sm text-muted-foreground">{bd.reason || 'N/A'}</TableCell>
@@ -1512,7 +1541,7 @@ export default function LabOperationsCenterPage() {
                         </div>
                         {isLoadingData && filteredLabSpecificRecurringRules.length === 0 && !activeLabSpecificClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
                         ) : filteredLabSpecificRecurringRules.length > 0 ? (
-                          <div className="overflow-x-auto border rounded-md">
+                          <div className="overflow-x-auto border rounded-b-md">
                             <Table><TableHeader><TableRow><TableHead>Rule Name</TableHead><TableHead>Days</TableHead><TableHead>Reason</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
                             <TableBody>{filteredLabSpecificRecurringRules.map(rule => (
                               <TableRow key={rule.id}><TableCell className="font-medium">{rule.name}</TableCell><TableCell className="text-sm text-muted-foreground">{rule.daysOfWeek.join(', ')}</TableCell><TableCell className="text-sm text-muted-foreground">{rule.reason || 'N/A'}</TableCell>
@@ -1597,7 +1626,7 @@ export default function LabOperationsCenterPage() {
                     {isLoadingData && labSpecificFilteredMaintenanceRequests.length === 0 ? (
                         <div className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2"/>Fetching requests for {selectedLabDetails.name}...</div>
                     ) : labSpecificFilteredMaintenanceRequests.length > 0 ? (
-                        <div className="overflow-x-auto border rounded-md">
+                        <div className="overflow-x-auto border rounded-b-md">
                         <Table>
                             <TableHeader><TableRow>
                             <TableHead>Resource</TableHead><TableHead className="min-w-[200px]">Issue</TableHead><TableHead>Reported By</TableHead>
@@ -1646,7 +1675,7 @@ export default function LabOperationsCenterPage() {
                         {isLoadingData && labSpecificMembershipsDisplay.length === 0 ? (
                             <div className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2"/>Loading lab members...</div>
                         ) : labSpecificMembershipsDisplay.length > 0 ? (
-                            <div className="overflow-x-auto border rounded-md">
+                            <div className="overflow-x-auto border rounded-b-md">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
