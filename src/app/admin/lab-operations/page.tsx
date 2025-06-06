@@ -1,41 +1,34 @@
 
 'use client';
 
-// All original imports are kept, but most will be unused temporarily.
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation'; // Added
+import { useSearchParams, useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/layout/page-header';
 import { Cog, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare, UserPlus2, Briefcase, MapPin, Tag, FileText, CalendarClock, User as UserIconLucide, AlertTriangle, BarChart3, ClipboardList, PieChart as PieChartIconComp, Percent, Hourglass, Clock } from 'lucide-react';
 import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus, DayOfWeek, Booking } from '@/types';
 import { useAuth } from '@/components/auth-context';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import {
-  Dialog as FilterSortDialog, // Renamed to avoid conflict with ShadCN's Dialog
+  Dialog as FilterSortDialog,
   DialogContent as FilterSortDialogContent,
   DialogDescription as FilterSortDialogDescription,
   DialogHeader as FilterSortDialogHeader,
   DialogTitle as FilterSortDialogTitle,
   DialogFooter as FilterSortDialogFooter,
   DialogTrigger as FilterSortDialogTrigger,
-} from '@/components/ui/dialog'; // Keep this alias for Filter/Sort dialogs
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { LabFormDialog, LabFormValues } from '@/components/admin/lab-form-dialog';
 import { BlackoutDateFormDialog, BlackoutDateFormValues as BlackoutDateDialogFormValues } from '@/components/admin/blackout-date-form-dialog';
 import { RecurringBlackoutRuleFormDialog, RecurringBlackoutRuleFormValues as RecurringRuleDialogFormValues } from '@/components/admin/recurring-blackout-rule-form-dialog';
 import { MaintenanceRequestFormDialog, MaintenanceRequestFormValues as MaintenanceDialogFormValues } from '@/components/admin/maintenance-request-form-dialog';
-import { ManageUserLabAccessDialog } from '@/components/admin/manage-user-lab-access-dialog';
+import { ManageUserLabAccessDialog } from '@/components/admin/manage-user-lab-access-dialog'; // This might be used by LabSpecificMembersTab
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp, where, limit } from 'firebase/firestore';
 import { addNotification, addAuditLog, manageLabMembership_SA } from '@/lib/firestore-helpers';
@@ -43,27 +36,16 @@ import { daysOfWeekArray, maintenanceRequestStatuses } from '@/lib/app-constants
 import { format, parseISO, isValid as isValidDateFn, isBefore, compareAsc, subDays, startOfHour, differenceInHours } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge as getResourceUIAvailabilityBadge } from '@/lib/utils';
 import Link from 'next/link';
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import {
-  BarChart,
-  Bar,
-  PieChart as RechartsPieChart, // Aliased to avoid conflict with lucide icon
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-} from 'recharts';
+
+// Import new Tab Components
+import { ManageLabsTab } from '@/components/admin/lab-operations/tabs/ManageLabsTab';
+import { GlobalClosuresTab } from '@/components/admin/lab-operations/tabs/GlobalClosuresTab';
+import { SystemMaintenanceLogTab } from '@/components/admin/lab-operations/tabs/SystemMaintenanceLogTab';
+import { LabAccessRequestsTab } from '@/components/admin/lab-operations/tabs/LabAccessRequestsTab';
+import { LabSpecificOverviewTab } from '@/components/admin/lab-operations/tabs/LabSpecificOverviewTab';
+import { LabSpecificClosuresTab } from '@/components/admin/lab-operations/tabs/LabSpecificClosuresTab';
+import { LabSpecificMaintenanceTab } from '@/components/admin/lab-operations/tabs/LabSpecificMaintenanceTab';
+import { LabSpecificMembersTab } from '@/components/admin/lab-operations/tabs/LabSpecificMembersTab';
 
 
 const GLOBAL_CONTEXT_VALUE = "--system-wide--";
@@ -90,79 +72,12 @@ const labSortOptions: { value: string; label: string }[] = [
   { value: 'memberCount-asc', label: 'Members (Low-High)' }, { value: 'memberCount-desc', label: 'Members (High-Low)' },
 ];
 
-interface ReportItem {
-  name: string;
-  count: number;
-  fill?: string;
-}
-
-interface UtilizationItem {
-  name: string;
-  utilization: number;
-}
-
-interface PeakHourItem {
-  hour: string;
-  count: number;
-}
-
-interface LabUserUsageReportItem {
-  userId: string;
-  userName: string;
-  avatarUrl?: string;
-  totalBookingsInLab: number;
-  totalHoursBookedInLab: number;
-}
-
-const CHART_COLORS = {
-  bookings: "hsl(var(--chart-1))",
-  maintenance: {
-    Open: "hsl(var(--destructive))", // Use destructive for Open
-    "In Progress": "hsl(var(--chart-3))", // Keep chart-3 for In Progress (often yellow/orange)
-    Resolved: "hsl(var(--chart-4))", // Keep chart-4 for Resolved (often blue)
-    Closed: "hsl(var(--chart-2))", // Use chart-2 for Closed (often green)
-  },
-  utilization: "hsl(var(--chart-2))",
-  peakHours: "hsl(var(--chart-3))",
-  waitlist: "hsl(var(--chart-4))",
-  userUsage: "hsl(var(--chart-5))",
-};
-
-const chartTooltipConfig = {
-  cursor: false,
-  content: <ChartTooltipContent indicator="dot" hideLabel />,
-};
-const chartLegendConfig = {
- content: <ChartLegendContent nameKey="name" className="text-xs mt-2" />,
-};
-
-
-const getMaintenanceStatusBadge = (status: MaintenanceRequestStatus) => {
-  switch (status) {
-    case 'Open': return <Badge variant="destructive" className="bg-red-500 text-white border-transparent"><AlertCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-    case 'In Progress': return <Badge variant="secondary" className="bg-yellow-500 text-yellow-950 border-transparent"><PenToolIcon className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-    case 'Resolved': return <Badge className="bg-blue-500 text-white border-transparent"><LucideCheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-    case 'Closed': return <Badge className="bg-green-500 text-white border-transparent"><LucideCheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-    default: return <Badge variant="outline">{status}</Badge>;
-  }
-};
-
-const getLabMembershipStatusBadgeClasses = (status: LabMembershipStatus): string => {
-    switch (status) {
-      case 'active': return 'bg-green-500 text-white hover:bg-green-600 border-transparent';
-      case 'pending_approval': return 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600 border-transparent';
-      case 'rejected':
-      case 'revoked':
-        return 'bg-red-500 text-white hover:bg-red-600 border-transparent';
-      default: return 'bg-gray-500 text-white hover:bg-gray-600 border-transparent';
-    }
-};
-
-
 export default function LabOperationsCenterPage() {
     const { toast } = useToast();
     const { currentUser, isLoading: authIsLoading } = useAuth();
     const searchParamsObj = useSearchParams();
+    const router = useRouter();
+    const pathname = usePathname();
 
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [activeContextId, setActiveContextId] = useState<string>(GLOBAL_CONTEXT_VALUE);
@@ -328,19 +243,33 @@ export default function LabOperationsCenterPage() {
     useEffect(() => { fetchAllAdminData(); }, [fetchAllAdminData]);
 
     useEffect(() => {
-        const preselectedLabIdFromUrl = searchParamsObj.get('labId');
-        if (preselectedLabIdFromUrl && labs.find(l => l.id === preselectedLabIdFromUrl)) {
-          setActiveContextId(preselectedLabIdFromUrl);
-        } else if (preselectedLabIdFromUrl) {
-          setActiveContextId(GLOBAL_CONTEXT_VALUE);
-        }
-      }, [searchParamsObj, labs]); 
+      const preselectedLabIdFromUrl = searchParamsObj.get('labId');
+      if (preselectedLabIdFromUrl && labs.find(l => l.id === preselectedLabIdFromUrl)) {
+        setActiveContextId(preselectedLabIdFromUrl);
+      } else if (preselectedLabIdFromUrl) { // If labId in URL is invalid, default to global
+        const newSearchParams = new URLSearchParams(searchParamsObj.toString());
+        newSearchParams.delete('labId');
+        router.replace(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
+        setActiveContextId(GLOBAL_CONTEXT_VALUE);
+      }
+    }, [searchParamsObj, labs, router, pathname]);
 
     const selectedLabDetails = useMemo(() => labs.find(lab => lab.id === activeContextId), [labs, activeContextId]);
 
+    const handleContextChange = (newContextId: string) => {
+        setActiveContextId(newContextId);
+        const newSearchParams = new URLSearchParams(searchParamsObj.toString());
+        if (newContextId === GLOBAL_CONTEXT_VALUE) {
+            newSearchParams.delete('labId');
+        } else {
+            newSearchParams.set('labId', newContextId);
+        }
+        router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
+    };
+
     const pageHeaderActionsContent = (
       <div className="flex items-center gap-2">
-        <Select value={activeContextId} onValueChange={setActiveContextId}>
+        <Select value={activeContextId} onValueChange={handleContextChange}>
             <SelectTrigger
                 id="labContextSelectPageHeader"
                 className={cn(
@@ -1078,142 +1007,51 @@ export default function LabOperationsCenterPage() {
         return allBookingsState.filter(b => labResourceIds.includes(b.resourceId));
     }, [selectedLabDetails, labSpecificResources, allBookingsState]);
     
-    const labSpecificMaintenanceRequests = useMemo(() => {
+    const labSpecificMaintenanceDataForReport = useMemo(() => {
         if (!selectedLabDetails) return [];
         const labResourceIds = labSpecificResources.map(r => r.id);
         return maintenanceRequests.filter(req => labResourceIds.includes(req.resourceId));
     }, [selectedLabDetails, labSpecificResources, maintenanceRequests]);
 
+    const [currentActiveSystemTab, setCurrentActiveSystemTab] = useState(searchParamsObj.get('tab') || "labs");
+    const [currentActiveLabTab, setCurrentActiveLabTab] = useState(searchParamsObj.get('tab') || "lab-details");
 
-    // Chart Data Calculations (Lab Specific)
-    const bookingsPerLabResource: ReportItem[] = useMemo(() => {
-        if (!selectedLabDetails || isLoadingData) return [];
-        const report: ReportItem[] = [];
-        labSpecificResources.forEach(resource => {
-            const count = labSpecificBookings.filter(b => b.resourceId === resource.id && b.status !== 'Cancelled').length;
-            if (count > 0) report.push({ name: resource.name, count });
-        });
-        return report.sort((a, b) => b.count - a.count).slice(0, 7);
-    }, [selectedLabDetails, labSpecificResources, labSpecificBookings, isLoadingData]);
-
-    const bookingsLabChartConfig = useMemo(() => {
-      const config: ChartConfig = {};
-      bookingsPerLabResource.forEach(item => { config[item.name] = { label: item.name, color: CHART_COLORS.bookings }; });
-      config["count"] = { label: "Bookings", color: CHART_COLORS.bookings };
-      return config;
-    }, [bookingsPerLabResource]);
-
-    const maintenanceByStatusForLab: ReportItem[] = useMemo(() => {
-        if (!selectedLabDetails || isLoadingData) return [];
-        const report: ReportItem[] = [];
-        maintenanceRequestStatuses.forEach(status => {
-            const count = labSpecificMaintenanceRequests.filter(req => req.status === status).length;
-            if (count > 0) report.push({ name: status, count, fill: CHART_COLORS.maintenance[status] });
-        });
-        return report;
-    }, [selectedLabDetails, labSpecificMaintenanceRequests, isLoadingData]);
-
-    const maintenanceLabChartConfig = useMemo(() => {
-      const config: ChartConfig = {};
-      maintenanceByStatusForLab.forEach(item => { config[item.name] = { label: item.name, color: item.fill! }; });
-      return config;
-    }, [maintenanceByStatusForLab]);
-
-    const labResourceUtilization: UtilizationItem[] = useMemo(() => {
-        if (!selectedLabDetails || isLoadingData) return [];
-        const report: UtilizationItem[] = [];
-        const today = new Date();
-        const thirtyDaysAgo = subDays(today, 30);
-        labSpecificResources.forEach(resource => {
-            const bookedDays = new Set<string>();
-            labSpecificBookings.forEach(booking => {
-                if (!booking.startTime || !isValidDateFn(booking.startTime)) return;
-                const bookingDate = booking.startTime;
-                if (booking.resourceId === resource.id && booking.status === 'Confirmed') {
-                    if (bookingDate >= thirtyDaysAgo && bookingDate <= today) bookedDays.add(format(bookingDate, 'yyyy-MM-dd'));
-                }
-            });
-            const utilizationPercentage = (bookedDays.size / 30) * 100;
-            if (utilizationPercentage > 0) report.push({ name: resource.name, utilization: Math.round(utilizationPercentage) });
-        });
-        return report.sort((a, b) => b.utilization - a.utilization).slice(0, 7);
-    }, [selectedLabDetails, labSpecificResources, labSpecificBookings, isLoadingData]);
-
-    const utilizationLabChartConfig = useMemo(() => {
-      const config: ChartConfig = {};
-      labResourceUtilization.forEach(item => { config[item.name] = { label: item.name, color: CHART_COLORS.utilization }; });
-      config["utilization"] = { label: "Utilization %", color: CHART_COLORS.utilization };
-      return config;
-    }, [labResourceUtilization]);
-
-    const peakBookingHoursForLab: PeakHourItem[] = useMemo(() => {
-        if (!selectedLabDetails || isLoadingData) return [];
-        const hourCounts: { [hour: string]: number } = {};
-        labSpecificBookings.forEach(booking => {
-            if (!booking.startTime || !isValidDateFn(booking.startTime)) return;
-            if (booking.status === 'Confirmed') {
-                const hour = format(startOfHour(booking.startTime), 'HH:00');
-                hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+    useEffect(() => {
+        const tabFromUrl = searchParamsObj.get('tab');
+        if (activeContextId === GLOBAL_CONTEXT_VALUE) {
+            if (tabFromUrl && ["labs", "global-closures", "maintenance-log", "lab-access-requests"].includes(tabFromUrl)) {
+                setCurrentActiveSystemTab(tabFromUrl);
+            } else if (tabFromUrl) { // Invalid tab for global context
+                setCurrentActiveSystemTab("labs"); // Default
+                const newSearchParams = new URLSearchParams(searchParamsObj.toString());
+                newSearchParams.set('tab', "labs");
+                router.replace(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
             }
-        });
-        return Object.entries(hourCounts)
-            .map(([hour, count]) => ({ hour, count }))
-            .sort((a, b) => parseInt(a.hour.split(':')[0]) - parseInt(b.hour.split(':')[0]));
-    }, [selectedLabDetails, labSpecificBookings, isLoadingData]);
+        } else {
+             if (tabFromUrl && ["lab-details", "lab-closures", "lab-maintenance", "lab-members"].includes(tabFromUrl)) {
+                setCurrentActiveLabTab(tabFromUrl);
+            } else if (tabFromUrl) { // Invalid tab for lab context
+                setCurrentActiveLabTab("lab-details"); // Default
+                const newSearchParams = new URLSearchParams(searchParamsObj.toString());
+                newSearchParams.set('tab', "lab-details");
+                router.replace(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
+            }
+        }
+    }, [activeContextId, searchParamsObj, router, pathname]);
+
+    const handleSystemTabChange = (newTab: string) => {
+        setCurrentActiveSystemTab(newTab);
+        const newSearchParams = new URLSearchParams(searchParamsObj.toString());
+        newSearchParams.set('tab', newTab);
+        router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
+    };
     
-    const peakHoursLabChartConfig = useMemo(() => {
-     const config: ChartConfig = {};
-     peakBookingHoursForLab.forEach(item => { config[item.hour] = { label: item.hour, color: CHART_COLORS.peakHours }; });
-     config["count"] = { label: "Bookings", color: CHART_COLORS.peakHours };
-     return config;
-    }, [peakBookingHoursForLab]);
-
-    const waitlistedPerLabResource: ReportItem[] = useMemo(() => {
-        if (!selectedLabDetails || isLoadingData) return [];
-        const report: ReportItem[] = [];
-        labSpecificResources.forEach(resource => {
-            if (resource.allowQueueing) {
-                const count = labSpecificBookings.filter(b => b.resourceId === resource.id && b.status === 'Waitlisted').length;
-                if (count > 0) report.push({ name: resource.name, count });
-            }
-        });
-        return report.sort((a, b) => b.count - a.count).slice(0, 7);
-    }, [selectedLabDetails, labSpecificResources, labSpecificBookings, isLoadingData]);
-
-    const waitlistLabChartConfig = useMemo(() => {
-      const config: ChartConfig = {};
-      waitlistedPerLabResource.forEach(item => { config[item.name] = { label: item.name, color: CHART_COLORS.waitlist }; });
-      config["count"] = { label: "Waitlisted", color: CHART_COLORS.waitlist };
-      return config;
-    }, [waitlistedPerLabResource]);
-
-    const labUserActivityReport: LabUserUsageReportItem[] = useMemo(() => {
-        if (!selectedLabDetails || isLoadingData || allUsersData.length === 0) return [];
-        const usageMap = new Map<string, LabUserUsageReportItem>();
-        labSpecificBookings.forEach(booking => {
-            if (booking.status === 'Cancelled') return;
-            let userReport = usageMap.get(booking.userId);
-            if (!userReport) {
-                const userDetails = allUsersData.find(u => u.id === booking.userId);
-                userReport = {
-                    userId: booking.userId,
-                    userName: userDetails?.name || 'Unknown User',
-                    avatarUrl: userDetails?.avatarUrl,
-                    totalBookingsInLab: 0,
-                    totalHoursBookedInLab: 0,
-                };
-            }
-            userReport.totalBookingsInLab += 1;
-            if (booking.status === 'Confirmed' && booking.startTime && booking.endTime && isValidDateFn(booking.startTime) && isValidDateFn(booking.endTime)) {
-                userReport.totalHoursBookedInLab += differenceInHours(booking.endTime, booking.startTime);
-            }
-            usageMap.set(booking.userId, userReport);
-        });
-        return Array.from(usageMap.values())
-            .filter(item => item.totalBookingsInLab > 0)
-            .sort((a, b) => b.totalBookingsInLab - a.totalBookingsInLab)
-            .slice(0, 7);
-    }, [selectedLabDetails, labSpecificBookings, allUsersData, isLoadingData]);
+    const handleLabTabChange = (newTab: string) => {
+        setCurrentActiveLabTab(newTab);
+        const newSearchParams = new URLSearchParams(searchParamsObj.toString());
+        newSearchParams.set('tab', newTab);
+        router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
+    };
 
 
     if (!currentUser || !canManageAny) {
@@ -1221,7 +1059,6 @@ export default function LabOperationsCenterPage() {
     }
 
   return (
-    <TooltipProvider>
     <div className="space-y-6">
         <PageHeader
           title="Lab Operations Center"
@@ -1237,7 +1074,7 @@ export default function LabOperationsCenterPage() {
         )}
 
         {!isLoadingData && activeContextId === GLOBAL_CONTEXT_VALUE && (
-          <Tabs defaultValue={searchParamsObj.get('tab') || "labs"} className="w-full">
+          <Tabs value={currentActiveSystemTab} onValueChange={handleSystemTabChange} className="w-full">
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
               <TabsTrigger value="labs">Manage Labs</TabsTrigger>
               <TabsTrigger value="global-closures">Global Closures</TabsTrigger>
@@ -1246,773 +1083,182 @@ export default function LabOperationsCenterPage() {
             </TabsList>
 
             <TabsContent value="labs" className="mt-6">
-              <Card>
-                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                  <div><CardTitle className="text-xl">Labs</CardTitle><p className="text-sm text-muted-foreground mt-1">Define laboratory locations and view their resource/member counts.</p></div>
-                  <div className="flex gap-2 flex-wrap">
-                    <FilterSortDialog open={isLabFilterDialogOpen} onOpenChange={setIsLabFilterDialogOpen}>
-                      <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter {activeLabFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeLabFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
-                      <FilterSortDialogContent className="sm:max-w-md">
-                        <FilterSortDialogHeader><FilterSortDialogTitle>Filter & Sort Labs</FilterSortDialogTitle></FilterSortDialogHeader>
-                        <Separator className="my-3" />
-                        <div className="space-y-3">
-                          <div className="relative"><Label htmlFor="labSearchDialog">Search (Name/Loc/Desc)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="labSearchDialog" value={tempLabSearchTerm} onChange={e => setTempLabSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/></div>
-                          <div><Label htmlFor="labSortDialog">Sort by</Label><Select value={tempLabSortBy} onValueChange={setTempLabSortBy}><SelectTrigger id="labSortDialog" className="mt-1 h-9"><SelectValue /></SelectTrigger><SelectContent>{labSortOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select></div>
-                        </div>
-                        <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><AlertDialogCancel>Cancel</AlertDialogCancel><Button onClick={handleApplyLabDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
-                      </FilterSortDialogContent>
-                    </FilterSortDialog>
-                    {canManageAny && <Button onClick={handleOpenNewLabDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Lab</Button>}
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {isLoadingData && filteredLabs.length === 0 && !activeLabSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
-                  ) : filteredLabs.length > 0 ? (
-                    <div className="overflow-x-auto rounded-b-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead><div className="flex items-center gap-1"><Building className="h-4 w-4 text-muted-foreground"/>Name</div></TableHead>
-                            <TableHead><div className="flex items-center gap-1"><MapPin className="h-4 w-4 text-muted-foreground"/>Location</div></TableHead>
-                            <TableHead className="text-center"><div className="flex items-center justify-center gap-1"><PackageIcon className="h-4 w-4 text-muted-foreground"/>Resources</div></TableHead>
-                            <TableHead className="text-center"><div className="flex items-center justify-center gap-1"><UsersRound className="h-4 w-4 text-muted-foreground"/>Members</div></TableHead>
-                            {canManageAny && <TableHead className="text-right w-[100px]">Actions</TableHead>}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>{filteredLabs.map(lab => (
-                          <TableRow key={lab.id}>
-                            <TableCell className="font-medium">{lab.name}</TableCell>
-                            <TableCell>{lab.location || 'N/A'}</TableCell>
-                            <TableCell className="text-center">{(lab as any).resourceCount ?? 0}</TableCell>
-                            <TableCell className="text-center">{(lab as any).memberCount ?? 0}</TableCell>
-                            {canManageAny && <TableCell className="text-right space-x-1">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setActiveContextId(lab.id)}>
-                                      <Settings2 className="h-4 w-4"/>
-                                      <span className="sr-only">Manage Lab</span>
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent><p>Manage Lab</p></TooltipContent>
-                                </Tooltip>
-                              <AlertDialog open={labToDelete?.id === lab.id} onOpenChange={(isOpen) => !isOpen && setLabToDelete(null)}>
-                                <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabToDelete(lab)} disabled={isLoadingData || ((lab as any).resourceCount ?? 0) > 0 || ((lab as any).memberCount ?? 0) > 0}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger>
-                                <TooltipContent>{((lab as any).resourceCount ?? 0) > 0 || ((lab as any).memberCount ?? 0) > 0 ? "Cannot delete: lab has resources or members" : "Delete Lab"}</TooltipContent>
-                                </Tooltip>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader><AlertDialogTitle>Delete "{labToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources are assigned and no members are active.</AlertDialogDescription></AlertDialogHeader>
-                                  <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => labToDelete && handleDeleteLab(labToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </TableCell>}
-                          </TableRow>
-                        ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : (
-                    <div className="text-center py-10 text-muted-foreground">
-                      <Building className="h-12 w-12 mx-auto mb-3 opacity-50"/>
-                      <p className="font-medium">{activeLabFilterCount > 0 ? "No labs match criteria." : "No labs defined."}</p>
-                      {activeLabFilterCount > 0 && <Button variant="link" onClick={resetAllActiveLabPageFilters} className="mt-2 text-xs"><FilterX className="mr-1.5 h-3.5 w-3.5"/>Reset Filters</Button>}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                <ManageLabsTab
+                    labs={filteredLabs}
+                    isLoadingData={isLoadingData}
+                    activeLabFilterCount={activeLabFilterCount}
+                    isLabFilterDialogOpen={isLabFilterDialogOpen}
+                    setIsLabFilterDialogOpen={setIsLabFilterDialogOpen}
+                    tempLabSearchTerm={tempLabSearchTerm}
+                    setTempLabSearchTerm={setTempLabSearchTerm}
+                    tempLabSortBy={tempLabSortBy}
+                    setTempLabSortBy={setTempLabSortBy}
+                    resetLabDialogFiltersOnly={resetLabDialogFiltersOnly}
+                    handleApplyLabDialogFilters={handleApplyLabDialogFilters}
+                    resetAllActiveLabPageFilters={resetAllActiveLabPageFilters}
+                    canManageAny={canManageAny}
+                    handleOpenNewLabDialog={handleOpenNewLabDialog}
+                    setActiveContextId={handleContextChange}
+                    setLabToDelete={setLabToDelete}
+                    labToDelete={labToDelete}
+                    handleDeleteLab={handleDeleteLab}
+                />
             </TabsContent>
             
             <TabsContent value="global-closures" className="mt-6">
-              <Card>
-                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                    <div><CardTitle className="text-xl">Global Lab Closures</CardTitle><p className="text-sm text-muted-foreground mt-1">Manage blackout dates and recurring rules that apply system-wide (to all labs).</p></div>
-                     <FilterSortDialog open={isGlobalClosureFilterDialogOpen} onOpenChange={setIsGlobalClosureFilterDialogOpen}>
-                      <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter {activeGlobalClosureFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeGlobalClosureFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
-                      <FilterSortDialogContent className="sm:max-w-md">
-                        <FilterSortDialogHeader><FilterSortDialogTitle>Filter Global Closures</FilterSortDialogTitle></FilterSortDialogHeader>
-                        <Separator className="my-3" />
-                        <div className="space-y-3">
-                          <div className="relative"><Label htmlFor="globalClosureSearchDialog">Search (Reason/Name/Date)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="globalClosureSearchDialog" value={tempGlobalClosureSearchTerm} onChange={e => setTempGlobalClosureSearchTerm(e.target.value)} placeholder="e.g., Holiday, Weekend, Jan 1" className="mt-1 h-9 pl-8"/></div>
-                        </div>
-                        <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetGlobalClosureDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><AlertDialogCancel>Cancel</AlertDialogCancel><Button onClick={handleApplyGlobalClosureDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
-                      </FilterSortDialogContent>
-                    </FilterSortDialog>
-                </CardHeader>
-                <CardContent>
-                  <Tabs value={activeGlobalClosuresTab} onValueChange={setActiveGlobalClosuresTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 mb-4">
-                      <TabsTrigger value="specific-dates-global"><CalendarDays className="mr-2 h-4 w-4"/>Specific Dates</TabsTrigger>
-                      <TabsTrigger value="recurring-rules-global"><Repeat className="mr-2 h-4 w-4"/>Recurring Rules</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="specific-dates-global">
-                      <div className="flex justify-end mb-3">
-                        <Button onClick={handleOpenNewGlobalDateDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Global Date</Button>
-                      </div>
-                      {isLoadingData && filteredGlobalBlackoutDates.length === 0 && !activeGlobalClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
-                      ) : filteredGlobalBlackoutDates.length > 0 ? (
-                        <div className="overflow-x-auto rounded-b-md border">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead><div className="flex items-center gap-1"><CalendarDays className="h-4 w-4 text-muted-foreground"/>Date</div></TableHead>
-                                <TableHead><div className="flex items-center gap-1"><FileText className="h-4 w-4 text-muted-foreground"/>Reason</div></TableHead>
-                                <TableHead className="text-right w-[100px]">Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                          <TableBody>{filteredGlobalBlackoutDates.map(bd => (
-                            <TableRow key={bd.id}><TableCell className="font-medium">{formatDateSafe(parseISO(bd.date), 'Invalid Date', 'PPP')}</TableCell><TableCell className="text-sm text-muted-foreground">{bd.reason || 'N/A'}</TableCell>
-                            <TableCell className="text-right space-x-1">
-                              <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditGlobalDateDialog(bd)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Date</TooltipContent></Tooltip>
-                              <AlertDialog open={globalDateToDelete?.id === bd.id} onOpenChange={(isOpen) => !isOpen && setGlobalDateToDelete(null)}>
-                                <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setGlobalDateToDelete(bd)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Date</TooltipContent></Tooltip>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader><AlertDialogTitle>Delete Global Blackout on {formatDateSafe(globalDateToDelete ? parseISO(globalDateToDelete.date) : new Date(), '', 'PPP')}?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                                  <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => globalDateToDelete && handleDeleteGlobalBlackoutDate(globalDateToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </TableCell></TableRow>
-                          ))}</TableBody></Table>
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground"><CalendarOff className="h-10 w-10 mx-auto mb-2 opacity-50"/><p className="font-medium">{activeGlobalClosureSearchTerm ? "No global dates match filter." : "No global specific blackout dates."}</p></div>
-                      )}
-                    </TabsContent>
-                    <TabsContent value="recurring-rules-global">
-                       <div className="flex justify-end mb-3">
-                        <Button onClick={handleOpenNewGlobalRecurringDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Global Rule</Button>
-                      </div>
-                      {isLoadingData && filteredGlobalRecurringRules.length === 0 && !activeGlobalClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
-                      ) : filteredGlobalRecurringRules.length > 0 ? (
-                        <div className="overflow-x-auto rounded-b-md border">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead><div className="flex items-center gap-1"><Tag className="h-4 w-4 text-muted-foreground"/>Rule Name</div></TableHead>
-                                <TableHead><div className="flex items-center gap-1"><Repeat className="h-4 w-4 text-muted-foreground"/>Days</div></TableHead>
-                                <TableHead><div className="flex items-center gap-1"><FileText className="h-4 w-4 text-muted-foreground"/>Reason</div></TableHead>
-                                <TableHead className="text-right w-[100px]">Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                          <TableBody>{filteredGlobalRecurringRules.map(rule => (
-                            <TableRow key={rule.id}><TableCell className="font-medium">{rule.name}</TableCell><TableCell className="text-sm text-muted-foreground">{rule.daysOfWeek.join(', ')}</TableCell><TableCell className="text-sm text-muted-foreground">{rule.reason || 'N/A'}</TableCell>
-                            <TableCell className="text-right space-x-1">
-                              <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditGlobalRecurringDialog(rule)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Rule</TooltipContent></Tooltip>
-                              <AlertDialog open={globalRuleToDelete?.id === rule.id} onOpenChange={(isOpen) => !isOpen && setGlobalRuleToDelete(null)}>
-                                <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setGlobalRuleToDelete(rule)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Rule</TooltipContent></Tooltip>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader><AlertDialogTitle>Delete Global Rule "{globalRuleToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                                  <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => globalRuleToDelete && handleDeleteGlobalRecurringRule(globalRuleToDelete.id)}>Delete Rule</AlertDialogAction></AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </TableCell></TableRow>
-                          ))}</TableBody></Table>
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground"><Repeat className="h-10 w-10 mx-auto mb-2 opacity-50"/><p className="font-medium">{activeGlobalClosureSearchTerm ? "No global rules match filter." : "No global recurring closure rules."}</p></div>
-                      )}
-                    </TabsContent>
-                  </Tabs>
-                </CardContent>
-              </Card>
+                <GlobalClosuresTab
+                    isLoadingData={isLoadingData}
+                    activeGlobalClosuresTab={activeGlobalClosuresTab}
+                    setActiveGlobalClosuresTab={setActiveGlobalClosuresTab}
+                    isGlobalClosureFilterDialogOpen={isGlobalClosureFilterDialogOpen}
+                    setIsGlobalClosureFilterDialogOpen={setIsGlobalClosureFilterDialogOpen}
+                    activeGlobalClosureFilterCount={activeGlobalClosureFilterCount}
+                    tempGlobalClosureSearchTerm={tempGlobalClosureSearchTerm}
+                    setTempGlobalClosureSearchTerm={setTempGlobalClosureSearchTerm}
+                    resetGlobalClosureDialogFiltersOnly={resetGlobalClosureDialogFiltersOnly}
+                    handleApplyGlobalClosureDialogFilters={handleApplyGlobalClosureDialogFilters}
+                    resetAllActiveGlobalClosurePageFilters={resetAllActiveGlobalClosurePageFilters}
+                    filteredGlobalBlackoutDates={filteredGlobalBlackoutDates}
+                    activeGlobalClosureSearchTerm={activeGlobalClosureSearchTerm}
+                    handleOpenNewGlobalDateDialog={handleOpenNewGlobalDateDialog}
+                    handleOpenEditGlobalDateDialog={handleOpenEditGlobalDateDialog}
+                    globalDateToDelete={globalDateToDelete}
+                    setGlobalDateToDelete={setGlobalDateToDelete}
+                    handleDeleteGlobalBlackoutDate={handleDeleteGlobalBlackoutDate}
+                    filteredGlobalRecurringRules={filteredGlobalRecurringRules}
+                    handleOpenNewGlobalRecurringDialog={handleOpenNewGlobalRecurringDialog}
+                    handleOpenEditGlobalRecurringDialog={handleOpenEditGlobalRecurringDialog}
+                    globalRuleToDelete={globalRuleToDelete}
+                    setGlobalRuleToDelete={setGlobalRuleToDelete}
+                    handleDeleteGlobalRecurringRule={handleDeleteGlobalRecurringRule}
+                />
             </TabsContent>
             
             <TabsContent value="maintenance-log" className="mt-6">
-              <Card>
-                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                  <div>
-                    <CardTitle className="text-xl">System-Wide Maintenance Log</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">View and manage all maintenance requests across labs.</p>
-                  </div>
-                  <div className="flex gap-2 flex-wrap">
-                    <FilterSortDialog open={isMaintenanceFilterDialogOpen} onOpenChange={setIsMaintenanceFilterDialogOpen}>
-                      <FilterSortDialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <FilterIcon className="mr-2 h-4 w-4" />Filter 
-                          {activeMaintenanceFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeMaintenanceFilterCount}</Badge>}
-                        </Button>
-                      </FilterSortDialogTrigger>
-                      <FilterSortDialogContent className="w-full max-w-lg">
-                        <FilterSortDialogHeader><FilterSortDialogTitle>Filter Maintenance Requests</FilterSortDialogTitle></FilterSortDialogHeader>
-                        <Separator className="my-3" />
-                        <div className="space-y-3">
-                          <div className="relative">
-                            <Label htmlFor="maintenanceSearchDialogSys">Search (Resource/Reporter/Issue/Tech)</Label>
-                            <SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" />
-                            <Input id="maintenanceSearchDialogSys" value={tempMaintenanceSearchTerm} onChange={e => setTempMaintenanceSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                              <Label htmlFor="maintenanceStatusDialogSys">Status</Label>
-                              <Select value={tempMaintenanceFilterStatus} onValueChange={(v) => setTempMaintenanceFilterStatus(v as MaintenanceRequestStatus | 'all')}>
-                                <SelectTrigger id="maintenanceStatusDialogSys" className="h-9 mt-1"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
-                                <SelectContent><SelectItem value="all">All Statuses</SelectItem>{maintenanceRequestStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                              </Select>
-                            </div>
-                            <div>
-                              <Label htmlFor="maintenanceResourceDialogSys">Resource</Label>
-                              <Select value={tempMaintenanceFilterResourceId} onValueChange={setTempMaintenanceFilterResourceId} disabled={allResourcesForCountsAndChecks.length === 0}>
-                                <SelectTrigger id="maintenanceResourceDialogSys" className="h-9 mt-1"><SelectValue placeholder={allResourcesForCountsAndChecks.length > 0 ? "Filter by Resource" : "No resources"} /></SelectTrigger>
-                                <SelectContent><SelectItem value="all">All Resources</SelectItem>{allResourcesForCountsAndChecks.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                          <div>
-                            <Label htmlFor="maintenanceTechnicianDialogSys">Assigned Technician</Label>
-                            <Select value={tempMaintenanceFilterTechnicianId} onValueChange={setTempMaintenanceFilterTechnicianId} disabled={allTechniciansForMaintenance.length === 0}>
-                              <SelectTrigger id="maintenanceTechnicianDialogSys" className="h-9 mt-1"><SelectValue placeholder={allTechniciansForMaintenance.length > 0 ? "Filter by Technician" : "No technicians"} /></SelectTrigger>
-                              <SelectContent><SelectItem value="all">All/Any</SelectItem><SelectItem value="--unassigned--">Unassigned</SelectItem>{allTechniciansForMaintenance.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <FilterSortDialogFooter className="mt-4 pt-4 border-t">
-                          <Button variant="ghost" onClick={resetMaintenanceDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel><Button onClick={handleApplyMaintenanceDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button>
-                        </FilterSortDialogFooter>
-                      </FilterSortDialogContent>
-                    </FilterSortDialog>
-                    {canManageAny && <Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add</Button>}
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {isLoadingData && filteredMaintenanceRequests.length === 0 ? (
-                    <div className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2"/>Fetching requests...</div>
-                  ) : filteredMaintenanceRequests.length > 0 ? (
-                    <div className="overflow-x-auto rounded-b-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead><div className="flex items-center gap-1"><PackageIcon className="h-4 w-4 text-muted-foreground"/>Resource</div></TableHead>
-                            <TableHead className="min-w-[200px]"><div className="flex items-center gap-1"><AlertTriangle className="h-4 w-4 text-muted-foreground"/>Issue</div></TableHead>
-                            <TableHead><div className="flex items-center gap-1"><UserIconLucide className="h-4 w-4 text-muted-foreground"/>Reported By</div></TableHead>
-                            <TableHead><div className="flex items-center gap-1"><CalendarClock className="h-4 w-4 text-muted-foreground"/>Date Reported</div></TableHead>
-                            <TableHead><div className="flex items-center gap-1"><InfoIcon className="h-4 w-4 text-muted-foreground"/>Status</div></TableHead>
-                            <TableHead><div className="flex items-center gap-1"><UserCog className="h-4 w-4 text-muted-foreground"/>Assigned To</div></TableHead>
-                            {canEditAnyMaintenanceRequest && <TableHead className="text-right w-[100px]">Actions</TableHead>}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>{filteredMaintenanceRequests.map((request) => (
-                          <TableRow key={request.id}>
-                            <TableCell className="font-medium">{request.resourceName}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground max-w-xs truncate" title={request.issueDescription}>{request.issueDescription}</TableCell>
-                            <TableCell>{request.reportedByUserName}</TableCell>
-                            <TableCell>{formatDateSafe(request.dateReported, 'N/A', 'MMM dd, yyyy')}</TableCell>
-                            <TableCell>{getMaintenanceStatusBadge(request.status)}</TableCell>
-                            <TableCell>{request.assignedTechnicianName || <span className="text-xs italic text-muted-foreground">Unassigned</span>}</TableCell>
-                            {canEditAnyMaintenanceRequest && (
-                              <TableCell className="text-right space-x-1">
-                                <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditMaintenanceDialog(request)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Request</TooltipContent></Tooltip>
-                              </TableCell>
-                            )}
-                          </TableRow>
-                        ))}</TableBody>
-                      </Table>
-                    </div>
-                  ) : (
-                    <div className="text-center py-10 text-muted-foreground">
-                      <Wrench className="h-12 w-12 mx-auto mb-3 opacity-50"/>
-                      <p className="font-medium">{activeMaintenanceFilterCount > 0 ? "No requests match filters." : "No maintenance requests."}</p>
-                      {activeMaintenanceFilterCount > 0 ? (<Button variant="outline" size="sm" onClick={resetAllActiveMaintenancePageFilters}><FilterX className="mr-2 h-4 w-4"/>Reset Filters</Button>) : (canManageAny && (<Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add</Button>))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                <SystemMaintenanceLogTab
+                    isLoadingData={isLoadingData}
+                    filteredMaintenanceRequests={filteredMaintenanceRequests}
+                    activeMaintenanceFilterCount={activeMaintenanceFilterCount}
+                    isMaintenanceFilterDialogOpen={isMaintenanceFilterDialogOpen}
+                    setIsMaintenanceFilterDialogOpen={setIsMaintenanceFilterDialogOpen}
+                    tempMaintenanceSearchTerm={tempMaintenanceSearchTerm}
+                    setTempMaintenanceSearchTerm={setTempMaintenanceSearchTerm}
+                    tempMaintenanceFilterStatus={tempMaintenanceFilterStatus}
+                    setTempMaintenanceFilterStatus={setTempMaintenanceFilterStatus}
+                    tempMaintenanceFilterResourceId={tempMaintenanceFilterResourceId}
+                    setTempMaintenanceFilterResourceId={setTempMaintenanceFilterResourceId}
+                    tempMaintenanceFilterTechnicianId={tempMaintenanceFilterTechnicianId}
+                    setTempMaintenanceFilterTechnicianId={setTempMaintenanceFilterTechnicianId}
+                    allResourcesForCountsAndChecks={allResourcesForCountsAndChecks}
+                    allTechniciansForMaintenance={allTechniciansForMaintenance}
+                    resetMaintenanceDialogFiltersOnly={resetMaintenanceDialogFiltersOnly}
+                    handleApplyMaintenanceDialogFilters={handleApplyMaintenanceDialogFilters}
+                    resetAllActiveMaintenancePageFilters={resetAllActiveMaintenancePageFilters}
+                    canManageAny={canManageAny}
+                    handleOpenNewMaintenanceDialog={handleOpenNewMaintenanceDialog}
+                    canEditAnyMaintenanceRequest={canEditAnyMaintenanceRequest}
+                    handleOpenEditMaintenanceDialog={handleOpenEditMaintenanceDialog}
+                />
             </TabsContent>
 
             <TabsContent value="lab-access-requests" className="mt-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-xl"><div className="flex items-center gap-2"><UsersRound className="h-5 w-5 text-muted-foreground"/>System-Wide Lab Access Requests</div></CardTitle>
-                  <CardDescription>Review and manage pending requests for lab access from all users for all labs.</CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {isLabAccessRequestLoading ? (
-                    <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
-                  ) : allLabAccessRequests.length > 0 ? (
-                    <div className="overflow-x-auto rounded-b-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead><div className="flex items-center gap-1"><UserIconLucide className="h-4 w-4 text-muted-foreground"/>User</div></TableHead>
-                            <TableHead><div className="flex items-center gap-1"><Building className="h-4 w-4 text-muted-foreground"/>Lab Requested</div></TableHead>
-                            <TableHead><div className="flex items-center gap-1"><CalendarClock className="h-4 w-4 text-muted-foreground"/>Date Requested</div></TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {allLabAccessRequests.map(req => (
-                            <TableRow key={req.id}>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <Avatar className="h-8 w-8">
-                                    <AvatarImage src={req.userAvatarUrl} alt={req.userName} data-ai-hint="user avatar"/>
-                                    <AvatarFallback>{(req.userName || 'U').charAt(0)}</AvatarFallback>
-                                  </Avatar>
-                                  <div>
-                                    <div className="font-medium">{req.userName}</div>
-                                    <div className="text-xs text-muted-foreground">{req.userEmail}</div>
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell>{req.labName}</TableCell>
-                              <TableCell>{req.requestedAt ? formatDateSafe(req.requestedAt, 'N/A', 'PPP p') : 'N/A'}</TableCell>
-                              <TableCell className="text-right space-x-1">
-                                 <Tooltip>
-                                  <TooltipTrigger asChild>
-                                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'approve_request', req.id)} disabled={isProcessingLabAccessAction[req.id!]}>
-                                          {isProcessingLabAccessAction[req.id!] ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsUp className="h-4 w-4 text-green-600" />}
-                                          <span className="sr-only">Approve Request</span>
-                                      </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent><p>Approve Request</p></TooltipContent>
-                                 </Tooltip>
-                                 <Tooltip>
-                                  <TooltipTrigger asChild>
-                                      <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => handleMembershipAction(req.userId, req.userName!, req.labId, req.labName!, 'reject_request', req.id)} disabled={isProcessingLabAccessAction[req.id!]}>
-                                           {isProcessingLabAccessAction[req.id!] ? <Loader2 className="h-4 w-4 animate-spin"/> : <ThumbsDown className="h-4 w-4" />}
-                                          <span className="sr-only">Reject Request</span>
-                                      </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent><p>Reject Request</p></TooltipContent>
-                                 </Tooltip>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : (
-                    <div className="text-center py-10 text-muted-foreground">
-                      <Users className="h-12 w-12 mx-auto mb-3 opacity-50"/>
-                      <p className="font-medium">No pending lab access requests system-wide.</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                <LabAccessRequestsTab
+                    isLabAccessRequestLoading={isLabAccessRequestLoading}
+                    allLabAccessRequests={allLabAccessRequests}
+                    handleMembershipAction={handleMembershipAction}
+                    isProcessingLabAccessAction={isProcessingLabAccessAction}
+                />
             </TabsContent>
           </Tabs>
         )}
 
         {!isLoadingData && activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
-           <Tabs defaultValue={searchParamsObj.get('tab') || "lab-details"} className="w-full">
+           <Tabs value={currentActiveLabTab} onValueChange={handleLabTabChange} className="w-full">
               <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
-                  <TabsTrigger value="lab-details">Lab Overview & Reports</TabsTrigger>
+                  <TabsTrigger value="lab-details">Lab Overview</TabsTrigger>
                   <TabsTrigger value="lab-closures">Closures</TabsTrigger>
                   <TabsTrigger value="lab-maintenance">Maintenance</TabsTrigger>
-                  <TabsTrigger value="lab-members">Members & Access</TabsTrigger>
+                  <TabsTrigger value="lab-members">Members</TabsTrigger>
               </TabsList>
 
               <TabsContent value="lab-details" className="mt-6">
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-                    <Card className="shadow-lg lg:col-span-2 md:col-span-1">
-                        <CardHeader className="flex flex-row items-start justify-between gap-2">
-                            <div>
-                                <CardTitle className="text-2xl">{selectedLabDetails.name}</CardTitle>
-                                {selectedLabDetails.location && <CardDescription>{selectedLabDetails.location}</CardDescription>}
-                            </div>
-                            <Button variant="outline" size="icon" className="h-8 w-8 flex-shrink-0" onClick={handleOpenEditSelectedLabDialog}><Edit className="h-4 w-4"/></Button>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-sm text-muted-foreground">{selectedLabDetails.description || 'No description provided.'}</p>
-                        </CardContent>
-                    </Card>
-                    <Card className="shadow-lg lg:col-span-3 md:col-span-1">
-                        <CardHeader><CardTitle className="text-xl flex items-center gap-2"><BarChartHorizontalBig className="h-5 w-5 text-primary"/>Key Statistics</CardTitle></CardHeader>
-                        <CardContent className="space-y-3">
-                            <div className="flex items-center justify-between p-2 bg-muted/30 rounded-md">
-                                <div className="flex items-center gap-2"><PackageIcon className="h-5 w-5 text-muted-foreground"/> <span className="font-medium">Resources</span></div>
-                                <Badge variant="secondary" className="text-lg">{labSpecificStats.resourceCount}</Badge>
-                            </div>
-                             <div className="flex items-center justify-between p-2 bg-muted/30 rounded-md">
-                                <div className="flex items-center gap-2"><UsersRound className="h-5 w-5 text-muted-foreground"/> <span className="font-medium">Active Members</span></div>
-                                <Badge variant="secondary" className="text-lg">{labSpecificStats.activeMemberCount}</Badge>
-                            </div>
-                             <div className="flex items-center justify-between p-2 bg-muted/30 rounded-md">
-                                <div className="flex items-center gap-2"><Briefcase className="h-5 w-5 text-muted-foreground"/> <span className="font-medium">Open Maintenance</span></div>
-                                <Badge variant="secondary" className="text-lg">{labSpecificStats.openMaintenanceCount}</Badge>
-                            </div>
-                        </CardContent>
-                    </Card>
-                  </div>
-
-                  <Card className="shadow-lg">
-                      <CardHeader>
-                          <CardTitle className="text-xl flex items-center gap-2">
-                              <BarChart3 className="h-5 w-5 text-primary"/>
-                              Lab Performance Dashboard: {selectedLabDetails.name}
-                          </CardTitle>
-                          <CardDescription>Key performance indicators for this lab.</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-8">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <Card>
-                                  <CardHeader><CardTitle className="text-base flex items-center gap-1"><ClipboardList className="h-4 w-4"/>Bookings per Resource</CardTitle></CardHeader>
-                                  <CardContent>
-                                      {bookingsPerLabResource.length > 0 ? (
-                                          <ChartContainer config={bookingsLabChartConfig} className="min-h-[250px] w-full">
-                                              <ResponsiveContainer width="100%" height={250}>
-                                                  <BarChart data={bookingsPerLabResource} margin={{ top: 5, right: 5, left: -25, bottom: 40 }}>
-                                                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                                                      <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} angle={-30} textAnchor="end" interval={0} height={50} className="text-xs"/>
-                                                      <YAxis tickLine={false} axisLine={false} tickMargin={8} allowDecimals={false} />
-                                                      <ChartTooltip {...chartTooltipConfig} />
-                                                      <Bar dataKey="count" fill="var(--color-count)" radius={3} />
-                                                  </BarChart>
-                                              </ResponsiveContainer>
-                                          </ChartContainer>
-                                      ) : <p className="text-muted-foreground text-center text-sm py-8">No booking data.</p>}
-                                  </CardContent>
-                              </Card>
-                               <Card>
-                                  <CardHeader><CardTitle className="text-base flex items-center gap-1"><AlertTriangle className="h-4 w-4"/>Maintenance Status</CardTitle></CardHeader>
-                                  <CardContent className="flex justify-center">
-                                      {maintenanceByStatusForLab.length > 0 ? (
-                                          <ChartContainer config={maintenanceLabChartConfig} className="min-h-[250px] max-w-[280px] w-full aspect-square">
-                                              <ResponsiveContainer width="100%" height={250}>
-                                                  <RechartsPieChart>
-                                                      <ChartTooltip {...chartTooltipConfig} />
-                                                      <Pie data={maintenanceByStatusForLab} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={70} labelLine={false} label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}>
-                                                        {maintenanceByStatusForLab.map((entry) => (<Cell key={`cell-${entry.name}`} fill={entry.fill} className="stroke-background focus:outline-none"/> ))}
-                                                      </Pie>
-                                                      <ChartLegend {...chartLegendConfig} />
-                                                  </RechartsPieChart>
-                                              </ResponsiveContainer>
-                                          </ChartContainer>
-                                      ) : <p className="text-muted-foreground text-center text-sm py-8">No maintenance data.</p>}
-                                  </CardContent>
-                              </Card>
-                          </div>
-                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <Card>
-                                  <CardHeader><CardTitle className="text-base flex items-center gap-1"><Percent className="h-4 w-4"/>Resource Utilization (30d)</CardTitle></CardHeader>
-                                  <CardContent>
-                                      {labResourceUtilization.length > 0 ? (
-                                          <ChartContainer config={utilizationLabChartConfig} className="min-h-[250px] w-full">
-                                              <ResponsiveContainer width="100%" height={250}>
-                                                  <BarChart data={labResourceUtilization} layout="vertical" margin={{ top: 5, right: 25, left: 10, bottom: 5 }}>
-                                                      <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-                                                      <XAxis type="number" tickLine={false} axisLine={false} tickMargin={8} unit="%" domain={[0,100]} />
-                                                      <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={8} width={100} className="text-xs truncate"/>
-                                                      <ChartTooltip content={<ChartTooltipContent formatter={(value, name, props) => `${props.payload.name}: ${value}%`} indicator="dot" />} />
-                                                      <Bar dataKey="utilization" fill="var(--color-utilization)" radius={3} />
-                                                  </BarChart>
-                                              </ResponsiveContainer>
-                                          </ChartContainer>
-                                      ) : <p className="text-muted-foreground text-center text-sm py-8">No utilization data.</p>}
-                                  </CardContent>
-                              </Card>
-                              <Card>
-                                  <CardHeader><CardTitle className="text-base flex items-center gap-1"><Clock className="h-4 w-4"/>Peak Booking Hours</CardTitle></CardHeader>
-                                  <CardContent>
-                                      {peakBookingHoursForLab.length > 0 ? (
-                                          <ChartContainer config={peakHoursLabChartConfig} className="min-h-[250px] w-full">
-                                              <ResponsiveContainer width="100%" height={250}>
-                                                  <LineChart data={peakBookingHoursForLab} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
-                                                      <CartesianGrid strokeDasharray="3 3" />
-                                                      <XAxis dataKey="hour" tickLine={false} axisLine={true} tickMargin={8} className="text-xs"/>
-                                                      <YAxis tickLine={false} axisLine={true} tickMargin={8} allowDecimals={false}/>
-                                                      <ChartTooltip {...chartTooltipConfig} />
-                                                      <Line type="monotone" dataKey="count" stroke="var(--color-count)" strokeWidth={2} dot={{r:3, fill: "var(--color-count)"}} activeDot={{r:5}} />
-                                                  </LineChart>
-                                              </ResponsiveContainer>
-                                          </ChartContainer>
-                                      ) : <p className="text-muted-foreground text-center text-sm py-8">No peak hours data.</p>}
-                                  </CardContent>
-                              </Card>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <Card>
-                                  <CardHeader><CardTitle className="text-base flex items-center gap-1"><Hourglass className="h-4 w-4"/>Current Waitlist Size</CardTitle></CardHeader>
-                                  <CardContent>
-                                      {waitlistedPerLabResource.length > 0 ? (
-                                          <ChartContainer config={waitlistLabChartConfig} className="min-h-[250px] w-full">
-                                              <ResponsiveContainer width="100%" height={Math.max(150, waitlistedPerLabResource.length * 40)}>
-                                                  <BarChart data={waitlistedPerLabResource} layout="vertical" margin={{ top: 5, right: 25, left: 10, bottom: 5 }}>
-                                                      <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-                                                      <XAxis type="number" allowDecimals={false} />
-                                                      <YAxis dataKey="name" type="category" width={100} className="text-xs truncate"/>
-                                                      <ChartTooltip {...chartTooltipConfig} />
-                                                      <Bar dataKey="count" fill="var(--color-count)" radius={3} />
-                                                  </BarChart>
-                                              </ResponsiveContainer>
-                                          </ChartContainer>
-                                      ) : <p className="text-muted-foreground text-center text-sm py-8">No waitlisted items.</p>}
-                                  </CardContent>
-                              </Card>
-                              <Card>
-                                  <CardHeader><CardTitle className="text-base flex items-center gap-1"><Users2 className="h-4 w-4"/>Top User Activity</CardTitle></CardHeader>
-                                  <CardContent className="p-0">
-                                      {labUserActivityReport.length > 0 ? (
-                                          <div className="overflow-x-auto">
-                                          <Table>
-                                              <TableHeader><TableRow><TableHead>User</TableHead><TableHead className="text-center">Bookings</TableHead><TableHead className="text-right">Hours</TableHead></TableRow></TableHeader>
-                                              <TableBody>
-                                              {labUserActivityReport.map(item => (
-                                                  <TableRow key={item.userId}>
-                                                  <TableCell><div className="flex items-center gap-2"><Avatar className="h-7 w-7 text-xs"><AvatarImage src={item.avatarUrl} alt={item.userName} data-ai-hint="user avatar"/><AvatarFallback>{item.userName.charAt(0)}</AvatarFallback></Avatar>{item.userName}</div></TableCell>
-                                                  <TableCell className="text-center">{item.totalBookingsInLab}</TableCell>
-                                                  <TableCell className="text-right">{item.totalHoursBookedInLab.toFixed(1)}</TableCell>
-                                                  </TableRow>
-                                              ))}
-                                              </TableBody>
-                                          </Table>
-                                          </div>
-                                      ) : <p className="text-muted-foreground text-center text-sm py-8 px-3">No user activity data for this lab.</p>}
-                                  </CardContent>
-                              </Card>
-                          </div>
-                      </CardContent>
-                  </Card>
-                </div>
+                  <LabSpecificOverviewTab
+                    selectedLabDetails={selectedLabDetails}
+                    labSpecificStats={labSpecificStats}
+                    handleOpenEditSelectedLabDialog={handleOpenEditSelectedLabDialog}
+                    labSpecificBookings={labSpecificBookings}
+                    labSpecificMaintenanceRequests={labSpecificMaintenanceDataForReport}
+                    labSpecificResources={labSpecificResources}
+                    allUsersData={allUsersData}
+                    isLoadingData={isLoadingData}
+                  />
               </TabsContent>
               <TabsContent value="lab-closures" className="mt-6">
-                <Card>
-                  <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                    <div>
-                        <CardTitle>{selectedLabDetails.name} - Closures</CardTitle>
-                        <CardDescription>Manage specific and recurring unavailability for this lab.</CardDescription>
-                    </div>
-                    <FilterSortDialog open={isLabSpecificClosureFilterDialogOpen} onOpenChange={setIsLabSpecificClosureFilterDialogOpen}>
-                        <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter {activeLabSpecificClosureFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeLabSpecificClosureFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
-                        <FilterSortDialogContent className="sm:max-w-md">
-                            <FilterSortDialogHeader><FilterSortDialogTitle>Filter Closures for {selectedLabDetails.name}</FilterSortDialogTitle></FilterSortDialogHeader>
-                            <Separator className="my-3" />
-                            <div className="space-y-3">
-                            <div className="relative"><Label htmlFor="labSpecificClosureSearchDialog">Search (Reason/Name/Date)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="labSpecificClosureSearchDialog" value={tempLabSpecificClosureSearchTerm} onChange={e => setTempLabSpecificClosureSearchTerm(e.target.value)} placeholder="e.g., Holiday, Weekend, Jan 1" className="mt-1 h-9 pl-8"/></div>
-                            </div>
-                            <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabSpecificClosureDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><AlertDialogCancel>Cancel</AlertDialogCancel><Button onClick={handleApplyLabSpecificClosureDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
-                        </FilterSortDialogContent>
-                    </FilterSortDialog>
-                  </CardHeader>
-                  <CardContent>
-                    <Tabs value={activeLabClosuresTab} onValueChange={setActiveLabClosuresTab} className="w-full">
-                      <TabsList className="grid w-full grid-cols-2 mb-4">
-                        <TabsTrigger value="specific-dates-lab"><CalendarDays className="mr-2 h-4 w-4"/>Specific Dates</TabsTrigger>
-                        <TabsTrigger value="recurring-rules-lab"><Repeat className="mr-2 h-4 w-4"/>Recurring Rules</TabsTrigger>
-                      </TabsList>
-                      <TabsContent value="specific-dates-lab">
-                        <div className="flex justify-end mb-3">
-                          <Button onClick={handleOpenNewLabSpecificDateDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add</Button>
-                        </div>
-                        {isLoadingData && filteredLabSpecificBlackoutDates.length === 0 && !activeLabSpecificClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
-                        ) : filteredLabSpecificBlackoutDates.length > 0 ? (
-                          <div className="overflow-x-auto border rounded-b-md">
-                            <Table><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Reason</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
-                            <TableBody>{filteredLabSpecificBlackoutDates.map(bd => (
-                              <TableRow key={bd.id}><TableCell className="font-medium">{formatDateSafe(parseISO(bd.date), 'Invalid Date', 'PPP')}</TableCell><TableCell className="text-sm text-muted-foreground">{bd.reason || 'N/A'}</TableCell>
-                              <TableCell className="text-right space-x-1">
-                                <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditLabSpecificDateDialog(bd)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Date</TooltipContent></Tooltip>
-                                <AlertDialog open={labSpecificDateToDelete?.id === bd.id} onOpenChange={(isOpen) => !isOpen && setLabSpecificDateToDelete(null)}>
-                                  <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabSpecificDateToDelete(bd)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Date</TooltipContent></Tooltip>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader><AlertDialogTitle>Delete Blackout on {formatDateSafe(labSpecificDateToDelete ? parseISO(labSpecificDateToDelete.date) : new Date(), '', 'PPP')} for {selectedLabDetails.name}?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => labSpecificDateToDelete && handleDeleteLabSpecificBlackoutDate(labSpecificDateToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </TableCell></TableRow>
-                            ))}</TableBody></Table>
-                          </div>
-                        ) : (
-                          <div className="text-center py-8 text-muted-foreground"><CalendarOff className="h-10 w-10 mx-auto mb-2 opacity-50"/><p className="font-medium">{activeLabSpecificClosureSearchTerm ? "No dates match filter." : `No specific blackout dates for ${selectedLabDetails.name}.`}</p></div>
-                        )}
-                      </TabsContent>
-                      <TabsContent value="recurring-rules-lab">
-                         <div className="flex justify-end mb-3">
-                          <Button onClick={handleOpenNewLabSpecificRecurringDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add</Button>
-                        </div>
-                        {isLoadingData && filteredLabSpecificRecurringRules.length === 0 && !activeLabSpecificClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
-                        ) : filteredLabSpecificRecurringRules.length > 0 ? (
-                          <div className="overflow-x-auto border rounded-b-md">
-                            <Table><TableHeader><TableRow><TableHead>Rule Name</TableHead><TableHead>Days</TableHead><TableHead>Reason</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
-                            <TableBody>{filteredLabSpecificRecurringRules.map(rule => (
-                              <TableRow key={rule.id}><TableCell className="font-medium">{rule.name}</TableCell><TableCell className="text-sm text-muted-foreground">{rule.daysOfWeek.join(', ')}</TableCell><TableCell className="text-sm text-muted-foreground">{rule.reason || 'N/A'}</TableCell>
-                              <TableCell className="text-right space-x-1">
-                                <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditLabSpecificRecurringDialog(rule)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Rule</TooltipContent></Tooltip>
-                                <AlertDialog open={labSpecificRuleToDelete?.id === rule.id} onOpenChange={(isOpen) => !isOpen && setLabSpecificRuleToDelete(null)}>
-                                  <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabSpecificRuleToDelete(rule)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Rule</TooltipContent></Tooltip>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader><AlertDialogTitle>Delete Rule "{labSpecificRuleToDelete?.name}" for {selectedLabDetails.name}?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => labSpecificRuleToDelete && handleDeleteLabSpecificRecurringRule(labSpecificRuleToDelete.id)}>Delete Rule</AlertDialogAction></AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </TableCell></TableRow>
-                            ))}</TableBody></Table>
-                          </div>
-                        ) : (
-                          <div className="text-center py-8 text-muted-foreground"><Repeat className="h-10 w-10 mx-auto mb-2 opacity-50"/><p className="font-medium">{activeLabSpecificClosureSearchTerm ? "No rules match filter." : `No recurring closure rules for ${selectedLabDetails.name}.`}</p></div>
-                        )}
-                      </TabsContent>
-                    </Tabs>
-                  </CardContent>
-                </Card>
+                  <LabSpecificClosuresTab
+                    selectedLabDetails={selectedLabDetails}
+                    isLoadingData={isLoadingData}
+                    activeLabClosuresTab={activeLabClosuresTab}
+                    setActiveLabClosuresTab={setActiveLabClosuresTab}
+                    isLabSpecificClosureFilterDialogOpen={isLabSpecificClosureFilterDialogOpen}
+                    setIsLabSpecificClosureFilterDialogOpen={setIsLabSpecificClosureFilterDialogOpen}
+                    activeLabSpecificClosureFilterCount={activeLabSpecificClosureFilterCount}
+                    tempLabSpecificClosureSearchTerm={tempLabSpecificClosureSearchTerm}
+                    setTempLabSpecificClosureSearchTerm={setTempLabSpecificClosureSearchTerm}
+                    resetLabSpecificClosureDialogFiltersOnly={resetLabSpecificClosureDialogFiltersOnly}
+                    handleApplyLabSpecificClosureDialogFilters={handleApplyLabSpecificClosureDialogFilters}
+                    resetAllActiveLabSpecificClosurePageFilters={resetAllActiveLabSpecificClosurePageFilters}
+                    filteredLabSpecificBlackoutDates={filteredLabSpecificBlackoutDates}
+                    activeLabSpecificClosureSearchTerm={activeLabSpecificClosureSearchTerm}
+                    handleOpenNewLabSpecificDateDialog={handleOpenNewLabSpecificDateDialog}
+                    handleOpenEditLabSpecificDateDialog={handleOpenEditLabSpecificDateDialog}
+                    labSpecificDateToDelete={labSpecificDateToDelete}
+                    setLabSpecificDateToDelete={setLabSpecificDateToDelete}
+                    handleDeleteLabSpecificBlackoutDate={handleDeleteLabSpecificBlackoutDate}
+                    filteredLabSpecificRecurringRules={filteredLabSpecificRecurringRules}
+                    handleOpenNewLabSpecificRecurringDialog={handleOpenNewLabSpecificRecurringDialog}
+                    handleOpenEditLabSpecificRecurringDialog={handleOpenEditLabSpecificRecurringDialog}
+                    labSpecificRuleToDelete={labSpecificRuleToDelete}
+                    setLabSpecificRuleToDelete={setLabSpecificRuleToDelete}
+                    handleDeleteLabSpecificRecurringRule={handleDeleteLabSpecificRecurringRule}
+                  />
               </TabsContent>
               <TabsContent value="lab-maintenance" className="mt-6">
-                <Card>
-                  <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                    <div>
-                      <CardTitle>{selectedLabDetails.name} - Maintenance Log</CardTitle>
-                      <CardDescription>View and manage maintenance requests for resources in this lab.</CardDescription>
-                    </div>
-                    <div className="flex gap-2 flex-wrap">
-                        <FilterSortDialog open={isLabSpecificMaintenanceFilterDialogOpen} onOpenChange={setIsLabSpecificMaintenanceFilterDialogOpen}>
-                          <FilterSortDialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              <FilterIcon className="mr-2 h-4 w-4" />Filter
-                              {activeLabSpecificMaintenanceFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeLabSpecificMaintenanceFilterCount}</Badge>}
-                            </Button>
-                          </FilterSortDialogTrigger>
-                          <FilterSortDialogContent className="w-full max-w-lg">
-                            <FilterSortDialogHeader><FilterSortDialogTitle>Filter Maintenance for {selectedLabDetails.name}</FilterSortDialogTitle></FilterSortDialogHeader>
-                            <Separator className="my-3" />
-                            <div className="space-y-3">
-                              <div className="relative">
-                                <Label htmlFor="labMaintenanceSearchDialog">Search (Resource/Reporter/Issue/Tech)</Label>
-                                <SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" />
-                                <Input id="labMaintenanceSearchDialog" value={tempLabSpecificMaintenanceSearchTerm} onChange={e => setTempLabSpecificMaintenanceSearchTerm(e.target.value)} placeholder="Keyword..." className="mt-1 h-9 pl-8"/>
-                              </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                  <Label htmlFor="labMaintenanceStatusDialog">Status</Label>
-                                  <Select value={tempLabSpecificMaintenanceStatusFilter} onValueChange={(v) => setTempLabSpecificMaintenanceStatusFilter(v as MaintenanceRequestStatus | 'all')}>
-                                    <SelectTrigger id="labMaintenanceStatusDialog" className="h-9 mt-1"><SelectValue placeholder="Filter by Status" /></SelectTrigger>
-                                    <SelectContent><SelectItem value="all">All Statuses</SelectItem>{maintenanceRequestStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                                  </Select>
-                                </div>
-                                <div>
-                                  <Label htmlFor="labMaintenanceResourceDialog">Resource (in this lab)</Label>
-                                  <Select value={tempLabSpecificMaintenanceResourceIdFilter} onValueChange={setTempLabSpecificMaintenanceResourceIdFilter} disabled={resourcesForLabSpecificMaintenanceFilter.length === 0}>
-                                    <SelectTrigger id="labMaintenanceResourceDialog" className="h-9 mt-1"><SelectValue placeholder={resourcesForLabSpecificMaintenanceFilter.length > 0 ? "Filter by Resource" : "No resources in lab"} /></SelectTrigger>
-                                    <SelectContent><SelectItem value="all">All Resources in {selectedLabDetails.name}</SelectItem>{resourcesForLabSpecificMaintenanceFilter.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                              <div>
-                                <Label htmlFor="labMaintenanceTechnicianDialog">Assigned Technician</Label>
-                                <Select value={tempLabSpecificMaintenanceTechnicianIdFilter} onValueChange={setTempLabSpecificMaintenanceTechnicianIdFilter} disabled={allTechniciansForMaintenance.length === 0}>
-                                  <SelectTrigger id="labMaintenanceTechnicianDialog" className="h-9 mt-1"><SelectValue placeholder={allTechniciansForMaintenance.length > 0 ? "Filter by Technician" : "No technicians"} /></SelectTrigger>
-                                  <SelectContent><SelectItem value="all">All/Any</SelectItem><SelectItem value="--unassigned--">Unassigned</SelectItem>{allTechniciansForMaintenance.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                            <FilterSortDialogFooter className="mt-4 pt-4 border-t">
-                              <Button variant="ghost" onClick={resetLabSpecificMaintenanceDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel><Button onClick={handleApplyLabSpecificMaintenanceDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button>
-                            </FilterSortDialogFooter>
-                          </FilterSortDialogContent>
-                        </FilterSortDialog>
-                        {canManageAny && <Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add</Button>}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    {isLoadingData && labSpecificFilteredMaintenanceRequests.length === 0 ? (
-                        <div className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2"/>Fetching requests for {selectedLabDetails.name}...</div>
-                    ) : labSpecificFilteredMaintenanceRequests.length > 0 ? (
-                        <div className="overflow-x-auto border rounded-b-md">
-                        <Table>
-                            <TableHeader><TableRow>
-                            <TableHead>Resource</TableHead><TableHead className="min-w-[200px]">Issue</TableHead><TableHead>Reported By</TableHead>
-                            <TableHead>Date Reported</TableHead><TableHead>Status</TableHead><TableHead>Assigned To</TableHead>
-                            {canEditAnyMaintenanceRequest && <TableHead className="text-right w-[100px]">Actions</TableHead>}
-                            </TableRow></TableHeader>
-                            <TableBody>{labSpecificFilteredMaintenanceRequests.map((request) => (
-                            <TableRow key={request.id}>
-                                <TableCell className="font-medium">{request.resourceName}</TableCell>
-                                <TableCell className="text-sm text-muted-foreground max-w-xs truncate" title={request.issueDescription}>{request.issueDescription}</TableCell>
-                                <TableCell>{request.reportedByUserName}</TableCell>
-                                <TableCell>{formatDateSafe(request.dateReported, 'N/A', 'MMM dd, yyyy')}</TableCell>
-                                <TableCell>{getMaintenanceStatusBadge(request.status)}</TableCell>
-                                <TableCell>{request.assignedTechnicianName || <span className="text-xs italic text-muted-foreground">Unassigned</span>}</TableCell>
-                                {canEditAnyMaintenanceRequest && (
-                                <TableCell className="text-right space-x-1">
-                                    <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditMaintenanceDialog(request)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Request</TooltipContent></Tooltip>
-                                </TableCell>
-                                )}
-                            </TableRow>
-                            ))}</TableBody>
-                        </Table>
-                        </div>
-                    ) : (
-                        <div className="text-center py-10 text-muted-foreground">
-                        <Wrench className="h-12 w-12 mx-auto mb-3 opacity-50"/>
-                        <p className="font-medium">{activeLabSpecificMaintenanceFilterCount > 0 ? `No requests match filters for ${selectedLabDetails.name}.` : `No maintenance requests for ${selectedLabDetails.name}.`}</p>
-                        {activeLabSpecificMaintenanceFilterCount > 0 ? (<Button variant="outline" size="sm" onClick={resetAllActiveLabSpecificMaintenancePageFilters}><FilterX className="mr-2 h-4 w-4"/>Reset Lab Filters</Button>) : (canManageAny && (<Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add</Button>))}
-                        </div>
-                    )}
-                    </CardContent>
-                </Card>
+                  <LabSpecificMaintenanceTab
+                    selectedLabDetails={selectedLabDetails}
+                    isLoadingData={isLoadingData}
+                    labSpecificFilteredMaintenanceRequests={labSpecificFilteredMaintenanceRequests}
+                    activeLabSpecificMaintenanceFilterCount={activeLabSpecificMaintenanceFilterCount}
+                    isLabSpecificMaintenanceFilterDialogOpen={isLabSpecificMaintenanceFilterDialogOpen}
+                    setIsLabSpecificMaintenanceFilterDialogOpen={setIsLabSpecificMaintenanceFilterDialogOpen}
+                    tempLabSpecificMaintenanceSearchTerm={tempLabSpecificMaintenanceSearchTerm}
+                    setTempLabSpecificMaintenanceSearchTerm={setTempLabSpecificMaintenanceSearchTerm}
+                    tempLabSpecificMaintenanceStatusFilter={tempLabSpecificMaintenanceStatusFilter}
+                    setTempLabSpecificMaintenanceStatusFilter={setTempLabSpecificMaintenanceStatusFilter}
+                    tempLabSpecificMaintenanceResourceIdFilter={tempLabSpecificMaintenanceResourceIdFilter}
+                    setTempLabSpecificMaintenanceResourceIdFilter={setTempLabSpecificMaintenanceResourceIdFilter}
+                    tempLabSpecificMaintenanceTechnicianIdFilter={tempLabSpecificMaintenanceTechnicianIdFilter}
+                    setTempLabSpecificMaintenanceTechnicianIdFilter={setTempLabSpecificMaintenanceTechnicianIdFilter}
+                    resourcesForLabSpecificMaintenanceFilter={resourcesForLabSpecificMaintenanceFilter}
+                    allTechniciansForMaintenance={allTechniciansForMaintenance}
+                    resetLabSpecificMaintenanceDialogFiltersOnly={resetLabSpecificMaintenanceDialogFiltersOnly}
+                    handleApplyLabSpecificMaintenanceDialogFilters={handleApplyLabSpecificMaintenanceDialogFilters}
+                    resetAllActiveLabSpecificMaintenancePageFilters={resetAllActiveLabSpecificMaintenancePageFilters}
+                    canManageAny={canManageAny}
+                    handleOpenNewMaintenanceDialog={handleOpenNewMaintenanceDialog}
+                    canEditAnyMaintenanceRequest={canEditAnyMaintenanceRequest}
+                    handleOpenEditMaintenanceDialog={handleOpenEditMaintenanceDialog}
+                  />
               </TabsContent>
               <TabsContent value="lab-members" className="mt-6">
-                <Card>
-                    <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                        <div>
-                            <CardTitle>{selectedLabDetails.name} - Members & Access</CardTitle>
-                            <CardDescription>Manage user access and view members of this lab.</CardDescription>
-                        </div>
-                        <Button size="sm" onClick={() => setIsLabSpecificMemberAddDialogOpen(true)} disabled={!canManageAny}>
-                            <UserPlus2 className="mr-2 h-4 w-4"/> Add New Member to {selectedLabDetails.name}
-                        </Button>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        {isLoadingData && labSpecificMembershipsDisplay.length === 0 ? (
-                            <div className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2"/>Loading lab members...</div>
-                        ) : labSpecificMembershipsDisplay.length > 0 ? (
-                            <div className="overflow-x-auto border rounded-b-md">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead><div className="flex items-center gap-1"><UserIconLucide className="h-4 w-4 text-muted-foreground"/>User</div></TableHead>
-                                            <TableHead><div className="flex items-center gap-1"><InfoIcon className="h-4 w-4 text-muted-foreground"/>Status in Lab</div></TableHead>
-                                            <TableHead><div className="flex items-center gap-1"><ActivitySquare className="h-4 w-4 text-muted-foreground"/>Last Activity</div></TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {labSpecificMembershipsDisplay.map(member => (
-                                            <TableRow key={member.id || member.userId}>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2">
-                                                        <Avatar className="h-8 w-8">
-                                                            <AvatarImage src={member.userAvatarUrl} alt={member.userName} data-ai-hint="user avatar"/>
-                                                            <AvatarFallback>{member.userName.charAt(0)}</AvatarFallback>
-                                                        </Avatar>
-                                                        <div>
-                                                            <div className="font-medium">{member.userName}</div>
-                                                            <div className="text-xs text-muted-foreground">{member.userEmail}</div>
-                                                        </div>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge className={cn("capitalize", getLabMembershipStatusBadgeClasses(member.status))}>
-                                                        {member.status.replace('_', ' ')}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell>{formatDateSafe(member.updatedAt ? (member.updatedAt as Timestamp).toDate() : (member.requestedAt as Timestamp)?.toDate(), 'N/A', 'PPP p')}</TableCell>
-                                                <TableCell className="text-right space-x-1">
-                                                    {member.status === 'pending_approval' && (
-                                                        <>
-                                                            <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleMembershipAction(member.userId, member.userName, selectedLabDetails.id, selectedLabDetails.name, 'approve_request', member.id)} disabled={isProcessingLabAccessAction[member.id!] || isLoadingData}><ThumbsUp className="h-4 w-4 text-green-600"/></Button></TooltipTrigger><TooltipContent>Approve Request</TooltipContent></Tooltip>
-                                                            <Tooltip><TooltipTrigger asChild><Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => handleMembershipAction(member.userId, member.userName, selectedLabDetails.id, selectedLabDetails.name, 'reject_request', member.id)} disabled={isProcessingLabAccessAction[member.id!] || isLoadingData}><ThumbsDown className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Reject Request</TooltipContent></Tooltip>
-                                                        </>
-                                                    )}
-                                                    {member.status === 'active' && (
-                                                        <Tooltip><TooltipTrigger asChild><Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => handleMembershipAction(member.userId, member.userName, selectedLabDetails.id, selectedLabDetails.name, 'revoke', member.id)} disabled={isProcessingLabAccessAction[member.id!] || isLoadingData}><ShieldOff className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Revoke Access</TooltipContent></Tooltip>
-                                                    )}
-                                                    {(member.status === 'rejected' || member.status === 'revoked') && (
-                                                         <Tooltip><TooltipTrigger asChild><Button variant="default" size="icon" className="h-8 w-8" onClick={() => handleMembershipAction(member.userId, member.userName, selectedLabDetails.id, selectedLabDetails.name, 'grant', member.id)} disabled={isProcessingLabAccessAction[member.id!] || isLoadingData}><PlusCircle className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Re-Grant Access</TooltipContent></Tooltip>
-                                                    )}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        ) : (
-                             <div className="text-center py-10 text-muted-foreground">
-                                <Users2 className="h-12 w-12 mx-auto mb-3 opacity-50"/>
-                                <p className="font-medium">No members or pending requests for {selectedLabDetails.name}.</p>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                  <LabSpecificMembersTab
+                    selectedLabDetails={selectedLabDetails}
+                    isLoadingData={isLoadingData}
+                    labSpecificMembershipsDisplay={labSpecificMembershipsDisplay}
+                    canManageAny={canManageAny}
+                    setIsLabSpecificMemberAddDialogOpen={setIsLabSpecificMemberAddDialogOpen}
+                    handleMembershipAction={handleMembershipAction}
+                    isProcessingLabAccessAction={isProcessingLabAccessAction}
+                  />
               </TabsContent>
           </Tabs>
         )}
@@ -2051,6 +1297,5 @@ export default function LabOperationsCenterPage() {
           />
         )}
       </div>
-    </TooltipProvider>
   );
 }
