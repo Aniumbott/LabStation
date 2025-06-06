@@ -13,7 +13,7 @@ import {
   CheckSquare,
   Bell,
   Loader2,
-  BarChart3,
+  // BarChart3, // Removed as per deprecation of global reports page
   History,
   Cog,
 } from 'lucide-react';
@@ -70,12 +70,12 @@ const navItems: NavItem[] = [
   },
   { href: '/profile', label: 'My Profile', icon: UserCog },
   { href: '/notifications', label: 'Notifications', icon: Bell },
-  {
-    href: '/admin/reports',
-    label: 'Reports',
-    icon: BarChart3,
-    adminOnly: true,
-  },
+  // { // Reports link removed
+  //   href: '/admin/reports',
+  //   label: 'Reports',
+  //   icon: BarChart3,
+  //   adminOnly: true,
+  // },
   {
     href: '/admin/audit-log',
     label: 'Audit Log',

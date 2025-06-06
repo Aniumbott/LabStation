@@ -5,8 +5,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation'; // Added
 import { PageHeader } from '@/components/layout/page-header';
-import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare, UserPlus2, Briefcase, MapPin, Tag, FileText, CalendarClock, User as UserIconLucide, AlertTriangle } from 'lucide-react';
-import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus, DayOfWeek } from '@/types';
+import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare, UserPlus2, Briefcase, MapPin, Tag, FileText, CalendarClock, User as UserIconLucide, AlertTriangle, BarChart3, ClipboardList, PieChart as PieChartIconComp, Percent, Hourglass } from 'lucide-react';
+import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus, DayOfWeek, Booking } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -40,9 +40,30 @@ import { db, auth } from '@/lib/firebase';
 import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp, writeBatch, where, limit } from 'firebase/firestore';
 import { addNotification, addAuditLog, manageLabMembership_SA } from '@/lib/firestore-helpers';
 import { daysOfWeekArray, maintenanceRequestStatuses } from '@/lib/app-constants';
-import { format, parseISO, isValid as isValidDateFn, isBefore, compareAsc } from 'date-fns';
+import { format, parseISO, isValid as isValidDateFn, isBefore, compareAsc, subDays, startOfHour, differenceInHours } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge as getResourceUIAvailabilityBadge } from '@/lib/utils';
 import Link from 'next/link';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import {
+  BarChart,
+  Bar,
+  PieChart as RechartsPieChart, // Aliased to avoid conflict with lucide icon
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+} from 'recharts';
 
 
 const GLOBAL_CONTEXT_VALUE = "--system-wide--";
@@ -68,6 +89,52 @@ const labSortOptions: { value: string; label: string }[] = [
   { value: 'resourceCount-asc', label: 'Resources (Low-High)' }, { value: 'resourceCount-desc', label: 'Resources (High-Low)' },
   { value: 'memberCount-asc', label: 'Members (Low-High)' }, { value: 'memberCount-desc', label: 'Members (High-Low)' },
 ];
+
+interface ReportItem {
+  name: string;
+  count: number;
+  fill?: string;
+}
+
+interface UtilizationItem {
+  name: string;
+  utilization: number;
+}
+
+interface PeakHourItem {
+  hour: string;
+  count: number;
+}
+
+interface LabUserUsageReportItem {
+  userId: string;
+  userName: string;
+  avatarUrl?: string;
+  totalBookingsInLab: number;
+  totalHoursBookedInLab: number;
+}
+
+const CHART_COLORS = {
+  bookings: "hsl(var(--chart-1))",
+  maintenance: {
+    Open: "hsl(var(--destructive))", // Use destructive for Open
+    "In Progress": "hsl(var(--chart-3))", // Keep chart-3 for In Progress (often yellow/orange)
+    Resolved: "hsl(var(--chart-4))", // Keep chart-4 for Resolved (often blue)
+    Closed: "hsl(var(--chart-2))", // Use chart-2 for Closed (often green)
+  },
+  utilization: "hsl(var(--chart-2))",
+  peakHours: "hsl(var(--chart-3))",
+  waitlist: "hsl(var(--chart-4))",
+  userUsage: "hsl(var(--chart-5))",
+};
+
+const chartTooltipConfig = {
+  cursor: false,
+  content: <ChartTooltipContent indicator="dot" hideLabel />,
+};
+const chartLegendConfig = {
+ content: <ChartLegendContent nameKey="name" className="text-xs mt-2" />,
+};
 
 
 const getMaintenanceStatusBadge = (status: MaintenanceRequestStatus) => {
@@ -169,9 +236,6 @@ export default function LabOperationsCenterPage() {
     const [isProcessingLabAccessAction, setIsProcessingLabAccessAction] = useState<Record<string, boolean>>({});
     const [isLabAccessRequestLoading, setIsLabAccessRequestLoading] = useState(true);
     const [isLabSpecificMemberAddDialogOpen, setIsLabSpecificMemberAddDialogOpen] = useState(false);
-
-    const [labUpcomingBookings, setLabUpcomingBookings] = useState<(Booking & { resourceName?: string, userName?: string })[]>([]);
-    const [isLoadingLabUpcomingBookings, setIsLoadingLabUpcomingBookings] = useState(true);
     const [allBookingsState, setAllBookingsState] = useState<(Booking & { resourceName?: string, userName?: string })[]>([]);
 
 
@@ -1005,28 +1069,155 @@ export default function LabOperationsCenterPage() {
         });
     }, [activeContextId, userLabMemberships, allUsersData, isLoadingData]);
 
-    useEffect(() => {
-        if (activeContextId === GLOBAL_CONTEXT_VALUE || isLoadingData || authIsLoading) {
-          setIsLoadingLabUpcomingBookings(false);
-          return;
-        }
+
+    // Lab Specific Reports Data
+    const labSpecificResources = useMemo(() => {
+        if (!selectedLabDetails) return [];
+        return allResourcesForCountsAndChecks.filter(res => res.labId === selectedLabDetails.id);
+    }, [selectedLabDetails, allResourcesForCountsAndChecks]);
+
+    const labSpecificBookings = useMemo(() => {
+        if (!selectedLabDetails) return [];
+        const labResourceIds = labSpecificResources.map(r => r.id);
+        return allBookingsState.filter(b => labResourceIds.includes(b.resourceId));
+    }, [selectedLabDetails, labSpecificResources, allBookingsState]);
     
-        setIsLoadingLabUpcomingBookings(true);
-        const labResources = allResourcesForCountsAndChecks.filter(res => res.labId === activeContextId);
-        const labResourceIds = labResources.map(res => res.id);
+    const labSpecificMaintenanceRequests = useMemo(() => {
+        if (!selectedLabDetails) return [];
+        const labResourceIds = labSpecificResources.map(r => r.id);
+        return maintenanceRequests.filter(req => labResourceIds.includes(req.resourceId));
+    }, [selectedLabDetails, labSpecificResources, maintenanceRequests]);
+
+
+    // Chart Data Calculations (Lab Specific)
+    const bookingsPerLabResource: ReportItem[] = useMemo(() => {
+        if (!selectedLabDetails || isLoadingData) return [];
+        const report: ReportItem[] = [];
+        labSpecificResources.forEach(resource => {
+            const count = labSpecificBookings.filter(b => b.resourceId === resource.id && b.status !== 'Cancelled').length;
+            if (count > 0) report.push({ name: resource.name, count });
+        });
+        return report.sort((a, b) => b.count - a.count).slice(0, 7);
+    }, [selectedLabDetails, labSpecificResources, labSpecificBookings, isLoadingData]);
+
+    const bookingsLabChartConfig = useMemo(() => {
+      const config: ChartConfig = {};
+      bookingsPerLabResource.forEach(item => { config[item.name] = { label: item.name, color: CHART_COLORS.bookings }; });
+      config["count"] = { label: "Bookings", color: CHART_COLORS.bookings };
+      return config;
+    }, [bookingsPerLabResource]);
+
+    const maintenanceByStatusForLab: ReportItem[] = useMemo(() => {
+        if (!selectedLabDetails || isLoadingData) return [];
+        const report: ReportItem[] = [];
+        maintenanceRequestStatuses.forEach(status => {
+            const count = labSpecificMaintenanceRequests.filter(req => req.status === status).length;
+            if (count > 0) report.push({ name: status, count, fill: CHART_COLORS.maintenance[status] });
+        });
+        return report;
+    }, [selectedLabDetails, labSpecificMaintenanceRequests, isLoadingData]);
+
+    const maintenanceLabChartConfig = useMemo(() => {
+      const config: ChartConfig = {};
+      maintenanceByStatusForLab.forEach(item => { config[item.name] = { label: item.name, color: item.fill! }; });
+      return config;
+    }, [maintenanceByStatusForLab]);
+
+    const labResourceUtilization: UtilizationItem[] = useMemo(() => {
+        if (!selectedLabDetails || isLoadingData) return [];
+        const report: UtilizationItem[] = [];
+        const today = new Date();
+        const thirtyDaysAgo = subDays(today, 30);
+        labSpecificResources.forEach(resource => {
+            const bookedDays = new Set<string>();
+            labSpecificBookings.forEach(booking => {
+                if (!booking.startTime || !isValidDateFn(booking.startTime)) return;
+                const bookingDate = booking.startTime;
+                if (booking.resourceId === resource.id && booking.status === 'Confirmed') {
+                    if (bookingDate >= thirtyDaysAgo && bookingDate <= today) bookedDays.add(format(bookingDate, 'yyyy-MM-dd'));
+                }
+            });
+            const utilizationPercentage = (bookedDays.size / 30) * 100;
+            if (utilizationPercentage > 0) report.push({ name: resource.name, utilization: Math.round(utilizationPercentage) });
+        });
+        return report.sort((a, b) => b.utilization - a.utilization).slice(0, 7);
+    }, [selectedLabDetails, labSpecificResources, labSpecificBookings, isLoadingData]);
+
+    const utilizationLabChartConfig = useMemo(() => {
+      const config: ChartConfig = {};
+      labResourceUtilization.forEach(item => { config[item.name] = { label: item.name, color: CHART_COLORS.utilization }; });
+      config["utilization"] = { label: "Utilization %", color: CHART_COLORS.utilization };
+      return config;
+    }, [labResourceUtilization]);
+
+    const peakBookingHoursForLab: PeakHourItem[] = useMemo(() => {
+        if (!selectedLabDetails || isLoadingData) return [];
+        const hourCounts: { [hour: string]: number } = {};
+        labSpecificBookings.forEach(booking => {
+            if (!booking.startTime || !isValidDateFn(booking.startTime)) return;
+            if (booking.status === 'Confirmed') {
+                const hour = format(startOfHour(booking.startTime), 'HH:00');
+                hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+            }
+        });
+        return Object.entries(hourCounts)
+            .map(([hour, count]) => ({ hour, count }))
+            .sort((a, b) => parseInt(a.hour.split(':')[0]) - parseInt(b.hour.split(':')[0]));
+    }, [selectedLabDetails, labSpecificBookings, isLoadingData]);
     
-        const upcoming = allBookingsState
-          .filter(booking =>
-            labResourceIds.includes(booking.resourceId) &&
-            booking.startTime && !isBefore(booking.startTime, new Date()) &&
-            (booking.status === 'Confirmed' || booking.status === 'Pending')
-          )
-          .sort((a, b) => compareAsc(a.startTime, b.startTime))
-          .slice(0, 3);
-    
-        setLabUpcomingBookings(upcoming);
-        setIsLoadingLabUpcomingBookings(false);
-      }, [activeContextId, allResourcesForCountsAndChecks, allBookingsState, isLoadingData, authIsLoading]);
+    const peakHoursLabChartConfig = useMemo(() => {
+     const config: ChartConfig = {};
+     peakBookingHoursForLab.forEach(item => { config[item.hour] = { label: item.hour, color: CHART_COLORS.peakHours }; });
+     config["count"] = { label: "Bookings", color: CHART_COLORS.peakHours };
+     return config;
+    }, [peakBookingHoursForLab]);
+
+    const waitlistedPerLabResource: ReportItem[] = useMemo(() => {
+        if (!selectedLabDetails || isLoadingData) return [];
+        const report: ReportItem[] = [];
+        labSpecificResources.forEach(resource => {
+            if (resource.allowQueueing) {
+                const count = labSpecificBookings.filter(b => b.resourceId === resource.id && b.status === 'Waitlisted').length;
+                if (count > 0) report.push({ name: resource.name, count });
+            }
+        });
+        return report.sort((a, b) => b.count - a.count).slice(0, 7);
+    }, [selectedLabDetails, labSpecificResources, labSpecificBookings, isLoadingData]);
+
+    const waitlistLabChartConfig = useMemo(() => {
+      const config: ChartConfig = {};
+      waitlistedPerLabResource.forEach(item => { config[item.name] = { label: item.name, color: CHART_COLORS.waitlist }; });
+      config["count"] = { label: "Waitlisted", color: CHART_COLORS.waitlist };
+      return config;
+    }, [waitlistedPerLabResource]);
+
+    const labUserActivityReport: LabUserUsageReportItem[] = useMemo(() => {
+        if (!selectedLabDetails || isLoadingData || allUsersData.length === 0) return [];
+        const usageMap = new Map<string, LabUserUsageReportItem>();
+        labSpecificBookings.forEach(booking => {
+            if (booking.status === 'Cancelled') return;
+            let userReport = usageMap.get(booking.userId);
+            if (!userReport) {
+                const userDetails = allUsersData.find(u => u.id === booking.userId);
+                userReport = {
+                    userId: booking.userId,
+                    userName: userDetails?.name || 'Unknown User',
+                    avatarUrl: userDetails?.avatarUrl,
+                    totalBookingsInLab: 0,
+                    totalHoursBookedInLab: 0,
+                };
+            }
+            userReport.totalBookingsInLab += 1;
+            if (booking.status === 'Confirmed' && booking.startTime && booking.endTime && isValidDateFn(booking.startTime) && isValidDateFn(booking.endTime)) {
+                userReport.totalHoursBookedInLab += differenceInHours(booking.endTime, booking.startTime);
+            }
+            usageMap.set(booking.userId, userReport);
+        });
+        return Array.from(usageMap.values())
+            .filter(item => item.totalBookingsInLab > 0)
+            .sort((a, b) => b.totalBookingsInLab - a.totalBookingsInLab)
+            .slice(0, 7);
+    }, [selectedLabDetails, labSpecificBookings, allUsersData, isLoadingData]);
 
 
     if (!currentUser || !canManageAny) {
@@ -1333,7 +1524,7 @@ export default function LabOperationsCenterPage() {
             <TabsContent value="lab-access-requests" className="mt-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>System-Wide Lab Access Requests</CardTitle>
+                  <CardTitle className="text-xl"><div className="flex items-center gap-2"><Users2 className="h-5 w-5 text-muted-foreground"/>System-Wide Lab Access Requests</div></CardTitle>
                   <CardDescription>Review and manage pending requests for lab access from all users for all labs.</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -1344,7 +1535,7 @@ export default function LabOperationsCenterPage() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead><div className="flex items-center gap-1"><UserRound className="h-4 w-4 text-muted-foreground"/>User</div></TableHead>
+                            <TableHead><div className="flex items-center gap-1"><UserIconLucide className="h-4 w-4 text-muted-foreground"/>User</div></TableHead>
                             <TableHead><div className="flex items-center gap-1"><Building className="h-4 w-4 text-muted-foreground"/>Lab Requested</div></TableHead>
                             <TableHead><div className="flex items-center gap-1"><CalendarClock className="h-4 w-4 text-muted-foreground"/>Date Requested</div></TableHead>
                             <TableHead className="text-right">Actions</TableHead>
@@ -1407,7 +1598,7 @@ export default function LabOperationsCenterPage() {
         {!isLoadingData && activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
            <Tabs defaultValue={searchParamsObj.get('tab') || "lab-details"} className="w-full">
               <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
-                  <TabsTrigger value="lab-details">Lab Overview</TabsTrigger>
+                  <TabsTrigger value="lab-details">Lab Overview & Reports</TabsTrigger>
                   <TabsTrigger value="lab-closures">Closures</TabsTrigger>
                   <TabsTrigger value="lab-maintenance">Maintenance</TabsTrigger>
                   <TabsTrigger value="lab-members">Members & Access</TabsTrigger>
@@ -1447,38 +1638,133 @@ export default function LabOperationsCenterPage() {
                     </Card>
                   </div>
                   <div className="lg:col-span-2 space-y-6">
+                    {/* Lab Specific Reports Section */}
                     <Card className="shadow-lg">
-                        <CardHeader><CardTitle className="text-xl flex items-center gap-2"><Settings className="h-5 w-5 text-primary"/>Quick Actions</CardTitle></CardHeader>
-                        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <Button variant="outline" asChild><Link href={`/admin/resources?labId=${activeContextId}`}><PackageIcon className="mr-2"/>View Resources in this Lab</Link></Button>
-                            <Button variant="outline" onClick={() => setIsLabSpecificMemberAddDialogOpen(true)}><UserPlus2 className="mr-2"/>Add Member to this Lab</Button>
-                            <Button variant="outline" onClick={handleOpenNewMaintenanceDialog}><Wrench className="mr-2"/>Log Maintenance for this Lab</Button>
-                        </CardContent>
-                    </Card>
-                    <Card className="shadow-lg">
-                        <CardHeader><CardTitle className="text-xl flex items-center gap-2"><ActivitySquare className="h-5 w-5 text-primary"/>Recent Activity</CardTitle></CardHeader>
-                        <CardContent>
-                            {isLoadingLabUpcomingBookings ? (<div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
-                            ) : labUpcomingBookings.length > 0 ? (
-                                <div className="space-y-3">
-                                  {labUpcomingBookings.map(booking => (
-                                      <div key={booking.id} className="p-3 border rounded-md bg-muted/20">
-                                          <div className="flex justify-between items-start">
-                                              <div>
-                                                  <p className="font-semibold text-sm">{booking.resourceName}</p>
-                                                  <p className="text-xs text-muted-foreground">
-                                                      {formatDateSafe(booking.startTime, '', 'MMM dd, HH:mm')} - {formatDateSafe(booking.endTime, '', 'HH:mm')}
-                                                  </p>
-                                                  <p className="text-xs text-muted-foreground">By: {booking.userName}</p>
-                                              </div>
-                                              <Badge variant={booking.status === 'Confirmed' ? 'default' : 'secondary'} className={cn(booking.status === 'Confirmed' && "bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100", booking.status === 'Pending' && "bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100")}>{booking.status}</Badge>
-                                          </div>
-                                      </div>
-                                  ))}
-                                  <Button variant="link" asChild className="mt-2 text-xs p-0 h-auto"><Link href="/bookings">View All Lab Bookings</Link></Button>
-                                </div>
-                            ) : (<p className="text-sm text-muted-foreground text-center py-4">No upcoming bookings for this lab.</p>)
-                            }
+                        <CardHeader>
+                            <CardTitle className="text-xl flex items-center gap-2">
+                                <BarChart3 className="h-5 w-5 text-primary"/>
+                                Lab Performance Dashboard: {selectedLabDetails.name}
+                            </CardTitle>
+                            <CardDescription>Key performance indicators for this lab.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <Card>
+                                    <CardHeader><CardTitle className="text-base flex items-center gap-1"><ClipboardList className="h-4 w-4"/>Bookings per Resource</CardTitle></CardHeader>
+                                    <CardContent>
+                                        {bookingsPerLabResource.length > 0 ? (
+                                            <ChartContainer config={bookingsLabChartConfig} className="min-h-[250px] w-full">
+                                                <ResponsiveContainer width="100%" height={250}>
+                                                    <BarChart data={bookingsPerLabResource} margin={{ top: 5, right: 5, left: -25, bottom: 40 }}>
+                                                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                                                        <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} angle={-30} textAnchor="end" interval={0} height={50} className="text-xs"/>
+                                                        <YAxis tickLine={false} axisLine={false} tickMargin={8} allowDecimals={false} />
+                                                        <ChartTooltip {...chartTooltipConfig} />
+                                                        <Bar dataKey="count" fill="var(--color-count)" radius={3} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </ChartContainer>
+                                        ) : <p className="text-muted-foreground text-center text-sm py-8">No booking data.</p>}
+                                    </CardContent>
+                                </Card>
+                                 <Card>
+                                    <CardHeader><CardTitle className="text-base flex items-center gap-1"><AlertTriangle className="h-4 w-4"/>Maintenance Status</CardTitle></CardHeader>
+                                    <CardContent className="flex justify-center">
+                                        {maintenanceByStatusForLab.length > 0 ? (
+                                            <ChartContainer config={maintenanceLabChartConfig} className="min-h-[250px] max-w-[280px] w-full aspect-square">
+                                                <ResponsiveContainer width="100%" height={250}>
+                                                    <RechartsPieChart>
+                                                        <ChartTooltip {...chartTooltipConfig} />
+                                                        <Pie data={maintenanceByStatusForLab} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={70} labelLine={false} label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}>
+                                                          {maintenanceByStatusForLab.map((entry) => (<Cell key={`cell-${entry.name}`} fill={entry.fill} className="stroke-background focus:outline-none"/> ))}
+                                                        </Pie>
+                                                        <ChartLegend {...chartLegendConfig} />
+                                                    </RechartsPieChart>
+                                                </ResponsiveContainer>
+                                            </ChartContainer>
+                                        ) : <p className="text-muted-foreground text-center text-sm py-8">No maintenance data.</p>}
+                                    </CardContent>
+                                </Card>
+                            </div>
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <Card>
+                                    <CardHeader><CardTitle className="text-base flex items-center gap-1"><Percent className="h-4 w-4"/>Resource Utilization (30d)</CardTitle></CardHeader>
+                                    <CardContent>
+                                        {labResourceUtilization.length > 0 ? (
+                                            <ChartContainer config={utilizationLabChartConfig} className="min-h-[250px] w-full">
+                                                <ResponsiveContainer width="100%" height={250}>
+                                                    <BarChart data={labResourceUtilization} layout="vertical" margin={{ top: 5, right: 25, left: 10, bottom: 5 }}>
+                                                        <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                                                        <XAxis type="number" tickLine={false} axisLine={false} tickMargin={8} unit="%" domain={[0,100]} />
+                                                        <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={8} width={100} className="text-xs truncate"/>
+                                                        <ChartTooltip content={<ChartTooltipContent formatter={(value, name, props) => `${props.payload.name}: ${value}%`} indicator="dot" />} />
+                                                        <Bar dataKey="utilization" fill="var(--color-utilization)" radius={3} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </ChartContainer>
+                                        ) : <p className="text-muted-foreground text-center text-sm py-8">No utilization data.</p>}
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardHeader><CardTitle className="text-base flex items-center gap-1"><Clock className="h-4 w-4"/>Peak Booking Hours</CardTitle></CardHeader>
+                                    <CardContent>
+                                        {peakBookingHoursForLab.length > 0 ? (
+                                            <ChartContainer config={peakHoursLabChartConfig} className="min-h-[250px] w-full">
+                                                <ResponsiveContainer width="100%" height={250}>
+                                                    <LineChart data={peakBookingHoursForLab} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                                                        <CartesianGrid strokeDasharray="3 3" />
+                                                        <XAxis dataKey="hour" tickLine={false} axisLine={true} tickMargin={8} className="text-xs"/>
+                                                        <YAxis tickLine={false} axisLine={true} tickMargin={8} allowDecimals={false}/>
+                                                        <ChartTooltip {...chartTooltipConfig} />
+                                                        <Line type="monotone" dataKey="count" stroke="var(--color-count)" strokeWidth={2} dot={{r:3, fill: "var(--color-count)"}} activeDot={{r:5}} />
+                                                    </LineChart>
+                                                </ResponsiveContainer>
+                                            </ChartContainer>
+                                        ) : <p className="text-muted-foreground text-center text-sm py-8">No peak hours data.</p>}
+                                    </CardContent>
+                                </Card>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <Card>
+                                    <CardHeader><CardTitle className="text-base flex items-center gap-1"><Hourglass className="h-4 w-4"/>Current Waitlist Size</CardTitle></CardHeader>
+                                    <CardContent>
+                                        {waitlistedPerLabResource.length > 0 ? (
+                                            <ChartContainer config={waitlistLabChartConfig} className="min-h-[250px] w-full">
+                                                <ResponsiveContainer width="100%" height={Math.max(150, waitlistedPerLabResource.length * 40)}>
+                                                    <BarChart data={waitlistedPerLabResource} layout="vertical" margin={{ top: 5, right: 25, left: 10, bottom: 5 }}>
+                                                        <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                                                        <XAxis type="number" allowDecimals={false} />
+                                                        <YAxis dataKey="name" type="category" width={100} className="text-xs truncate"/>
+                                                        <ChartTooltip {...chartTooltipConfig} />
+                                                        <Bar dataKey="count" fill="var(--color-count)" radius={3} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </ChartContainer>
+                                        ) : <p className="text-muted-foreground text-center text-sm py-8">No waitlisted items.</p>}
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardHeader><CardTitle className="text-base flex items-center gap-1"><Users2 className="h-4 w-4"/>Top User Activity</CardTitle></CardHeader>
+                                    <CardContent className="p-0">
+                                        {labUserActivityReport.length > 0 ? (
+                                            <div className="overflow-x-auto">
+                                            <Table>
+                                                <TableHeader><TableRow><TableHead>User</TableHead><TableHead className="text-center">Bookings</TableHead><TableHead className="text-right">Hours</TableHead></TableRow></TableHeader>
+                                                <TableBody>
+                                                {labUserActivityReport.map(item => (
+                                                    <TableRow key={item.userId}>
+                                                    <TableCell><div className="flex items-center gap-2"><Avatar className="h-7 w-7 text-xs"><AvatarImage src={item.avatarUrl} alt={item.userName}/><AvatarFallback>{item.userName.charAt(0)}</AvatarFallback></Avatar>{item.userName}</div></TableCell>
+                                                    <TableCell className="text-center">{item.totalBookingsInLab}</TableCell>
+                                                    <TableCell className="text-right">{item.totalHoursBookedInLab.toFixed(1)}</TableCell>
+                                                    </TableRow>
+                                                ))}
+                                                </TableBody>
+                                            </Table>
+                                            </div>
+                                        ) : <p className="text-muted-foreground text-center text-sm py-8 px-3">No user activity data for this lab.</p>}
+                                    </CardContent>
+                                </Card>
+                            </div>
                         </CardContent>
                     </Card>
                   </div>
