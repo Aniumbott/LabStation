@@ -663,7 +663,11 @@ export default function AdminResourcesPage() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-[60px]"><ImageIconLucide className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Image</TableHead>
+                            <TableHead className="w-[90px]">
+                              <div className="flex items-center gap-1">
+                                <ImageIconLucide className="h-4 w-4 text-muted-foreground" />Image
+                              </div>
+                            </TableHead>
                             <TableHead><Tag className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Name</TableHead>
                             <TableHead><ListChecks className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Type</TableHead>
                             <TableHead><Building className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Lab</TableHead>
