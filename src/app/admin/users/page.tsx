@@ -3,8 +3,8 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, ThumbsUp, ThumbsDown, Loader2, CheckCircle2, Settings2 } from 'lucide-react';
-import type { User, RoleName, UserStatus, Lab } from '@/types';
+import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, ThumbsUp, ThumbsDown, Loader2, CheckCircle2, Settings2, User, Mail, Shield, Info } from 'lucide-react';
+import type { User as UserType, RoleName, UserStatus, Lab } from '@/types'; // Renamed User import
 import {
   Table,
   TableBody,
@@ -59,7 +59,7 @@ import { Separator } from '@/components/ui/separator';
 
 const userStatusesListForFilter: (UserStatus | 'all')[] = ['all', 'active', 'pending_approval', 'suspended'];
 
-const roleIcons: Record<User['role'], React.ElementType> = {
+const roleIcons: Record<UserType['role'], React.ElementType> = {
   'Admin': ShieldAlert,
   'Technician': UserCheck,
   'Researcher': UserCheck,
@@ -88,16 +88,16 @@ export default function UsersPage() {
   const { toast } = useToast();
   const { currentUser: loggedInUser } = useAuth();
 
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserType[]>([]);
   const [allLabs, setAllLabs] = useState<Lab[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
-  const [userToDelete, setUserToDelete] = useState<User | null>(null);
-  const [userToReject, setUserToReject] = useState<User | null>(null);
+  const [userToDelete, setUserToDelete] = useState<UserType | null>(null);
+  const [userToReject, setUserToReject] = useState<UserType | null>(null);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editingUser, setEditingUser] = useState<UserType | null>(null);
   
   const [isLabAccessDialogOpen, setIsLabAccessDialogOpen] = useState(false);
-  const [selectedUserForLabAccess, setSelectedUserForLabAccess] = useState<User | null>(null);
+  const [selectedUserForLabAccess, setSelectedUserForLabAccess] = useState<UserType | null>(null);
 
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
@@ -116,7 +116,7 @@ export default function UsersPage() {
       const usersQuery = query(usersCollectionRef, orderBy("name", "asc"));
       const usersSnapshot = await getDocs(usersQuery);
       
-      let fetchedUsers: User[] = usersSnapshot.docs.map((docSnap) => {
+      let fetchedUsers: UserType[] = usersSnapshot.docs.map((docSnap) => {
         const data = docSnap.data();
         return {
             id: docSnap.id,
@@ -126,7 +126,7 @@ export default function UsersPage() {
             status: data.status || 'pending_approval',
             avatarUrl: data.avatarUrl || 'https://placehold.co/100x100.png',
             createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
-        } as User;
+        } as UserType;
       });
       fetchedUsers.sort((a,b) => {
         if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
@@ -142,6 +142,7 @@ export default function UsersPage() {
       setAllLabs(fetchedLabs);
 
     } catch (error: any) {
+      toast({ title: "Data Load Error", description: `Failed to load users: ${error.message}`, variant: "destructive" });
       setUsers([]);
       setAllLabs([]);
     }
@@ -203,12 +204,12 @@ export default function UsersPage() {
     setIsFormDialogOpen(true);
   }, []);
 
-  const handleOpenEditUserDialog = useCallback((user: User) => {
+  const handleOpenEditUserDialog = useCallback((user: UserType) => {
     setEditingUser(user);
     setIsFormDialogOpen(true);
   }, []);
 
-  const handleOpenLabAccessDialog = useCallback((user: User) => {
+  const handleOpenLabAccessDialog = useCallback((user: UserType) => {
     setSelectedUserForLabAccess(user);
     setIsLabAccessDialogOpen(true);
   }, []);
@@ -237,7 +238,7 @@ export default function UsersPage() {
           email: data.email,
           role: data.role,
           avatarUrl: 'https://placehold.co/100x100.png',
-          status: 'active' as User['status'],
+          status: 'active' as UserType['status'],
           createdAt: serverTimestamp(),
         });
         await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User profile for ${data.name} (${data.email}) created by admin with role ${data.role}. This user cannot log in without a corresponding Auth account.` });
@@ -247,7 +248,7 @@ export default function UsersPage() {
       setEditingUser(null);
       await fetchData();
     } catch (error: any) {
-      // Log error
+      toast({ title: "Save Error", description: `Could not save user profile: ${error.message}`, variant: "destructive" });
     } finally {
       setIsLoadingData(false);
     }
@@ -282,7 +283,7 @@ export default function UsersPage() {
       setUserToDelete(null);
       await fetchData();
     } catch (error: any) {
-      // Log error
+      toast({ title: "Delete Error", description: `Could not delete user profile: ${error.message}`, variant: "destructive" });
     } finally {
       setIsLoadingData(false);
     }
@@ -319,11 +320,11 @@ export default function UsersPage() {
                 '/login'
             );
         } catch (notificationError: any) {
-            // Log error
+            toast({ title: "Notification Error", description: `Failed to send approval notification: ${notificationError.message}`, variant: "destructive" });
         }
         await fetchData();
     } catch (error: any) {
-        // Log error
+        toast({ title: "Approval Error", description: `Could not approve user: ${error.message}`, variant: "destructive" });
     } finally {
         setIsLoadingData(false);
     }
@@ -355,7 +356,7 @@ export default function UsersPage() {
       setUserToReject(null);
       await fetchData();
     } catch (error: any) {
-      // Log error
+      toast({ title: "Rejection Error", description: `Could not reject signup: ${error.message}`, variant: "destructive" });
     } finally {
       setIsLoadingData(false);
     }
@@ -478,10 +479,10 @@ export default function UsersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[80px]">Avatar</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead><div className="flex items-center gap-1"><User className="h-4 w-4 text-muted-foreground" />Name</div></TableHead>
+                <TableHead><div className="flex items-center gap-1"><Mail className="h-4 w-4 text-muted-foreground" />Email</div></TableHead>
+                <TableHead><div className="flex items-center gap-1"><Shield className="h-4 w-4 text-muted-foreground" />Role</div></TableHead>
+                <TableHead><div className="flex items-center gap-1"><Info className="h-4 w-4 text-muted-foreground" />Status</div></TableHead>
                 <TableHead className="text-right w-[160px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -541,6 +542,7 @@ export default function UsersPage() {
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter className="pt-6 border-t">
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction variant="destructive" onClick={handleConfirmRejectUser}>
                                     Reject Signup
                                   </AlertDialogAction>
@@ -591,6 +593,7 @@ export default function UsersPage() {
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter className="pt-6 border-t">
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
                                     <AlertDialogAction variant="destructive" onClick={() => userToDelete && handleDeleteUser(userToDelete.id)}>
                                     Delete User Profile
                                     </AlertDialogAction>
