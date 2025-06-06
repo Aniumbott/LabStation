@@ -30,7 +30,7 @@ export default function DeprecatedReportsPage() {
           <p className="text-muted-foreground">
             You can now find **lab-specific reports** within the "Lab Overview" tab when you select a particular lab in the
             {' '}
-            <Link href="/admin/lab-management-v2" className="text-primary hover:underline font-medium">
+            <Link href="/admin/lab-operations" className="text-primary hover:underline font-medium">
               Lab Operations Center
             </Link>.
           </p>
@@ -43,7 +43,7 @@ export default function DeprecatedReportsPage() {
           </p>
            <div className="pt-2">
              <Button asChild>
-                <Link href="/admin/lab-management-v2">
+                <Link href="/admin/lab-operations">
                     Go to Lab Operations Center
                 </Link>
             </Button>

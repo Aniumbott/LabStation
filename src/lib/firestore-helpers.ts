@@ -413,7 +413,7 @@ export async function requestLabAccess_SA(
                 'New Lab Access Request',
                 `${requestingUserName} has requested access to ${labName}. Please review in Lab Management.`,
                 'lab_access_request_received',
-                '/admin/inventory?tab=lab-access-requests' // Note: This link might need updating to /admin/lab-management-v2?tab=lab-access-requests
+                '/admin/lab-operations?tab=lab-access-requests' // Note: This link might need updating to /admin/lab-operations?tab=lab-access-requests
             );
         });
 

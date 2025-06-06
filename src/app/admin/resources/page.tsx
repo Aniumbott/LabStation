@@ -296,7 +296,7 @@ export default function AdminResourcesPage() {
     }
     if (fetchedLabs.length === 0 && canManageResourcesAndTypes) {
         toast({ title: "No Labs Defined", description: "Please add labs in Lab Operations before adding a resource.", variant: "destructive" });
-        router.push('/admin/lab-management-v2?tab=labs');
+        router.push('/admin/lab-operations?tab=labs');
         return;
     }
     setEditingResource(null);

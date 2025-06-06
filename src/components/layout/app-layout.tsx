@@ -57,7 +57,7 @@ const navItems: NavItem[] = [
   },
   { href: '/admin/resources', label: 'Resources', icon: Package },
   {
-    href: '/admin/lab-management-v2',
+    href: '/admin/lab-operations',
     label: 'Lab Operations',
     icon: Cog,
     adminOnly: true,

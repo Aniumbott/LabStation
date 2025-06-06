@@ -999,7 +999,7 @@ export default function LabOperationsCenterPage() {
                     const usersToNotifySnapshot = await getDocs(usersToNotifyQuery);
                     const notificationPromises = usersToNotifySnapshot.docs.map(userDoc => {
                         if(userDoc.id !== currentUser?.id) {
-                            return addNotification( userDoc.id, 'New Unassigned Maintenance Request', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`, 'maintenance_new', '/admin/inventory?tab=maintenance-log');
+                            return addNotification( userDoc.id, 'New Unassigned Maintenance Request', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`, 'maintenance_new', '/admin/lab-operations?tab=maintenance-log');
                         } return Promise.resolve();
                     });
                     await Promise.all(notificationPromises);
