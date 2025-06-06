@@ -5,7 +5,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation'; // Added
 import { PageHeader } from '@/components/layout/page-header';
-import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare, UserPlus2, Briefcase, MapPin, Tag, FileText, CalendarClock, User as UserIconLucide, AlertTriangle, BarChart3, ClipboardList, PieChart as PieChartIconComp, Percent, Hourglass, Clock } from 'lucide-react';
+import { Cog, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare, UserPlus2, Briefcase, MapPin, Tag, FileText, CalendarClock, User as UserIconLucide, AlertTriangle, BarChart3, ClipboardList, PieChart as PieChartIconComp, Percent, Hourglass, Clock } from 'lucide-react';
 import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus, DayOfWeek, Booking } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -36,8 +36,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { db, auth } from '@/lib/firebase';
-import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp, writeBatch, where, limit } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp, where, limit } from 'firebase/firestore';
 import { addNotification, addAuditLog, manageLabMembership_SA } from '@/lib/firestore-helpers';
 import { daysOfWeekArray, maintenanceRequestStatuses } from '@/lib/app-constants';
 import { format, parseISO, isValid as isValidDateFn, isBefore, compareAsc, subDays, startOfHour, differenceInHours } from 'date-fns';
@@ -167,7 +167,6 @@ export default function LabOperationsCenterPage() {
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [activeContextId, setActiveContextId] = useState<string>(GLOBAL_CONTEXT_VALUE);
     
-    const [resourceTypes, setResourceTypes] = useState<ResourceType[]>([]); // Still needed for ResourceFormDialog if triggered from here
     const [allResourcesForCountsAndChecks, setAllResourcesForCountsAndChecks] = useState<Resource[]>([]);
 
     const [labs, setLabs] = useState<Lab[]>([]);
@@ -250,9 +249,8 @@ export default function LabOperationsCenterPage() {
       setIsLoadingData(true);
       setIsLabAccessRequestLoading(true);
       try {
-        const [labsSnapshot, typesSnapshot, resourcesSnapshot, usersSnapshot, techniciansSnapshot, maintenanceSnapshot, boSnapshot, rrSnapshot, membershipsSnapshot, bookingsSnapshot] = await Promise.all([
+        const [labsSnapshot, resourcesSnapshot, usersSnapshot, techniciansSnapshot, maintenanceSnapshot, boSnapshot, rrSnapshot, membershipsSnapshot, bookingsSnapshot] = await Promise.all([
           getDocs(query(collection(db, "labs"), orderBy("name", "asc"))),
-          getDocs(query(collection(db, "resourceTypes"), orderBy("name", "asc"))),
           getDocs(query(collection(db, "resources"))),
           getDocs(query(collection(db, "users"), orderBy("name", "asc"))),
           getDocs(query(collection(db, "users"), where("role", "==", "Technician"), orderBy("name", "asc"))),
@@ -265,8 +263,6 @@ export default function LabOperationsCenterPage() {
 
         const fetchedLabs = labsSnapshot.docs.map(docSnap => ({id: docSnap.id, ...docSnap.data(), createdAt: (docSnap.data().createdAt as Timestamp)?.toDate(), lastUpdatedAt: (docSnap.data().lastUpdatedAt as Timestamp)?.toDate()} as Lab));
         setLabs(fetchedLabs);
-
-        setResourceTypes(typesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as ResourceType)));
 
         const fetchedResourcesAll = resourcesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Resource));
         setAllResourcesForCountsAndChecks(fetchedResourcesAll);
@@ -1605,7 +1601,7 @@ export default function LabOperationsCenterPage() {
               </TabsList>
 
               <TabsContent value="lab-details" className="mt-6">
-                <div className="space-y-6"> 
+                <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                     <Card className="shadow-lg lg:col-span-2 md:col-span-1">
                         <CardHeader className="flex flex-row items-start justify-between gap-2">
@@ -1752,7 +1748,7 @@ export default function LabOperationsCenterPage() {
                                               <TableBody>
                                               {labUserActivityReport.map(item => (
                                                   <TableRow key={item.userId}>
-                                                  <TableCell><div className="flex items-center gap-2"><Avatar className="h-7 w-7 text-xs"><AvatarImage src={item.avatarUrl} alt={item.userName}/><AvatarFallback>{item.userName.charAt(0)}</AvatarFallback></Avatar>{item.userName}</div></TableCell>
+                                                  <TableCell><div className="flex items-center gap-2"><Avatar className="h-7 w-7 text-xs"><AvatarImage src={item.avatarUrl} alt={item.userName} data-ai-hint="user avatar"/><AvatarFallback>{item.userName.charAt(0)}</AvatarFallback></Avatar>{item.userName}</div></TableCell>
                                                   <TableCell className="text-center">{item.totalBookingsInLab}</TableCell>
                                                   <TableCell className="text-right">{item.totalHoursBookedInLab.toFixed(1)}</TableCell>
                                                   </TableRow>
@@ -2058,6 +2054,3 @@ export default function LabOperationsCenterPage() {
     </TooltipProvider>
   );
 }
-
-
-
