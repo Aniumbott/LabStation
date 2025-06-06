@@ -35,6 +35,7 @@ import {
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -798,3 +799,4 @@ export default function AdminResourcesPage() {
     </div>
   );
 }
+
