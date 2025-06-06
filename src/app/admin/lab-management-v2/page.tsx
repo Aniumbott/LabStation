@@ -1605,8 +1605,7 @@ export default function LabOperationsCenterPage() {
               </TabsList>
 
               <TabsContent value="lab-details" className="mt-6">
-                <div className="space-y-6"> {/* Main vertical stack for rows */}
-                  {/* First Row: Details and Stats */}
+                <div className="space-y-6"> 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                     <Card className="shadow-lg lg:col-span-2 md:col-span-1">
                         <CardHeader className="flex flex-row items-start justify-between gap-2">
@@ -1639,7 +1638,6 @@ export default function LabOperationsCenterPage() {
                     </Card>
                   </div>
 
-                  {/* Second Row: Reports Dashboard */}
                   <Card className="shadow-lg">
                       <CardHeader>
                           <CardTitle className="text-xl flex items-center gap-2">
@@ -1797,7 +1795,7 @@ export default function LabOperationsCenterPage() {
                       </TabsList>
                       <TabsContent value="specific-dates-lab">
                         <div className="flex justify-end mb-3">
-                          <Button onClick={handleOpenNewLabSpecificDateDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Date for {selectedLabDetails.name}</Button>
+                          <Button onClick={handleOpenNewLabSpecificDateDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add</Button>
                         </div>
                         {isLoadingData && filteredLabSpecificBlackoutDates.length === 0 && !activeLabSpecificClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
                         ) : filteredLabSpecificBlackoutDates.length > 0 ? (
