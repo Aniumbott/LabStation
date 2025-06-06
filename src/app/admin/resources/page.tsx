@@ -10,7 +10,7 @@ import React, {
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Package, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, CheckCircle2, Building, ListChecks, Edit, Trash2 } from 'lucide-react';
+import { Package, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, CheckCircle2, Building, ListChecks, Edit, Trash2, Tag, Info, FileText, Image as ImageIconLucide } from 'lucide-react';
 import type { Resource, ResourceStatus, ResourceType, Lab, LabMembership } from '@/types';
 import { resourceStatusesList } from '@/lib/app-constants';
 import { useAuth } from '@/components/auth-context';
@@ -662,11 +662,11 @@ export default function AdminResourcesPage() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-[60px]">Image</TableHead>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Lab</TableHead>
-                            <TableHead>Status</TableHead>
+                            <TableHead className="w-[60px]"><ImageIconLucide className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Image</TableHead>
+                            <TableHead><Tag className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Name</TableHead>
+                            <TableHead><ListChecks className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Type</TableHead>
+                            <TableHead><Building className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Lab</TableHead>
+                            <TableHead><Info className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Status</TableHead>
                             <TableHead className="text-right w-[100px]">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -750,7 +750,12 @@ export default function AdminResourcesPage() {
                 ) : filteredResourceTypesForDisplay.length > 0 ? (
                     <div className="overflow-x-auto border rounded-b-md">
                     <Table>
-                        <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Description</TableHead><TableHead className="text-center"># Resources</TableHead><TableHead className="text-right w-[100px]">Actions</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow>
+                            <TableHead><Tag className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Name</TableHead>
+                            <TableHead><FileText className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Description</TableHead>
+                            <TableHead className="text-center"><Package className="inline-block mr-1 h-4 w-4 text-muted-foreground" /># Resources</TableHead>
+                            <TableHead className="text-right w-[100px]">Actions</TableHead>
+                        </TableRow></TableHeader>
                         <TableBody>{filteredResourceTypesForDisplay.map(type => (
                         <TableRow key={type.id}>
                             <TableCell className="font-medium">{type.name}</TableCell>
@@ -764,7 +769,7 @@ export default function AdminResourcesPage() {
                                   </TooltipTrigger><TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent></Tooltip></TooltipProvider>
                                   <AlertDialogContent>
                                       <AlertDialogHeader className="mt-4"><AlertDialogTitle>Delete "{typeToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>
-                                      <AlertDialogFooter className="pt-6 border-t"><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
+                                      <AlertDialogFooter className="pt-6 border-t"><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
                                   </AlertDialogContent>
                               </AlertDialog>
                             </TableCell>
