@@ -40,7 +40,6 @@ import { useAuth } from '@/components/auth-context';
 import { db, auth } from '@/lib/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, serverTimestamp, Timestamp, getDoc, orderBy, limit, writeBatch, addDoc } from 'firebase/firestore';
 import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
 
 
 function BookingsPageLoader() {
