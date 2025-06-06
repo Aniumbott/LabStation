@@ -3,7 +3,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Wrench, Loader2, ThumbsUp, Clock, X, User as UserIconLucide, XCircle, Building, KeyRound, University, PlusCircle, LogOut, Ban } from 'lucide-react';
+import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, AlertTriangle, Wrench, Loader2, ThumbsUp, Clock, X, User as UserIconLucide, XCircle, Building, KeyRound, University, PlusCircle, LogOut, Ban, Package, CalendarDays, Info } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -337,9 +337,9 @@ export default function DashboardPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Resource</TableHead>
-                      <TableHead>Date & Time</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead><Package className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Resource</TableHead>
+                      <TableHead><CalendarDays className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Date & Time</TableHead>
+                      <TableHead><Info className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -502,4 +502,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
