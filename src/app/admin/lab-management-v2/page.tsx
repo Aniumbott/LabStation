@@ -1083,7 +1083,7 @@ export default function LabOperationsCenterPage() {
                   ) : filteredLabs.length > 0 ? (
                     <div className="overflow-x-auto rounded-md border">
                       <Table>
-                        <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead className="text-center">Resources</TableHead><TableHead className="text-center">Members</TableHead>{canManageAny && <TableHead className="text-right w-[140px]">Actions</TableHead>}</TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead className="text-center">Resources</TableHead><TableHead className="text-center">Members</TableHead>{canManageAny && <TableHead className="text-right w-[100px]">Actions</TableHead>}</TableRow></TableHeader>
                         <TableBody>{filteredLabs.map(lab => (
                           <TableRow key={lab.id}>
                             <TableCell className="font-medium">{lab.name}</TableCell>
@@ -1100,7 +1100,6 @@ export default function LabOperationsCenterPage() {
                                   </TooltipTrigger>
                                   <TooltipContent><p>Manage Lab</p></TooltipContent>
                                 </Tooltip>
-                              <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setEditingLab(lab); setIsLabFormDialogOpen(true);}} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Lab Details</TooltipContent></Tooltip>
                               <AlertDialog open={labToDelete?.id === lab.id} onOpenChange={(isOpen) => !isOpen && setLabToDelete(null)}>
                                 <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabToDelete(lab)} disabled={isLoadingData || ((lab as any).resourceCount ?? 0) > 0 || ((lab as any).memberCount ?? 0) > 0}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger>
                                 <TooltipContent>{((lab as any).resourceCount ?? 0) > 0 || ((lab as any).memberCount ?? 0) > 0 ? "Cannot delete: lab has resources or members" : "Delete Lab"}</TooltipContent>
@@ -1746,3 +1745,4 @@ export default function LabOperationsCenterPage() {
     </TooltipProvider>
   );
 }
+
