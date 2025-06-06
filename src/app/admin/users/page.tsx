@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, Edit, Trash2, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, ThumbsUp, ThumbsDown, Loader2, CheckCircle2, Settings2, User, Mail, Shield, Info } from 'lucide-react';
+import { Users as UsersIconLucide, ShieldAlert, UserCheck, UserCog as UserCogIcon, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, ThumbsUp, ThumbsDown, Loader2, CheckCircle2, Settings2, User, Mail, Shield, Info, Trash2 } from 'lucide-react';
 import type { User as UserType, RoleName, UserStatus, Lab } from '@/types'; // Renamed User import
 import {
   Table,
@@ -44,7 +44,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { UserFormDialog, UserFormValues } from '@/components/admin/user-form-dialog';
-import { ManageUserLabAccessDialog } from '@/components/admin/manage-user-lab-access-dialog';
+import { ManageUserDetailsAndAccessDialog } from '@/components/admin/manage-user-details-and-access-dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -80,8 +80,8 @@ const getStatusBadgeClasses = (status: UserStatus): string => {
     switch (status) {
       case 'active': return 'bg-green-500 text-white hover:bg-green-600 border-transparent';
       case 'pending_approval': return 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600 border-transparent';
-      case 'suspended': return 'bg-red-500 text-white hover:bg-red-600 border-transparent'; // Consistent with destructive variant's typical color
-      default: return 'bg-gray-500 text-white hover:bg-gray-600 border-transparent'; // Fallback for any unexpected status
+      case 'suspended': return 'bg-red-500 text-white hover:bg-red-600 border-transparent';
+      default: return 'bg-gray-500 text-white hover:bg-gray-600 border-transparent';
     }
 };
 
@@ -95,11 +95,10 @@ export default function UsersPage() {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [userToDelete, setUserToDelete] = useState<UserType | null>(null);
   const [userToReject, setUserToReject] = useState<UserType | null>(null);
-  const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<UserType | null>(null);
+  const [isAddUserFormDialogOpen, setIsAddUserFormDialogOpen] = useState(false); // For adding new users
   
-  const [isLabAccessDialogOpen, setIsLabAccessDialogOpen] = useState(false);
-  const [selectedUserForLabAccess, setSelectedUserForLabAccess] = useState<UserType | null>(null);
+  const [isManageUserDetailsAndAccessDialogOpen, setIsManageUserDetailsAndAccessDialogOpen] = useState(false);
+  const [selectedUserForManagement, setSelectedUserForManagement] = useState<UserType | null>(null);
 
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
@@ -202,21 +201,15 @@ export default function UsersPage() {
   }, [resetDialogFiltersOnly]);
 
   const handleOpenNewUserDialog = useCallback(() => {
-    setEditingUser(null);
-    setIsFormDialogOpen(true);
+    setIsAddUserFormDialogOpen(true);
   }, []);
 
-  const handleOpenEditUserDialog = useCallback((user: UserType) => {
-    setEditingUser(user);
-    setIsFormDialogOpen(true);
+  const handleOpenManageUserDetailsAndAccessDialog = useCallback((user: UserType) => {
+    setSelectedUserForManagement(user);
+    setIsManageUserDetailsAndAccessDialogOpen(true);
   }, []);
 
-  const handleOpenLabAccessDialog = useCallback((user: UserType) => {
-    setSelectedUserForLabAccess(user);
-    setIsLabAccessDialogOpen(true);
-  }, []);
-
-  const handleSaveUser = useCallback(async (data: UserFormValues) => {
+  const handleSaveNewUser = useCallback(async (data: UserFormValues) => {
     if (!loggedInUser || loggedInUser.role !== 'Admin') {
       toast({ title: "Permission Denied", description: "You are not authorized to perform this action.", variant: "destructive" });
       return;
@@ -224,37 +217,27 @@ export default function UsersPage() {
     
     setIsLoadingData(true);
     try {
-      if (editingUser) {
-        const userDocRef = doc(db, "users", editingUser.id);
-        await updateDoc(userDocRef, {
-          name: data.name,
-          role: data.role,
-        });
-        await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_UPDATED', { entityType: 'User', entityId: editingUser.id, details: `User ${data.name} (ID: ${editingUser.id}) details updated. Role set to ${data.role}.` });
-        toast({ title: 'User Updated', description: `User ${data.name} has been updated.` });
-      } else {
-        const newUserId = `admin_created_${Date.now()}_${Math.random().toString(36).substring(2,9)}`;
-        const userDocRef = doc(db, "users", newUserId);
-        await setDoc(userDocRef, {
-          name: data.name,
-          email: data.email,
-          role: data.role,
-          avatarUrl: 'https://placehold.co/100x100.png',
-          status: 'active' as UserType['status'],
-          createdAt: serverTimestamp(),
-        });
-        await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User profile for ${data.name} (${data.email}) created by admin with role ${data.role}. This user cannot log in without a corresponding Auth account.` });
-        toast({ title: 'User Profile Created (Admin)', description: `User profile for ${data.name} created. Note: This does not create a Firebase Auth account for login.` });
-      }
-      setIsFormDialogOpen(false);
-      setEditingUser(null);
+      const newUserId = `admin_created_${Date.now()}_${Math.random().toString(36).substring(2,9)}`;
+      const userDocRef = doc(db, "users", newUserId);
+      await setDoc(userDocRef, {
+        name: data.name,
+        email: data.email,
+        role: data.role,
+        avatarUrl: 'https://placehold.co/100x100.png',
+        status: 'active' as UserType['status'],
+        createdAt: serverTimestamp(),
+      });
+      await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_CREATED', { entityType: 'User', entityId: newUserId, details: `User profile for ${data.name} (${data.email}) created by admin with role ${data.role}. This user cannot log in without a corresponding Auth account.` });
+      toast({ title: 'User Profile Created (Admin)', description: `User profile for ${data.name} created. Note: This does not create a Firebase Auth account for login.` });
+      
+      setIsAddUserFormDialogOpen(false);
       await fetchData();
     } catch (error: any) {
       toast({ title: "Save Error", description: `Could not save user profile: ${error.message}`, variant: "destructive" });
     } finally {
       setIsLoadingData(false);
     }
-  }, [loggedInUser, editingUser, fetchData, toast]);
+  }, [loggedInUser, fetchData, toast]);
 
   const handleDeleteUser = useCallback(async (userId: string) => {
     if (!loggedInUser || loggedInUser.role !== 'Admin') {
@@ -481,7 +464,7 @@ export default function UsersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[80px]">Avatar</TableHead>
-                <TableHead><div className="flex items-center gap-1"><User className="h-4 w-4 text-muted-foreground" />Name</div></TableHead>
+                <TableHead><div className="flex items-center gap-1"><UserIcon className="h-4 w-4 text-muted-foreground" />Name</div></TableHead>
                 <TableHead><div className="flex items-center gap-1"><Mail className="h-4 w-4 text-muted-foreground" />Email</div></TableHead>
                 <TableHead><div className="flex items-center gap-1"><Shield className="h-4 w-4 text-muted-foreground" />Role</div></TableHead>
                 <TableHead><div className="flex items-center gap-1"><Info className="h-4 w-4 text-muted-foreground" />Status</div></TableHead>
@@ -557,21 +540,12 @@ export default function UsersPage() {
                         <>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditUserDialog(user)} disabled={isLoadingData}>
-                                <Edit className="h-4 w-4" />
-                                <span className="sr-only">Edit User</span>
+                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenManageUserDetailsAndAccessDialog(user)} disabled={isLoadingData}>
+                                <Settings2 className="h-4 w-4" />
+                                <span className="sr-only">Manage User</span>
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent><p>Edit User Profile</p></TooltipContent>
-                          </Tooltip>
-                           <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenLabAccessDialog(user)} disabled={isLoadingData || allLabs.length === 0}>
-                                  <Settings2 className="h-4 w-4" />
-                                  <span className="sr-only">Manage Lab Access</span>
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent><p>Manage Lab Access</p></TooltipContent>
+                            <TooltipContent><p>Manage User Details & Lab Access</p></TooltipContent>
                           </Tooltip>
                           <AlertDialog open={userToDelete?.id === user.id} onOpenChange={(isOpen) => !isOpen && setUserToDelete(null)}>
                             <Tooltip>
@@ -642,29 +616,30 @@ export default function UsersPage() {
           </CardContent>
         </Card>
       )}
-      {isFormDialogOpen && (
+      {isAddUserFormDialogOpen && (
         <UserFormDialog
-            open={isFormDialogOpen}
+            open={isAddUserFormDialogOpen}
             onOpenChange={(isOpen) => {
-                setIsFormDialogOpen(isOpen);
-                if (!isOpen) setEditingUser(null);
+                setIsAddUserFormDialogOpen(isOpen);
             }}
-            initialUser={editingUser}
-            onSave={handleSaveUser}
+            initialUser={null} // Always for new user
+            onSave={handleSaveNewUser}
         />
       )}
-      {selectedUserForLabAccess && allLabs && (
-        <ManageUserLabAccessDialog
-          targetUser={selectedUserForLabAccess}
+      {selectedUserForManagement && allLabs && (
+        <ManageUserDetailsAndAccessDialog
+          targetUser={selectedUserForManagement}
           allLabs={allLabs}
-          open={isLabAccessDialogOpen}
+          open={isManageUserDetailsAndAccessDialogOpen}
           onOpenChange={(isOpen) => {
-            setIsLabAccessDialogOpen(isOpen);
-            if (!isOpen) setSelectedUserForLabAccess(null);
+            setIsManageUserDetailsAndAccessDialogOpen(isOpen);
+            if (!isOpen) setSelectedUserForManagement(null);
           }}
-          onMembershipUpdate={fetchData}
+          onUpdate={fetchData}
         />
       )}
     </div>
   );
 }
+
+    
