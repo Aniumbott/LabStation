@@ -15,7 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import type { User, Lab, LabMembership, LabMembershipStatus, RoleName } from '@/types';
-import { Loader2, CheckCircle, Ban, PlusCircle, ShieldCheck, ShieldOff, Save, User as UserIcon, Shield, Settings2 } from 'lucide-react';
+import { Loader2, CheckCircle, Ban, PlusCircle, ShieldCheck, ShieldOff, Save, User as UserIcon, Shield, Settings2, Building, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, orderBy, doc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
@@ -267,7 +267,13 @@ export function ManageUserDetailsAndAccessDialog({
             ) : currentMembershipsInfo.length > 0 ? (
               <ScrollArea className="h-[300px] border rounded-md">
                 <Table>
-                  <TableHeader><TableRow><TableHead>Lab Name</TableHead><TableHead>Current Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead><div className="flex items-center gap-1"><Building className="h-4 w-4 text-muted-foreground" />Lab Name</div></TableHead>
+                      <TableHead><div className="flex items-center gap-1"><Info className="h-4 w-4 text-muted-foreground" />Current Status</div></TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
                   <TableBody>
                     {currentMembershipsInfo.map(info => (
                       <TableRow key={info.labId}>
@@ -300,4 +306,3 @@ export function ManageUserDetailsAndAccessDialog({
   );
 }
 
-    
