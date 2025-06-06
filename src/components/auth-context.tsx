@@ -115,8 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let message = "Login failed. Please check your credentials or contact support.";
 
       if (error.code === 'auth/invalid-credential') {
-        message = "Login Failed: Invalid email or password. Please verify your credentials. Ensure your account exists, is enabled, and your Firestore profile is 'active'. Also check your .env.local Firebase configuration.";
-        console.error("CRITICAL FIREBASE ERROR (auth/invalid-credential): Verify .env.local, Firebase Auth user status (enabled, correct password), and Firestore user document (status: 'active') for email:", email);
+        message = "Login Failed: Invalid email or password.";
       } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-email') {
         message = "Invalid email or password provided.";
       } else if (error.code === 'auth/too-many-requests') {
@@ -124,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (error.code === 'auth/user-disabled') {
          message = "This user account has been disabled by an administrator in Firebase Authentication.";
       } else if (error.code === 'auth/network-request-failed') {
-        message = "Network error during login. Please check your internet connection and Firebase project setup (especially API key and auth domain in .env.local).";
+        message = "Network error during login. Please check your internet connection and Firebase project setup.";
       }
       
       if (typeof window !== 'undefined') localStorage.setItem('login_message', message);
@@ -172,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const adminUsersQuery = query(
           collection(db, "users"),
-          where("role", "in", ["Admin"]), // Removed 'Lab Manager' as per type changes
+          where("role", "in", ["Admin"]),
           orderBy("name", "asc")
         );
         const adminUsersSnapshot = await getDocs(adminUsersQuery);

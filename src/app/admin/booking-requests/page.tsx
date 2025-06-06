@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, Filter as FilterIcon, Clock, Info, Loader2, User as UserIcon, Package as ResourceIcon, CheckCircle2, StickyNote } from 'lucide-react';
-import type { Booking, Resource, User, ResourceStatus } from '@/types';
+import type { Booking, Resource, User } from '@/types';
 import { addNotification, addAuditLog, processWaitlistForResource } from '@/lib/firestore-helpers';
 import { useAuth } from '@/components/auth-context';
 import {
@@ -33,16 +33,15 @@ import {
 } from "@/components/ui/tooltip";
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { format, parseISO, isValid as isValidDateFn } from 'date-fns';
+import { format, isValid as isValidDateFn } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn, formatDateSafe } from '@/lib/utils';
 import { db, auth } from '@/lib/firebase';
-import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy, Timestamp } from 'firebase/firestore';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 
 
 const bookingStatusesForApprovalFilter: Array<'all' | 'Pending' | 'Waitlisted'> = ['all', 'Pending', 'Waitlisted'];
@@ -126,7 +125,7 @@ export default function BookingRequestsPage() {
       setAllBookingsState([]);
     }
     setIsLoading(false);
-  }, [canManageBookingRequests, toast]);
+  }, [canManageBookingRequests]);
 
 
   useEffect(() => {
@@ -176,13 +175,13 @@ export default function BookingRequestsPage() {
       try {
         await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_APPROVED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} approved.`});
       } catch (auditError: any) {
-          // Log error
+          console.warn("Audit log failed for booking approval:", auditError);
       }
 
       if (bookingToUpdate.userId && bookingToUpdate.resourceName && bookingToUpdate.startTime) {
         const directAuthUser = auth.currentUser;
         if (!directAuthUser || !directAuthUser.uid) {
-           // Log error
+           console.warn("Direct Firebase auth user not found for sending notification on approval.");
         } else {
             const notificationParams = {
                 userId: bookingToUpdate.userId,
@@ -200,13 +199,14 @@ export default function BookingRequestsPage() {
                 notificationParams.linkTo
               );
             } catch (notificationError: any) {
-              // Log error
+              console.warn("Notification failed for booking approval:", notificationError);
             }
         }
       }
       await fetchBookingRequestsAndRelatedData();
     } catch (error: any) {
-      // Log error
+      console.error("Error approving booking:", error);
+      toast({ title: "Error Approving Booking", description: `Failed to approve booking: ${error.message || 'Unknown error'}`, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -232,13 +232,13 @@ export default function BookingRequestsPage() {
       try {
         await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_REJECTED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} rejected/cancelled.`});
       } catch (auditError: any) {
-          // Log error
+          console.warn("Audit log failed for booking rejection:", auditError);
       }
 
       if (bookingToUpdate.userId && bookingToUpdate.resourceName && bookingToUpdate.startTime) {
         const directAuthUser = auth.currentUser;
         if (!directAuthUser || !directAuthUser.uid) {
-           // Log error
+           console.warn("Direct Firebase auth user not found for sending notification on rejection.");
         } else {
             const notificationParams = {
                 userId: bookingToUpdate.userId,
@@ -256,7 +256,7 @@ export default function BookingRequestsPage() {
                 notificationParams.linkTo
               );
             } catch (notificationError: any) {
-              // Log error
+              console.warn("Notification failed for booking rejection:", notificationError);
             }
         }
       }
@@ -270,13 +270,14 @@ export default function BookingRequestsPage() {
                 'admin_reject'
             );
         } catch (waitlistError: any) {
-            // Log error
+            console.warn("Error processing waitlist after rejection:", waitlistError);
         }
       }
 
       await fetchBookingRequestsAndRelatedData();
     } catch (error: any) {
-      // Log error
+      console.error("Error rejecting booking:", error);
+      toast({ title: "Error Rejecting Booking", description: `Failed to reject booking: ${error.message || 'Unknown error'}`, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }

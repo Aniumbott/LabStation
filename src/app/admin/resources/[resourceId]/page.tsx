@@ -5,15 +5,15 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Building, ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, ShoppingCart, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarCog, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, AlertCircle, CheckCircle, Construction, User as UserIconLucide, Calendar as CalendarIcon, XCircle, ShieldAlert } from 'lucide-react';
+import { Building, ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, User as UserIconLucide, Calendar as CalendarIcon, XCircle, ShieldAlert } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
-import type { Resource, ResourceType, Booking, UnavailabilityPeriod, RoleName, Lab, LabMembership } from '@/types';
-import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay, isBefore, compareAsc, isWithinInterval, isSameDay, addDays as dateFnsAddDays, Timestamp as FirestoreTimestamp } from 'date-fns';
+import type { Resource, ResourceType, Booking, UnavailabilityPeriod, Lab, LabMembership } from '@/types';
+import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay, isBefore, compareAsc, Timestamp as FirestoreTimestamp } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, type ResourceFormValues } from '@/components/admin/resource-form-dialog';
@@ -244,7 +244,7 @@ export default function ResourceDetailPage() {
           const membershipSnapshot = await getDocs(membershipQuery);
           if (membershipSnapshot.empty) {
             setHasAccess(false);
-            setResource(fetchedResource); // Still set resource for admins if they somehow landed here without perms
+            setResource(fetchedResource); 
             setIsLoading(false);
             return;
           }
@@ -262,7 +262,7 @@ export default function ResourceDetailPage() {
           const labDocRef = doc(db, "labs", fetchedResource.labId);
           const labSnap = await getDoc(labDocRef);
           setLabName(labSnap.exists() ? labSnap.data()?.name || 'Unknown Lab' : 'N/A (Lab Not Found)');
-        } else { setLabName('N/A'); }
+        } else { setLabName('N/A (Global)'); }
 
       } else {
         setResource(null);
@@ -585,9 +585,10 @@ export default function ResourceDetailPage() {
                         </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter className="pt-6 border-t">
-                        <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
                             Delete
-                        </AlertDialogAction>
+                          </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                   )}
@@ -719,7 +720,7 @@ export default function ResourceDetailPage() {
                 </>
               )}
             </CardContent>
-            <CardFooter className="pt-6 border-t">
+            <CardFooter className="border-t pt-6">
                  <Button asChild className="w-full sm:w-auto" disabled={!canBookResource}>
                     <Link href={`/bookings?resourceId=${resource.id}`}>
                         <CalendarPlus className="mr-2 h-4 w-4" />
@@ -728,27 +729,6 @@ export default function ResourceDetailPage() {
                 </Button>
             </CardFooter>
           </Card>
-            {resource && resource.status === 'Working' && (
-              <Card className="shadow-lg">
-                <CardHeader>
-                  <CardTitle className="text-xl flex items-center gap-2">
-                    <CalendarDays className="text-primary h-5 w-5" /> General Availability
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    This resource is generally available for booking during standard lab hours unless an unavailability period is active or it's a lab-wide blackout day.
-                  </p>
-                </CardContent>
-                 <CardFooter className="justify-center pt-4 border-t">
-                    <Button variant="outline" asChild>
-                        <Link href={`/bookings?resourceId=${resource.id}`}>
-                            View Full Calendar &amp; Book <ExternalLink className="ml-2 h-3 w-3" />
-                        </Link>
-                    </Button>
-                 </CardFooter>
-              </Card>
-           )}
         </div>
       </div>
 
@@ -776,6 +756,3 @@ export default function ResourceDetailPage() {
     </TooltipProvider>
   );
 }
-
-
-    

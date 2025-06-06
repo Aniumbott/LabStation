@@ -13,7 +13,7 @@ export async function addNotification(
   type: AppNotificationType,
   linkToParam?: string | undefined
 ): Promise<void> {
-  const functionName = "addNotification V7 DEBUG (Admin SDK)";
+  const functionName = "addNotification (Admin SDK)";
 
   const paramsReceived = { userId, title, message, type, linkToParam };
 
@@ -47,7 +47,6 @@ export async function addNotification(
     if (e.details) {
       console.error(`[${functionName}] Firestore Error Details:`, e.details);
     }
-    console.error(`[${functionName}] Full error object:`, e);
     console.error(`[${functionName}] Notification data that failed:`, JSON.stringify(newNotificationData, null, 2));
     throw e;
   }
@@ -66,7 +65,7 @@ export async function addAuditLog(
     details: string;
   }
 ): Promise<void> {
-  const functionName = "addAuditLog V8 (Admin SDK)";
+  const functionName = "addAuditLog (Admin SDK)";
 
   const paramsReceived = { actingUserId, actingUserName, action, params };
 
@@ -98,7 +97,6 @@ export async function addAuditLog(
      if (e.details) {
       console.error(`[${functionName}] Firestore Error Details:`, e.details);
     }
-    console.error(`[${functionName}] Full error object:`, e);
     console.error(`[${functionName}] Audit log data that failed:`, JSON.stringify(newLogData, null, 2));
     throw e;
   }
@@ -111,7 +109,7 @@ export async function processWaitlistForResource(
   freedSlotEndTime: Date,
   triggeringAction: 'admin_reject' | 'user_cancel_confirmed'
 ): Promise<void> {
-  const functionName = "processWaitlistForResource V1 (Admin SDK)";
+  const functionName = "processWaitlistForResource (Admin SDK)";
 
   try {
     const waitlistQuery = adminDb.collection('bookings')
@@ -173,7 +171,7 @@ export async function processWaitlistForResource(
               `/bookings?bookingId=${waitlistedBookingId}`
             );
           } catch (userNotifError) {
-            console.error(`[${functionName}] Failed to send 'promoted_user' notification to ${waitlistedUserId}:`, userNotifError);
+            console.warn(`[${functionName}] Failed to send 'promoted_user' notification to ${waitlistedUserId}:`, userNotifError);
           }
 
           try {
@@ -190,7 +188,7 @@ export async function processWaitlistForResource(
             });
             await Promise.all(adminNotificationPromises);
           } catch (adminNotifError) {
-            console.error(`[${functionName}] Failed to send 'promoted_admin' notifications:`, adminNotifError);
+            console.warn(`[${functionName}] Failed to send 'promoted_admin' notifications:`, adminNotifError);
           }
           return;
         }
@@ -202,7 +200,6 @@ export async function processWaitlistForResource(
     if (error.code) console.error(`[${functionName}] Error Code:`, error.code);
     if (error.message) console.error(`[${functionName}] Error Message:`, error.message);
     if (error.details) console.error(`[${functionName}] Firestore Error Details:`, error.details);
-    console.error(`[${functionName}] Full error object:`, error);
   }
 }
 
@@ -218,7 +215,7 @@ export async function createBooking_SA(
   },
   actingUser: { id: string; name: string }
 ): Promise<string> {
-  const functionName = "createBooking_SA V3 (Admin SDK)";
+  const functionName = "createBooking_SA (Admin SDK)";
 
   if (!adminDb) {
     console.error(`!!! CRITICAL ERROR IN ${functionName} !!! adminDb is not initialized!`);
@@ -262,7 +259,7 @@ export async function createBooking_SA(
         }
       );
     } catch (auditError: any) {
-      console.error(`[${functionName}] Failed to add audit log for booking ${docRef.id}:`, auditError.toString());
+      console.warn(`[${functionName}] Failed to add audit log for booking ${docRef.id}:`, auditError.toString());
     }
     return docRef.id;
   } catch (e: any) {
@@ -272,7 +269,6 @@ export async function createBooking_SA(
     if (e.details) {
       console.error(`[${functionName}] Firestore Error Details:`, e.details);
     }
-    console.error(`[${functionName}] Full error object:`, e);
     console.error(`[${functionName}] Booking data that failed:`, JSON.stringify(dataToSave, null, 2));
     throw e;
   }
@@ -289,7 +285,7 @@ export async function manageLabMembership_SA(
   action: 'grant' | 'revoke' | 'approve_request' | 'reject_request',
   membershipDocIdToUpdate?: string
 ): Promise<{ success: boolean; message: string }> {
-  const functionName = "manageLabMembership_SA V2";
+  const functionName = "manageLabMembership_SA";
 
   if (!adminUserId || !adminUserName || !targetUserId || !labId || !labName) {
     throw new Error("Missing required parameters for managing lab membership.");
@@ -413,7 +409,7 @@ export async function requestLabAccess_SA(
                 'New Lab Access Request',
                 `${requestingUserName} has requested access to ${labName}. Please review in Lab Management.`,
                 'lab_access_request_received',
-                '/admin/lab-operations?tab=lab-access-requests' // Note: This link might need updating to /admin/lab-operations?tab=lab-access-requests
+                '/admin/lab-operations?tab=lab-access-requests'
             );
         });
 

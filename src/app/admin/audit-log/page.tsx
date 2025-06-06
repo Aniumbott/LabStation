@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { History, Filter as FilterIcon, Search as SearchIcon, X, Loader2, FilterX, CheckCircle2 } from 'lucide-react';
+import { History, Filter as FilterIcon, Search as SearchIcon, Loader2, FilterX, CheckCircle2 } from 'lucide-react';
 import type { AuditLogEntry, AuditActionType } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import {
@@ -29,12 +29,11 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { formatDateSafe, cn } from '@/lib/utils';
+import { formatDateSafe } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
 import { AuditLogDetailsDialog } from '@/components/admin/audit-log-details-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 
 const auditActionTypesForFilter: AuditActionType[] = [
   'USER_CREATED', 'USER_UPDATED', 'USER_DELETED', 'USER_APPROVED', 'USER_REJECTED',
