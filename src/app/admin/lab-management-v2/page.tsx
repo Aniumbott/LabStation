@@ -5,7 +5,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation'; // Added
 import { PageHeader } from '@/components/layout/page-header';
-import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare, UserPlus2, Briefcase, MapPin, Tag, FileText, CalendarClock, User as UserIconLucide, AlertTriangle, BarChart3, ClipboardList, PieChart as PieChartIconComp, Percent, Hourglass } from 'lucide-react';
+import { Cog, ListChecks, PackagePlus, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, SlidersHorizontal, ArrowLeft, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare, UserPlus2, Briefcase, MapPin, Tag, FileText, CalendarClock, User as UserIconLucide, AlertTriangle, BarChart3, ClipboardList, PieChart as PieChartIconComp, Percent, Hourglass, Clock } from 'lucide-react';
 import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus, DayOfWeek, Booking } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -1524,7 +1524,7 @@ export default function LabOperationsCenterPage() {
             <TabsContent value="lab-access-requests" className="mt-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-xl"><div className="flex items-center gap-2"><Users2 className="h-5 w-5 text-muted-foreground"/>System-Wide Lab Access Requests</div></CardTitle>
+                  <CardTitle className="text-xl"><div className="flex items-center gap-2"><UsersRound className="h-5 w-5 text-muted-foreground"/>System-Wide Lab Access Requests</div></CardTitle>
                   <CardDescription>Review and manage pending requests for lab access from all users for all labs.</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -1965,9 +1965,9 @@ export default function LabOperationsCenterPage() {
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead>User</TableHead>
-                                            <TableHead>Status in Lab</TableHead>
-                                            <TableHead>Last Activity</TableHead>
+                                            <TableHead><div className="flex items-center gap-1"><UserIconLucide className="h-4 w-4 text-muted-foreground"/>User</div></TableHead>
+                                            <TableHead><div className="flex items-center gap-1"><InfoIcon className="h-4 w-4 text-muted-foreground"/>Status in Lab</div></TableHead>
+                                            <TableHead><div className="flex items-center gap-1"><ActivitySquare className="h-4 w-4 text-muted-foreground"/>Last Activity</div></TableHead>
                                             <TableHead className="text-right">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
