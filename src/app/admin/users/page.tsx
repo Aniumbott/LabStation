@@ -464,7 +464,7 @@ export default function UsersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[80px]">Avatar</TableHead>
-                <TableHead><div className="flex items-center gap-1"><UserIcon className="h-4 w-4 text-muted-foreground" />Name</div></TableHead>
+                <TableHead><div className="flex items-center gap-1"><UsersIconLucide className="h-4 w-4 text-muted-foreground" />Name</div></TableHead>
                 <TableHead><div className="flex items-center gap-1"><Mail className="h-4 w-4 text-muted-foreground" />Email</div></TableHead>
                 <TableHead><div className="flex items-center gap-1"><Shield className="h-4 w-4 text-muted-foreground" />Role</div></TableHead>
                 <TableHead><div className="flex items-center gap-1"><Info className="h-4 w-4 text-muted-foreground" />Status</div></TableHead>
@@ -642,4 +642,3 @@ export default function UsersPage() {
   );
 }
 
-    
