@@ -1473,7 +1473,7 @@ export default function LabOperationsCenterPage() {
                         </FilterSortDialogFooter>
                       </FilterSortDialogContent>
                     </FilterSortDialog>
-                    {canManageAny && <Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Log Request</Button>}
+                    {canManageAny && <Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add</Button>}
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -1514,7 +1514,7 @@ export default function LabOperationsCenterPage() {
                     <div className="text-center py-10 text-muted-foreground">
                       <Wrench className="h-12 w-12 mx-auto mb-3 opacity-50"/>
                       <p className="font-medium">{activeMaintenanceFilterCount > 0 ? "No requests match filters." : "No maintenance requests."}</p>
-                      {activeMaintenanceFilterCount > 0 ? (<Button variant="outline" size="sm" onClick={resetAllActiveMaintenancePageFilters}><FilterX className="mr-2 h-4 w-4"/>Reset Filters</Button>) : (canManageAny && (<Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Log First Request</Button>))}
+                      {activeMaintenanceFilterCount > 0 ? (<Button variant="outline" size="sm" onClick={resetAllActiveMaintenancePageFilters}><FilterX className="mr-2 h-4 w-4"/>Reset Filters</Button>) : (canManageAny && (<Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add</Button>))}
                     </div>
                   )}
                 </CardContent>
@@ -1821,7 +1821,7 @@ export default function LabOperationsCenterPage() {
                       </TabsContent>
                       <TabsContent value="recurring-rules-lab">
                          <div className="flex justify-end mb-3">
-                          <Button onClick={handleOpenNewLabSpecificRecurringDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Rule for {selectedLabDetails.name}</Button>
+                          <Button onClick={handleOpenNewLabSpecificRecurringDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add</Button>
                         </div>
                         {isLoadingData && filteredLabSpecificRecurringRules.length === 0 && !activeLabSpecificClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
                         ) : filteredLabSpecificRecurringRules.length > 0 ? (
@@ -1903,7 +1903,7 @@ export default function LabOperationsCenterPage() {
                             </FilterSortDialogFooter>
                           </FilterSortDialogContent>
                         </FilterSortDialog>
-                        {canManageAny && <Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Log Request for this Lab</Button>}
+                        {canManageAny && <Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add</Button>}
                     </div>
                   </CardHeader>
                   <CardContent className="p-0">
@@ -1938,7 +1938,7 @@ export default function LabOperationsCenterPage() {
                         <div className="text-center py-10 text-muted-foreground">
                         <Wrench className="h-12 w-12 mx-auto mb-3 opacity-50"/>
                         <p className="font-medium">{activeLabSpecificMaintenanceFilterCount > 0 ? `No requests match filters for ${selectedLabDetails.name}.` : `No maintenance requests for ${selectedLabDetails.name}.`}</p>
-                        {activeLabSpecificMaintenanceFilterCount > 0 ? (<Button variant="outline" size="sm" onClick={resetAllActiveLabSpecificMaintenancePageFilters}><FilterX className="mr-2 h-4 w-4"/>Reset Lab Filters</Button>) : (canManageAny && (<Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Log First Request for this Lab</Button>))}
+                        {activeLabSpecificMaintenanceFilterCount > 0 ? (<Button variant="outline" size="sm" onClick={resetAllActiveLabSpecificMaintenancePageFilters}><FilterX className="mr-2 h-4 w-4"/>Reset Lab Filters</Button>) : (canManageAny && (<Button onClick={handleOpenNewMaintenanceDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add</Button>))}
                         </div>
                     )}
                     </CardContent>
@@ -2058,5 +2058,6 @@ export default function LabOperationsCenterPage() {
     </TooltipProvider>
   );
 }
+
 
 
