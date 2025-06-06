@@ -1605,9 +1605,10 @@ export default function LabOperationsCenterPage() {
               </TabsList>
 
               <TabsContent value="lab-details" className="mt-6">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-1 space-y-6">
-                    <Card className="shadow-lg">
+                <div className="space-y-6"> {/* Main vertical stack for rows */}
+                  {/* First Row: Details and Stats */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                    <Card className="shadow-lg lg:col-span-2 md:col-span-1">
                         <CardHeader className="flex flex-row items-start justify-between gap-2">
                             <div>
                                 <CardTitle className="text-2xl">{selectedLabDetails.name}</CardTitle>
@@ -1619,7 +1620,7 @@ export default function LabOperationsCenterPage() {
                             <p className="text-sm text-muted-foreground">{selectedLabDetails.description || 'No description provided.'}</p>
                         </CardContent>
                     </Card>
-                    <Card className="shadow-lg">
+                    <Card className="shadow-lg lg:col-span-3 md:col-span-1">
                         <CardHeader><CardTitle className="text-xl flex items-center gap-2"><BarChartHorizontalBig className="h-5 w-5 text-primary"/>Key Statistics</CardTitle></CardHeader>
                         <CardContent className="space-y-3">
                             <div className="flex items-center justify-between p-2 bg-muted/30 rounded-md">
@@ -1637,137 +1638,136 @@ export default function LabOperationsCenterPage() {
                         </CardContent>
                     </Card>
                   </div>
-                  <div className="lg:col-span-2 space-y-6">
-                    {/* Lab Specific Reports Section */}
-                    <Card className="shadow-lg">
-                        <CardHeader>
-                            <CardTitle className="text-xl flex items-center gap-2">
-                                <BarChart3 className="h-5 w-5 text-primary"/>
-                                Lab Performance Dashboard: {selectedLabDetails.name}
-                            </CardTitle>
-                            <CardDescription>Key performance indicators for this lab.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-8">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <Card>
-                                    <CardHeader><CardTitle className="text-base flex items-center gap-1"><ClipboardList className="h-4 w-4"/>Bookings per Resource</CardTitle></CardHeader>
-                                    <CardContent>
-                                        {bookingsPerLabResource.length > 0 ? (
-                                            <ChartContainer config={bookingsLabChartConfig} className="min-h-[250px] w-full">
-                                                <ResponsiveContainer width="100%" height={250}>
-                                                    <BarChart data={bookingsPerLabResource} margin={{ top: 5, right: 5, left: -25, bottom: 40 }}>
-                                                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                                                        <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} angle={-30} textAnchor="end" interval={0} height={50} className="text-xs"/>
-                                                        <YAxis tickLine={false} axisLine={false} tickMargin={8} allowDecimals={false} />
-                                                        <ChartTooltip {...chartTooltipConfig} />
-                                                        <Bar dataKey="count" fill="var(--color-count)" radius={3} />
-                                                    </BarChart>
-                                                </ResponsiveContainer>
-                                            </ChartContainer>
-                                        ) : <p className="text-muted-foreground text-center text-sm py-8">No booking data.</p>}
-                                    </CardContent>
-                                </Card>
-                                 <Card>
-                                    <CardHeader><CardTitle className="text-base flex items-center gap-1"><AlertTriangle className="h-4 w-4"/>Maintenance Status</CardTitle></CardHeader>
-                                    <CardContent className="flex justify-center">
-                                        {maintenanceByStatusForLab.length > 0 ? (
-                                            <ChartContainer config={maintenanceLabChartConfig} className="min-h-[250px] max-w-[280px] w-full aspect-square">
-                                                <ResponsiveContainer width="100%" height={250}>
-                                                    <RechartsPieChart>
-                                                        <ChartTooltip {...chartTooltipConfig} />
-                                                        <Pie data={maintenanceByStatusForLab} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={70} labelLine={false} label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}>
-                                                          {maintenanceByStatusForLab.map((entry) => (<Cell key={`cell-${entry.name}`} fill={entry.fill} className="stroke-background focus:outline-none"/> ))}
-                                                        </Pie>
-                                                        <ChartLegend {...chartLegendConfig} />
-                                                    </RechartsPieChart>
-                                                </ResponsiveContainer>
-                                            </ChartContainer>
-                                        ) : <p className="text-muted-foreground text-center text-sm py-8">No maintenance data.</p>}
-                                    </CardContent>
-                                </Card>
-                            </div>
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <Card>
-                                    <CardHeader><CardTitle className="text-base flex items-center gap-1"><Percent className="h-4 w-4"/>Resource Utilization (30d)</CardTitle></CardHeader>
-                                    <CardContent>
-                                        {labResourceUtilization.length > 0 ? (
-                                            <ChartContainer config={utilizationLabChartConfig} className="min-h-[250px] w-full">
-                                                <ResponsiveContainer width="100%" height={250}>
-                                                    <BarChart data={labResourceUtilization} layout="vertical" margin={{ top: 5, right: 25, left: 10, bottom: 5 }}>
-                                                        <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-                                                        <XAxis type="number" tickLine={false} axisLine={false} tickMargin={8} unit="%" domain={[0,100]} />
-                                                        <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={8} width={100} className="text-xs truncate"/>
-                                                        <ChartTooltip content={<ChartTooltipContent formatter={(value, name, props) => `${props.payload.name}: ${value}%`} indicator="dot" />} />
-                                                        <Bar dataKey="utilization" fill="var(--color-utilization)" radius={3} />
-                                                    </BarChart>
-                                                </ResponsiveContainer>
-                                            </ChartContainer>
-                                        ) : <p className="text-muted-foreground text-center text-sm py-8">No utilization data.</p>}
-                                    </CardContent>
-                                </Card>
-                                <Card>
-                                    <CardHeader><CardTitle className="text-base flex items-center gap-1"><Clock className="h-4 w-4"/>Peak Booking Hours</CardTitle></CardHeader>
-                                    <CardContent>
-                                        {peakBookingHoursForLab.length > 0 ? (
-                                            <ChartContainer config={peakHoursLabChartConfig} className="min-h-[250px] w-full">
-                                                <ResponsiveContainer width="100%" height={250}>
-                                                    <LineChart data={peakBookingHoursForLab} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
-                                                        <CartesianGrid strokeDasharray="3 3" />
-                                                        <XAxis dataKey="hour" tickLine={false} axisLine={true} tickMargin={8} className="text-xs"/>
-                                                        <YAxis tickLine={false} axisLine={true} tickMargin={8} allowDecimals={false}/>
-                                                        <ChartTooltip {...chartTooltipConfig} />
-                                                        <Line type="monotone" dataKey="count" stroke="var(--color-count)" strokeWidth={2} dot={{r:3, fill: "var(--color-count)"}} activeDot={{r:5}} />
-                                                    </LineChart>
-                                                </ResponsiveContainer>
-                                            </ChartContainer>
-                                        ) : <p className="text-muted-foreground text-center text-sm py-8">No peak hours data.</p>}
-                                    </CardContent>
-                                </Card>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <Card>
-                                    <CardHeader><CardTitle className="text-base flex items-center gap-1"><Hourglass className="h-4 w-4"/>Current Waitlist Size</CardTitle></CardHeader>
-                                    <CardContent>
-                                        {waitlistedPerLabResource.length > 0 ? (
-                                            <ChartContainer config={waitlistLabChartConfig} className="min-h-[250px] w-full">
-                                                <ResponsiveContainer width="100%" height={Math.max(150, waitlistedPerLabResource.length * 40)}>
-                                                    <BarChart data={waitlistedPerLabResource} layout="vertical" margin={{ top: 5, right: 25, left: 10, bottom: 5 }}>
-                                                        <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-                                                        <XAxis type="number" allowDecimals={false} />
-                                                        <YAxis dataKey="name" type="category" width={100} className="text-xs truncate"/>
-                                                        <ChartTooltip {...chartTooltipConfig} />
-                                                        <Bar dataKey="count" fill="var(--color-count)" radius={3} />
-                                                    </BarChart>
-                                                </ResponsiveContainer>
-                                            </ChartContainer>
-                                        ) : <p className="text-muted-foreground text-center text-sm py-8">No waitlisted items.</p>}
-                                    </CardContent>
-                                </Card>
-                                <Card>
-                                    <CardHeader><CardTitle className="text-base flex items-center gap-1"><Users2 className="h-4 w-4"/>Top User Activity</CardTitle></CardHeader>
-                                    <CardContent className="p-0">
-                                        {labUserActivityReport.length > 0 ? (
-                                            <div className="overflow-x-auto">
-                                            <Table>
-                                                <TableHeader><TableRow><TableHead>User</TableHead><TableHead className="text-center">Bookings</TableHead><TableHead className="text-right">Hours</TableHead></TableRow></TableHeader>
-                                                <TableBody>
-                                                {labUserActivityReport.map(item => (
-                                                    <TableRow key={item.userId}>
-                                                    <TableCell><div className="flex items-center gap-2"><Avatar className="h-7 w-7 text-xs"><AvatarImage src={item.avatarUrl} alt={item.userName}/><AvatarFallback>{item.userName.charAt(0)}</AvatarFallback></Avatar>{item.userName}</div></TableCell>
-                                                    <TableCell className="text-center">{item.totalBookingsInLab}</TableCell>
-                                                    <TableCell className="text-right">{item.totalHoursBookedInLab.toFixed(1)}</TableCell>
-                                                    </TableRow>
-                                                ))}
-                                                </TableBody>
-                                            </Table>
-                                            </div>
-                                        ) : <p className="text-muted-foreground text-center text-sm py-8 px-3">No user activity data for this lab.</p>}
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        </CardContent>
-                    </Card>
-                  </div>
+
+                  {/* Second Row: Reports Dashboard */}
+                  <Card className="shadow-lg">
+                      <CardHeader>
+                          <CardTitle className="text-xl flex items-center gap-2">
+                              <BarChart3 className="h-5 w-5 text-primary"/>
+                              Lab Performance Dashboard: {selectedLabDetails.name}
+                          </CardTitle>
+                          <CardDescription>Key performance indicators for this lab.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-8">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <Card>
+                                  <CardHeader><CardTitle className="text-base flex items-center gap-1"><ClipboardList className="h-4 w-4"/>Bookings per Resource</CardTitle></CardHeader>
+                                  <CardContent>
+                                      {bookingsPerLabResource.length > 0 ? (
+                                          <ChartContainer config={bookingsLabChartConfig} className="min-h-[250px] w-full">
+                                              <ResponsiveContainer width="100%" height={250}>
+                                                  <BarChart data={bookingsPerLabResource} margin={{ top: 5, right: 5, left: -25, bottom: 40 }}>
+                                                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                                                      <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} angle={-30} textAnchor="end" interval={0} height={50} className="text-xs"/>
+                                                      <YAxis tickLine={false} axisLine={false} tickMargin={8} allowDecimals={false} />
+                                                      <ChartTooltip {...chartTooltipConfig} />
+                                                      <Bar dataKey="count" fill="var(--color-count)" radius={3} />
+                                                  </BarChart>
+                                              </ResponsiveContainer>
+                                          </ChartContainer>
+                                      ) : <p className="text-muted-foreground text-center text-sm py-8">No booking data.</p>}
+                                  </CardContent>
+                              </Card>
+                               <Card>
+                                  <CardHeader><CardTitle className="text-base flex items-center gap-1"><AlertTriangle className="h-4 w-4"/>Maintenance Status</CardTitle></CardHeader>
+                                  <CardContent className="flex justify-center">
+                                      {maintenanceByStatusForLab.length > 0 ? (
+                                          <ChartContainer config={maintenanceLabChartConfig} className="min-h-[250px] max-w-[280px] w-full aspect-square">
+                                              <ResponsiveContainer width="100%" height={250}>
+                                                  <RechartsPieChart>
+                                                      <ChartTooltip {...chartTooltipConfig} />
+                                                      <Pie data={maintenanceByStatusForLab} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={70} labelLine={false} label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}>
+                                                        {maintenanceByStatusForLab.map((entry) => (<Cell key={`cell-${entry.name}`} fill={entry.fill} className="stroke-background focus:outline-none"/> ))}
+                                                      </Pie>
+                                                      <ChartLegend {...chartLegendConfig} />
+                                                  </RechartsPieChart>
+                                              </ResponsiveContainer>
+                                          </ChartContainer>
+                                      ) : <p className="text-muted-foreground text-center text-sm py-8">No maintenance data.</p>}
+                                  </CardContent>
+                              </Card>
+                          </div>
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <Card>
+                                  <CardHeader><CardTitle className="text-base flex items-center gap-1"><Percent className="h-4 w-4"/>Resource Utilization (30d)</CardTitle></CardHeader>
+                                  <CardContent>
+                                      {labResourceUtilization.length > 0 ? (
+                                          <ChartContainer config={utilizationLabChartConfig} className="min-h-[250px] w-full">
+                                              <ResponsiveContainer width="100%" height={250}>
+                                                  <BarChart data={labResourceUtilization} layout="vertical" margin={{ top: 5, right: 25, left: 10, bottom: 5 }}>
+                                                      <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                                                      <XAxis type="number" tickLine={false} axisLine={false} tickMargin={8} unit="%" domain={[0,100]} />
+                                                      <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={8} width={100} className="text-xs truncate"/>
+                                                      <ChartTooltip content={<ChartTooltipContent formatter={(value, name, props) => `${props.payload.name}: ${value}%`} indicator="dot" />} />
+                                                      <Bar dataKey="utilization" fill="var(--color-utilization)" radius={3} />
+                                                  </BarChart>
+                                              </ResponsiveContainer>
+                                          </ChartContainer>
+                                      ) : <p className="text-muted-foreground text-center text-sm py-8">No utilization data.</p>}
+                                  </CardContent>
+                              </Card>
+                              <Card>
+                                  <CardHeader><CardTitle className="text-base flex items-center gap-1"><Clock className="h-4 w-4"/>Peak Booking Hours</CardTitle></CardHeader>
+                                  <CardContent>
+                                      {peakBookingHoursForLab.length > 0 ? (
+                                          <ChartContainer config={peakHoursLabChartConfig} className="min-h-[250px] w-full">
+                                              <ResponsiveContainer width="100%" height={250}>
+                                                  <LineChart data={peakBookingHoursForLab} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                                                      <CartesianGrid strokeDasharray="3 3" />
+                                                      <XAxis dataKey="hour" tickLine={false} axisLine={true} tickMargin={8} className="text-xs"/>
+                                                      <YAxis tickLine={false} axisLine={true} tickMargin={8} allowDecimals={false}/>
+                                                      <ChartTooltip {...chartTooltipConfig} />
+                                                      <Line type="monotone" dataKey="count" stroke="var(--color-count)" strokeWidth={2} dot={{r:3, fill: "var(--color-count)"}} activeDot={{r:5}} />
+                                                  </LineChart>
+                                              </ResponsiveContainer>
+                                          </ChartContainer>
+                                      ) : <p className="text-muted-foreground text-center text-sm py-8">No peak hours data.</p>}
+                                  </CardContent>
+                              </Card>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <Card>
+                                  <CardHeader><CardTitle className="text-base flex items-center gap-1"><Hourglass className="h-4 w-4"/>Current Waitlist Size</CardTitle></CardHeader>
+                                  <CardContent>
+                                      {waitlistedPerLabResource.length > 0 ? (
+                                          <ChartContainer config={waitlistLabChartConfig} className="min-h-[250px] w-full">
+                                              <ResponsiveContainer width="100%" height={Math.max(150, waitlistedPerLabResource.length * 40)}>
+                                                  <BarChart data={waitlistedPerLabResource} layout="vertical" margin={{ top: 5, right: 25, left: 10, bottom: 5 }}>
+                                                      <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                                                      <XAxis type="number" allowDecimals={false} />
+                                                      <YAxis dataKey="name" type="category" width={100} className="text-xs truncate"/>
+                                                      <ChartTooltip {...chartTooltipConfig} />
+                                                      <Bar dataKey="count" fill="var(--color-count)" radius={3} />
+                                                  </BarChart>
+                                              </ResponsiveContainer>
+                                          </ChartContainer>
+                                      ) : <p className="text-muted-foreground text-center text-sm py-8">No waitlisted items.</p>}
+                                  </CardContent>
+                              </Card>
+                              <Card>
+                                  <CardHeader><CardTitle className="text-base flex items-center gap-1"><Users2 className="h-4 w-4"/>Top User Activity</CardTitle></CardHeader>
+                                  <CardContent className="p-0">
+                                      {labUserActivityReport.length > 0 ? (
+                                          <div className="overflow-x-auto">
+                                          <Table>
+                                              <TableHeader><TableRow><TableHead>User</TableHead><TableHead className="text-center">Bookings</TableHead><TableHead className="text-right">Hours</TableHead></TableRow></TableHeader>
+                                              <TableBody>
+                                              {labUserActivityReport.map(item => (
+                                                  <TableRow key={item.userId}>
+                                                  <TableCell><div className="flex items-center gap-2"><Avatar className="h-7 w-7 text-xs"><AvatarImage src={item.avatarUrl} alt={item.userName}/><AvatarFallback>{item.userName.charAt(0)}</AvatarFallback></Avatar>{item.userName}</div></TableCell>
+                                                  <TableCell className="text-center">{item.totalBookingsInLab}</TableCell>
+                                                  <TableCell className="text-right">{item.totalHoursBookedInLab.toFixed(1)}</TableCell>
+                                                  </TableRow>
+                                              ))}
+                                              </TableBody>
+                                          </Table>
+                                          </div>
+                                      ) : <p className="text-muted-foreground text-center text-sm py-8 px-3">No user activity data for this lab.</p>}
+                                  </CardContent>
+                              </Card>
+                          </div>
+                      </CardContent>
+                  </Card>
                 </div>
               </TabsContent>
               <TabsContent value="lab-closures" className="mt-6">
@@ -2060,4 +2060,5 @@ export default function LabOperationsCenterPage() {
     </TooltipProvider>
   );
 }
+
 
