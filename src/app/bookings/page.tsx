@@ -22,7 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { Booking, Resource, RoleName, BookingUsageDetails, ResourceStatus, User, LabMembership } from '@/types';
+import type { Booking, Resource, RoleName, BookingUsageDetails, ResourceStatus, User, LabMembership, BlackoutDate, RecurringBlackoutRule } from '@/types';
 import { format, parseISO, isValid as isValidDateFn, startOfDay, isSameDay, set, isBefore, getDay, startOfToday, compareAsc, addDays as dateFnsAddDays, Timestamp as FirestoreTimestamp } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -66,8 +66,8 @@ function BookingsPageContent({}: BookingsPageContentProps) {
   const [allAvailableResources, setAllAvailableResources] = useState<Resource[]>([]);
   const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]);
   const [allUsersForFilter, setAllUsersForFilter] = useState<User[]>([]);
-  const [fetchedBlackoutDates, setFetchedBlackoutDates] = useState<any[]>([]);
-  const [fetchedRecurringRules, setFetchedRecurringRules] = useState<any[]>([]);
+  const [fetchedBlackoutDates, setFetchedBlackoutDates] = useState<BlackoutDate[]>([]);
+  const [fetchedRecurringRules, setFetchedRecurringRules] = useState<RecurringBlackoutRule[]>([]);
 
   const [isLoadingBookings, setIsLoadingBookings] = useState(true);
   const [isLoadingResourcesAndLabs, setIsLoadingResourcesAndLabs] = useState(true);
@@ -232,11 +232,11 @@ function BookingsPageContent({}: BookingsPageContentProps) {
     try {
       const blackoutQuery = query(collection(db, "blackoutDates"), orderBy("date", "asc"));
       const blackoutSnapshot = await getDocs(blackoutQuery);
-      setFetchedBlackoutDates(blackoutSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+      setFetchedBlackoutDates(blackoutSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate)));
 
       const recurringQuery = query(collection(db, "recurringBlackoutRules"), orderBy("name", "asc"));
       const recurringSnapshot = await getDocs(recurringQuery);
-      setFetchedRecurringRules(recurringSnapshot.docs.map(r => ({ id: r.id, ...r.data() } as any)));
+      setFetchedRecurringRules(recurringSnapshot.docs.map(r => ({ id: r.id, ...r.data() } as RecurringBlackoutRule)));
     } catch (error: any) {
       setFetchedBlackoutDates([]);
       setFetchedRecurringRules([]);

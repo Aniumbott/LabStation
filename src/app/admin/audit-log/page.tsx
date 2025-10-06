@@ -127,7 +127,7 @@ export default function AuditLogPage() {
     setTempActionType('all');
   }, []);
 
-  const resetAllPageFilters = useCallback(() => {
+  const resetAllActivePageFilters = useCallback(() => {
     setActiveSearchTerm('');
     setActiveActionType('all');
     resetDialogFiltersOnly();
@@ -259,7 +259,7 @@ export default function AuditLogPage() {
                 : "No system actions have been logged yet."}
             </p>
             {activeFilterCount > 0 && (
-                <Button variant="outline" onClick={resetAllPageFilters}>
+                <Button variant="outline" onClick={resetAllActivePageFilters}>
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             )}

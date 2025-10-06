@@ -5,7 +5,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Building, ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, User as UserIconLucide, Calendar as CalendarIcon, XCircle, ShieldAlert } from 'lucide-react';
+import { Building, ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, User as UserIconLucide, Calendar as CalendarIcon, ShieldAlert } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -186,8 +186,7 @@ export default function ResourceDetailPage() {
 
   const [isUnavailabilityDialogOpen, setIsUnavailabilityDialogOpen] = useState(false);
   const [resourceUserBookings, setResourceUserBookings] = useState<Booking[]>([]);
-  const [fetchedResourceTypesForDialog, setFetchedResourceTypesForDialog] = useState<ResourceType[]>([]);
-  const [fetchedLabsForDialog, setFetchedLabsForDialog] = useState<Lab[]>([]);
+  // Resource types and labs are now fetched from AdminDataContext in the form dialog
 
   const resourceId = typeof params.resourceId === 'string' ? params.resourceId : null;
 
@@ -244,7 +243,7 @@ export default function ResourceDetailPage() {
           const membershipSnapshot = await getDocs(membershipQuery);
           if (membershipSnapshot.empty) {
             setHasAccess(false);
-            setResource(fetchedResource); 
+            setResource(fetchedResource);
             setIsLoading(false);
             return;
           }
@@ -289,40 +288,8 @@ export default function ResourceDetailPage() {
 
 
   useEffect(() => {
-    if (isFormDialogOpen || isUnavailabilityDialogOpen) {
-      const fetchSupportData = async () => {
-        try {
-          const typesCollectionRef = collection(db, "resourceTypes");
-          const typesQueryInstance = query(typesCollectionRef, orderBy("name", "asc"));
-          const typesSnapshot = await getDocs(typesQueryInstance);
-          const types = typesSnapshot.docs.map(docSnap => ({
-            id: docSnap.id,
-            ...(docSnap.data() as Omit<ResourceType, 'id'>),
-          }));
-          setFetchedResourceTypesForDialog(types);
-
-          const labsCollectionRef = collection(db, "labs");
-          const labsQueryInstance = query(labsCollectionRef, orderBy("name", "asc"));
-          const labsSnapshot = await getDocs(labsQueryInstance);
-          const labsData = labsSnapshot.docs.map(docSnap => ({
-            id: docSnap.id,
-            ...(docSnap.data() as Omit<Lab, 'id'>),
-          }));
-          setFetchedLabsForDialog(labsData);
-
-        } catch (error: any) {
-          toast({ title: "Error Loading Support Data", description: `Could not load types/labs for form: ${error.message}`, variant: "destructive" });
-          setFetchedResourceTypesForDialog([]);
-          setFetchedLabsForDialog([]);
-        }
-      };
-      fetchSupportData();
-    }
-  }, [isFormDialogOpen, isUnavailabilityDialogOpen, toast]);
-
-  useEffect(() => {
     const fetchBookingsForResourceUser = async () => {
-      if (!resourceId || !currentUser?.id || !hasAccess) { // Also check hasAccess
+      if (!resourceId || !currentUser?.id || !hasAccess) {
         setResourceUserBookings([]);
         return;
       }
@@ -457,15 +424,14 @@ export default function ResourceDetailPage() {
     try {
         const resourceDocRef = doc(db, "resources", resource.id);
         await updateDoc(resourceDocRef, firestorePayload);
-        const updatedLabName = fetchedLabsForDialog.find(l => l.id === data.labId)?.name || 'Unknown Lab';
-        addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Resource '${data.name}' updated by ${currentUser.name}. Status: ${data.status}, Lab: ${updatedLabName}.`});
+        addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Resource '${data.name}' updated by ${currentUser.name}. Status: ${data.status}.`});
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
         await fetchResourceData();
     } catch (error: any) {
         toast({ title: "Update Failed", description: `Could not update resource: ${error.message}`, variant: "destructive" });
     }
     setIsFormDialogOpen(false);
-  }, [currentUser, canManageResource, resource, fetchResourceData, toast, fetchedLabsForDialog]);
+  }, [currentUser, canManageResource, resource, fetchResourceData, toast]);
 
    const handleConfirmDelete = useCallback(async () => {
     if (!resourceToDeleteId || !currentUser || !canManageResource || !resource) {
@@ -740,8 +706,6 @@ export default function ResourceDetailPage() {
             }}
             initialResource={resource}
             onSave={handleSaveResource}
-            resourceTypes={fetchedResourceTypesForDialog}
-            labs={fetchedLabsForDialog}
         />
       )}
       {resource && (
