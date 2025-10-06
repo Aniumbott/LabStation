@@ -5,15 +5,16 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Building, ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, User as UserIconLucide, Calendar as CalendarIcon, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Info, ListChecks, SlidersHorizontal, FileText, Wrench, Edit, Trash2, Network, Globe, Fingerprint, KeyRound, ExternalLink, Archive, History, CalendarX, Loader2, PackageSearch, Clock, CalendarDays, User as UserIconLucide, Calendar as CalendarIcon, ShieldAlert, Building } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
-import type { Resource, ResourceType, Booking, UnavailabilityPeriod, Lab, LabMembership } from '@/types';
-import { format, parseISO, isValid as isValidDateFn, startOfDay as fnsStartOfDay, isBefore, compareAsc, Timestamp as FirestoreTimestamp } from 'date-fns';
+import { useAdminData } from '@/contexts/AdminDataContext';
+import type { Resource, ResourceType, Booking, UnavailabilityPeriod, Lab } from '@/types';
+import { format, parseISO, isValid as isValidDateFn, isBefore, compareAsc, Timestamp as FirestoreTimestamp } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, type ResourceFormValues } from '@/components/admin/resource-form-dialog';
@@ -173,12 +174,11 @@ export default function ResourceDetailPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { currentUser } = useAuth();
+  const { labs, resourceTypes, isLoading: isAdminDataLoading } = useAdminData();
 
   const [resource, setResource] = useState<Resource | null>(null);
-  const [resourceTypeName, setResourceTypeName] = useState<string>('Loading...');
-  const [labName, setLabName] = useState<string>('Loading...');
   const [isLoading, setIsLoading] = useState(true);
-  const [hasAccess, setHasAccess] = useState<boolean | null>(null); // null: loading, true: access, false: no access
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
 
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
@@ -186,7 +186,6 @@ export default function ResourceDetailPage() {
 
   const [isUnavailabilityDialogOpen, setIsUnavailabilityDialogOpen] = useState(false);
   const [resourceUserBookings, setResourceUserBookings] = useState<Booking[]>([]);
-  // Resource types and labs are now fetched from AdminDataContext in the form dialog
 
   const resourceId = typeof params.resourceId === 'string' ? params.resourceId : null;
 
@@ -194,11 +193,11 @@ export default function ResourceDetailPage() {
     if (!resourceId) {
       setIsLoading(false);
       setResource(null);
-      setHasAccess(false); // No resource ID, no access
+      setHasAccess(false);
       return;
     }
     setIsLoading(true);
-    setHasAccess(null); // Reset access status on new fetch
+    setHasAccess(null);
     try {
       const resourceDocRef = doc(db, "resources", resourceId);
       const docSnap = await getDoc(resourceDocRef);
@@ -233,7 +232,6 @@ export default function ResourceDetailPage() {
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
         };
 
-        // Check Lab Access
         if (currentUser?.role !== 'Admin' && fetchedResource.labId) {
           const membershipQuery = query(collection(db, 'labMemberships'),
             where('userId', '==', currentUser?.id),
@@ -251,21 +249,9 @@ export default function ResourceDetailPage() {
         setHasAccess(true);
         setResource(fetchedResource);
 
-        if (fetchedResource.resourceTypeId) {
-          const typeDocRef = doc(db, "resourceTypes", fetchedResource.resourceTypeId);
-          const typeSnap = await getDoc(typeDocRef);
-          setResourceTypeName(typeSnap.exists() ? typeSnap.data()?.name || 'Unknown Type' : 'N/A (Type Not Found)');
-        } else { setResourceTypeName('N/A'); }
-
-        if (fetchedResource.labId) {
-          const labDocRef = doc(db, "labs", fetchedResource.labId);
-          const labSnap = await getDoc(labDocRef);
-          setLabName(labSnap.exists() ? labSnap.data()?.name || 'Unknown Lab' : 'N/A (Lab Not Found)');
-        } else { setLabName('N/A (Global)'); }
-
       } else {
         setResource(null);
-        setHasAccess(false); // Resource not found, so no access
+        setHasAccess(false);
       }
     } catch (error: any) {
       toast({ title: "Error Fetching Resource", description: `Could not load resource details. ${error.message}`, variant: "destructive" });
@@ -277,12 +263,12 @@ export default function ResourceDetailPage() {
   }, [resourceId, toast, currentUser]);
 
   useEffect(() => {
-    if(currentUser) { // Only fetch if currentUser is available
+    if(currentUser) {
       fetchResourceData();
-    } else if (currentUser === null && resourceId) { // User explicitly logged out or not logged in
+    } else if (currentUser === null && resourceId) {
         setIsLoading(false);
-        setHasAccess(false); // No user, no access
-        setResource(null); // No resource details if not logged in
+        setHasAccess(false);
+        setResource(null);
     }
   }, [fetchResourceData, currentUser, resourceId]);
 
@@ -336,6 +322,14 @@ export default function ResourceDetailPage() {
     if (!currentUser) return false;
     return currentUser.role === 'Admin';
   }, [currentUser]);
+
+  const { resourceTypeName, labName } = useMemo(() => {
+    if (!resource || isAdminDataLoading) return { resourceTypeName: 'Loading...', labName: 'Loading...' };
+    const typeName = resource.resourceTypeId ? (resourceTypes.find(rt => rt.id === resource.resourceTypeId)?.name || 'Unknown Type') : 'N/A';
+    const lName = resource.labId ? (labs.find(l => l.id === resource.labId)?.name || 'Unknown Lab') : 'N/A (Global)';
+    return { resourceTypeName: typeName, labName: lName };
+  }, [resource, resourceTypes, labs, isAdminDataLoading]);
+
 
   const userPastBookingsForResource = useMemo(() => {
     if (!resource || !currentUser || !resourceUserBookings || resourceUserBookings.length === 0 || !hasAccess) return [];
@@ -424,14 +418,15 @@ export default function ResourceDetailPage() {
     try {
         const resourceDocRef = doc(db, "resources", resource.id);
         await updateDoc(resourceDocRef, firestorePayload);
-        addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Resource '${data.name}' updated by ${currentUser.name}. Status: ${data.status}.`});
+        const updatedLabName = labs.find(l => l.id === data.labId)?.name || 'Unknown Lab';
+        addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Resource '${data.name}' updated by ${currentUser.name}. Status: ${data.status}, Lab: ${updatedLabName}.`});
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
         await fetchResourceData();
     } catch (error: any) {
         toast({ title: "Update Failed", description: `Could not update resource: ${error.message}`, variant: "destructive" });
     }
     setIsFormDialogOpen(false);
-  }, [currentUser, canManageResource, resource, fetchResourceData, toast]);
+  }, [currentUser, canManageResource, resource, fetchResourceData, toast, labs]);
 
    const handleConfirmDelete = useCallback(async () => {
     if (!resourceToDeleteId || !currentUser || !canManageResource || !resource) {
@@ -472,7 +467,7 @@ export default function ResourceDetailPage() {
   }, [resource, currentUser, canManageResource, toast]);
 
 
-  if (isLoading || hasAccess === null) {
+  if (isLoading || hasAccess === null || isAdminDataLoading) {
     return <ResourceDetailPageSkeleton />;
   }
 
@@ -701,9 +696,7 @@ export default function ResourceDetailPage() {
       {resource && isFormDialogOpen && (
         <ResourceFormDialog
             open={isFormDialogOpen}
-            onOpenChange={(isOpen) => {
-                setIsFormDialogOpen(isOpen);
-            }}
+            onOpenChange={setIsFormDialogOpen}
             initialResource={resource}
             onSave={handleSaveResource}
         />

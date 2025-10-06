@@ -4,40 +4,26 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { PageHeader } from '@/components/layout/page-header';
-import { Cog, Edit, Trash2, Filter as FilterIcon, FilterX, Search as SearchIcon, Loader2, X, CheckCircle2, Building, PlusCircle, CalendarOff, Repeat, Wrench, PenToolIcon, AlertCircle, CheckCircle as LucideCheckCircle, Globe, Users, ThumbsUp, ThumbsDown, Settings, Settings2, ShieldCheck, ShieldOff, CalendarDays, Info as InfoIcon, Package as PackageIcon, Users2, UserCog, CalendarCheck, BarChartHorizontalBig, UsersRound, ActivitySquare, UserPlus2, Briefcase, MapPin, Tag, FileText, CalendarClock, User as UserIconLucide, AlertTriangle, BarChart3, ClipboardList, PieChart as PieChartIconComp, Percent, Hourglass, Clock } from 'lucide-react';
-import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, MaintenanceRequestStatus, User, LabMembership, LabMembershipStatus, DayOfWeek, Booking } from '@/types';
+import { Cog, Loader2, Building, Globe } from 'lucide-react';
+import type { ResourceType, Resource, Lab, BlackoutDate, RecurringBlackoutRule, MaintenanceRequest, User, LabMembership, Booking } from '@/types';
 import { useAuth } from '@/components/auth-context';
+import { useAdminData } from '@/contexts/AdminDataContext';
 import { Button } from "@/components/ui/button";
-import {
-  Dialog as FilterSortDialog,
-  DialogContent as FilterSortDialogContent,
-  DialogDescription as FilterSortDialogDescription,
-  DialogHeader as FilterSortDialogHeader,
-  DialogTitle as FilterSortDialogTitle,
-  DialogFooter as FilterSortDialogFooter,
-  DialogTrigger as FilterSortDialogTrigger,
-} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { LabFormDialog, LabFormValues } from '@/components/admin/lab-form-dialog';
 import { BlackoutDateFormDialog, BlackoutDateFormValues as BlackoutDateDialogFormValues } from '@/components/admin/blackout-date-form-dialog';
 import { RecurringBlackoutRuleFormDialog, RecurringBlackoutRuleFormValues as RecurringRuleDialogFormValues } from '@/components/admin/recurring-blackout-rule-form-dialog';
 import { MaintenanceRequestFormDialog, MaintenanceRequestFormValues as MaintenanceDialogFormValues } from '@/components/admin/maintenance-request-form-dialog';
-import { ManageUserLabAccessDialog } from '@/components/admin/manage-user-lab-access-dialog'; // This might be used by LabSpecificMembersTab
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { ManageUserLabAccessDialog } from '@/components/admin/manage-user-lab-access-dialog';
+import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp, where, limit } from 'firebase/firestore';
 import { addNotification, addAuditLog, manageLabMembership_SA } from '@/lib/firestore-helpers';
-import { daysOfWeekArray, maintenanceRequestStatuses } from '@/lib/app-constants';
-import { format, parseISO, isValid as isValidDateFn, isBefore, compareAsc, subDays, startOfHour, differenceInHours } from 'date-fns';
-import { cn, formatDateSafe, getResourceStatusBadge as getResourceUIAvailabilityBadge } from '@/lib/utils';
-import Link from 'next/link';
 
-// Import new Tab Components
+// Import Tab Components
 import { ManageLabsTab } from '@/components/admin/lab-operations/tabs/ManageLabsTab';
 import { GlobalClosuresTab } from '@/components/admin/lab-operations/tabs/GlobalClosuresTab';
 import { SystemMaintenanceLogTab } from '@/components/admin/lab-operations/tabs/SystemMaintenanceLogTab';
@@ -46,7 +32,6 @@ import { LabSpecificOverviewTab } from '@/components/admin/lab-operations/tabs/L
 import { LabSpecificClosuresTab } from '@/components/admin/lab-operations/tabs/LabSpecificClosuresTab';
 import { LabSpecificMaintenanceTab } from '@/components/admin/lab-operations/tabs/LabSpecificMaintenanceTab';
 import { LabSpecificMembersTab } from '@/components/admin/lab-operations/tabs/LabSpecificMembersTab';
-
 
 const GLOBAL_CONTEXT_VALUE = "--system-wide--";
 
@@ -65,13 +50,6 @@ interface LabMembershipDisplay extends LabMembership {
 
 type LabSortableColumn = 'name' | 'location' | 'resourceCount' | 'memberCount';
 
-const labSortOptions: { value: string; label: string }[] = [
-  { value: 'name-asc', label: 'Name (A-Z)' }, { value: 'name-desc', label: 'Name (Z-A)' },
-  { value: 'location-asc', label: 'Location (A-Z)' }, { value: 'location-desc', label: 'Location (Z-A)' },
-  { value: 'resourceCount-asc', label: 'Resources (Low-High)' }, { value: 'resourceCount-desc', label: 'Resources (High-Low)' },
-  { value: 'memberCount-asc', label: 'Members (Low-High)' }, { value: 'memberCount-desc', label: 'Members (High-Low)' },
-];
-
 export default function LabOperationsCenterPage() {
     const { toast } = useToast();
     const { currentUser, isLoading: authIsLoading } = useAuth();
@@ -79,12 +57,17 @@ export default function LabOperationsCenterPage() {
     const router = useRouter();
     const pathname = usePathname();
 
+    const {
+      labs,
+      allUsers: allUsersData,
+      allTechnicians: allTechniciansForMaintenance,
+      isLoading: isAdminDataLoading
+    } = useAdminData();
+
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [activeContextId, setActiveContextId] = useState<string>(GLOBAL_CONTEXT_VALUE);
     
     const [allResourcesForCountsAndChecks, setAllResourcesForCountsAndChecks] = useState<Resource[]>([]);
-
-    const [labs, setLabs] = useState<Lab[]>([]);
     const [labToDelete, setLabToDelete] = useState<Lab | null>(null);
     const [isLabFormDialogOpen, setIsLabFormDialogOpen] = useState(false);
     const [editingLab, setEditingLab] = useState<Lab | null>(null);
@@ -96,7 +79,6 @@ export default function LabOperationsCenterPage() {
 
     const [allBlackoutDates, setAllBlackoutDates] = useState<BlackoutDate[]>([]);
     const [allRecurringRules, setAllRecurringRules] = useState<RecurringBlackoutRule[]>([]);
-
     const [activeGlobalClosuresTab, setActiveGlobalClosuresTab] = useState('specific-dates-global');
     const [isGlobalDateFormDialogOpen, setIsGlobalDateFormDialogOpen] = useState(false);
     const [editingGlobalBlackoutDate, setEditingGlobalBlackoutDate] = useState<BlackoutDate | null>(null);
@@ -120,8 +102,6 @@ export default function LabOperationsCenterPage() {
     const [activeLabSpecificClosureSearchTerm, setActiveLabSpecificClosureSearchTerm] = useState('');
 
     const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRequest[]>([]);
-    const [allTechniciansForMaintenance, setAllTechniciansForMaintenance] = useState<User[]>([]);
-    const [allUsersData, setAllUsersData] = useState<User[]>([]);
     const [isMaintenanceFormDialogOpen, setIsMaintenanceFormDialogOpen] = useState(false);
     const [editingMaintenanceRequest, setEditingMaintenanceRequest] = useState<MaintenanceRequest | null>(null);
     
@@ -155,7 +135,7 @@ export default function LabOperationsCenterPage() {
 
     const canManageAny = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
 
-    const fetchAllAdminData = useCallback(async () => {
+    const fetchRemainingData = useCallback(async () => {
       if (!canManageAny) {
         setIsLoadingData(false);
         setIsLabAccessRequestLoading(false);
@@ -164,11 +144,8 @@ export default function LabOperationsCenterPage() {
       setIsLoadingData(true);
       setIsLabAccessRequestLoading(true);
       try {
-        const [labsSnapshot, resourcesSnapshot, usersSnapshot, techniciansSnapshot, maintenanceSnapshot, boSnapshot, rrSnapshot, membershipsSnapshot, bookingsSnapshot] = await Promise.all([
-          getDocs(query(collection(db, "labs"), orderBy("name", "asc"))),
+        const [resourcesSnapshot, maintenanceSnapshot, boSnapshot, rrSnapshot, membershipsSnapshot, bookingsSnapshot] = await Promise.all([
           getDocs(query(collection(db, "resources"))),
-          getDocs(query(collection(db, "users"), orderBy("name", "asc"))),
-          getDocs(query(collection(db, "users"), where("role", "==", "Technician"), orderBy("name", "asc"))),
           getDocs(query(collection(db, "maintenanceRequests"), orderBy("dateReported", "desc"))),
           getDocs(query(collection(db, "blackoutDates"), orderBy("date", "asc"))),
           getDocs(query(collection(db, "recurringBlackoutRules"), orderBy("name", "asc"))),
@@ -176,16 +153,8 @@ export default function LabOperationsCenterPage() {
           getDocs(query(collection(db, "bookings"), orderBy("startTime", "asc"))),
         ]);
 
-        const fetchedLabs = labsSnapshot.docs.map(docSnap => ({id: docSnap.id, ...docSnap.data(), createdAt: (docSnap.data().createdAt as Timestamp)?.toDate(), lastUpdatedAt: (docSnap.data().lastUpdatedAt as Timestamp)?.toDate()} as Lab));
-        setLabs(fetchedLabs);
-
         const fetchedResourcesAll = resourcesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Resource));
         setAllResourcesForCountsAndChecks(fetchedResourcesAll);
-
-        const fetchedUsersAll = usersSnapshot.docs.map(d => ({id: d.id, ...d.data(), createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date()} as User));
-        setAllUsersData(fetchedUsersAll);
-
-        setAllTechniciansForMaintenance(techniciansSnapshot.docs.map(d => ({id: d.id, ...d.data(), createdAt: (d.data().createdAt as Timestamp)?.toDate() || new Date()} as User)));
 
         setMaintenanceRequests(maintenanceSnapshot.docs.map(docSnap => {
             const data = docSnap.data();
@@ -201,8 +170,8 @@ export default function LabOperationsCenterPage() {
         const pendingRequestsPromises = allFetchedMemberships 
             .filter(m => m.status === 'pending_approval')
             .map(async (membershipData) => {
-                const user = fetchedUsersAll.find(u => u.id === membershipData.userId);
-                const lab = fetchedLabs.find(l => l.id === membershipData.labId);
+                const user = allUsersData.find(u => u.id === membershipData.userId);
+                const lab = labs.find(l => l.id === membershipData.labId);
                 return {
                     ...membershipData,
                     id: membershipData.id!,
@@ -218,7 +187,7 @@ export default function LabOperationsCenterPage() {
         const bookingsWithDetailsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
             const data = docSnap.data();
             const resource = fetchedResourcesAll.find(r => r.id === data.resourceId);
-            const user = fetchedUsersAll.find(u => u.id === data.userId);
+            const user = allUsersData.find(u => u.id === data.userId);
             return {
               id: docSnap.id,
               ...data,
@@ -231,22 +200,25 @@ export default function LabOperationsCenterPage() {
           });
         setAllBookingsState(await Promise.all(bookingsWithDetailsPromises));
 
-
       } catch (error: any) {
-        toast({ title: "Error", description: `Failed to load data: ${error.message}`, variant: "destructive" });
+        toast({ title: "Error", description: `Failed to load operational data: ${error.message}`, variant: "destructive" });
       } finally {
         setIsLoadingData(false);
         setIsLabAccessRequestLoading(false);
       }
-    }, [toast, canManageAny]);
+    }, [toast, canManageAny, allUsersData, labs]);
 
-    useEffect(() => { fetchAllAdminData(); }, [fetchAllAdminData]);
+    useEffect(() => {
+        if (!isAdminDataLoading) {
+            fetchRemainingData();
+        }
+    }, [fetchRemainingData, isAdminDataLoading]);
 
     useEffect(() => {
       const preselectedLabIdFromUrl = searchParamsObj.get('labId');
       if (preselectedLabIdFromUrl && labs.find(l => l.id === preselectedLabIdFromUrl)) {
         setActiveContextId(preselectedLabIdFromUrl);
-      } else if (preselectedLabIdFromUrl) { // If labId in URL is invalid, default to global
+      } else if (preselectedLabIdFromUrl) {
         const newSearchParams = new URLSearchParams(searchParamsObj.toString());
         newSearchParams.delete('labId');
         router.replace(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
@@ -382,13 +354,13 @@ export default function LabOperationsCenterPage() {
             toast({ title: `Lab ${editingLab ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingLab ? 'updated' : 'created'}.` });
             setIsLabFormDialogOpen(false);
             setEditingLab(null); 
-            await fetchAllAdminData();
+            fetchRemainingData();
         } catch (error: any) {
             toast({ title: "Save Error", description: `Could not save lab: ${error.message}`, variant: "destructive" });
         } finally {
             setIsLoadingData(false);
         }
-    }, [currentUser, canManageAny, editingLab, fetchAllAdminData, toast, setIsLoadingData, setIsLabFormDialogOpen, setEditingLab]);
+    }, [currentUser, canManageAny, editingLab, fetchRemainingData, toast]);
 
     const handleDeleteLab = useCallback(async (labId: string) => {
         if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
@@ -413,7 +385,7 @@ export default function LabOperationsCenterPage() {
             await addAuditLog(currentUser.id, currentUser.name, 'LAB_DELETED', { entityType: 'Lab', entityId: labId, details: `Lab '${deletedLab.name}' deleted.` });
             toast({ title: "Lab Deleted", description: `Lab "${deletedLab.name}" removed.`, variant: "destructive" });
             setLabToDelete(null);
-            await fetchAllAdminData();
+            fetchRemainingData();
             if (activeContextId === labId) {
                 setActiveContextId(GLOBAL_CONTEXT_VALUE);
             }
@@ -422,7 +394,7 @@ export default function LabOperationsCenterPage() {
         } finally {
             setIsLoadingData(false);
         }
-    }, [currentUser, canManageAny, labs, allResourcesForCountsAndChecks, userLabMemberships, fetchAllAdminData, toast, setIsLoadingData, setLabToDelete, activeContextId, setActiveContextId]);
+    }, [currentUser, canManageAny, labs, allResourcesForCountsAndChecks, userLabMemberships, fetchRemainingData, toast, activeContextId]);
 
     const activeLabFilterCount = useMemo(() => [activeLabSearchTerm !== '', activeLabSortBy !== 'name-asc'].filter(Boolean).length, [activeLabSearchTerm, activeLabSortBy]);
 
@@ -478,10 +450,10 @@ export default function LabOperationsCenterPage() {
             }
             setIsGlobalDateFormDialogOpen(false);
             setEditingGlobalBlackoutDate(null);
-            await fetchAllAdminData();
+            fetchRemainingData();
         } catch (error: any) { toast({ title: "Save Failed", description: `Failed to save global blackout date: ${error.message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
-    }, [currentUser, editingGlobalBlackoutDate, fetchAllAdminData, toast]);
+    }, [currentUser, editingGlobalBlackoutDate, fetchRemainingData, toast]);
 
     const handleDeleteGlobalBlackoutDate = useCallback(async (blackoutDateId: string) => {
         if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
@@ -494,10 +466,10 @@ export default function LabOperationsCenterPage() {
             addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Global Blackout Date for ${dateString ? format(parseISO(dateString), 'PPP') : 'Invalid Date'} (Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`});
             toast({ title: "Global Blackout Date Removed", variant: "destructive" });
             setGlobalDateToDelete(null);
-            await fetchAllAdminData();
+            fetchRemainingData();
         } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete global blackout date: ${error.message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
-    }, [currentUser, allBlackoutDates, fetchAllAdminData, toast]);
+    }, [currentUser, allBlackoutDates, fetchRemainingData, toast]);
 
     const handleOpenNewGlobalRecurringDialog = useCallback(() => { setEditingGlobalRecurringRule(null); setIsGlobalRecurringFormDialogOpen(true); }, []);
     const handleOpenEditGlobalRecurringDialog = useCallback((rule: RecurringBlackoutRule) => { setEditingGlobalRecurringRule(rule); setIsGlobalRecurringFormDialogOpen(true); }, []);
@@ -523,10 +495,10 @@ export default function LabOperationsCenterPage() {
             }
             setIsGlobalRecurringFormDialogOpen(false);
             setEditingGlobalRecurringRule(null);
-            await fetchAllAdminData();
+            fetchRemainingData();
         } catch (error: any) { toast({ title: "Save Failed", description: `Failed to save global recurring rule: ${error.message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
-    }, [currentUser, editingGlobalRecurringRule, fetchAllAdminData, toast]);
+    }, [currentUser, editingGlobalRecurringRule, fetchRemainingData, toast]);
 
     const handleDeleteGlobalRecurringRule = useCallback(async (ruleId: string) => {
         if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
@@ -538,10 +510,10 @@ export default function LabOperationsCenterPage() {
             addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Global recurring rule '${deletedRuleObj.name}' deleted.`});
             toast({ title: "Global Recurring Rule Removed", variant: "destructive" });
             setGlobalRuleToDelete(null);
-            await fetchAllAdminData();
+            fetchRemainingData();
         } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete global recurring rule: ${error.message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
-    }, [currentUser, allRecurringRules, fetchAllAdminData, toast]);
+    }, [currentUser, allRecurringRules, fetchRemainingData, toast]);
     
     const handleApplyGlobalClosureDialogFilters = useCallback(() => {
         setActiveGlobalClosureSearchTerm(tempGlobalClosureSearchTerm);
@@ -612,10 +584,10 @@ export default function LabOperationsCenterPage() {
             }
             setIsLabSpecificDateFormDialogOpen(false);
             setEditingLabSpecificBlackoutDate(null);
-            await fetchAllAdminData();
+            fetchRemainingData();
         } catch (error: any) { toast({ title: "Save Failed", description: `Failed to save lab-specific blackout date: ${error.message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
-    }, [currentUser, editingLabSpecificBlackoutDate, activeContextId, fetchAllAdminData, toast]);
+    }, [currentUser, editingLabSpecificBlackoutDate, activeContextId, fetchRemainingData, toast]);
 
     const handleDeleteLabSpecificBlackoutDate = useCallback(async (blackoutDateId: string) => {
         if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
@@ -628,10 +600,10 @@ export default function LabOperationsCenterPage() {
             addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Lab-specific Blackout Date for ${dateString ? format(parseISO(dateString), 'PPP') : 'Invalid Date'} (Lab ID: ${deletedDateObj.labId}, Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`});
             toast({ title: "Lab Blackout Date Removed", variant: "destructive" });
             setLabSpecificDateToDelete(null);
-            await fetchAllAdminData();
+            fetchRemainingData();
         } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete lab-specific blackout date: ${error.message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
-    }, [currentUser, allBlackoutDates, fetchAllAdminData, toast]);
+    }, [currentUser, allBlackoutDates, fetchRemainingData, toast]);
 
     const handleOpenNewLabSpecificRecurringDialog = useCallback(() => { setEditingLabSpecificRecurringRule(null); setIsLabSpecificRecurringFormDialogOpen(true); }, []);
     const handleOpenEditLabSpecificRecurringDialog = useCallback((rule: RecurringBlackoutRule) => { setEditingLabSpecificRecurringRule(rule); setIsLabSpecificRecurringFormDialogOpen(true); }, []);
@@ -657,10 +629,10 @@ export default function LabOperationsCenterPage() {
             }
             setIsLabSpecificRecurringFormDialogOpen(false);
             setEditingLabSpecificRecurringRule(null);
-            await fetchAllAdminData();
+            fetchRemainingData();
         } catch (error: any) { toast({ title: "Save Failed", description: `Failed to save lab-specific recurring rule: ${error.message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
-    }, [currentUser, editingLabSpecificRecurringRule, activeContextId, fetchAllAdminData, toast]);
+    }, [currentUser, editingLabSpecificRecurringRule, activeContextId, fetchRemainingData, toast]);
 
     const handleDeleteLabSpecificRecurringRule = useCallback(async (ruleId: string) => {
         if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
@@ -672,10 +644,10 @@ export default function LabOperationsCenterPage() {
             addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Lab-specific recurring rule '${deletedRuleObj.name}' (Lab ID: ${deletedRuleObj.labId}) deleted.`});
             toast({ title: "Lab Recurring Rule Removed", variant: "destructive" });
             setLabSpecificRuleToDelete(null);
-            await fetchAllAdminData();
+            fetchRemainingData();
         } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete lab-specific recurring rule: ${error.message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
-    }, [currentUser, allRecurringRules, fetchAllAdminData, toast]);
+    }, [currentUser, allRecurringRules, fetchRemainingData, toast]);
 
     const handleApplyLabSpecificClosureDialogFilters = useCallback(() => {
         setActiveLabSpecificClosureSearchTerm(tempLabSpecificClosureSearchTerm);
@@ -932,10 +904,10 @@ export default function LabOperationsCenterPage() {
             }
             setIsMaintenanceFormDialogOpen(false);
             setEditingMaintenanceRequest(null);
-            await fetchAllAdminData();
+            fetchRemainingData();
         } catch (error: any) { toast({ title: `${editingMaintenanceRequest ? "Update" : "Logging"} Failed`, description: `Failed to ${editingMaintenanceRequest ? "update" : "log"} request: ${error.message}`, variant: "destructive" });
         } finally { setIsLoadingData(false); }
-    }, [currentUser, editingMaintenanceRequest, allResourcesForCountsAndChecks, fetchAllAdminData, toast]);
+    }, [currentUser, editingMaintenanceRequest, allResourcesForCountsAndChecks, fetchRemainingData, toast]);
 
     const activeMaintenanceFilterCount = useMemo(() => [activeMaintenanceSearchTerm !== '', activeMaintenanceFilterStatus !== 'all', activeMaintenanceFilterResourceId !== 'all', activeMaintenanceFilterTechnicianId !== 'all'].filter(Boolean).length, [activeMaintenanceSearchTerm, activeMaintenanceFilterStatus, activeMaintenanceFilterResourceId, activeMaintenanceFilterTechnicianId]);
     const canEditAnyMaintenanceRequest = useMemo(() => currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Technician'), [currentUser]);
@@ -962,7 +934,7 @@ export default function LabOperationsCenterPage() {
           );
           if (result.success) {
             toast({ title: "Success", description: result.message });
-            fetchAllAdminData(); 
+            fetchRemainingData(); 
           } else {
             toast({ title: "Action Failed", description: result.message, variant: "destructive" });
           }
@@ -971,7 +943,7 @@ export default function LabOperationsCenterPage() {
         } finally {
           setIsProcessingLabAccessAction(prev => ({ ...prev, [actionKey]: false }));
         }
-    }, [currentUser, fetchAllAdminData, toast]);
+    }, [currentUser, fetchRemainingData, toast]);
 
     const labSpecificMembershipsDisplay = useMemo(() => {
       if (activeContextId === GLOBAL_CONTEXT_VALUE || isLoadingData) return [];
@@ -994,8 +966,6 @@ export default function LabOperationsCenterPage() {
         });
     }, [activeContextId, userLabMemberships, allUsersData, isLoadingData]);
 
-
-    // Lab Specific Reports Data
     const labSpecificResources = useMemo(() => {
         if (!selectedLabDetails) return [];
         return allResourcesForCountsAndChecks.filter(res => res.labId === selectedLabDetails.id);
@@ -1021,8 +991,8 @@ export default function LabOperationsCenterPage() {
         if (activeContextId === GLOBAL_CONTEXT_VALUE) {
             if (tabFromUrl && ["labs", "global-closures", "maintenance-log", "lab-access-requests"].includes(tabFromUrl)) {
                 setCurrentActiveSystemTab(tabFromUrl);
-            } else if (tabFromUrl) { // Invalid tab for global context
-                setCurrentActiveSystemTab("labs"); // Default
+            } else if (tabFromUrl) {
+                setCurrentActiveSystemTab("labs");
                 const newSearchParams = new URLSearchParams(searchParamsObj.toString());
                 newSearchParams.set('tab', "labs");
                 router.replace(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
@@ -1030,8 +1000,8 @@ export default function LabOperationsCenterPage() {
         } else {
              if (tabFromUrl && ["lab-details", "lab-closures", "lab-maintenance", "lab-members"].includes(tabFromUrl)) {
                 setCurrentActiveLabTab(tabFromUrl);
-            } else if (tabFromUrl) { // Invalid tab for lab context
-                setCurrentActiveLabTab("lab-details"); // Default
+            } else if (tabFromUrl) {
+                setCurrentActiveLabTab("lab-details");
                 const newSearchParams = new URLSearchParams(searchParamsObj.toString());
                 newSearchParams.set('tab', "lab-details");
                 router.replace(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
@@ -1066,14 +1036,14 @@ export default function LabOperationsCenterPage() {
           icon={Cog}
           actions={pageHeaderActionsContent}
         />
-        {isLoadingData && (
+        {(isLoadingData || isAdminDataLoading) && (
           <div className="flex justify-center items-center py-20">
               <Loader2 className="h-12 w-12 animate-spin text-primary"/>
               <p className="ml-4 text-lg text-muted-foreground">Loading Lab Operations Data...</p>
           </div>
         )}
 
-        {!isLoadingData && activeContextId === GLOBAL_CONTEXT_VALUE && (
+        {!(isLoadingData || isAdminDataLoading) && activeContextId === GLOBAL_CONTEXT_VALUE && (
           <Tabs value={currentActiveSystemTab} onValueChange={handleSystemTabChange} className="w-full">
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
               <TabsTrigger value="labs">Manage Labs</TabsTrigger>
@@ -1085,7 +1055,7 @@ export default function LabOperationsCenterPage() {
             <TabsContent value="labs" className="mt-6">
                 <ManageLabsTab
                     labs={filteredLabs}
-                    isLoadingData={isLoadingData}
+                    isLoadingData={isLoadingData || isAdminDataLoading}
                     activeLabFilterCount={activeLabFilterCount}
                     isLabFilterDialogOpen={isLabFilterDialogOpen}
                     setIsLabFilterDialogOpen={setIsLabFilterDialogOpen}
@@ -1107,7 +1077,7 @@ export default function LabOperationsCenterPage() {
             
             <TabsContent value="global-closures" className="mt-6">
                 <GlobalClosuresTab
-                    isLoadingData={isLoadingData}
+                    isLoadingData={isLoadingData || isAdminDataLoading}
                     activeGlobalClosuresTab={activeGlobalClosuresTab}
                     setActiveGlobalClosuresTab={setActiveGlobalClosuresTab}
                     isGlobalClosureFilterDialogOpen={isGlobalClosureFilterDialogOpen}
@@ -1136,7 +1106,7 @@ export default function LabOperationsCenterPage() {
             
             <TabsContent value="maintenance-log" className="mt-6">
                 <SystemMaintenanceLogTab
-                    isLoadingData={isLoadingData}
+                    isLoadingData={isLoadingData || isAdminDataLoading}
                     filteredMaintenanceRequests={filteredMaintenanceRequests}
                     activeMaintenanceFilterCount={activeMaintenanceFilterCount}
                     isMaintenanceFilterDialogOpen={isMaintenanceFilterDialogOpen}
@@ -1172,7 +1142,7 @@ export default function LabOperationsCenterPage() {
           </Tabs>
         )}
 
-        {!isLoadingData && activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
+        {!(isLoadingData || isAdminDataLoading) && activeContextId !== GLOBAL_CONTEXT_VALUE && selectedLabDetails && (
            <Tabs value={currentActiveLabTab} onValueChange={handleLabTabChange} className="w-full">
               <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
                   <TabsTrigger value="lab-details">Lab Overview</TabsTrigger>
@@ -1292,7 +1262,7 @@ export default function LabOperationsCenterPage() {
             allLabs={labs}
             open={isLabSpecificMemberAddDialogOpen}
             onOpenChange={setIsLabSpecificMemberAddDialogOpen}
-            onMembershipUpdate={fetchAllAdminData}
+            onMembershipUpdate={fetchRemainingData}
             preselectedLabId={activeContextId} 
           />
         )}

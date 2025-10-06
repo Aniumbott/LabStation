@@ -19,13 +19,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Save, PlusCircle, Network, Info, Loader2 } from 'lucide-react';
+import { Save, PlusCircle, Network, Loader2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Resource, ResourceStatus, ResourceType, Lab } from '@/types';
 import { resourceStatusesList } from '@/lib/app-constants';
 import { parseISO, format, isValid as isValidDateFn } from 'date-fns';
-import { Timestamp } from 'firebase/firestore';
-import { Separator } from '@/components/ui/separator';
+import { useAdminData } from '@/contexts/AdminDataContext';
 import { cn } from '@/lib/utils';
 
 const VALID_REMOTE_PROTOCOLS = ['RDP', 'SSH', 'VNC', 'Other'] as const;
@@ -56,7 +55,7 @@ const resourceFormSchema = z.object({
     username: z.string().max(100).optional().or(z.literal('')),
     port: z.preprocess(
       (val) => (String(val ?? '').trim() === '' ? undefined : String(val).trim()),
-      z.string().optional().transform((val) => { // Added .optional() here
+      z.string().optional().transform((val) => {
         if (val === undefined || val === '') return undefined;
         const num = Number(val);
         return isNaN(num) ? undefined : num;
@@ -78,14 +77,13 @@ interface ResourceFormDialogProps {
   onOpenChange: (open: boolean) => void;
   initialResource: Resource | null;
   onSave: (data: ResourceFormValues, resourceIdToUpdate?: string) => Promise<void>;
-  resourceTypes: ResourceType[];
-  labs: Lab[];
 }
 
 export function ResourceFormDialog({
-    open, onOpenChange, initialResource, onSave, resourceTypes, labs
+    open, onOpenChange, initialResource, onSave
 }: ResourceFormDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { labs, resourceTypes, isLoading: isAdminDataLoading } = useAdminData();
 
   const form = useForm<ResourceFormValues>({
     resolver: zodResolver(resourceFormSchema),
@@ -159,11 +157,11 @@ export function ResourceFormDialog({
   }, [initialResource, resourceTypes, labs, form]);
 
   useEffect(() => {
-    if (open) {
+    if (open && !isAdminDataLoading) {
       setIsSubmitting(false);
       resetForm();
     }
-  }, [open, resetForm]);
+  }, [open, resetForm, isAdminDataLoading]);
 
 
   async function onSubmit(data: ResourceFormValues) {
@@ -175,7 +173,7 @@ export function ResourceFormDialog({
             remoteAccess: data.remoteAccess ? {
                 ...data.remoteAccess,
                 port: (data.remoteAccess.port === null || data.remoteAccess.port === undefined)
-                      ? null // Store as null if empty/undefined for DB consistency
+                      ? null
                       : Number(data.remoteAccess.port),
             } : undefined,
         };
@@ -194,6 +192,21 @@ export function ResourceFormDialog({
     } finally {
       setIsSubmitting(false);
     }
+  }
+  
+  if (isAdminDataLoading) {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{initialResource ? 'Edit Resource' : 'Add New Resource'}</DialogTitle>
+                </DialogHeader>
+                <div className="flex justify-center items-center py-10">
+                    <Loader2 className="mr-2 h-6 w-6 animate-spin"/> Loading form data...
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
   }
 
   return (
@@ -253,7 +266,7 @@ export function ResourceFormDialog({
                                 <SelectContent>
                                 {labs.length > 0 ? labs.map(lab => (
                                     <SelectItem key={lab.id} value={lab.id}>{lab.name}</SelectItem>
-                                )) : <SelectItem value="disabled_placeholder_no_labs" disabled>No labs available. Add labs in Lab Management.</SelectItem>}
+                                )) : <SelectItem value="disabled_placeholder_no_labs" disabled>No labs available. Add labs in Lab Operations.</SelectItem>}
                                 </SelectContent>
                             </Select>
                              {labs.length === 0 && <FormDescription className="text-destructive">Please define labs in Admin &gt; Lab Operations.</FormDescription>}
@@ -399,8 +412,6 @@ export function ResourceFormDialog({
                           </FormItem>
                       )}
                    />
-
-                  
                   <div className="pt-2">
                       <h3 className="text-md font-medium mb-3 flex items-center border-t pt-5 mt-3">
                           <Network className="mr-2 h-5 w-5 text-primary" /> Remote Access Details (Optional)

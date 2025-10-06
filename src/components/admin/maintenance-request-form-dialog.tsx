@@ -24,7 +24,7 @@ import type { MaintenanceRequest, MaintenanceRequestStatus, User, Resource, Role
 import { maintenanceRequestStatuses } from '@/lib/app-constants';
 import { Timestamp, serverTimestamp } from 'firebase/firestore';
 import { format, parseISO, isValid as isValidDateFn } from 'date-fns';
-import { Separator } from '@/components/ui/separator';
+import { useAdminData } from '@/contexts/AdminDataContext';
 
 const UNASSIGNED_TECHNICIAN_VALUE = "--unassigned--";
 
@@ -54,8 +54,6 @@ interface MaintenanceRequestFormDialogProps {
   onOpenChange: (open: boolean) => void;
   initialRequest: MaintenanceRequest | null;
   onSave: (data: MaintenanceRequestFormValues) => Promise<void>;
-  technicians: User[];
-  resources: Resource[]; // All resources passed in
   currentUserRole?: RoleName;
   labContextId?: string; // Optional: To filter resources if adding from a lab-specific context
 }
@@ -68,16 +66,17 @@ const formatForDateTimeLocal = (date?: Date | null): string => {
 };
 
 export function MaintenanceRequestFormDialog({
-    open, onOpenChange, initialRequest, onSave, technicians, resources, currentUserRole, labContextId
+    open, onOpenChange, initialRequest, onSave, currentUserRole, labContextId
 }: MaintenanceRequestFormDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { allResources, allTechnicians, isLoading: isAdminDataLoading } = useAdminData();
   
   const availableResourcesForForm = useMemo(() => {
     if (labContextId) {
-      return resources.filter(r => r.labId === labContextId);
+      return allResources.filter(r => r.labId === labContextId);
     }
-    return resources; // If no labContextId, show all resources
-  }, [resources, labContextId]);
+    return allResources;
+  }, [allResources, labContextId]);
   
   const form = useForm<MaintenanceRequestFormValues>({
     resolver: zodResolver(maintenanceRequestFormSchema),
@@ -153,6 +152,20 @@ export function MaintenanceRequestFormDialog({
       return currentUserRole === 'Admin';
   }, [currentUserRole]);
 
+  if (isAdminDataLoading) {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{initialRequest ? 'Edit Maintenance Request' : 'Log New Maintenance Request'}</DialogTitle>
+                </DialogHeader>
+                <div className="flex justify-center items-center py-10">
+                    <Loader2 className="mr-2 h-6 w-6 animate-spin"/> Loading form data...
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -181,7 +194,7 @@ export function MaintenanceRequestFormDialog({
                             <FormControl><SelectTrigger><SelectValue placeholder={availableResourcesForForm.length > 0 ? "Select a resource" : (labContextId ? "No resources in this lab" : "No resources available")} /></SelectTrigger></FormControl>
                             <SelectContent>
                             {availableResourcesForForm.map(res => (
-                                <SelectItem key={res.id} value={res.id}>{res.name} {labContextId ? '' : `(${res.labId ? (resources.find(rMain => rMain.id === res.id)?.labName || 'Unknown Lab') : 'No Lab Assigned'})`}</SelectItem>
+                                <SelectItem key={res.id} value={res.id}>{res.name} {labContextId ? '' : `(${res.labId ? (allResources.find(rMain => rMain.id === res.id)?.labId ? labs.find(l=>l.id === res.labId)?.name : 'Unknown Lab') : 'No Lab Assigned'})`}</SelectItem>
                             ))}
                             </SelectContent>
                         </Select>
@@ -237,7 +250,7 @@ export function MaintenanceRequestFormDialog({
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select a technician" /></SelectTrigger></FormControl>
                                 <SelectContent>
                                   <SelectItem value={UNASSIGNED_TECHNICIAN_VALUE}>Unassigned</SelectItem>
-                                {technicians.map(tech => (
+                                {allTechnicians.map(tech => (
                                     <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
                                 ))}
                                 </SelectContent>
