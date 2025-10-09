@@ -591,11 +591,11 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
       if (isNewBooking) {
         const bookingPayloadForServerAction = {
             resourceId: formData.resourceId!,
+            userId: bookingForUserId,
             startTime: finalStartTime,
             endTime: finalEndTime,
             status: finalStatus,
             notes: formData.notes || '',
-            userId: bookingForUserId
         };
         const actingUserForSA = { id: actingUserId, name: actingUserName };
         let newBookingId: string | undefined;

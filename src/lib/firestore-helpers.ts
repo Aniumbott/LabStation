@@ -122,6 +122,10 @@ export async function processWaitlistForResource(
     if (waitlistSnapshot.empty) {
       return;
     }
+    
+    const resourceDoc = await adminDb.collection('resources').doc(resourceId).get();
+    const resourceName = resourceDoc.exists ? resourceDoc.data()?.name || 'the resource' : 'the resource';
+    const resourceLabId = resourceDoc.exists ? resourceDoc.data()?.labId : null;
 
     const freedStart = freedSlotStartTime;
     const freedEnd = freedSlotEndTime;
@@ -133,7 +137,10 @@ export async function processWaitlistForResource(
       const waitlistedStartTime = (waitlistedBookingData.startTime as Timestamp).toDate();
       const waitlistedEndTime = (waitlistedBookingData.endTime as Timestamp).toDate();
       const waitlistedUserId = waitlistedBookingData.userId;
-      const waitlistedUserName = waitlistedBookingData.userName || 'Waitlisted User';
+      
+      const userDoc = await adminDb.collection('users').doc(waitlistedUserId).get();
+      const waitlistedUserName = userDoc.exists ? userDoc.data()?.name || 'Waitlisted User' : 'Waitlisted User';
+
 
       if (waitlistedStartTime >= freedStart && waitlistedEndTime <= freedEnd) {
         const conflictQuery = adminDb.collection('bookings')
@@ -155,14 +162,11 @@ export async function processWaitlistForResource(
             {
               entityType: 'Booking',
               entityId: waitlistedBookingId,
-              details: `Booking for resource ${resourceId} by user ${waitlistedUserId} automatically promoted from waitlist to Pending.`
+              details: `Booking for resource ${resourceName} (ID: ${resourceId}) by user ${waitlistedUserName} (ID: ${waitlistedUserId}) automatically promoted from waitlist to Pending.`
             }
           );
 
           try {
-            const resourceDoc = await adminDb.collection('resources').doc(resourceId).get();
-            const resourceName = resourceDoc.exists ? resourceDoc.data()?.name || 'the resource' : 'the resource';
-
             await addNotification(
               waitlistedUserId,
               'Booking Promoted from Waitlist!',
@@ -175,13 +179,25 @@ export async function processWaitlistForResource(
           }
 
           try {
-            const adminUsersQuery = adminDb.collection('users').where('role', 'in', ['Admin', 'Technician']);
-            const adminSnapshot = await adminUsersQuery.get();
-            const adminNotificationPromises = adminSnapshot.docs.map(adminDoc => {
+            let adminsToNotifyQuery = adminDb.collection('users').where('role', 'in', ['Admin', 'Technician']);
+            const adminSnapshot = await adminsToNotifyQuery.get();
+            const allAdminsAndTechs = adminSnapshot.docs.map(d => d.id);
+            let finalAdminIdsToNotify = allAdminsAndTechs;
+
+            if (resourceLabId) {
+                const labMembershipsQuery = adminDb.collection('labMemberships').where('labId', '==', resourceLabId).where('status', '==', 'active');
+                const labMembershipsSnapshot = await labMembershipsQuery.get();
+                const labMemberUserIds = labMembershipsSnapshot.docs.map(d => d.data().userId);
+                
+                finalAdminIdsToNotify = allAdminsAndTechs.filter(adminId => labMemberUserIds.includes(adminId));
+            }
+            if (finalAdminIdsToNotify.length === 0) finalAdminIdsToNotify = allAdminsAndTechs;
+
+            const adminNotificationPromises = finalAdminIdsToNotify.map(adminId => {
               return addNotification(
-                adminDoc.id,
+                adminId,
                 'Booking Promoted - Needs Approval',
-                `A waitlisted booking for ${resourceId} by user ${waitlistedUserId} (${waitlistedUserName}) has been promoted to 'Pending' and requires approval.`,
+                `A waitlisted booking for ${resourceName} by user ${waitlistedUserName} has been promoted to 'Pending' and requires approval.`,
                 'booking_promoted_admin',
                 `/admin/booking-requests?bookingId=${waitlistedBookingId}`
               );

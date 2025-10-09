@@ -275,7 +275,7 @@ export default function ResourceDetailPage() {
 
   useEffect(() => {
     const fetchBookingsForResourceUser = async () => {
-      if (!resourceId || !currentUser?.id || !hasAccess) {
+      if (!resourceId || !currentUser?.id) {
         setResourceUserBookings([]);
         return;
       }
