@@ -2,7 +2,7 @@
 'use client';
 
 import type { FC } from 'react';
-import { CalendarDays, Repeat, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle2, CalendarOff, Edit, Trash2, Tag, FileText } from 'lucide-react';
+import { CalendarDays, Repeat, PlusCircle, Filter as FilterIcon, FilterX, CheckCircle2, CalendarOff, Edit, Trash2, Tag, FileText, Search as SearchIcon } from 'lucide-react';
 import type { BlackoutDate, RecurringBlackoutRule } from '@/types';
 import { Button } from "@/components/ui/button";
 import {
