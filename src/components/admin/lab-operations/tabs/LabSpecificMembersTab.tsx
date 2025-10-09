@@ -56,7 +56,7 @@ export const LabSpecificMembersTab: FC<LabSpecificMembersTabProps> = ({
           <CardDescription>Manage user access and view members of this lab.</CardDescription>
         </div>
         <Button size="sm" onClick={() => setIsLabSpecificMemberAddDialogOpen(true)} disabled={!canManageAny}>
-          <UserPlus2 className="mr-2 h-4 w-4"/> Add New Member to {selectedLabDetails.name}
+          <UserPlus2 className="mr-2 h-4 w-4"/> Add
         </Button>
       </CardHeader>
       <CardContent className="p-0">
