@@ -69,9 +69,10 @@ export function MaintenanceRequestFormDialog({
     open, onOpenChange, initialRequest, onSave, currentUserRole, labContextId
 }: MaintenanceRequestFormDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { allResources, allTechnicians, isLoading: isAdminDataLoading } = useAdminData();
+  const { allResources, allTechnicians, isLoading: isAdminDataLoading, labs } = useAdminData();
   
   const availableResourcesForForm = useMemo(() => {
+    if (!allResources) return []; // Ensure allResources is not undefined
     if (labContextId) {
       return allResources.filter(r => r.labId === labContextId);
     }
@@ -104,7 +105,7 @@ export function MaintenanceRequestFormDialog({
       });
     } else {
       form.reset({
-        resourceId: availableResourcesForForm.length > 0 ? availableResourcesForForm[0].id : '',
+        resourceId: availableResourcesForForm && availableResourcesForForm.length > 0 ? availableResourcesForForm[0].id : '',
         issueDescription: '',
         status: 'Open',
         assignedTechnicianId: '',
@@ -189,17 +190,17 @@ export function MaintenanceRequestFormDialog({
                         <Select
                             onValueChange={field.onChange}
                             value={field.value || ''}
-                            disabled={!!initialRequest || availableResourcesForForm.length === 0 || isSubmitting}
+                            disabled={!!initialRequest || !availableResourcesForForm || availableResourcesForForm.length === 0 || isSubmitting}
                         >
-                            <FormControl><SelectTrigger><SelectValue placeholder={availableResourcesForForm.length > 0 ? "Select a resource" : (labContextId ? "No resources in this lab" : "No resources available")} /></SelectTrigger></FormControl>
+                            <FormControl><SelectTrigger><SelectValue placeholder={availableResourcesForForm && availableResourcesForForm.length > 0 ? "Select a resource" : (labContextId ? "No resources in this lab" : "No resources available")} /></SelectTrigger></FormControl>
                             <SelectContent>
-                            {availableResourcesForForm.map(res => (
-                                <SelectItem key={res.id} value={res.id}>{res.name} {labContextId ? '' : `(${res.labId ? (allResources.find(rMain => rMain.id === res.id)?.labId ? labs.find(l=>l.id === res.labId)?.name : 'Unknown Lab') : 'No Lab Assigned'})`}</SelectItem>
+                            {availableResourcesForForm && availableResourcesForForm.map(res => (
+                                <SelectItem key={res.id} value={res.id}>{res.name} {labContextId ? '' : `(${res.labId ? (labs.find(l=>l.id === res.labId)?.name || 'Unknown Lab') : 'No Lab Assigned'})`}</SelectItem>
                             ))}
                             </SelectContent>
                         </Select>
                         {!!initialRequest && <FormDescription>Resource cannot be changed after logging.</FormDescription>}
-                        {availableResourcesForForm.length === 0 && <FormDescription className="text-destructive">{labContextId ? "No resources found in this lab." : "No resources found. Add resources first."}</FormDescription>}
+                        {(!availableResourcesForForm || availableResourcesForForm.length === 0) && <FormDescription className="text-destructive">{labContextId ? "No resources found in this lab." : "No resources found. Add resources first."}</FormDescription>}
                         <FormMessage />
                         </FormItem>
                     )}
@@ -294,7 +295,7 @@ export function MaintenanceRequestFormDialog({
             </div>
             </ScrollArea>
             <DialogFooter className="pt-6 border-t">
-              <Button type="submit" disabled={isSubmitting || (!!initialRequest && !canAdminister && !canEditAsTechnician && !canOnlyEditDescription) || (availableResourcesForForm.length === 0 && !initialRequest) }>
+              <Button type="submit" disabled={isSubmitting || (!!initialRequest && !canAdminister && !canEditAsTechnician && !canOnlyEditDescription) || (!availableResourcesForForm || availableResourcesForForm.length === 0 && !initialRequest) }>
                 {isSubmitting
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   : (initialRequest ? <Save className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />)
