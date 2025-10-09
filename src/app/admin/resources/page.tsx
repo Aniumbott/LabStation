@@ -14,6 +14,7 @@ import { Package, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIco
 import type { Resource, ResourceStatus, ResourceType, Lab, LabMembership } from '@/types';
 import { resourceStatusesList } from '@/lib/app-constants';
 import { useAuth } from '@/components/auth-context';
+import { useAdminData } from '@/contexts/AdminDataContext';
 import {
   Table,
   TableBody,
@@ -85,10 +86,10 @@ export default function AdminResourcesPage() {
   const { toast } = useToast();
   const { currentUser } = useAuth();
   const router = useRouter();
+  
+  const { labs: fetchedLabs, resourceTypes: fetchedResourceTypes, isLoading: isAdminDataLoading, refetch: refetchAdminData } = useAdminData();
 
   const [allResourcesDataSource, setAllResourcesDataSource] = useState<Resource[]>([]);
-  const [fetchedResourceTypes, setFetchedResourceTypes] = useState<ResourceType[]>([]);
-  const [fetchedLabs, setFetchedLabs] = useState<Lab[]>([]);
   const [userLabMemberships, setUserLabMemberships] = useState<LabMembership[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [activeTab, setActiveTab] = useState("resources");
@@ -120,21 +121,15 @@ export default function AdminResourcesPage() {
 
   const canManageResourcesAndTypes = useMemo(() => currentUser && currentUser.role === 'Admin', [currentUser]);
 
-  const fetchInitialData = useCallback(async () => {
+  const fetchResourcePageData = useCallback(async () => {
+    if (!currentUser) {
+        setIsLoadingData(false);
+        return;
+    }
     setIsLoadingData(true);
     try {
-      const labsQueryInstance = query(collection(db, "labs"), orderBy("name", "asc"));
-      const labsSnapshot = await getDocs(labsQueryInstance);
-      const rLabs: Lab[] = labsSnapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        name: docSnap.data().name || 'Unnamed Lab',
-        location: docSnap.data().location,
-        description: docSnap.data().description,
-      }));
-      setFetchedLabs(rLabs);
-
       let activeUserLabIds: string[] = [];
-      if (currentUser && currentUser.id && currentUser.role !== 'Admin') {
+      if (currentUser.id && currentUser.role !== 'Admin') {
         const membershipsQuery = query(collection(db, 'labMemberships'), where('userId', '==', currentUser.id), where('status', '==', 'active'));
         const membershipsSnapshot = await getDocs(membershipsQuery);
         const memberships = membershipsSnapshot.docs.map(mDoc => mDoc.data() as LabMembership);
@@ -144,7 +139,7 @@ export default function AdminResourcesPage() {
 
       const resourcesQuery = query(collection(db, "resources"), orderBy("name", "asc"));
       const resourcesSnapshot = await getDocs(resourcesQuery);
-      const fetchedResourcesPromises = resourcesSnapshot.docs.map(async (docSnap) => {
+      let fetchedResources = resourcesSnapshot.docs.map(docSnap => {
         const data = docSnap.data();
         return {
           id: docSnap.id,
@@ -174,27 +169,14 @@ export default function AdminResourcesPage() {
           createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
         } as Resource;
       });
-      let fetchedResources = await Promise.all(fetchedResourcesPromises);
 
-      if (currentUser && currentUser.role !== 'Admin') {
+      if (currentUser.role !== 'Admin') {
         fetchedResources = fetchedResources.filter(resource => activeUserLabIds.includes(resource.labId) || !resource.labId);
       }
       setAllResourcesDataSource(fetchedResources);
-
-      const typesQueryInstance = query(collection(db, "resourceTypes"), orderBy("name", "asc"));
-      const typesSnapshot = await getDocs(typesQueryInstance);
-      const rTypes: ResourceType[] = typesSnapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        name: docSnap.data().name || 'Unnamed Type',
-        description: docSnap.data().description || '',
-      }));
-      setFetchedResourceTypes(rTypes);
-
     } catch (error: any) {
-      toast({ title: "Data Load Error", description: `Failed to load initial data: ${error.message}`, variant: "destructive" });
+      toast({ title: "Data Load Error", description: `Failed to load resources: ${error.message}`, variant: "destructive" });
       setAllResourcesDataSource([]);
-      setFetchedResourceTypes([]);
-      setFetchedLabs([]);
       setUserLabMemberships([]);
     }
     setIsLoadingData(false);
@@ -202,10 +184,10 @@ export default function AdminResourcesPage() {
 
 
   useEffect(() => {
-    if (currentUser) {
-        fetchInitialData();
+    if (!isAdminDataLoading) {
+      fetchResourcePageData();
     }
-  }, [fetchInitialData, currentUser]);
+  }, [fetchResourcePageData, isAdminDataLoading]);
 
   useEffect(() => {
     if (isResourceFilterDialogOpen) {
@@ -403,14 +385,14 @@ export default function AdminResourcesPage() {
       }
       setIsResourceFormDialogOpen(false);
       setEditingResource(null);
-      await fetchInitialData();
+      await fetchResourcePageData();
+      refetchAdminData();
     } catch (error: any) {
         toast({ title: "Save Failed", description: `Could not save resource: ${error.message}`, variant: "destructive" });
-        setIsLoadingData(false);
     } finally {
       setIsLoadingData(false);
     }
-  }, [currentUser, canManageResourcesAndTypes, editingResource, fetchedResourceTypes, fetchedLabs, fetchInitialData, toast]);
+  }, [currentUser, canManageResourcesAndTypes, editingResource, fetchedResourceTypes, fetchedLabs, fetchResourcePageData, toast, refetchAdminData]);
 
 
   const activeResourceFilterCount = useMemo(() => [
@@ -503,14 +485,13 @@ export default function AdminResourcesPage() {
           toast({ title: `Resource Type ${editingResourceType ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingResourceType ? 'updated' : 'created'}.` });
           setIsResourceTypeFormDialogOpen(false);
           setEditingResourceType(null);
-          await fetchInitialData();
+          refetchAdminData();
       } catch (error: any) {
           toast({ title: "Save Failed", description: `Could not save resource type: ${error.message}`, variant: "destructive" });
-          setIsLoadingData(false);
       } finally {
           setIsLoadingData(false);
       }
-  }, [currentUser, canManageResourcesAndTypes, editingResourceType, fetchInitialData, toast]);
+  }, [currentUser, canManageResourcesAndTypes, editingResourceType, refetchAdminData, toast]);
 
   const handleDeleteResourceType = useCallback(async (typeId: string) => {
       if (!currentUser || !currentUser.name || !canManageResourcesAndTypes) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
@@ -528,14 +509,13 @@ export default function AdminResourcesPage() {
           await addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_DELETED', { entityType: 'ResourceType', entityId: typeId, details: `Resource Type '${deletedType.name}' deleted.` });
           toast({ title: "Resource Type Deleted", description: `"${deletedType.name}" removed.`, variant: "destructive" });
           setTypeToDelete(null);
-          await fetchInitialData();
+          refetchAdminData();
       } catch (error: any) {
           toast({ title: "Delete Error", description: `Could not delete resource type: ${error.message}`, variant: "destructive" });
-          setIsLoadingData(false);
       } finally {
           setIsLoadingData(false);
       }
-  }, [currentUser, canManageResourcesAndTypes, fetchedResourceTypes, allResourcesDataSource, fetchInitialData, toast]);
+  }, [currentUser, canManageResourcesAndTypes, fetchedResourceTypes, allResourcesDataSource, refetchAdminData, toast]);
 
   const activeResourceTypeFilterSortCount = useMemo(() => [activeResourceTypeSearchTerm !== '', activeResourceTypeSortBy !== 'name-asc'].filter(Boolean).length, [activeResourceTypeSearchTerm, activeResourceTypeSortBy]);
 
@@ -751,7 +731,7 @@ export default function AdminResourcesPage() {
                 </div>
                 </CardHeader>
                 <CardContent className="p-0">
-                {isLoadingData && filteredResourceTypesForDisplay.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
+                {(isLoadingData || isAdminDataLoading) && filteredResourceTypesForDisplay.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
                 ) : filteredResourceTypesForDisplay.length > 0 ? (
                     <div className="overflow-x-auto border rounded-b-md">
                     <Table>
@@ -796,10 +776,12 @@ export default function AdminResourcesPage() {
       </Tabs>
 
       {isResourceFormDialogOpen && (
-        <ResourceFormDialog open={isResourceFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceFormDialogOpen(isOpen); if (!isOpen) setEditingResource(null);}} initialResource={editingResource} onSave={handleSaveResource} resourceTypes={fetchedResourceTypes} labs={currentUser?.role === 'Admin' ? fetchedLabs : fetchedLabs.filter(lab => userLabMemberships.some(m => m.labId === lab.id && m.status === 'active'))}/>
+        <ResourceFormDialog open={isResourceFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceFormDialogOpen(isOpen); if (!isOpen) setEditingResource(null);}} initialResource={editingResource} onSave={handleSaveResource}/>
       )}
       {isResourceTypeFormDialogOpen && (<ResourceTypeFormDialog open={isResourceTypeFormDialogOpen} onOpenChange={(isOpen) => { setIsResourceTypeFormDialogOpen(isOpen); if (!isOpen) setEditingResourceType(null); }} initialType={editingResourceType} onSave={handleSaveResourceType} />)}
 
     </div>
   );
 }
+
+    

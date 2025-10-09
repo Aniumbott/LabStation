@@ -50,6 +50,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/components/auth-context';
+import { useAdminData } from '@/contexts/AdminDataContext';
 import { userRolesList } from '@/lib/app-constants';
 import { addNotification, addAuditLog } from '@/lib/firestore-helpers';
 import { db } from '@/lib/firebase';
@@ -89,10 +90,8 @@ const getStatusBadgeClasses = (status: UserStatus): string => {
 export default function UsersPage() {
   const { toast } = useToast();
   const { currentUser: loggedInUser } = useAuth();
+  const { allUsers: users, labs: allLabs, isLoading: isAdminDataLoading, refetch: refetchAdminData } = useAdminData();
 
-  const [users, setUsers] = useState<UserType[]>([]);
-  const [allLabs, setAllLabs] = useState<Lab[]>([]);
-  const [isLoadingData, setIsLoadingData] = useState(true);
   const [userToDelete, setUserToDelete] = useState<UserType | null>(null);
   const [userToReject, setUserToReject] = useState<UserType | null>(null);
   const [isAddUserFormDialogOpen, setIsAddUserFormDialogOpen] = useState(false); // For adding new users
@@ -100,6 +99,7 @@ export default function UsersPage() {
   const [isManageUserDetailsAndAccessDialogOpen, setIsManageUserDetailsAndAccessDialogOpen] = useState(false);
   const [selectedUserForManagement, setSelectedUserForManagement] = useState<UserType | null>(null);
 
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState('');
@@ -110,56 +110,6 @@ export default function UsersPage() {
   const [activeFilterRole, setActiveFilterRole] = useState<RoleName | 'all'>('all');
   const [activeFilterStatus, setActiveFilterStatus] = useState<UserStatus | 'all'>('all');
 
-  const fetchData = useCallback(async () => {
-    setIsLoadingData(true);
-    try {
-      const usersCollectionRef = collection(db, "users");
-      const usersQuery = query(usersCollectionRef, orderBy("name", "asc"));
-      const usersSnapshot = await getDocs(usersQuery);
-      
-      let fetchedUsers: UserType[] = usersSnapshot.docs.map((docSnap) => {
-        const data = docSnap.data();
-        return {
-            id: docSnap.id,
-            name: data.name || 'N/A',
-            email: data.email || 'N/A',
-            role: data.role || 'Researcher',
-            status: data.status || 'pending_approval',
-            avatarUrl: data.avatarUrl || 'https://placehold.co/100x100.png',
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
-        } as UserType;
-      });
-      fetchedUsers.sort((a,b) => {
-        if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
-        if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
-        return (a.name || '').localeCompare(b.name || '');
-      });
-      setUsers(fetchedUsers);
-
-      const labsCollectionRef = collection(db, "labs");
-      const labsQuery = query(labsCollectionRef, orderBy("name", "asc"));
-      const labsSnapshot = await getDocs(labsQuery);
-      const fetchedLabs: Lab[] = labsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Lab));
-      setAllLabs(fetchedLabs);
-
-    } catch (error: any) {
-      toast({ title: "Data Load Error", description: `Failed to load users: ${error.message}`, variant: "destructive" });
-      setUsers([]);
-      setAllLabs([]);
-    }
-    setIsLoadingData(false);
-  }, [toast]);
-
-  useEffect(() => {
-    if (loggedInUser?.role === 'Admin') {
-      fetchData();
-    } else {
-      setUsers([]);
-      setAllLabs([]);
-      setIsLoadingData(false);
-    }
-  }, [loggedInUser, fetchData]);
-
   useEffect(() => {
     if (isFilterDialogOpen) {
       setTempSearchTerm(activeSearchTerm);
@@ -169,7 +119,13 @@ export default function UsersPage() {
   }, [isFilterDialogOpen, activeSearchTerm, activeFilterRole, activeFilterStatus]);
 
   const filteredUsers = useMemo(() => {
-    return users.filter(user => {
+    let sortedUsers = [...users].sort((a,b) => {
+        if (a.status === 'pending_approval' && b.status !== 'pending_approval') return -1;
+        if (a.status !== 'pending_approval' && b.status === 'pending_approval') return 1;
+        return (a.name || '').localeCompare(b.name || '');
+    });
+
+    return sortedUsers.filter(user => {
       const lowerSearchTerm = activeSearchTerm.toLowerCase();
       const nameMatch = user.name && user.name.toLowerCase().includes(lowerSearchTerm);
       const emailMatch = user.email && user.email.toLowerCase().includes(lowerSearchTerm);
@@ -215,7 +171,7 @@ export default function UsersPage() {
       return;
     }
     
-    setIsLoadingData(true);
+    setIsProcessingAction(true);
     try {
       const newUserId = `admin_created_${Date.now()}_${Math.random().toString(36).substring(2,9)}`;
       const userDocRef = doc(db, "users", newUserId);
@@ -231,13 +187,13 @@ export default function UsersPage() {
       toast({ title: 'User Profile Created (Admin)', description: `User profile for ${data.name} created. Note: This does not create a Firebase Auth account for login.` });
       
       setIsAddUserFormDialogOpen(false);
-      await fetchData();
+      refetchAdminData();
     } catch (error: any) {
       toast({ title: "Save Error", description: `Could not save user profile: ${error.message}`, variant: "destructive" });
     } finally {
-      setIsLoadingData(false);
+      setIsProcessingAction(false);
     }
-  }, [loggedInUser, fetchData, toast]);
+  }, [loggedInUser, refetchAdminData, toast]);
 
   const handleDeleteUser = useCallback(async (userId: string) => {
     if (!loggedInUser || loggedInUser.role !== 'Admin') {
@@ -250,7 +206,7 @@ export default function UsersPage() {
         return;
     }
 
-    setIsLoadingData(true);
+    setIsProcessingAction(true);
     try {
       const userDocRef = doc(db, "users", userId);
       
@@ -266,13 +222,13 @@ export default function UsersPage() {
       await addAuditLog(loggedInUser.id, loggedInUser.name || 'Admin', 'USER_DELETED', { entityType: 'User', entityId: userId, details: `User profile for ${userToDeleteDetails.name} (ID: ${userId}) and all their lab memberships deleted. Associated Firebase Auth user may still exist if one was created via signup.` });
       toast({ title: "User Profile Deleted", description: `User "${userToDeleteDetails.name}" Firestore profile and lab memberships removed. Note: Their Firebase Auth account may still exist.`, variant: "destructive" });
       setUserToDelete(null);
-      await fetchData();
+      refetchAdminData();
     } catch (error: any) {
       toast({ title: "Delete Error", description: `Could not delete user profile: ${error.message}`, variant: "destructive" });
     } finally {
-      setIsLoadingData(false);
+      setIsProcessingAction(false);
     }
-  }, [loggedInUser, users, fetchData, toast]);
+  }, [loggedInUser, users, refetchAdminData, toast]);
 
   const handleApproveUser = useCallback(async (userId: string) => {
     if (!loggedInUser || !loggedInUser.id || loggedInUser.role !== 'Admin') {
@@ -285,7 +241,7 @@ export default function UsersPage() {
         return;
     }
 
-    setIsLoadingData(true);
+    setIsProcessingAction(true);
     try {
         const userDocRef = doc(db, "users", userId);
         await updateDoc(userDocRef, { status: 'active' });
@@ -307,13 +263,13 @@ export default function UsersPage() {
         } catch (notificationError: any) {
             toast({ title: "Notification Error", description: `Failed to send approval notification: ${notificationError.message}`, variant: "destructive" });
         }
-        await fetchData();
+        refetchAdminData();
     } catch (error: any) {
         toast({ title: "Approval Error", description: `Could not approve user: ${error.message}`, variant: "destructive" });
     } finally {
-        setIsLoadingData(false);
+      setIsProcessingAction(false);
     }
-  }, [loggedInUser, users, fetchData, toast]);
+  }, [loggedInUser, users, refetchAdminData, toast]);
 
   const handleConfirmRejectUser = useCallback(async () => {
     if (!userToReject || !loggedInUser || !loggedInUser.id || loggedInUser.role !== 'Admin') {
@@ -328,7 +284,7 @@ export default function UsersPage() {
         return;
     }
 
-    setIsLoadingData(true);
+    setIsProcessingAction(true);
     try {
       const userDocRef = doc(db, "users", userToReject.id);
       await deleteDoc(userDocRef);
@@ -339,13 +295,13 @@ export default function UsersPage() {
       await addAuditLog(loggedInUser.id, adminName, 'USER_REJECTED', { entityType: 'User', entityId: userToReject.id, details: `Signup request for ${rejectedUserName} (ID: ${userToReject.id}) rejected by ${adminName} and profile removed. Associated Firebase Auth user may still exist.` });
       toast({ title: 'Signup Request Rejected', description: `Signup request for ${rejectedUserName} has been rejected and profile removed. Note: Their Firebase Auth account may still exist.`, variant: 'destructive' });
       setUserToReject(null);
-      await fetchData();
+      refetchAdminData();
     } catch (error: any) {
       toast({ title: "Rejection Error", description: `Could not reject signup: ${error.message}`, variant: "destructive" });
     } finally {
-      setIsLoadingData(false);
+      setIsProcessingAction(false);
     }
-  }, [userToReject, loggedInUser, users, fetchData, toast]);
+  }, [userToReject, loggedInUser, users, refetchAdminData, toast]);
 
   const activeFilterCount = useMemo(() => [activeSearchTerm !== '', activeFilterRole !== 'all', activeFilterStatus !== 'all'].filter(Boolean).length, [activeSearchTerm, activeFilterRole, activeFilterStatus]);
   
@@ -452,7 +408,7 @@ export default function UsersPage() {
           </div>
         }
       />
-      {isLoadingData ? (
+      {isAdminDataLoading ? (
          <div className="flex justify-center items-center py-10 text-muted-foreground">
            <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
            Loading users...
@@ -500,7 +456,7 @@ export default function UsersPage() {
                         <>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleApproveUser(user.id)} disabled={isLoadingData}>
+                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleApproveUser(user.id)} disabled={isProcessingAction}>
                                 <ThumbsUp className="h-4 w-4 text-green-600" />
                                 <span className="sr-only">Approve User</span>
                               </Button>
@@ -511,7 +467,7 @@ export default function UsersPage() {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToReject(user)} disabled={isLoadingData}>
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToReject(user)} disabled={isProcessingAction}>
                                     <ThumbsDown className="h-4 w-4" />
                                     <span className="sr-only">Reject User Signup</span>
                                 </Button>
@@ -540,7 +496,7 @@ export default function UsersPage() {
                         <>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenManageUserDetailsAndAccessDialog(user)} disabled={isLoadingData}>
+                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenManageUserDetailsAndAccessDialog(user)} disabled={isProcessingAction}>
                                 <Settings2 className="h-4 w-4" />
                                 <span className="sr-only">Manage User</span>
                               </Button>
@@ -551,7 +507,7 @@ export default function UsersPage() {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToDelete(user)} disabled={isLoadingData}>
+                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => setUserToDelete(user)} disabled={isProcessingAction}>
                                       <Trash2 className="h-4 w-4" />
                                       <span className="sr-only">Delete User Profile</span>
                                   </Button>
@@ -607,7 +563,7 @@ export default function UsersPage() {
                     <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
                 </Button>
             ) : (
-              !isLoadingData && users.length === 0 && canAddUsers && (
+              !isAdminDataLoading && users.length === 0 && canAddUsers && (
                 <Button onClick={handleOpenNewUserDialog}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add First User Profile
                 </Button>
@@ -635,10 +591,11 @@ export default function UsersPage() {
             setIsManageUserDetailsAndAccessDialogOpen(isOpen);
             if (!isOpen) setSelectedUserForManagement(null);
           }}
-          onUpdate={fetchData}
+          onUpdate={refetchAdminData}
         />
       )}
     </div>
   );
 }
 
+    

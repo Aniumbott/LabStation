@@ -7,6 +7,7 @@ import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, Filte
 import type { Booking, Resource, User } from '@/types';
 import { addNotification, addAuditLog, processWaitlistForResource } from '@/lib/firestore-helpers';
 import { useAuth } from '@/components/auth-context';
+import { useAdminData } from '@/contexts/AdminDataContext';
 import {
   Table,
   TableBody,
@@ -49,9 +50,9 @@ const bookingStatusesForApprovalFilter: Array<'all' | 'Pending' | 'Waitlisted'> 
 export default function BookingRequestsPage() {
   const { toast } = useToast();
   const { currentUser: loggedInUserFromContext } = useAuth();
-  const [allBookingsState, setAllBookingsState] = useState<(Booking & { resourceName?: string, userName?: string })[]>([]);
-  const [allResources, setAllResources] = useState<Resource[]>([]);
+  const { allResources, allUsers, isLoading: isAdminDataLoading } = useAdminData();
 
+  const [allBookingsState, setAllBookingsState] = useState<(Booking & { resourceName?: string, userName?: string })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
@@ -74,14 +75,6 @@ export default function BookingRequestsPage() {
     }
     setIsLoading(true);
     try {
-      const resourcesQueryInstance = query(collection(db, "resources"), orderBy("name", "asc"));
-      const resourcesSnapshot = await getDocs(resourcesQueryInstance);
-      const fetchedResources = resourcesSnapshot.docs.map(d => ({
-        id: d.id,
-        ...(d.data() as Omit<Resource, 'id'>)
-      } as Resource));
-      setAllResources(fetchedResources);
-
       const bookingsRef = collection(db, "bookings");
       const q = query(bookingsRef, where("status", "in", ["Pending", "Waitlisted"]), orderBy("startTime", "asc"));
       const querySnapshot = await getDocs(q);
@@ -91,15 +84,12 @@ export default function BookingRequestsPage() {
         let resourceName = "Unknown Resource";
         let userName = "Unknown User";
 
-        if (data.resourceId) {
-          const resourceDoc = await getDoc(doc(db, 'resources', data.resourceId));
-          if (resourceDoc.exists()) resourceName = resourceDoc.data()?.name || resourceName;
-        }
-        if (data.userId) {
-          const userDoc = await getDoc(doc(db, 'users', data.userId));
-          if (userDoc.exists()) userName = userDoc.data()?.name || userName;
-        }
-
+        const resource = allResources.find(r => r.id === data.resourceId);
+        if (resource) resourceName = resource.name;
+        
+        const user = allUsers.find(u => u.id === data.userId);
+        if (user) userName = user.name;
+        
         return {
           id: docSnap.id,
           resourceId: data.resourceId,
@@ -125,12 +115,14 @@ export default function BookingRequestsPage() {
       setAllBookingsState([]);
     }
     setIsLoading(false);
-  }, [canManageBookingRequests]);
+  }, [canManageBookingRequests, allResources, allUsers]);
 
 
   useEffect(() => {
-    fetchBookingRequestsAndRelatedData();
-  }, [fetchBookingRequestsAndRelatedData]);
+    if (!isAdminDataLoading) {
+      fetchBookingRequestsAndRelatedData();
+    }
+  }, [fetchBookingRequestsAndRelatedData, isAdminDataLoading]);
 
   useEffect(() => {
     if (isFilterDialogOpen) {
@@ -374,9 +366,9 @@ export default function BookingRequestsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="requestResourceDialog">Resource</Label>
-                        <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId} disabled={isLoading || allResources.length === 0}>
+                        <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId} disabled={isAdminDataLoading || allResources.length === 0}>
                             <SelectTrigger id="requestResourceDialog" className="h-9 mt-1">
-                              <SelectValue placeholder={isLoading ? "Loading..." : (allResources.length > 0 ? "Filter by Resource" : "No resources found")} />
+                              <SelectValue placeholder={isAdminDataLoading ? "Loading..." : (allResources.length > 0 ? "Filter by Resource" : "No resources found")} />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Resources</SelectItem>
@@ -413,7 +405,7 @@ export default function BookingRequestsPage() {
           }
         />
 
-        {isLoading && allBookingsState.length === 0 ? (
+        {(isLoading || isAdminDataLoading) && allBookingsState.length === 0 ? (
           <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading requests...</div>
         ) : bookingsForApproval.length > 0 ? (
           <Card className="shadow-lg">
@@ -518,3 +510,5 @@ export default function BookingRequestsPage() {
     </TooltipProvider>
   );
 }
+
+    
