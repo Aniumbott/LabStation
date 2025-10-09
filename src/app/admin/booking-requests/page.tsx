@@ -50,9 +50,10 @@ const bookingStatusesForApprovalFilter: Array<'all' | 'Pending' | 'Waitlisted'> 
 export default function BookingRequestsPage() {
   const { toast } = useToast();
   const { currentUser: loggedInUserFromContext } = useAuth();
-  const { allResources, allUsers, isLoading: isAdminDataLoading } = useAdminData();
+  const { allUsers, isLoading: isAdminDataLoading } = useAdminData();
 
   const [allBookingsState, setAllBookingsState] = useState<(Booking & { resourceName?: string, userName?: string })[]>([]);
+  const [allResources, setAllResources] = useState<Resource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
@@ -75,6 +76,10 @@ export default function BookingRequestsPage() {
     }
     setIsLoading(true);
     try {
+      const resourcesSnapshot = await getDocs(query(collection(db, "resources"), orderBy("name", "asc")));
+      const fetchedResources = resourcesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Resource));
+      setAllResources(fetchedResources);
+
       const bookingsRef = collection(db, "bookings");
       const q = query(bookingsRef, where("status", "in", ["Pending", "Waitlisted"]), orderBy("startTime", "asc"));
       const querySnapshot = await getDocs(q);
@@ -84,7 +89,7 @@ export default function BookingRequestsPage() {
         let resourceName = "Unknown Resource";
         let userName = "Unknown User";
 
-        const resource = allResources.find(r => r.id === data.resourceId);
+        const resource = fetchedResources.find(r => r.id === data.resourceId);
         if (resource) resourceName = resource.name;
         
         const user = allUsers.find(u => u.id === data.userId);
@@ -115,7 +120,7 @@ export default function BookingRequestsPage() {
       setAllBookingsState([]);
     }
     setIsLoading(false);
-  }, [canManageBookingRequests, allResources, allUsers]);
+  }, [canManageBookingRequests, allUsers]);
 
 
   useEffect(() => {
@@ -366,13 +371,13 @@ export default function BookingRequestsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="requestResourceDialog">Resource</Label>
-                        <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId} disabled={isAdminDataLoading || allResources.length === 0}>
+                        <Select value={tempFilterResourceId} onValueChange={setTempFilterResourceId} disabled={isAdminDataLoading || (allResources && allResources.length === 0)}>
                             <SelectTrigger id="requestResourceDialog" className="h-9 mt-1">
-                              <SelectValue placeholder={isAdminDataLoading ? "Loading..." : (allResources.length > 0 ? "Filter by Resource" : "No resources found")} />
+                              <SelectValue placeholder={isAdminDataLoading ? "Loading..." : (allResources && allResources.length > 0 ? "Filter by Resource" : "No resources found")} />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Resources</SelectItem>
-                                {allResources
+                                {allResources && allResources
                                     .map(resource => (
                                         <SelectItem key={resource.id} value={resource.id}>{resource.name}</SelectItem>
                                     ))
@@ -510,5 +515,3 @@ export default function BookingRequestsPage() {
     </TooltipProvider>
   );
 }
-
-    
