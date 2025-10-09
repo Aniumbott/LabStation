@@ -56,7 +56,6 @@ import { addNotification, addAuditLog } from '@/lib/firestore-helpers';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, Timestamp, query, orderBy, where, writeBatch as firestoreWriteBatch } from 'firebase/firestore';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
 
@@ -597,5 +596,3 @@ export default function UsersPage() {
     </div>
   );
 }
-
-    

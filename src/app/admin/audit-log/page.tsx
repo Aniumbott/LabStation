@@ -43,7 +43,8 @@ const auditActionTypesForFilter: AuditActionType[] = [
   'BOOKING_CREATED', 'BOOKING_UPDATED', 'BOOKING_APPROVED', 'BOOKING_REJECTED', 'BOOKING_CANCELLED', 'BOOKING_PROMOTED', 'BOOKING_WAITLISTED',
   'MAINTENANCE_CREATED', 'MAINTENANCE_UPDATED',
   'BLACKOUT_DATE_CREATED', 'BLACKOUT_DATE_UPDATED', 'BLACKOUT_DATE_DELETED',
-  'RECURRING_RULE_CREATED', 'RECURRING_RULE_UPDATED', 'RECURRING_RULE_DELETED'
+  'RECURRING_RULE_CREATED', 'RECURRING_RULE_UPDATED', 'RECURRING_RULE_DELETED',
+  'LAB_MEMBERSHIP_REQUESTED', 'LAB_MEMBERSHIP_APPROVED', 'LAB_MEMBERSHIP_REJECTED', 'LAB_MEMBERSHIP_REVOKED', 'LAB_MEMBERSHIP_CANCELLED', 'LAB_MEMBERSHIP_GRANTED', 'LAB_MEMBERSHIP_LEFT'
 ];
 
 
@@ -181,7 +182,7 @@ export default function AuditLogPage() {
                 </DialogDescription>
               </DialogHeader>
               <ScrollArea className="max-h-[60vh] mt-4">
-                <div className="space-y-4 pl-1 pr-1">
+                <div className="space-y-4 px-4 py-2">
                   <div>
                     <Label htmlFor="auditSearchDialog">Search (User, Action, Entity, Details)</Label>
                     <div className="relative mt-1">

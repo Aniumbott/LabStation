@@ -14,7 +14,6 @@ import { formatDateSafe } from '@/lib/utils';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { User, Tag, Info, CalendarDays, Hash, Database, Fingerprint } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
 
 interface AuditLogDetailsDialogProps {
   logEntry: AuditLogEntry | null;
@@ -57,7 +56,7 @@ export function AuditLogDetailsDialog({ logEntry, isOpen, onOpenChange }: AuditL
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="max-h-[60vh] mt-4">
-          <div className="space-y-2 pl-1 pr-1">
+          <div className="space-y-2 px-4 py-2">
             <DetailItem icon={CalendarDays} label="Timestamp" value={formatDateSafe(logEntry.timestamp, 'N/A', 'PPP, p')} />
             <DetailItem icon={User} label="User Name" value={logEntry.userName} />
             <DetailItem icon={Fingerprint} label="User ID" value={logEntry.userId} />

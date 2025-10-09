@@ -118,7 +118,6 @@ export interface MaintenanceRequest {
   assignedTechnicianId?: string | null;
   dateReported: Date;
   dateResolved?: Date | null;
-  resolutionNotes?: string | null;
   resourceName?: string;
   reportedByUserName?: string;
   assignedTechnicianName?: string;
