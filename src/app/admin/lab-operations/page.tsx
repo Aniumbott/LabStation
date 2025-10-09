@@ -32,6 +32,8 @@ import { LabSpecificOverviewTab } from '@/components/admin/lab-operations/tabs/L
 import { LabSpecificClosuresTab } from '@/components/admin/lab-operations/tabs/LabSpecificClosuresTab';
 import { LabSpecificMaintenanceTab } from '@/components/admin/lab-operations/tabs/LabSpecificMaintenanceTab';
 import { LabSpecificMembersTab } from '@/components/admin/lab-operations/tabs/LabSpecificMembersTab';
+import { cn } from '@/lib/utils';
+import { isValid as isValidDateFn, parseISO } from 'date-fns';
 
 const GLOBAL_CONTEXT_VALUE = "--system-wide--";
 
@@ -107,19 +109,19 @@ export default function LabOperationsCenterPage() {
     
     const [isMaintenanceFilterDialogOpen, setIsMaintenanceFilterDialogOpen] = useState(false);
     const [tempMaintenanceSearchTerm, setTempMaintenanceSearchTerm] = useState('');
-    const [tempMaintenanceFilterStatus, setTempMaintenanceFilterStatus] = useState<MaintenanceRequestStatus | 'all'>('all');
+    const [tempMaintenanceFilterStatus, setTempMaintenanceFilterStatus] = useState<MaintenanceRequest['status'] | 'all'>('all');
     const [tempMaintenanceFilterResourceId, setTempMaintenanceFilterResourceId] = useState<string>('all');
     const [tempMaintenanceFilterTechnicianId, setTempMaintenanceFilterTechnicianId] = useState<string>('all');
     const [activeMaintenanceSearchTerm, setActiveMaintenanceSearchTerm] = useState('');
-    const [activeMaintenanceFilterStatus, setActiveMaintenanceFilterStatus] = useState<MaintenanceRequestStatus | 'all'>('all');
+    const [activeMaintenanceFilterStatus, setActiveMaintenanceFilterStatus] = useState<MaintenanceRequest['status'] | 'all'>('all');
     const [activeMaintenanceFilterResourceId, setActiveMaintenanceFilterResourceId] = useState<string>('all');
     const [activeMaintenanceFilterTechnicianId, setActiveMaintenanceFilterTechnicianId] = useState<string>('all');
 
     const [isLabSpecificMaintenanceFilterDialogOpen, setIsLabSpecificMaintenanceFilterDialogOpen] = useState(false);
     const [tempLabSpecificMaintenanceSearchTerm, setTempLabSpecificMaintenanceSearchTerm] = useState('');
     const [activeLabSpecificMaintenanceSearchTerm, setActiveLabSpecificMaintenanceSearchTerm] = useState('');
-    const [tempLabSpecificMaintenanceStatusFilter, setTempLabSpecificMaintenanceStatusFilter] = useState<MaintenanceRequestStatus | 'all'>('all');
-    const [activeLabSpecificMaintenanceStatusFilter, setActiveLabSpecificMaintenanceStatusFilter] = useState<MaintenanceRequestStatus | 'all'>('all');
+    const [tempLabSpecificMaintenanceStatusFilter, setTempLabSpecificMaintenanceStatusFilter] = useState<MaintenanceRequest['status'] | 'all'>('all');
+    const [activeLabSpecificMaintenanceStatusFilter, setActiveLabSpecificMaintenanceStatusFilter] = useState<MaintenanceRequest['status'] | 'all'>('all');
     const [tempLabSpecificMaintenanceResourceIdFilter, setTempLabSpecificMaintenanceResourceIdFilter] = useState<string>('all'); 
     const [activeLabSpecificMaintenanceResourceIdFilter, setActiveLabSpecificMaintenanceResourceIdFilter] = useState<string>('all');
     const [tempLabSpecificMaintenanceTechnicianIdFilter, setTempLabSpecificMaintenanceTechnicianIdFilter] = useState<string>('all');
@@ -410,7 +412,7 @@ export default function LabOperationsCenterPage() {
             const lowerSearchTerm = activeGlobalClosureSearchTerm.toLowerCase();
             const reasonMatch = bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm);
             const dateString = typeof bd.date === 'string' ? bd.date : (bd.date as unknown as Timestamp)?.toDate()?.toISOString().split('T')[0];
-            const dateMatch = dateString && isValidDateFn(parseISO(dateString)) && format(parseISO(dateString), 'PPP').toLowerCase().includes(lowerSearchTerm);
+            const dateMatch = dateString && isValidDateFn(parseISO(dateString)) && formatDateSafe(parseISO(dateString), '', 'PPP').toLowerCase().includes(lowerSearchTerm);
             return isGlobal && (!activeGlobalClosureSearchTerm || reasonMatch || dateMatch);
         });
     }, [allBlackoutDates, activeGlobalClosureSearchTerm]);
@@ -430,8 +432,8 @@ export default function LabOperationsCenterPage() {
     
     const handleSaveGlobalBlackoutDate = useCallback(async (data: BlackoutDateDialogFormValues) => {
         if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
-        const formattedDateOnly = format(data.date, 'yyyy-MM-dd');
-        const displayDate = format(data.date, 'PPP');
+        const formattedDateOnly = formatDateSafe(data.date, '', 'yyyy-MM-dd');
+        const displayDate = formatDateSafe(data.date, '', 'PPP');
         const blackoutDataToSave: Omit<BlackoutDate, 'id'> = {
             labId: null, 
             date: formattedDateOnly,
@@ -463,7 +465,7 @@ export default function LabOperationsCenterPage() {
         setIsLoadingData(true);
         try {
             await deleteDoc(doc(db, "blackoutDates", blackoutDateId));
-            addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Global Blackout Date for ${dateString ? format(parseISO(dateString), 'PPP') : 'Invalid Date'} (Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`});
+            addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Global Blackout Date for ${dateString ? formatDateSafe(parseISO(dateString), '', 'PPP') : 'Invalid Date'} (Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`});
             toast({ title: "Global Blackout Date Removed", variant: "destructive" });
             setGlobalDateToDelete(null);
             fetchRemainingData();
@@ -544,7 +546,7 @@ export default function LabOperationsCenterPage() {
             const lowerSearchTerm = activeLabSpecificClosureSearchTerm.toLowerCase();
             const reasonMatch = bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm);
             const dateString = typeof bd.date === 'string' ? bd.date : (bd.date as unknown as Timestamp)?.toDate()?.toISOString().split('T')[0];
-            const dateMatch = dateString && isValidDateFn(parseISO(dateString)) && format(parseISO(dateString), 'PPP').toLowerCase().includes(lowerSearchTerm);
+            const dateMatch = dateString && isValidDateFn(parseISO(dateString)) && formatDateSafe(parseISO(dateString), '', 'PPP').toLowerCase().includes(lowerSearchTerm);
             return isForCurrentLab && (!activeLabSpecificClosureSearchTerm || reasonMatch || dateMatch);
         });
     }, [allBlackoutDates, activeContextId, activeLabSpecificClosureSearchTerm]);
@@ -564,8 +566,8 @@ export default function LabOperationsCenterPage() {
 
     const handleSaveLabSpecificBlackoutDate = useCallback(async (data: BlackoutDateDialogFormValues) => {
         if (!currentUser || !currentUser.id || !currentUser.name || activeContextId === GLOBAL_CONTEXT_VALUE) { toast({ title: "Error", description: "Cannot save lab-specific date without lab context or auth.", variant: "destructive" }); return; }
-        const formattedDateOnly = format(data.date, 'yyyy-MM-dd');
-        const displayDate = format(data.date, 'PPP');
+        const formattedDateOnly = formatDateSafe(data.date, '', 'yyyy-MM-dd');
+        const displayDate = formatDateSafe(data.date, '', 'PPP');
         const blackoutDataToSave: Omit<BlackoutDate, 'id'> = {
             labId: activeContextId, 
             date: formattedDateOnly,
@@ -597,7 +599,7 @@ export default function LabOperationsCenterPage() {
         setIsLoadingData(true);
         try {
             await deleteDoc(doc(db, "blackoutDates", blackoutDateId));
-            addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Lab-specific Blackout Date for ${dateString ? format(parseISO(dateString), 'PPP') : 'Invalid Date'} (Lab ID: ${deletedDateObj.labId}, Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`});
+            addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Lab-specific Blackout Date for ${dateString ? formatDateSafe(parseISO(dateString), '', 'PPP') : 'Invalid Date'} (Lab ID: ${deletedDateObj.labId}, Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`});
             toast({ title: "Lab Blackout Date Removed", variant: "destructive" });
             setLabSpecificDateToDelete(null);
             fetchRemainingData();
@@ -974,7 +976,7 @@ export default function LabOperationsCenterPage() {
     const labSpecificBookings = useMemo(() => {
         if (!selectedLabDetails) return [];
         const labResourceIds = labSpecificResources.map(r => r.id);
-        return allBookingsState.filter(b => labResourceIds.includes(b.resourceId));
+        return allBookingsState.filter(b => labResourceIds.includes(b.resourceId!));
     }, [selectedLabDetails, labSpecificResources, allBookingsState]);
     
     const labSpecificMaintenanceDataForReport = useMemo(() => {
@@ -1250,8 +1252,6 @@ export default function LabOperationsCenterPage() {
             }}
             initialRequest={editingMaintenanceRequest}
             onSave={handleSaveMaintenanceRequest}
-            technicians={allTechniciansForMaintenance}
-            resources={allResourcesForCountsAndChecks} 
             currentUserRole={currentUser?.role}
             labContextId={activeContextId === GLOBAL_CONTEXT_VALUE ? undefined : activeContextId} 
           />
@@ -1269,3 +1269,5 @@ export default function LabOperationsCenterPage() {
       </div>
   );
 }
+
+    
