@@ -10,7 +10,9 @@ import React, {
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Package, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, Loader2, CheckCircle2, Building, ListChecks, Edit, Trash2, Tag, Info, FileText, Image as ImageIconLucide } from 'lucide-react';
+import { Package, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIcon, Calendar as CalendarIconLucide, CheckCircle2, Building, ListChecks, Edit, Trash2, Tag, Info, FileText, Image as ImageIconLucide } from 'lucide-react';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import type { Resource, ResourceStatus, ResourceType, Lab, LabMembership } from '@/types';
 import { resourceStatusesList } from '@/lib/app-constants';
 import { useAuth } from '@/components/auth-context';
@@ -53,25 +55,19 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval, Timestamp as FirestoreTimestamp } from 'date-fns';
+import { format, startOfDay, isValid as isValidDateFn, parseISO, isWithinInterval } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
-import { db } from '@/lib/firebase';
-import {
-  collection,
-  getDocs,
-  doc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  serverTimestamp,
-  query,
-  orderBy,
-  where,
-  Timestamp
-} from 'firebase/firestore';
+import { getResources_SA, getLabMemberships_SA } from '@/lib/actions/data.actions';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/layout/page-header';
-import { addAuditLog } from '@/lib/firestore-helpers';
+import {
+  createResource_SA,
+  updateResource_SA,
+  deleteResource_SA,
+  createResourceType_SA,
+  updateResourceType_SA,
+  deleteResourceType_SA,
+} from '@/lib/actions/resource.actions';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
@@ -130,45 +126,16 @@ export default function AdminResourcesPage() {
     try {
       let activeUserLabIds: string[] = [];
       if (currentUser.id && currentUser.role !== 'Admin') {
-        const membershipsQuery = query(collection(db, 'labMemberships'), where('userId', '==', currentUser.id), where('status', '==', 'active'));
-        const membershipsSnapshot = await getDocs(membershipsQuery);
-        const memberships = membershipsSnapshot.docs.map(mDoc => mDoc.data() as LabMembership);
+        const membershipsResult = await getLabMemberships_SA(currentUser.id);
+        const memberships: LabMembership[] = membershipsResult.success && membershipsResult.data
+          ? membershipsResult.data.filter(m => m.status === 'active')
+          : [];
         setUserLabMemberships(memberships);
         activeUserLabIds = memberships.map(m => m.labId);
       }
 
-      const resourcesQuery = query(collection(db, "resources"), orderBy("name", "asc"));
-      const resourcesSnapshot = await getDocs(resourcesQuery);
-      let fetchedResources = resourcesSnapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          name: data.name || 'Unnamed Resource',
-          resourceTypeId: data.resourceTypeId || '',
-          labId: data.labId || '',
-          status: data.status || 'Working',
-          description: data.description || '',
-          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
-          manufacturer: data.manufacturer,
-          model: data.model,
-          serialNumber: data.serialNumber,
-          purchaseDate: data.purchaseDate instanceof Timestamp ? data.purchaseDate.toDate() : undefined,
-          notes: data.notes,
-          features: Array.isArray(data.features) ? data.features : [],
-          remoteAccess: data.remoteAccess ? {
-            ipAddress: data.remoteAccess.ipAddress,
-            hostname: data.remoteAccess.hostname,
-            protocol: data.remoteAccess.protocol || '',
-            username: data.remoteAccess.username,
-            port: data.remoteAccess.port ?? undefined,
-            notes: data.remoteAccess.notes,
-          } : undefined,
-          allowQueueing: data.allowQueueing ?? false,
-          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2,9)), startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [],
-          lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
-        } as Resource;
-      });
+      const resourcesResult = await getResources_SA();
+      let fetchedResources: Resource[] = resourcesResult.success && resourcesResult.data ? resourcesResult.data : [];
 
       if (currentUser.role !== 'Admin') {
         fetchedResources = fetchedResources.filter(resource => activeUserLabIds.includes(resource.labId) || !resource.labId);
@@ -303,84 +270,76 @@ export default function AdminResourcesPage() {
       toast({ title: "Invalid Lab Selected", variant: "destructive" }); return;
     }
 
+    const purchaseDateStr = (data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate)))
+      ? data.purchaseDate
+      : null;
 
-    let purchaseDateForFirestore: Timestamp | null = null;
-    if (data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))) {
-        purchaseDateForFirestore = Timestamp.fromDate(parseISO(data.purchaseDate));
-    } else if (data.purchaseDate === '' || data.purchaseDate === undefined) {
-        purchaseDateForFirestore = null;
-    }
-
-    const remoteAccessDataForFirestore = data.remoteAccess
-      ? {
-          ipAddress: data.remoteAccess.ipAddress || null,
-          hostname: data.remoteAccess.hostname || null,
-          protocol: data.remoteAccess.protocol || '',
-          username: data.remoteAccess.username || null,
-          port: data.remoteAccess.port ?? null,
-          notes: data.remoteAccess.notes || null,
-        }
-      : undefined;
-
-    const firestorePayload: any = {
-      name: data.name,
-      resourceTypeId: data.resourceTypeId,
-      labId: labIdForSave,
-      status: data.status,
-      description: data.description || '',
-      imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
-      manufacturer: data.manufacturer || null,
-      model: data.model || null,
-      serialNumber: data.serialNumber || null,
-      purchaseDate: purchaseDateForFirestore,
-      notes: data.notes || null,
-      features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-      remoteAccess: remoteAccessDataForFirestore,
-      allowQueueing: data.allowQueueing ?? editingResource?.allowQueueing ?? false,
-      lastUpdatedAt: serverTimestamp(),
-    };
-
-    Object.keys(firestorePayload).forEach(key => {
-        if (firestorePayload[key] === undefined && key !== 'remoteAccess' && key !== 'allowQueueing') {
-            firestorePayload[key] = null;
-        }
-    });
-    if (firestorePayload.remoteAccess) {
-        Object.keys(firestorePayload.remoteAccess).forEach((key) => {
-            if ((firestorePayload.remoteAccess as any)[key] === undefined) {
-                 (firestorePayload.remoteAccess as any)[key] = null;
-            }
-        });
-        const ra = firestorePayload.remoteAccess;
-        const allRemoteAccessEffectivelyNull = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && (ra.port === undefined || ra.port === null) && !ra.notes;
-        if (allRemoteAccessEffectivelyNull) {
-            firestorePayload.remoteAccess = undefined;
-        }
+    let remoteAccessForSA: { ipAddress?: string; hostname?: string; protocol?: string; username?: string; port?: number | null; notes?: string } | null = null;
+    if (data.remoteAccess) {
+      const ra = data.remoteAccess;
+      const allEffectivelyNull = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && (ra.port === undefined || ra.port === null) && !ra.notes;
+      if (!allEffectivelyNull) {
+        remoteAccessForSA = {
+          ipAddress: ra.ipAddress || undefined,
+          hostname: ra.hostname || undefined,
+          protocol: ra.protocol || '',
+          username: ra.username || undefined,
+          port: ra.port ?? null,
+          notes: ra.notes || undefined,
+        };
+      }
     }
 
     const isEditing = !!editingResource;
-    const auditAction = isEditing ? 'RESOURCE_UPDATED' : 'RESOURCE_CREATED';
-    const labNameForAudit = labIdForSave === '' ? 'Global/No Lab' : (lab?.name || 'Unknown Lab');
-    const auditDetails = `Resource '${data.name}' ${isEditing ? 'updated' : 'created'} by ${currentUser.name}. Status: ${data.status}, Lab: ${labNameForAudit}.`;
 
     setIsLoadingData(true);
     try {
       if (isEditing && editingResource?.id) {
-        const resourceDocRef = doc(db, "resources", editingResource.id);
-        await updateDoc(resourceDocRef, firestorePayload);
-        addAuditLog(currentUser.id, currentUser.name || 'Admin', auditAction, { entityType: 'Resource', entityId: editingResource.id, details: auditDetails });
+        const result = await updateResource_SA({
+          callerUserId: currentUser.id,
+          resourceId: editingResource.id,
+          name: data.name,
+          resourceTypeId: data.resourceTypeId,
+          labId: labIdForSave,
+          status: data.status,
+          description: data.description || '',
+          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+          manufacturer: data.manufacturer || undefined,
+          model: data.model || undefined,
+          serialNumber: data.serialNumber || undefined,
+          purchaseDate: purchaseDateStr,
+          notes: data.notes || undefined,
+          features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
+          remoteAccess: remoteAccessForSA,
+          allowQueueing: data.allowQueueing ?? editingResource.allowQueueing ?? false,
+        });
+        if (!result.success) {
+          toast({ title: 'Update Failed', description: result.message || 'Could not update resource.', variant: 'destructive' });
+          return;
+        }
         toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
       } else {
-        const newResourceData = {
-            ...firestorePayload,
-            createdAt: serverTimestamp(),
-            unavailabilityPeriods: [],
-        };
-        if (!isEditing && newResourceData.hasOwnProperty('lastUpdatedAt')) {
-          delete newResourceData.lastUpdatedAt;
+        const result = await createResource_SA({
+          callerUserId: currentUser.id,
+          name: data.name,
+          resourceTypeId: data.resourceTypeId,
+          labId: labIdForSave,
+          status: data.status,
+          description: data.description || '',
+          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+          manufacturer: data.manufacturer || undefined,
+          model: data.model || undefined,
+          serialNumber: data.serialNumber || undefined,
+          purchaseDate: purchaseDateStr,
+          notes: data.notes || undefined,
+          features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
+          remoteAccess: remoteAccessForSA,
+          allowQueueing: data.allowQueueing ?? false,
+        });
+        if (!result.success) {
+          toast({ title: 'Create Failed', description: result.message || 'Could not create resource.', variant: 'destructive' });
+          return;
         }
-        const docRef = await addDoc(collection(db, "resources"), newResourceData);
-        addAuditLog(currentUser.id, currentUser.name || 'Admin', auditAction, { entityType: 'Resource', entityId: docRef.id, details: auditDetails });
         toast({ title: 'Resource Created', description: `Resource "${data.name}" has been created.` });
       }
       setIsResourceFormDialogOpen(false);
@@ -472,16 +431,28 @@ export default function AdminResourcesPage() {
       if (!currentUser || !currentUser.name || !canManageResourcesAndTypes) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
       setIsLoadingData(true);
       try {
-          const typeDataToSave = { name: data.name, description: data.description || null };
-          const auditAction = editingResourceType ? 'RESOURCE_TYPE_UPDATED' : 'RESOURCE_TYPE_CREATED';
-          let entityId = editingResourceType ? editingResourceType.id : '';
           if (editingResourceType) {
-              await updateDoc(doc(db, "resourceTypes", entityId), typeDataToSave);
+              const result = await updateResourceType_SA({
+                callerUserId: currentUser.id,
+                typeId: editingResourceType.id,
+                name: data.name,
+                description: data.description || undefined,
+              });
+              if (!result.success) {
+                toast({ title: "Update Failed", description: result.message || 'Could not update resource type.', variant: "destructive" });
+                return;
+              }
           } else {
-              const docRef = await addDoc(collection(db, "resourceTypes"), typeDataToSave);
-              entityId = docRef.id;
+              const result = await createResourceType_SA({
+                callerUserId: currentUser.id,
+                name: data.name,
+                description: data.description || undefined,
+              });
+              if (!result.success) {
+                toast({ title: "Create Failed", description: result.message || 'Could not create resource type.', variant: "destructive" });
+                return;
+              }
           }
-          await addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'ResourceType', entityId, details: `Resource Type '${data.name}' ${editingResourceType ? 'updated' : 'created'}.` });
           toast({ title: `Resource Type ${editingResourceType ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingResourceType ? 'updated' : 'created'}.` });
           setIsResourceTypeFormDialogOpen(false);
           setEditingResourceType(null);
@@ -505,8 +476,11 @@ export default function AdminResourcesPage() {
       }
       setIsLoadingData(true);
       try {
-          await deleteDoc(doc(db, "resourceTypes", typeId));
-          await addAuditLog(currentUser.id, currentUser.name, 'RESOURCE_TYPE_DELETED', { entityType: 'ResourceType', entityId: typeId, details: `Resource Type '${deletedType.name}' deleted.` });
+          const result = await deleteResourceType_SA({ callerUserId: currentUser.id, typeId });
+          if (!result.success) {
+            toast({ title: "Delete Failed", description: result.message || 'Could not delete resource type.', variant: "destructive" });
+            return;
+          }
           toast({ title: "Resource Type Deleted", description: `"${deletedType.name}" removed.`, variant: "destructive" });
           setTypeToDelete(null);
           refetchAdminData();
@@ -636,28 +610,28 @@ export default function AdminResourcesPage() {
                     </div>
                 </CardHeader>
                 <CardContent className="p-0">
-                  {isLoadingData && allResourcesDataSource.length === 0 ? (
-                    <div className="flex justify-center items-center py-10 text-muted-foreground"><Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" /> Loading resources...</div>
-                  ) : filteredResources.length > 0 ? (
-                    <div className="overflow-x-auto border rounded-b-lg">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-[90px]">
-                              <div className="flex items-center gap-1">
-                                <ImageIconLucide className="h-4 w-4 text-muted-foreground" />Image
-                              </div>
-                            </TableHead>
-                            <TableHead><Tag className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Name</TableHead>
-                            <TableHead><ListChecks className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Type</TableHead>
-                            <TableHead><Building className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Lab</TableHead>
-                            <TableHead><Info className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Status</TableHead>
-                            <TableHead className="text-right w-[100px]">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredResources.map((resource) => (
-                            <TableRow key={resource.id}>
+                  <div className="rounded-lg border border-border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
+                          <TableHead className="font-semibold text-foreground w-[90px]">
+                            <div className="flex items-center gap-1">
+                              <ImageIconLucide className="h-4 w-4 text-muted-foreground" />Image
+                            </div>
+                          </TableHead>
+                          <TableHead className="font-semibold text-foreground"><Tag className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Name</TableHead>
+                          <TableHead className="font-semibold text-foreground"><ListChecks className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Type</TableHead>
+                          <TableHead className="font-semibold text-foreground"><Building className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Lab</TableHead>
+                          <TableHead className="font-semibold text-foreground"><Info className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Status</TableHead>
+                          <TableHead className="font-semibold text-foreground text-right w-[100px]">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {isLoadingData && allResourcesDataSource.length === 0 ? (
+                          <TableSkeleton rows={5} cols={6} />
+                        ) : filteredResources.length > 0 ? (
+                          filteredResources.map((resource) => (
+                            <TableRow key={resource.id} className="hover:bg-muted/30 transition-colors">
                               <TableCell>
                                 <Link href={`/admin/resources/${resource.id}`}>
                                   <Image src={resource.imageUrl || 'https://placehold.co/100x100.png'} alt={resource.name} width={40} height={40} className="rounded-md object-cover h-10 w-10 hover:opacity-80 transition-opacity" data-ai-hint="lab equipment"/>
@@ -677,21 +651,26 @@ export default function AdminResourcesPage() {
                                 </Button>
                               </TableCell>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : (
-                    <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
-                      <CardContent>
-                        <Package className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                        <p className="text-lg font-medium">{activeResourceFilterCount > 0 ? "No Resources Match Filters" : "No Resources Found"}</p>
-                        <p className="text-sm mb-4">{activeResourceFilterCount > 0 ? "Try adjusting your filter or search criteria." : (canManageResourcesAndTypes ? "There are currently no resources in the catalog. Add one to get started!" : "There are currently no resources accessible to you. Request lab access via your dashboard.")}</p>
-                        {activeResourceFilterCount > 0 ? (<Button variant="outline" onClick={resetAllActiveResourcePageFilters}><FilterX className="mr-2 h-4 w-4" /> Reset All Filters</Button>
-                        ): (!isLoadingData && allResourcesDataSource.length === 0 && canManageResourcesAndTypes && (<Button onClick={handleOpenNewResourceDialog}><PlusCircle className="mr-2 h-4 w-4" /> Add First Resource</Button>))}
-                      </CardContent>
-                    </Card>
-                  )}
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={6}>
+                              <EmptyState
+                                icon={Package}
+                                title={activeResourceFilterCount > 0 ? "No Resources Match Filters" : "No Resources Found"}
+                                description={activeResourceFilterCount > 0 ? "Try adjusting your filter or search criteria." : (canManageResourcesAndTypes ? "There are currently no resources in the catalog. Add one to get started!" : "There are currently no resources accessible to you. Request lab access via your dashboard.")}
+                                action={activeResourceFilterCount > 0 ? (
+                                  <Button variant="outline" onClick={resetAllActiveResourcePageFilters}><FilterX className="mr-2 h-4 w-4" /> Reset All Filters</Button>
+                                ) : (!isLoadingData && allResourcesDataSource.length === 0 && canManageResourcesAndTypes ? (
+                                  <Button onClick={handleOpenNewResourceDialog}><PlusCircle className="mr-2 h-4 w-4" /> Add First Resource</Button>
+                                ) : undefined)}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
             </Card>
         </TabsContent>
@@ -731,44 +710,55 @@ export default function AdminResourcesPage() {
                 </div>
                 </CardHeader>
                 <CardContent className="p-0">
-                {(isLoadingData || isAdminDataLoading) && filteredResourceTypesForDisplay.length === 0 && !activeResourceTypeSearchTerm ? ( <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto"/></div>
-                ) : filteredResourceTypesForDisplay.length > 0 ? (
-                    <div className="overflow-x-auto border rounded-b-md">
+                  <div className="rounded-lg border border-border overflow-hidden">
                     <Table>
-                        <TableHeader><TableRow>
-                            <TableHead><Tag className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Name</TableHead>
-                            <TableHead><FileText className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Description</TableHead>
-                            <TableHead className="text-center"><Package className="inline-block mr-1 h-4 w-4 text-muted-foreground" /># Resources</TableHead>
-                            <TableHead className="text-right w-[100px]">Actions</TableHead>
-                        </TableRow></TableHeader>
-                        <TableBody>{filteredResourceTypesForDisplay.map(type => (
-                        <TableRow key={type.id}>
-                            <TableCell className="font-medium">{type.name}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell>
-                            <TableCell className="text-center">{type.resourceCount}</TableCell>
-                            <TableCell className="text-right space-x-1">
-                              <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip></TooltipProvider>
-                              <AlertDialog open={!!typeToDelete && typeToDelete.id === type.id} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}>
-                                  <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}><Trash2 className="h-4 w-4"/></Button>
-                                  </TooltipTrigger><TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent></Tooltip></TooltipProvider>
-                                  <AlertDialogContent>
-                                      <AlertDialogHeader className="mt-4"><AlertDialogTitle>Delete "{typeToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>
-                                      <AlertDialogFooter className="pt-6 border-t"><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
-                                  </AlertDialogContent>
-                              </AlertDialog>
-                            </TableCell>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
+                          <TableHead className="font-semibold text-foreground"><Tag className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Name</TableHead>
+                          <TableHead className="font-semibold text-foreground"><FileText className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Description</TableHead>
+                          <TableHead className="font-semibold text-foreground text-center"><Package className="inline-block mr-1 h-4 w-4 text-muted-foreground" /># Resources</TableHead>
+                          <TableHead className="font-semibold text-foreground text-right w-[100px]">Actions</TableHead>
                         </TableRow>
-                        ))}</TableBody>
+                      </TableHeader>
+                      <TableBody>
+                        {(isLoadingData || isAdminDataLoading) && filteredResourceTypesForDisplay.length === 0 && !activeResourceTypeSearchTerm ? (
+                          <TableSkeleton rows={5} cols={4} />
+                        ) : filteredResourceTypesForDisplay.length > 0 ? (
+                          filteredResourceTypesForDisplay.map(type => (
+                            <TableRow key={type.id} className="hover:bg-muted/30 transition-colors">
+                              <TableCell className="font-medium">{type.name}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground max-w-md truncate" title={type.description || undefined}>{type.description || 'N/A'}</TableCell>
+                              <TableCell className="text-center">{type.resourceCount}</TableCell>
+                              <TableCell className="text-right space-x-1">
+                                <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditResourceTypeDialog(type)} disabled={isLoadingData}><Edit className="h-4 w-4"/></Button></TooltipTrigger><TooltipContent>Edit Type</TooltipContent></Tooltip></TooltipProvider>
+                                <AlertDialog open={!!typeToDelete && typeToDelete.id === type.id} onOpenChange={(isOpen) => !isOpen && setTypeToDelete(null)}>
+                                    <TooltipProvider><Tooltip><TooltipTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setTypeToDelete(type)} disabled={isLoadingData || type.resourceCount > 0}><Trash2 className="h-4 w-4"/></Button>
+                                    </TooltipTrigger><TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent></Tooltip></TooltipProvider>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader className="mt-4"><AlertDialogTitle>Delete "{typeToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>
+                                        <AlertDialogFooter className="pt-6 border-t"><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={4}>
+                              <EmptyState
+                                icon={ListChecks}
+                                title={activeResourceTypeFilterSortCount > 0 ? "No types match criteria." : "No resource types defined."}
+                                action={activeResourceTypeFilterSortCount > 0 ? (
+                                  <Button variant="link" onClick={resetAllActiveResourceTypePageFiltersSort} className="mt-2 text-xs"><FilterX className="mr-1.5 h-3.5 w-3.5"/>Reset Filters</Button>
+                                ) : undefined}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
                     </Table>
-                    </div>
-                ) : (
-                    <div className="text-center py-10 text-muted-foreground">
-                    <ListChecks className="h-12 w-12 mx-auto mb-3 opacity-50"/>
-                    <p className="font-medium">{activeResourceTypeFilterSortCount > 0 ? "No types match criteria." : "No resource types defined."}</p>
-                    {activeResourceTypeFilterSortCount > 0 && <Button variant="link" onClick={resetAllActiveResourceTypePageFiltersSort} className="mt-2 text-xs"><FilterX className="mr-1.5 h-3.5 w-3.5"/>Reset Filters</Button>}
-                    </div>
-                )}
+                  </div>
                 </CardContent>
             </Card>
             </TabsContent>

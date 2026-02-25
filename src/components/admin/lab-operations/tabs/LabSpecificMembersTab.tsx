@@ -11,7 +11,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from '@/components/ui/badge';
 import { formatDateSafe, cn } from '@/lib/utils';
-import { Timestamp } from 'firebase/firestore';
 
 interface LabMembershipDisplay extends LabMembership {
   userName: string;
@@ -94,7 +93,7 @@ export const LabSpecificMembersTab: FC<LabSpecificMembersTabProps> = ({
                                         {member.status.replace('_', ' ')}
                                     </Badge>
                                 </TableCell>
-                                <TableCell>{formatDateSafe(member.updatedAt ? (member.updatedAt as Timestamp).toDate() : (member.requestedAt as Timestamp)?.toDate(), 'N/A', 'PPP p')}</TableCell>
+                                <TableCell>{formatDateSafe(member.updatedAt || member.requestedAt, 'N/A', 'PPP p')}</TableCell>
                                 <TableCell className="text-right space-x-1">
                                     {member.status === 'pending_approval' && (
                                         <>

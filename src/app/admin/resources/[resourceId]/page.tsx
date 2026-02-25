@@ -14,7 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/auth-context';
 import { useAdminData } from '@/contexts/AdminDataContext';
 import type { Resource, ResourceType, Booking, UnavailabilityPeriod, Lab } from '@/types';
-import { format, parseISO, isValid as isValidDateFn, isBefore, compareAsc, Timestamp as FirestoreTimestamp } from 'date-fns';
+import { format, parseISO, isValid as isValidDateFn, isBefore, compareAsc } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResourceFormDialog, type ResourceFormValues } from '@/components/admin/resource-form-dialog';
@@ -27,9 +27,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ManageUnavailabilityDialog } from '@/components/resources/manage-unavailability-dialog';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, orderBy, Timestamp, limit } from 'firebase/firestore';
-import { addAuditLog } from '@/lib/firestore-helpers';
+import { getResourceById_SA, getLabMemberships_SA, getBookings_SA } from '@/lib/actions/data.actions';
+import {
+  updateResource_SA,
+  deleteResource_SA,
+  updateResourceUnavailability_SA,
+} from '@/lib/actions/resource.actions';
 
 
 function ResourceDetailPageSkeleton() {
@@ -199,47 +202,22 @@ export default function ResourceDetailPage() {
     setIsLoading(true);
     setHasAccess(null);
     try {
-      const resourceDocRef = doc(db, "resources", resourceId);
-      const docSnap = await getDoc(resourceDocRef);
+      const result = await getResourceById_SA(resourceId);
 
-      if (docSnap.exists()) {
-        const data = docSnap.data();
+      if (result.success && result.data) {
         const fetchedResource: Resource = {
-          id: docSnap.id,
-          name: data.name || 'Unnamed Resource',
-          resourceTypeId: data.resourceTypeId || '',
-          labId: data.labId || '',
-          status: data.status || 'Working',
-          description: data.description || '',
-          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
-          manufacturer: data.manufacturer || undefined,
-          model: data.model || undefined,
-          serialNumber: data.serialNumber || undefined,
-          purchaseDate: data.purchaseDate instanceof Timestamp ? data.purchaseDate.toDate() : undefined,
-          notes: data.notes || undefined,
-          remoteAccess: data.remoteAccess ? {
-            ipAddress: data.remoteAccess.ipAddress || undefined,
-            hostname: data.remoteAccess.hostname || undefined,
-            protocol: data.remoteAccess.protocol || '',
-            username: data.remoteAccess.username || undefined,
-            port: data.remoteAccess.port ?? undefined,
-            notes: data.remoteAccess.notes || undefined,
-          } : undefined,
-          allowQueueing: data.allowQueueing ?? false,
-          unavailabilityPeriods: Array.isArray(data.unavailabilityPeriods) ? data.unavailabilityPeriods.map((p: any) => ({...p, id: p.id || ('unavail-' + Date.now() + '-' + Math.random().toString(36).substring(2,9)), startDate: p.startDate, endDate: p.endDate, reason: p.reason })) : [],
-          features: Array.isArray(data.features) ? data.features : [],
-          lastUpdatedAt: data.lastUpdatedAt instanceof Timestamp ? data.lastUpdatedAt.toDate() : undefined,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : undefined,
+          ...result.data,
+          purchaseDate: result.data.purchaseDate ? new Date(result.data.purchaseDate) : undefined,
+          lastUpdatedAt: result.data.lastUpdatedAt ? new Date(result.data.lastUpdatedAt) : undefined,
+          createdAt: result.data.createdAt ? new Date(result.data.createdAt) : undefined,
         };
 
         if (currentUser?.role !== 'Admin' && fetchedResource.labId) {
-          const membershipQuery = query(collection(db, 'labMemberships'),
-            where('userId', '==', currentUser?.id),
-            where('labId', '==', fetchedResource.labId),
-            where('status', '==', 'active'),
-            limit(1));
-          const membershipSnapshot = await getDocs(membershipQuery);
-          if (membershipSnapshot.empty) {
+          const membershipsResult = await getLabMemberships_SA(currentUser?.id || '');
+          const hasActiveMembership = membershipsResult.success && membershipsResult.data
+            ? membershipsResult.data.some(m => m.labId === fetchedResource.labId && m.status === 'active')
+            : false;
+          if (!hasActiveMembership) {
             setHasAccess(false);
             setResource(fetchedResource);
             setIsLoading(false);
@@ -280,33 +258,21 @@ export default function ResourceDetailPage() {
         return;
       }
       try {
-        const bookingsQueryInstance = query(
-          collection(db, "bookings"),
-          where("resourceId", "==", resourceId),
-          where("userId", "==", currentUser.id),
-          orderBy("startTime", "desc")
-        );
-        const querySnapshot = await getDocs(bookingsQueryInstance);
-        const bookingsData = querySnapshot.docs.map(docSnap => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
-            resourceId: data.resourceId,
-            userId: data.userId,
-            startTime: data.startTime instanceof Timestamp ? data.startTime.toDate() : new Date(),
-            endTime: data.endTime instanceof Timestamp ? data.endTime.toDate() : new Date(),
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
-            status: data.status,
-            notes: data.notes,
-            usageDetails: data.usageDetails ? {
-                ...data.usageDetails,
-                actualStartTime: data.usageDetails.actualStartTime instanceof Timestamp ? data.usageDetails.actualStartTime.toDate() : undefined,
-                actualEndTime: data.usageDetails.actualEndTime instanceof Timestamp ? data.usageDetails.actualEndTime.toDate() : undefined,
-            } : undefined,
-          } as Booking;
-        });
-        setResourceUserBookings(bookingsData);
-      } catch (error:any) {
+        const result = await getBookings_SA({ userId: currentUser.id });
+        if (result.success && result.data) {
+          const bookingsData: Booking[] = result.data
+            .filter(b => b.resourceId === resourceId)
+            .map(data => ({
+              ...data,
+              startTime: data.startTime ? new Date(data.startTime) : new Date(),
+              endTime: data.endTime ? new Date(data.endTime) : new Date(),
+              createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
+            } as Booking));
+          setResourceUserBookings(bookingsData);
+        } else {
+          setResourceUserBookings([]);
+        }
+      } catch (error: any) {
         toast({ title: "Error Fetching Bookings", description: `Could not load your past bookings for this resource. ${error.message}`, variant: "destructive" });
         setResourceUserBookings([]);
       }
@@ -363,70 +329,43 @@ export default function ResourceDetailPage() {
         return;
     }
 
-    let purchaseDateForFirestore: Timestamp | null = null;
-    if (data.purchaseDate && isValidDateFn(parseISO(data.purchaseDate))) {
-        purchaseDateForFirestore = Timestamp.fromDate(parseISO(data.purchaseDate));
-    } else if (!data.purchaseDate) {
-        purchaseDateForFirestore = null;
-    }
-
-    const remoteAccessDataForFirestore = data.remoteAccess
-      ? {
-          ipAddress: data.remoteAccess.ipAddress || null,
-          hostname: data.remoteAccess.hostname || null,
-          protocol: data.remoteAccess.protocol || '',
-          username: data.remoteAccess.username || null,
-          port: data.remoteAccess.port ?? null,
-          notes: data.remoteAccess.notes || null,
-        }
-      : undefined;
-
-    const firestorePayload: any = {
-      name: data.name,
-      resourceTypeId: data.resourceTypeId,
-      labId: data.labId,
-      status: data.status,
-      description: data.description || '',
-      imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
-      manufacturer: data.manufacturer || null,
-      model: data.model || null,
-      serialNumber: data.serialNumber || null,
-      purchaseDate: purchaseDateForFirestore,
-      notes: data.notes || null,
-      features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
-      remoteAccess: remoteAccessDataForFirestore,
-      allowQueueing: data.allowQueueing ?? resource.allowQueueing ?? false,
-      lastUpdatedAt: serverTimestamp(),
-    };
-
-    Object.keys(firestorePayload).forEach(key => {
-      if (firestorePayload[key] === undefined && key !== 'remoteAccess' && key !== 'allowQueueing') {
-          firestorePayload[key] = null;
-      }
-    });
-    if (firestorePayload.remoteAccess) {
-        Object.keys(firestorePayload.remoteAccess).forEach(key => {
-            if ((firestorePayload.remoteAccess as any)[key] === undefined) {
-                 (firestorePayload.remoteAccess as any)[key] = null;
-            }
-        });
-         const ra = firestorePayload.remoteAccess;
-         const allRemoteAccessEffectivelyNull = !ra.ipAddress && !ra.hostname && !ra.protocol && !ra.username && ra.port === null && !ra.notes;
-         if(allRemoteAccessEffectivelyNull) firestorePayload.remoteAccess = undefined;
-    }
-
     try {
-        const resourceDocRef = doc(db, "resources", resource.id);
-        await updateDoc(resourceDocRef, firestorePayload);
-        const updatedLabName = labs.find(l => l.id === data.labId)?.name || 'Unknown Lab';
-        addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Resource '${data.name}' updated by ${currentUser.name}. Status: ${data.status}, Lab: ${updatedLabName}.`});
-        toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
-        await fetchResourceData();
+        const result = await updateResource_SA({
+          callerUserId: currentUser.id,
+          resourceId: resource.id,
+          name: data.name,
+          resourceTypeId: data.resourceTypeId,
+          labId: data.labId,
+          status: data.status,
+          description: data.description || '',
+          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+          manufacturer: data.manufacturer || undefined,
+          model: data.model || undefined,
+          serialNumber: data.serialNumber || undefined,
+          purchaseDate: data.purchaseDate || null,
+          notes: data.notes || undefined,
+          features: data.features?.split(',').map(f => f.trim()).filter(f => f) || [],
+          allowQueueing: data.allowQueueing ?? resource.allowQueueing ?? false,
+          remoteAccess: data.remoteAccess ? {
+            ipAddress: data.remoteAccess.ipAddress || undefined,
+            hostname: data.remoteAccess.hostname || undefined,
+            protocol: (data.remoteAccess.protocol as 'RDP' | 'SSH' | 'VNC' | 'Other' | '') || '',
+            username: data.remoteAccess.username || undefined,
+            port: data.remoteAccess.port ?? null,
+            notes: data.remoteAccess.notes || undefined,
+          } : null,
+        });
+        if (!result.success) {
+          toast({ title: "Update Failed", description: result.message || 'Could not update resource.', variant: "destructive" });
+        } else {
+          toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
+          await fetchResourceData();
+        }
     } catch (error: any) {
         toast({ title: "Update Failed", description: `Could not update resource: ${error.message}`, variant: "destructive" });
     }
     setIsFormDialogOpen(false);
-  }, [currentUser, canManageResource, resource, fetchResourceData, toast, labs]);
+  }, [currentUser, canManageResource, resource, fetchResourceData, toast]);
 
    const handleConfirmDelete = useCallback(async () => {
     if (!resourceToDeleteId || !currentUser || !canManageResource || !resource) {
@@ -436,11 +375,16 @@ export default function ResourceDetailPage() {
         return;
     }
     try {
-        const resourceDocRef = doc(db, "resources", resourceToDeleteId);
-        await deleteDoc(resourceDocRef);
-        addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_DELETED', { entityType: 'Resource', entityId: resourceToDeleteId, details: `Resource '${resource.name}' (ID: ${resourceToDeleteId}) deleted by ${currentUser.name}.`});
-        toast({ title: "Resource Deleted", description: `Resource "${resource.name}" has been removed.`, variant: "destructive" });
-        router.push('/admin/resources');
+        const result = await deleteResource_SA({
+          callerUserId: currentUser.id,
+          resourceId: resourceToDeleteId,
+        });
+        if (!result.success) {
+          toast({ title: "Delete Failed", description: result.message || 'Could not delete resource.', variant: "destructive" });
+        } else {
+          toast({ title: "Resource Deleted", description: `Resource "${resource.name}" has been removed.`, variant: "destructive" });
+          router.push('/admin/resources');
+        }
     } catch (error: any) {
         toast({ title: "Delete Failed", description: `Could not delete resource: ${error.message}`, variant: "destructive" });
     } finally {
@@ -455,12 +399,23 @@ export default function ResourceDetailPage() {
         return;
     }
     try {
-      const resourceDocRef = doc(db, "resources", resource.id);
       const periodsToSave = updatedPeriods.map(p => ({...p, id: String(p.id) }));
-      await updateDoc(resourceDocRef, { unavailabilityPeriods: periodsToSave, lastUpdatedAt: serverTimestamp() });
-      addAuditLog(currentUser.id, currentUser.name || 'User', 'RESOURCE_UPDATED', { entityType: 'Resource', entityId: resource.id, details: `Unavailability periods for resource '${resource.name}' updated by ${currentUser.name}.`});
-      toast({ title: 'Unavailability Updated', description: `Unavailability periods for ${resource.name} have been updated.` });
-      setResource(prev => prev ? ({ ...prev, unavailabilityPeriods: periodsToSave, lastUpdatedAt: new Date() }) : null);
+      const result = await updateResourceUnavailability_SA({
+        callerUserId: currentUser.id,
+        resourceId: resource.id,
+        periods: periodsToSave.map(p => ({
+          id: p.id,
+          startDate: p.startDate,
+          endDate: p.endDate,
+          reason: p.reason,
+        })),
+      });
+      if (!result.success) {
+        toast({ title: "Update Failed", description: result.message || 'Could not save unavailability periods.', variant: "destructive" });
+      } else {
+        toast({ title: 'Unavailability Updated', description: `Unavailability periods for ${resource.name} have been updated.` });
+        setResource(prev => prev ? ({ ...prev, unavailabilityPeriods: periodsToSave, lastUpdatedAt: new Date() }) : null);
+      }
     } catch (error: any) {
       toast({ title: "Update Failed", description: `Could not save unavailability periods: ${error.message}`, variant: "destructive" });
     }
@@ -542,7 +497,7 @@ export default function ResourceDetailPage() {
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
                             This action cannot be undone. This will permanently delete the resource
-                            <span className="font-semibold"> "{resource.name}"</span> from Firestore.
+                            <span className="font-semibold"> "{resource.name}"</span> from the database.
                         </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter className="pt-6 border-t">

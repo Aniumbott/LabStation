@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { Resource, Booking, Lab, LabMembership, LabMembershipStatus } from '@/types';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -18,19 +19,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format, isValid, isPast, parseISO, compareAsc, startOfToday, startOfDay, Timestamp as FirestoreTimestamp } from 'date-fns';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { format, isValid, isPast, parseISO, compareAsc, startOfToday, startOfDay } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
-import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore';
-import { requestLabAccess_SA, cancelLabAccessRequest_SA, leaveLab_SA } from '@/lib/firestore-helpers';
+import { requestLabAccess_SA, cancelLabAccessRequest_SA, leaveLab_SA } from '@/lib/db-helpers';
+import { getDashboardData_SA } from '@/lib/actions/data.actions';
 
 
 const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Date => {
-  if (value instanceof Timestamp) {
-    return value.toDate();
+  if (value instanceof Date && isValid(value)) {
+    return value;
   }
   if (typeof value === 'string') {
     const parsed = parseISO(value);
@@ -48,13 +50,6 @@ const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Da
          return dateFromNum;
      }
   }
-  if (value && typeof value.seconds === 'number' && typeof value.nanoseconds === 'number') {
-    try {
-        return new Timestamp(value.seconds, value.nanoseconds).toDate();
-    } catch (e) {
-        // Fall through
-    }
-  }
   console.error(`[Dashboard] CRITICAL: Unexpected data type or invalid date for ${fieldName} in booking ${bookingId}. Using current date as fallback. Value:`, value, `Type: ${typeof value}`);
   return new Date();
 };
@@ -65,7 +60,7 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const [frequentlyUsedResources, setFrequentlyUsedResources] = useState<(Resource & { labName?: string })[]>([]);
   const [upcomingUserBookings, setUpcomingUserBookings] = useState<(Booking & { resourceName?: string })[]>([]);
-  
+
   const [allLabs, setAllLabs] = useState<Lab[]>([]);
   const [userMemberships, setUserMemberships] = useState<LabMembership[]>([]);
 
@@ -76,110 +71,79 @@ export default function DashboardPage() {
 
 
   const fetchDashboardData = useCallback(async () => {
+    if (!currentUser || !currentUser.id) {
+      setFrequentlyUsedResources([]);
+      setUpcomingUserBookings([]);
+      setAllLabs([]);
+      setUserMemberships([]);
+      setIsLoadingResources(false);
+      setIsLoadingBookings(false);
+      setIsLoadingLabsAndMemberships(false);
+      return;
+    }
+
     setIsLoadingResources(true);
     setIsLoadingBookings(true);
     setIsLoadingLabsAndMemberships(true);
 
-    let fetchedLabs: Lab[] = [];
     try {
-        const labsSnapshot = await getDocs(query(collection(db, 'labs'), orderBy('name', 'asc')));
-        fetchedLabs = labsSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Lab));
-        setAllLabs(fetchedLabs);
-    } catch (error: any) {
-        toast({ title: "Error Loading Labs Data", variant: "destructive" });
-    }
+      const result = await getDashboardData_SA(currentUser.id);
 
-    if (currentUser && currentUser.id && currentUser.role !== 'Admin') {
-        try {
-            const membershipsQuery = query(collection(db, 'labMemberships'), where('userId', '==', currentUser.id));
-            const membershipsSnapshot = await getDocs(membershipsQuery);
-            setUserMemberships(membershipsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as LabMembership)));
-        } catch (error: any) {
-            toast({ title: "Error Loading Your Lab Memberships", variant: "destructive" });
-            setUserMemberships([]);
+      if (result.success && result.data) {
+        const { labs, userLabMemberships, recentResources, upcomingBookings } = result.data;
+
+        // Set labs
+        setAllLabs(labs);
+
+        // Set memberships (only for non-admin users)
+        if (currentUser.role !== 'Admin') {
+          setUserMemberships(userLabMemberships);
+        } else {
+          setUserMemberships([]);
         }
-    } else {
-        setUserMemberships([]);
-    }
-    setIsLoadingLabsAndMemberships(false);
+        setIsLoadingLabsAndMemberships(false);
 
+        // Set resources with lab names
+        const resourcesWithLabName = recentResources.map(r => ({
+          ...r,
+          labName: r.labName || (r.labId ? 'Unknown Lab' : 'Global/No Lab'),
+          imageUrl: r.imageUrl || 'https://placehold.co/600x400.png',
+          features: r.features || [],
+          purchaseDate: r.purchaseDate ? safeConvertToDate(r.purchaseDate, 'purchaseDate', r.id) : undefined,
+          lastUpdatedAt: r.lastUpdatedAt ? safeConvertToDate(r.lastUpdatedAt, 'lastUpdatedAt', r.id) : undefined,
+          createdAt: r.createdAt ? safeConvertToDate(r.createdAt, 'createdAt', r.id) : undefined,
+        }));
+        setFrequentlyUsedResources(resourcesWithLabName);
+        setIsLoadingResources(false);
 
-    try {
-      const resourcesQuery = query(collection(db, 'resources'), orderBy('name', 'asc'), limit(3));
-      const resourcesSnapshot = await getDocs(resourcesQuery);
-      const fetchedResourcesWithLab: (Resource & { labName?: string })[] = resourcesSnapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        const resourceIdForLog = docSnap.id;
-        const lab = fetchedLabs.find(l => l.id === data.labId);
-        return {
-          id: docSnap.id,
-          name: data.name || 'Unnamed Resource',
-          resourceTypeId: data.resourceTypeId || '',
-          labId: data.labId || '',
-          labName: lab?.name || (data.labId ? 'Unknown Lab' : 'Global/No Lab'),
-          status: data.status || 'Working',
-          description: data.description || '',
-          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
-          features: Array.isArray(data.features) ? data.features : [],
-          purchaseDate: data.purchaseDate ? safeConvertToDate(data.purchaseDate, 'purchaseDate', resourceIdForLog) : undefined,
-          lastUpdatedAt: data.lastUpdatedAt ? safeConvertToDate(data.lastUpdatedAt, 'lastUpdatedAt', resourceIdForLog) : undefined,
-          createdAt: data.createdAt ? safeConvertToDate(data.createdAt, 'createdAt', resourceIdForLog) : undefined,
-        } as Resource & { labName?: string };
-      });
-      setFrequentlyUsedResources(fetchedResourcesWithLab);
-    } catch (error: any) {
-      toast({ title: "Error Loading Resources", description: `Could not fetch frequently used resources: ${error.message}`, variant: "destructive"});
-    } finally {
-      setIsLoadingResources(false);
-    }
-
-    if (currentUser && currentUser.id) {
-      const todayStart = Timestamp.fromDate(startOfToday());
-      try {
-        const bookingsQuery = query(
-          collection(db, 'bookings'),
-          where('userId', '==', currentUser.id),
-          where('endTime', '>=', todayStart),
-          orderBy('startTime', 'asc'),
-          limit(5)
-        );
-        const bookingsSnapshot = await getDocs(bookingsQuery);
-        const fetchedBookingsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
-          const bookingData = docSnap.data();
-          const bookingId = docSnap.id;
-          let resourceNameStr = 'Unknown Resource';
-          if (bookingData.resourceId) {
-            const resourceDocRef = doc(db, 'resources', bookingData.resourceId);
-            const resourceDocSnap = await getDoc(resourceDocRef);
-            if (resourceDocSnap.exists()) {
-              resourceNameStr = resourceDocSnap.data()?.name || 'Unknown Resource';
-            }
-          }
-          return {
-            id: bookingId,
-            resourceId: bookingData.resourceId,
-            userId: bookingData.userId,
-            startTime: safeConvertToDate(bookingData.startTime, 'startTime', bookingId),
-            endTime: safeConvertToDate(bookingData.endTime, 'endTime', bookingId),
-            createdAt: safeConvertToDate(bookingData.createdAt, 'createdAt', bookingId),
-            status: bookingData.status as Booking['status'],
-            notes: bookingData.notes,
-            usageDetails: bookingData.usageDetails,
-            resourceName: resourceNameStr,
-          } as Booking & { resourceName?: string };
-        });
-        let resolvedBookings = await Promise.all(fetchedBookingsPromises);
+        // Set bookings with proper date conversion
         const now = new Date();
-        const clientFilteredBookings = resolvedBookings.filter(b => b.endTime >= now && b.status !== 'Cancelled');
-        setUpcomingUserBookings(clientFilteredBookings);
-      } catch (error: any) {
-        toast({ title: "Error Loading Your Bookings", description: `Could not fetch your upcoming bookings: ${error.message}`, variant: "destructive"});
+        const processedBookings = upcomingBookings.map(b => ({
+          ...b,
+          startTime: safeConvertToDate(b.startTime, 'startTime', b.id),
+          endTime: safeConvertToDate(b.endTime, 'endTime', b.id),
+          createdAt: safeConvertToDate(b.createdAt, 'createdAt', b.id),
+        })).filter(b => b.endTime >= now && b.status !== 'Cancelled');
+        setUpcomingUserBookings(processedBookings);
+        setIsLoadingBookings(false);
+      } else {
+        toast({ title: "Error Loading Dashboard Data", description: result.message || "Failed to load dashboard data.", variant: "destructive" });
+        setAllLabs([]);
+        setUserMemberships([]);
+        setFrequentlyUsedResources([]);
         setUpcomingUserBookings([]);
-      } finally {
+        setIsLoadingLabsAndMemberships(false);
+        setIsLoadingResources(false);
         setIsLoadingBookings(false);
       }
-    } else {
+    } catch (error: any) {
+      toast({ title: "Error Loading Dashboard Data", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+      setAllLabs([]);
+      setUserMemberships([]);
+      setFrequentlyUsedResources([]);
       setUpcomingUserBookings([]);
+      setIsLoadingLabsAndMemberships(false);
+      setIsLoadingResources(false);
       setIsLoadingBookings(false);
     }
   }, [currentUser, toast]);
@@ -262,6 +226,8 @@ export default function DashboardPage() {
   };
 
 
+  const isLoadingAll = isLoadingResources || isLoadingBookings || isLoadingLabsAndMemberships;
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -270,9 +236,37 @@ export default function DashboardPage() {
         icon={LayoutDashboard}
       />
 
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {isLoadingAll ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-lg" />
+          ))
+        ) : (
+          <>
+            <div className="rounded-lg border border-border bg-card p-4 flex items-center gap-4">
+              <div className="rounded-md bg-primary/10 p-2 flex-shrink-0"><CalendarDays className="h-5 w-5 text-primary" /></div>
+              <div><p className="text-2xl font-bold">{upcomingUserBookings.length}</p><p className="text-xs text-muted-foreground">Upcoming Bookings</p></div>
+            </div>
+            <div className="rounded-lg border border-border bg-card p-4 flex items-center gap-4">
+              <div className="rounded-md bg-primary/10 p-2 flex-shrink-0"><Package className="h-5 w-5 text-primary" /></div>
+              <div><p className="text-2xl font-bold">{frequentlyUsedResources.filter(r => r.status === 'Working').length}</p><p className="text-xs text-muted-foreground">Working Resources</p></div>
+            </div>
+            <div className="rounded-lg border border-border bg-card p-4 flex items-center gap-4">
+              <div className="rounded-md bg-primary/10 p-2 flex-shrink-0"><University className="h-5 w-5 text-primary" /></div>
+              <div><p className="text-2xl font-bold">{userActiveLabs.length || allLabs.length}</p><p className="text-xs text-muted-foreground">Active Labs</p></div>
+            </div>
+            <div className="rounded-lg border border-border bg-card p-4 flex items-center gap-4">
+              <div className="rounded-md bg-primary/10 p-2 flex-shrink-0"><Clock className="h-5 w-5 text-primary" /></div>
+              <div><p className="text-2xl font-bold">{userPendingLabRequests.length}</p><p className="text-xs text-muted-foreground">Pending Requests</p></div>
+            </div>
+          </>
+        )}
+      </div>
+
       <section>
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-semibold">Frequently Used Resources</h2>
+          <h2 className="text-xl font-semibold">Frequently Used Resources</h2>
           {frequentlyUsedResources.length > 0 && (
              <Button asChild variant="outline" size="sm">
               <Link href="/admin/resources">View All</Link>
@@ -280,7 +274,11 @@ export default function DashboardPage() {
           )}
         </div>
         {isLoadingResources ? (
-          <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading resources...</div>
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 w-fit">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <Skeleton key={i} className="h-64 w-full md:max-w-md rounded-lg" />
+            ))}
+          </div>
         ) : frequentlyUsedResources.length > 0 ? (
           <div className="w-fit grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2">
             {frequentlyUsedResources.map((resource) => (
@@ -316,94 +314,93 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : (
-          <Card className="p-6 text-center shadow-md border-0 bg-card">
-            <CardContent>
-              <p className="text-muted-foreground">No frequently used resources to display. Explore resources via <Link href="/admin/resources" className="text-primary hover:underline">Resources</Link>.</p>
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={Package}
+            title="No resources to display"
+            description="Explore available resources and make a booking."
+            action={
+              <Button asChild variant="outline" size="sm">
+                <Link href="/admin/resources">Browse Resources</Link>
+              </Button>
+            }
+          />
         )}
       </section>
 
       <Separator />
 
       <section>
-        <h2 className="text-2xl font-semibold mb-4">Your Upcoming Bookings</h2>
-        {isLoadingBookings ? (
-          <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading bookings...</div>
-        ) : currentUser && upcomingUserBookings.length > 0 ? (
-          <Card className="shadow-lg">
-            <CardContent className="p-0">
-              <div className="overflow-x-auto border rounded-t-md">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead><Package className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Resource</TableHead>
-                      <TableHead><CalendarDays className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Date & Time</TableHead>
-                      <TableHead><Info className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {upcomingUserBookings.map((booking) => {
-                      const resourceNameDisplay = booking.resourceName || 'Loading...';
-
-                      return (
-                        <TableRow key={booking.id}>
-                          <TableCell className="font-medium">{resourceNameDisplay}</TableCell>
-                          <TableCell>
-                            <div>{formatDateSafe(booking.startTime, 'Invalid Date', 'MMM dd, yyyy')}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {isValid(booking.startTime) && isValid(booking.endTime) ? `${format(booking.startTime, 'p')} - ${format(booking.endTime, 'p')}` : 'Invalid Time'}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {getBookingStatusBadge(booking.status)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" asChild>
-                              <Link href={`/bookings?bookingId=${booking.id}&date=${isValid(booking.startTime) ? format(booking.startTime, 'yyyy-MM-dd') : ''}`}>View/Edit</Link>
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-            {upcomingUserBookings.length > 0 && (
-              <CardFooter className="justify-end pt-4">
-                <Button variant="outline" asChild>
-                  <Link href="/bookings">View All Bookings <ChevronRight className="ml-2 h-4 w-4" /></Link>
-                </Button>
-              </CardFooter>
-            )}
-          </Card>
-        ) : (
-          <Card className="p-6 text-center shadow-md border-0 bg-card">
-            <CardContent>
-              <p className="text-muted-foreground">
-                {currentUser ? "You have no upcoming bookings." : "Please log in to see your bookings."}
-              </p>
-              {currentUser && (
-                <Button asChild className="mt-4">
-                  <Link href="/admin/resources">Find Resources to Book</Link>
-                </Button>
+        <h2 className="text-xl font-semibold mb-4">Your Upcoming Bookings</h2>
+        <div className="rounded-lg border border-border overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50 hover:bg-muted/50">
+                <TableHead className="font-semibold text-foreground">Resource</TableHead>
+                <TableHead className="font-semibold text-foreground">Date & Time</TableHead>
+                <TableHead className="font-semibold text-foreground">Status</TableHead>
+                <TableHead className="font-semibold text-foreground text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoadingBookings ? (
+                <TableSkeleton rows={3} cols={4} />
+              ) : upcomingUserBookings.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4}>
+                    <EmptyState
+                      icon={CalendarDays}
+                      title="No upcoming bookings"
+                      description={currentUser ? "You have no upcoming bookings." : "Please log in to see your bookings."}
+                      action={currentUser ? (
+                        <Button asChild size="sm">
+                          <Link href="/admin/resources">Find Resources to Book</Link>
+                        </Button>
+                      ) : undefined}
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                upcomingUserBookings.map((booking) => (
+                  <TableRow key={booking.id} className="hover:bg-muted/30 transition-colors">
+                    <TableCell className="font-medium">{booking.resourceName || 'Loading...'}</TableCell>
+                    <TableCell>
+                      <div>{formatDateSafe(booking.startTime, 'Invalid Date', 'MMM dd, yyyy')}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {isValid(booking.startTime) && isValid(booking.endTime) ? `${format(booking.startTime, 'p')} - ${format(booking.endTime, 'p')}` : 'Invalid Time'}
+                      </div>
+                    </TableCell>
+                    <TableCell>{getBookingStatusBadge(booking.status)}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" asChild>
+                        <Link href={`/bookings?bookingId=${booking.id}&date=${isValid(booking.startTime) ? format(booking.startTime, 'yyyy-MM-dd') : ''}`}>View/Edit</Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
               )}
-            </CardContent>
-          </Card>
+            </TableBody>
+          </Table>
+        </div>
+        {upcomingUserBookings.length > 0 && (
+          <div className="flex justify-end mt-3">
+            <Button variant="outline" asChild size="sm">
+              <Link href="/bookings">View All Bookings <ChevronRight className="ml-2 h-4 w-4" /></Link>
+            </Button>
+          </div>
         )}
       </section>
-      
+
       {currentUser && currentUser.role !== 'Admin' && (
         <>
           <Separator />
           <section>
             <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-semibold">My Labs</h2>
+                <h2 className="text-xl font-semibold">My Labs</h2>
             </div>
             {isLoadingLabsAndMemberships ? (
-                <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading your lab access...</div>
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                  {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-lg" />)}
+                </div>
             ) : userActiveLabs.length > 0 ? (
                 <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                     {userActiveLabs.map(lab => {
@@ -433,15 +430,11 @@ export default function DashboardPage() {
                     })}
                 </div>
             ) : (
-                 <Card className="p-6 text-center shadow-md border-0 bg-card">
-                    <CardContent>
-                    <KeyRound className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-60"/>
-                    <p className="text-muted-foreground">
-                        You currently do not have active access to any labs.
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-2">You can request access to available labs below.</p>
-                    </CardContent>
-                </Card>
+                <EmptyState
+                  icon={KeyRound}
+                  title="No active lab access"
+                  description="You can request access to available labs below."
+                />
             )}
           </section>
 
@@ -449,7 +442,7 @@ export default function DashboardPage() {
             <>
               <Separator />
               <section>
-                <h2 className="text-2xl font-semibold mb-4">Pending Lab Access Requests</h2>
+                <h2 className="text-xl font-semibold mb-4">Pending Lab Access Requests</h2>
                 <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   {userPendingLabRequests.map(req => (
                     <Card key={req.id} className="shadow-sm border-dashed">
@@ -474,7 +467,7 @@ export default function DashboardPage() {
             <>
               <Separator />
               <section>
-                <h2 className="text-2xl font-semibold mb-4">Available Labs</h2>
+                <h2 className="text-xl font-semibold mb-4">Available Labs</h2>
                 <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   {availableLabsForRequest.map(lab => (
                     <Card key={lab.id} className="shadow-sm">

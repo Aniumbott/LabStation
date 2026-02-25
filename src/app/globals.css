@@ -115,6 +115,23 @@
     @apply bg-background text-foreground;
     /* Default font family is set by Geist Sans in layout.tsx, removing explicit body font-family */
   }
+  html {
+    scroll-behavior: smooth;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
 }
 
 /* Style for the dot indicator on booked calendar days */

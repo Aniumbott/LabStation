@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { History, Filter as FilterIcon, Search as SearchIcon, Loader2, FilterX, CheckCircle2 } from 'lucide-react';
+import { History, Filter as FilterIcon, Search as SearchIcon, FilterX, CheckCircle2 } from 'lucide-react';
 import type { AuditLogEntry, AuditActionType } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import {
@@ -30,10 +30,11 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatDateSafe } from '@/lib/utils';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
+import { getAuditLogs_SA } from '@/lib/actions/data.actions';
 import { AuditLogDetailsDialog } from '@/components/admin/audit-log-details-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 
 const auditActionTypesForFilter: AuditActionType[] = [
   'USER_CREATED', 'USER_UPDATED', 'USER_DELETED', 'USER_APPROVED', 'USER_REJECTED',
@@ -67,17 +68,16 @@ export default function AuditLogPage() {
   const fetchAuditLogs = useCallback(async () => {
     setIsLoading(true);
     try {
-      const logsQuery = query(collection(db, "auditLogs"), orderBy("timestamp", "desc"));
-      const querySnapshot = await getDocs(logsQuery);
-      const fetchedLogs: AuditLogEntry[] = querySnapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          ...data,
-          timestamp: data.timestamp instanceof Timestamp ? data.timestamp.toDate() : new Date(),
-        } as AuditLogEntry;
-      });
-      setAuditLogs(fetchedLogs);
+      const result = await getAuditLogs_SA();
+      if (result.success && result.data) {
+        const fetchedLogs: AuditLogEntry[] = result.data.map(log => ({
+          ...log,
+          timestamp: log.timestamp ? new Date(log.timestamp) : new Date(),
+        }));
+        setAuditLogs(fetchedLogs);
+      } else {
+        setAuditLogs([]);
+      }
     } catch (error: any) {
       setAuditLogs([]);
     }
@@ -224,49 +224,45 @@ export default function AuditLogPage() {
         }
       />
 
-      {isLoading ? (
-        <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading audit logs...</div>
-      ) : filteredLogs.length > 0 ? (
-        <div className="overflow-x-auto rounded-lg border shadow-sm">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Timestamp</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredLogs.map((log) => (
-                <TableRow key={log.id} onClick={() => handleRowClick(log)} className="cursor-pointer hover:bg-muted/50">
+      <div className="rounded-lg border border-border overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50 hover:bg-muted/50">
+              <TableHead className="font-semibold text-foreground">User</TableHead>
+              <TableHead className="font-semibold text-foreground">Action</TableHead>
+              <TableHead className="font-semibold text-foreground">Timestamp</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableSkeleton rows={5} cols={3} />
+            ) : filteredLogs.length > 0 ? (
+              filteredLogs.map((log) => (
+                <TableRow key={log.id} onClick={() => handleRowClick(log)} className="cursor-pointer hover:bg-muted/30 transition-colors">
                   <TableCell>{log.userName || 'N/A'}</TableCell>
                   <TableCell><Badge variant="outline">{log.action.replace(/_/g, ' ')}</Badge></TableCell>
                   <TableCell className="whitespace-nowrap">{formatDateSafe(log.timestamp, 'N/A', 'MMM dd, yyyy, p')}</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      ) : (
-        <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
-          <CardContent>
-            <History className="mx-auto h-12 w-12 mb-4 opacity-50" />
-            <p className="text-lg font-medium">
-              {activeFilterCount > 0 ? "No Audit Logs Match Filters" : "No Audit Logs Found"}
-            </p>
-            <p className="text-sm mb-4">
-              {activeFilterCount > 0
-                ? "Try adjusting your filter criteria."
-                : "No system actions have been logged yet."}
-            </p>
-            {activeFilterCount > 0 && (
-                <Button variant="outline" onClick={resetAllActivePageFilters}>
-                    <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
-                </Button>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={3}>
+                  <EmptyState
+                    icon={History}
+                    title={activeFilterCount > 0 ? "No Audit Logs Match Filters" : "No Audit Logs Found"}
+                    description={activeFilterCount > 0 ? "Try adjusting your filter criteria." : "No system actions have been logged yet."}
+                    action={activeFilterCount > 0 ? (
+                      <Button variant="outline" onClick={resetAllActivePageFilters}>
+                        <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                      </Button>
+                    ) : undefined}
+                  />
+                </TableCell>
+              </TableRow>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </TableBody>
+        </Table>
+      </div>
 
       <AuditLogDetailsDialog
         logEntry={selectedLogForDetails}

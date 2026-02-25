@@ -8,13 +8,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useAuth } from '@/components/auth-context';
-import { LogIn, AlertCircle, Loader2 } from 'lucide-react';
-import { Logo } from '@/components/icons/logo';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertCircle, Loader2, FlaskConical } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
@@ -52,23 +50,29 @@ export default function LoginPage() {
     }
   }, [authIsLoading]);
 
-
   const onSubmit = async (data: LoginFormValues) => {
     setPageErrorMessage(null);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('login_message');
     }
     setIsSubmitting(true);
-    
+
     const result = await login(data.email, data.password);
-    
-    if (!result.success) {
-      const finalMessage = result.message || (typeof window !== 'undefined' ? localStorage.getItem('login_message') : null) || "Login failed. An unknown error occurred.";
-      setPageErrorMessage(finalMessage);
+
+    if (result.success) {
+      // Refresh the Next.js router cache so all route segments re-render with
+      // the new session — prevents stale cached redirects from a previous
+      // user's session affecting the newly logged-in user.
+      router.refresh();
+      router.push('/dashboard');
+      return;
     }
+
+    const finalMessage = result.message || (typeof window !== 'undefined' ? localStorage.getItem('login_message') : null) || "Login failed. An unknown error occurred.";
+    setPageErrorMessage(finalMessage);
     setIsSubmitting(false);
   };
-  
+
   if (authIsLoading && !currentUser) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -76,33 +80,63 @@ export default function LoginPage() {
       </div>
     );
   }
-  
+
   if (currentUser) {
-     return (
+    return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p className="text-muted-foreground">Redirecting to dashboard...</p>
       </div>
     );
   }
 
-
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-secondary p-4">
-      <Card className="w-full max-w-sm shadow-xl">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto mb-4">
-            <Logo />
+    <div className="flex min-h-screen">
+      {/* Brand panel */}
+      <div className="hidden md:flex w-1/2 bg-primary flex-col items-center justify-center p-12 gap-6">
+        <div className="flex items-center justify-center rounded-2xl bg-white/10 p-5">
+          <FlaskConical className="h-14 w-14 text-white" />
+        </div>
+        <div className="text-center">
+          <h2 className="text-white text-4xl font-bold mb-3">LabStation</h2>
+          <p className="text-primary-foreground/75 text-base max-w-xs leading-relaxed">
+            Manage lab resources, bookings, and team access — all in one place.
+          </p>
+        </div>
+        <div className="flex gap-8 mt-4">
+          <div className="text-center">
+            <p className="text-white text-2xl font-bold">∞</p>
+            <p className="text-primary-foreground/60 text-xs mt-1">Resources</p>
           </div>
-          <CardTitle className="text-2xl">Welcome Back!</CardTitle>
-          <CardDescription>Please sign in to access your LabStation account.</CardDescription>
-        </CardHeader>
-        <CardContent>
+          <div className="text-center">
+            <p className="text-white text-2xl font-bold">24/7</p>
+            <p className="text-primary-foreground/60 text-xs mt-1">Access</p>
+          </div>
+          <div className="text-center">
+            <p className="text-white text-2xl font-bold">100%</p>
+            <p className="text-primary-foreground/60 text-xs mt-1">Controlled</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Form panel */}
+      <div className="flex w-full md:w-1/2 items-center justify-center p-8 bg-background">
+        <div className="w-full max-w-sm">
+          {/* Mobile logo */}
+          <div className="flex items-center gap-2 mb-8 md:hidden">
+            <FlaskConical className="h-6 w-6 text-primary" />
+            <span className="text-xl font-bold">LabStation</span>
+          </div>
+
+          <div className="mb-8">
+            <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+            <p className="text-muted-foreground text-sm mt-1">Sign in to your account to continue.</p>
+          </div>
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               {pageErrorMessage && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Login Error</AlertTitle>
                   <AlertDescription>{pageErrorMessage}</AlertDescription>
                 </Alert>
               )}
@@ -111,7 +145,7 @@ export default function LoginPage() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email Address</FormLabel>
+                    <FormLabel>Email address</FormLabel>
                     <FormControl>
                       <Input type="email" placeholder="you@example.com" {...field} disabled={isSubmitting} />
                     </FormControl>
@@ -133,23 +167,19 @@ export default function LoginPage() {
                 )}
               />
               <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing In...</> : 'Sign In'}
+                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in...</> : 'Sign in'}
               </Button>
             </form>
           </Form>
-        </CardContent>
-        <CardFooter className="flex flex-col items-center text-sm space-y-2 pt-4">
-           <p className="text-muted-foreground">
+
+          <p className="text-center text-sm text-muted-foreground mt-6">
             Don&apos;t have an account?{' '}
             <Link href="/signup" className="font-medium text-primary hover:underline">
-              Sign Up
+              Sign up
             </Link>
           </p>
-          <Link href="#" className="text-xs text-muted-foreground hover:underline">
-            Forgot password?
-          </Link>
-        </CardFooter>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

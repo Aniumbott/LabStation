@@ -1,0 +1,183 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                 String   @id @default(cuid())
+  name               String
+  email              String   @unique
+  passwordHash       String
+  role               String   @default("Researcher") // Admin | Technician | Researcher
+  avatarUrl          String?
+  status             String   @default("pending_approval") // active | pending_approval | suspended
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  bookings            Booking[]
+  labMemberships      LabMembership[]
+  notifications       Notification[]
+  reportedMaintenance MaintenanceRequest[] @relation("ReportedBy")
+  assignedMaintenance MaintenanceRequest[] @relation("AssignedTo")
+  auditLogs           AuditLog[]
+  actedMemberships    LabMembership[]      @relation("ActingAdmin")
+}
+
+model Lab {
+  id          String   @id @default(cuid())
+  name        String
+  location    String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  resources              Resource[]
+  labMemberships         LabMembership[]
+  blackoutDates          BlackoutDate[]
+  recurringBlackoutRules RecurringBlackoutRule[]
+}
+
+model ResourceType {
+  id          String @id @default(cuid())
+  name        String
+  description String?
+
+  resources Resource[]
+}
+
+model Resource {
+  id             String   @id @default(cuid())
+  name           String
+  resourceTypeId String
+  labId          String
+  status         String   @default("Working") // Working | Maintenance | Broken
+  description    String?
+  imageUrl       String?
+  features       String?  // JSON array
+  manufacturer   String?
+  model          String?
+  serialNumber   String?
+  purchaseDate   DateTime?
+  notes          String?
+  remoteAccess   String?  // JSON object
+  allowQueueing  Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  resourceType          ResourceType          @relation(fields: [resourceTypeId], references: [id])
+  lab                   Lab                   @relation(fields: [labId], references: [id])
+  bookings              Booking[]
+  maintenanceRequests   MaintenanceRequest[]
+  unavailabilityPeriods UnavailabilityPeriod[]
+}
+
+model UnavailabilityPeriod {
+  id         String  @id @default(cuid())
+  resourceId String
+  startDate  String  // YYYY-MM-DD
+  endDate    String  // YYYY-MM-DD
+  reason     String?
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+}
+
+model Booking {
+  id           String   @id @default(cuid())
+  resourceId   String
+  userId       String
+  startTime    DateTime
+  endTime      DateTime
+  status       String   @default("Pending") // Confirmed | Pending | Cancelled | Waitlisted
+  notes        String?
+  usageDetails String?  // JSON object
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  resource Resource @relation(fields: [resourceId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+}
+
+model LabMembership {
+  id            String   @id @default(cuid())
+  userId        String
+  labId         String
+  status        String   @default("pending_approval") // active | pending_approval | rejected | revoked
+  roleInLab     String?  // Lead | Member
+  requestedAt   DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  actingAdminId String?
+
+  user        User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lab         Lab   @relation(fields: [labId], references: [id], onDelete: Cascade)
+  actingAdmin User? @relation("ActingAdmin", fields: [actingAdminId], references: [id])
+
+  @@unique([userId, labId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   // NotificationType
+  isRead    Boolean  @default(false)
+  linkTo    String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id                  String   @id @default(cuid())
+  timestamp           DateTime @default(now())
+  userId              String
+  userName            String
+  action              String   // AuditActionType
+  entityType          String?
+  entityId            String?
+  secondaryEntityType String?
+  secondaryEntityId   String?
+  details             String
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model MaintenanceRequest {
+  id                   String    @id @default(cuid())
+  resourceId           String
+  reportedByUserId     String
+  issueDescription     String
+  status               String    @default("Open") // Open | In Progress | Resolved | Closed
+  assignedTechnicianId String?
+  dateReported         DateTime  @default(now())
+  dateResolved         DateTime?
+  resolutionNotes      String?
+
+  resource           Resource @relation(fields: [resourceId], references: [id])
+  reportedBy         User     @relation("ReportedBy", fields: [reportedByUserId], references: [id])
+  assignedTechnician User?    @relation("AssignedTo", fields: [assignedTechnicianId], references: [id])
+}
+
+model BlackoutDate {
+  id     String  @id @default(cuid())
+  labId  String?
+  date   String  // YYYY-MM-DD
+  reason String?
+
+  lab Lab? @relation(fields: [labId], references: [id], onDelete: Cascade)
+}
+
+model RecurringBlackoutRule {
+  id         String  @id @default(cuid())
+  labId      String?
+  name       String
+  daysOfWeek String  // JSON array: ["Monday","Friday"]
+  reason     String?
+
+  lab Lab? @relation(fields: [labId], references: [id], onDelete: Cascade)
+}

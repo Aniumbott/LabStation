@@ -3,19 +3,8 @@
 
 import type { User, RoleName } from '@/types';
 import type { ReactNode } from 'react';
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  updateProfile as firebaseUpdateProfile,
-  type User as FirebaseUser,
-} from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp, Timestamp, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { addNotification, addAuditLog } from '@/lib/firestore-helpers';
-import { useToast } from '@/hooks/use-toast';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { updateUserProfile_SA } from '@/lib/actions/user.actions';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -28,247 +17,193 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const STORAGE_KEY = 'labstation_user';
+const MESSAGE_KEY = 'login_message';
+
+function getStoredUser(): User | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Rehydrate createdAt as a Date
+    if (parsed.createdAt) parsed.createdAt = new Date(parsed.createdAt);
+    return parsed as User;
+  } catch {
+    return null;
+  }
+}
+
+function storeUser(user: User | null): void {
+  if (typeof window === 'undefined') return;
+  if (user) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+}
+
+function clearLoginMessage(): void {
+  if (typeof window !== 'undefined') localStorage.removeItem(MESSAGE_KEY);
+}
+
+function setLoginMessage(message: string): void {
+  if (typeof window !== 'undefined') localStorage.setItem(MESSAGE_KEY, message);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(getStoredUser);
   const [isLoading, setIsLoading] = useState(true);
-  const { toast } = useToast();
+  const didMount = useRef(false);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-      setIsLoading(true);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('login_message');
-      }
-
-      if (firebaseUser) {
-        const userDocRef = doc(db, "users", firebaseUser.uid);
-        try {
-          const userDocSnap = await getDoc(userDocRef);
-          if (userDocSnap.exists()) {
-            const userProfileData = userDocSnap.data();
-            if (userProfileData.status === 'active') {
-              const appUser: User = {
-                id: firebaseUser.uid,
-                name: userProfileData.name || firebaseUser.displayName || 'Unnamed User',
-                email: userProfileData.email || firebaseUser.email || '',
-                role: userProfileData.role as RoleName,
-                status: userProfileData.status as User['status'],
-                avatarUrl: userProfileData.avatarUrl || firebaseUser.photoURL || 'https://placehold.co/100x100.png',
-                createdAt: userProfileData.createdAt instanceof Timestamp ? userProfileData.createdAt.toDate() : new Date(),
-              };
-              setCurrentUser(appUser);
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('labstation_user', JSON.stringify(appUser));
-              }
-            } else {
-              let message = 'Your account is not active.';
-              if (userProfileData.status === 'pending_approval') {
-                message = 'Your account is awaiting admin approval. Please check back later or contact an administrator.';
-              } else if (userProfileData.status === 'suspended') {
-                message = 'Your account has been suspended. Please contact an administrator.';
-              }
-              if (typeof window !== 'undefined') localStorage.setItem('login_message', message);
-              await firebaseSignOut(auth);
-              setCurrentUser(null);
-              if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
-            }
-          } else {
-            const profileNotFoundMsg = 'User profile not found. Please complete signup or contact support.';
-            if (typeof window !== 'undefined') localStorage.setItem('login_message', profileNotFoundMsg);
-            await firebaseSignOut(auth);
-            setCurrentUser(null);
-            if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
-          }
-        } catch (error) {
-          const profileErrorMsg = 'Error retrieving your profile during login. Please try again or contact support.';
-          if (typeof window !== 'undefined') localStorage.setItem('login_message', profileErrorMsg);
-          try {
-            await firebaseSignOut(auth);
-          } catch (signOutError) {
-            // Silent fail on signout error after profile fetch error
-          }
-          setCurrentUser(null);
-          if (typeof window !== 'undefined') localStorage.removeItem('labstation_user');
-        }
-      } else {
+  // Fetch the authenticated user from the JWT cookie via the API route.
+  const fetchMe = useCallback(async (): Promise<User | null> => {
+    try {
+      const res = await fetch('/api/auth/me');
+      if (!res.ok) {
+        // Any non-OK response (including 401) means no valid session.
         setCurrentUser(null);
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('labstation_user');
-          localStorage.removeItem('login_message');
-        }
+        storeUser(null);
+        return null;
       }
-      setIsLoading(false);
-    });
-    return () => unsubscribe();
+      const data = await res.json();
+      const user: User = {
+        ...data.user,
+        createdAt: data.user.createdAt ? new Date(data.user.createdAt) : new Date(),
+      };
+      setCurrentUser(user);
+      storeUser(user);
+      return user;
+    } catch {
+      setCurrentUser(null);
+      storeUser(null);
+      return null;
+    }
   }, []);
 
+  // On mount: quick hydration from localStorage, then validate with /api/auth/me
+  useEffect(() => {
+    if (didMount.current) return;
+    didMount.current = true;
+
+    (async () => {
+      // currentUser is already hydrated from localStorage via the lazy initialiser.
+      // Now validate against the server.
+      await fetchMe();
+      setIsLoading(false);
+    })();
+  }, [fetchMe]);
+
   const login = useCallback(async (email: string, password?: string): Promise<{ success: boolean; message?: string }> => {
-    if (!password) return { success: false, message: "Password is required." };
-    
+    if (!password) return { success: false, message: 'Password is required.' };
+
     setIsLoading(true);
-    if (typeof window !== 'undefined') localStorage.removeItem('login_message');
-    
+    clearLoginMessage();
+
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        const message = data.message || 'Login failed. Please check your credentials or contact support.';
+        setLoginMessage(message);
+        setIsLoading(false);
+        return { success: false, message };
+      }
+
+      // Successful login — hydrate user state.
+      const user: User = {
+        ...data.user,
+        createdAt: data.user.createdAt ? new Date(data.user.createdAt) : new Date(),
+      };
+      setCurrentUser(user);
+      storeUser(user);
+      setIsLoading(false);
       return { success: true };
     } catch (error: any) {
-      let message = "Login failed. Please check your credentials or contact support.";
-
-      if (error.code === 'auth/invalid-credential') {
-        message = "Login Failed: Invalid email or password.";
-      } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-email') {
-        message = "Invalid email or password provided.";
-      } else if (error.code === 'auth/too-many-requests') {
-        message = "Access to this account has been temporarily disabled due to many failed login attempts. You can reset your password or try again later.";
-      } else if (error.code === 'auth/user-disabled') {
-         message = "This user account has been disabled by an administrator in Firebase Authentication.";
-      } else if (error.code === 'auth/network-request-failed') {
-        message = "Network error during login. Please check your internet connection and Firebase project setup.";
-      }
-      
-      if (typeof window !== 'undefined') localStorage.setItem('login_message', message);
+      const message = error.message || 'Login failed. Please try again.';
+      setLoginMessage(message);
       setIsLoading(false);
-      return { success: false, message: message };
+      return { success: false, message };
     }
   }, []);
 
   const logout = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     try {
-      await firebaseSignOut(auth);
-    } catch (error) {
-      setCurrentUser(null);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('labstation_user');
-        localStorage.removeItem('login_message');
-      }
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Even if the API call fails, clear local state.
     }
+    setCurrentUser(null);
+    storeUser(null);
+    clearLoginMessage();
+    setIsLoading(false);
   }, []);
 
   const signup = useCallback(async (name: string, email: string, password?: string): Promise<{ success: boolean; message: string; userId?: string }> => {
-    if (!password) return { success: false, message: "Password is required." };
+    if (!password) return { success: false, message: 'Password is required.' };
+
     setIsLoading(true);
-    if (typeof window !== 'undefined') localStorage.removeItem('login_message');
+    clearLoginMessage();
+
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const firebaseUser = userCredential.user;
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+      });
 
-      await firebaseUpdateProfile(firebaseUser, { displayName: name });
+      const data = await res.json();
 
-      const userDocRef = doc(db, "users", firebaseUser.uid);
-      const newUserProfileData = {
-        name: name,
-        email: firebaseUser.email || email,
-        role: 'Researcher' as RoleName,
-        status: 'pending_approval' as User['status'],
-        avatarUrl: firebaseUser.photoURL || 'https://placehold.co/100x100.png',
-        createdAt: serverTimestamp(),
-      };
-      await setDoc(userDocRef, newUserProfileData);
-      
-      addAuditLog(firebaseUser.uid, name, 'USER_CREATED', { entityType: 'User', entityId: firebaseUser.uid, details: `User ${name} (${email}) signed up. Status: pending_approval.`});
-      
-      try {
-        const adminUsersQuery = query(
-          collection(db, "users"),
-          where("role", "in", ["Admin"]),
-          orderBy("name", "asc")
-        );
-        const adminUsersSnapshot = await getDocs(adminUsersQuery);
-        const notificationPromises = adminUsersSnapshot.docs.map(adminDoc => {
-          if (adminDoc.id !== firebaseUser.uid) {
-            return addNotification(
-              adminDoc.id,
-              'New Signup Request',
-              `User ${name} (${email}) has signed up and is awaiting approval.`,
-              'signup_pending_admin',
-              '/admin/users'
-            );
-          }
-          return Promise.resolve();
-        });
-        await Promise.all(notificationPromises);
-      } catch (adminNotificationError: any) {
-          toast({
-              title: "Admin Notification Failed",
-              description: `Signup was successful, but failed to notify admins: ${adminNotificationError.message}`,
-              variant: "destructive",
-              duration: 7000,
-          });
-      }
-      
-      await firebaseSignOut(auth);
       setIsLoading(false);
-      return { success: true, message: 'Signup successful! Your request is awaiting admin approval.', userId: firebaseUser.uid };
+
+      if (!res.ok || !data.success) {
+        return { success: false, message: data.message || 'Signup failed. Please try again.' };
+      }
+
+      // On success do NOT set currentUser — the user is pending approval.
+      return { success: true, message: data.message || 'Signup successful! Your request is awaiting admin approval.', userId: data.userId };
     } catch (error: any) {
       setIsLoading(false);
-      let message = "Signup failed. Please try again.";
-      if (error.code === 'auth/email-already-in-use') {
-        message = "This email address is already in use by another account.";
-      } else if (error.code === 'auth/weak-password') {
-        message = "Password is too weak. It should be at least 6 characters.";
-      } else if (error.code === 'auth/invalid-email') {
-        message = "The email address is not valid.";
-      }
-      return { success: false, message };
+      return { success: false, message: error.message || 'Signup failed. Please try again.' };
     }
-  }, [toast]);
+  }, []);
 
   const updateUserProfile = useCallback(async (updatedFields: Partial<Pick<User, 'name' | 'avatarUrl'>>): Promise<{ success: boolean; message?: string }> => {
-    const firebaseUser = auth.currentUser;
-    if (!firebaseUser || !currentUser) {
-      return { success: false, message: "No user logged in or user data unavailable." };
+    if (!currentUser) {
+      return { success: false, message: 'No user logged in or user data unavailable.' };
     }
-    
+
     setIsLoading(true);
+
     try {
-      const updatesForAuth: { displayName?: string; photoURL?: string } = {};
-      if (updatedFields.name && updatedFields.name !== currentUser.name) {
-        updatesForAuth.displayName = updatedFields.name;
-      }
-      if (updatedFields.avatarUrl && updatedFields.avatarUrl !== currentUser.avatarUrl) {
-         updatesForAuth.photoURL = updatedFields.avatarUrl;
-      }
-      
-      if (Object.keys(updatesForAuth).length > 0) {
-        await firebaseUpdateProfile(firebaseUser, updatesForAuth);
+      const result = await updateUserProfile_SA({
+        callerUserId: currentUser.id,
+        targetUserId: currentUser.id,
+        name: updatedFields.name,
+        avatarUrl: updatedFields.avatarUrl,
+      });
+
+      if (!result.success) {
+        setIsLoading(false);
+        return { success: false, message: result.message || 'Failed to update profile.' };
       }
 
-      const userDocRef = doc(db, "users", firebaseUser.uid);
-      const firestoreUpdates: Partial<Pick<User, 'name' | 'avatarUrl'>> = {};
-      if(updatedFields.name) firestoreUpdates.name = updatedFields.name;
-      if(updatedFields.avatarUrl) firestoreUpdates.avatarUrl = updatedFields.avatarUrl;
-
-      if (Object.keys(firestoreUpdates).length > 0) {
-        await updateDoc(userDocRef, firestoreUpdates);
-        addAuditLog(currentUser.id, updatedFields.name || currentUser.name, 'USER_UPDATED', { entityType: 'User', entityId: currentUser.id, details: `Profile updated: ${Object.keys(firestoreUpdates).join(', ')} changed.`});
-      }
-      
-      const updatedUserDocSnap = await getDoc(userDocRef);
-      if (updatedUserDocSnap.exists()) {
-        const updatedProfileData = updatedUserDocSnap.data();
-         const updatedAppUser: User = {
-            id: firebaseUser.uid,
-            name: updatedProfileData.name || firebaseUser.displayName || 'Unnamed User',
-            email: updatedProfileData.email || firebaseUser.email || '',
-            role: updatedProfileData.role as RoleName,
-            status: updatedProfileData.status as User['status'],
-            avatarUrl: updatedProfileData.avatarUrl || firebaseUser.photoURL || 'https://placehold.co/100x100.png',
-            createdAt: updatedProfileData.createdAt instanceof Timestamp ? updatedProfileData.createdAt.toDate() : new Date(),
-          };
-        setCurrentUser(updatedAppUser);
-        if (typeof window !== 'undefined') {
-            localStorage.setItem('labstation_user', JSON.stringify(updatedAppUser));
-        }
-      }
-      
+      // Re-fetch the authoritative user state from the server.
+      await fetchMe();
       setIsLoading(false);
-      return { success: true, message: "Profile updated successfully." };
+      return { success: true, message: 'Profile updated successfully.' };
     } catch (error: any) {
       setIsLoading(false);
-      return { success: false, message: error.message || "Failed to update profile." };
+      return { success: false, message: error.message || 'Failed to update profile.' };
     }
-  }, [currentUser]);
+  }, [currentUser, fetchMe]);
 
   return (
     <AuthContext.Provider value={{ currentUser, isLoading, login, logout, signup, updateUserProfile }}>

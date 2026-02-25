@@ -17,11 +17,11 @@ import { Badge } from "@/components/ui/badge";
 import type { User, Lab, LabMembership, LabMembershipStatus, RoleName } from '@/types';
 import { Loader2, CheckCircle, Ban, PlusCircle, ShieldCheck, ShieldOff, Save, User as UserIcon, Shield, Settings2, Building, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, orderBy, doc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { getLabMemberships_SA } from '@/lib/actions/data.actions';
 import { useAuth } from '@/components/auth-context';
 import { cn } from '@/lib/utils';
-import { manageLabMembership_SA, addAuditLog } from '@/lib/firestore-helpers';
+import { manageLabMembership_SA } from '@/lib/db-helpers';
+import { updateUserProfile_SA } from '@/lib/actions/user.actions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -91,16 +91,15 @@ export function ManageUserDetailsAndAccessDialog({
     if (!targetUser || activeTab !== 'labs') return;
     setIsLoadingMemberships(true);
     try {
-      const q = query(collection(db, 'labMemberships'), where('userId', '==', targetUser.id));
-      const querySnapshot = await getDocs(q);
-      const userMemberships = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LabMembership));
+      const result = await getLabMemberships_SA(targetUser.id);
+      const userMemberships: LabMembership[] = result.success && result.data ? result.data : [];
 
-      const displayInfos = allLabs.map(lab => {
+      const displayInfos: MembershipDisplayInfo[] = allLabs.map(lab => {
         const membership = userMemberships.find(m => m.labId === lab.id);
         return {
           labId: lab.id,
           labName: lab.name,
-          status: membership ? membership.status : 'not_member',
+          status: (membership ? membership.status : 'not_member') as MembershipDisplayInfo['status'],
           membershipDocId: membership?.id,
         };
       });
@@ -134,14 +133,18 @@ export function ManageUserDetailsAndAccessDialog({
     }
     setIsSavingProfile(true);
     try {
-      const userDocRef = doc(db, "users", targetUser.id);
-      await updateDoc(userDocRef, {
+      const result = await updateUserProfile_SA({
+        callerUserId: adminUser.id,
+        targetUserId: targetUser.id,
         name: data.name,
-        role: data.role,
+        role: data.role as RoleName,
       });
-      addAuditLog(adminUser.id, adminUser.name || 'Admin', 'USER_UPDATED', { entityType: 'User', entityId: targetUser.id, details: `User ${data.name} (ID: ${targetUser.id}) profile updated by admin. Role set to ${data.role}.` });
-      toast({ title: 'User Profile Updated', description: `Profile for ${data.name} has been updated.` });
-      onUpdate(); // Refresh parent list
+      if (result.success) {
+        toast({ title: 'User Profile Updated', description: result.message || `Profile for ${data.name} has been updated.` });
+        onUpdate(); // Refresh parent list
+      } else {
+        toast({ title: "Profile Save Error", description: result.message || 'Could not save profile.', variant: "destructive" });
+      }
     } catch (error: any) {
       toast({ title: "Profile Save Error", description: `Could not save profile: ${error.message}`, variant: "destructive" });
     } finally {

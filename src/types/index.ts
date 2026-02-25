@@ -1,6 +1,4 @@
 
-import type { Timestamp } from 'firebase/firestore';
-
 export interface ResourceType {
   id: string;
   name: string;
@@ -101,9 +99,9 @@ export interface LabMembership {
   labId: string;
   status: LabMembershipStatus;
   roleInLab?: 'Lead' | 'Member';
-  requestedAt?: Timestamp; // Timestamp for when the request was made
-  updatedAt?: Timestamp; // Timestamp for last status change (approval, rejection, revocation)
-  actingAdminId?: string; // User ID of admin who last changed status
+  requestedAt?: Date;
+  updatedAt?: Date;
+  actingAdminId?: string;
 }
 
 

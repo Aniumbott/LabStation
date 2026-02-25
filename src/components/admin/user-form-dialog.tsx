@@ -80,7 +80,7 @@ export function UserFormDialog({ open, onOpenChange, initialUser, onSave }: User
         <DialogHeader>
           <DialogTitle>{initialUser ? 'Edit User Profile' : 'Add New User Profile (Admin)'}</DialogTitle>
           <DialogDescription>
-            {initialUser ? `Modify the Firestore profile for ${initialUser.name}. Email cannot be changed here.` : 'Fill in the information for the new user profile. This does not create a Firebase Auth account.'}
+            {initialUser ? `Modify the profile for ${initialUser.name}. Email cannot be changed here.` : 'Fill in the information for the new user profile. A temporary password will be set.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>

@@ -1,11 +1,10 @@
 
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import type { Lab, ResourceType, User } from '@/types';
-import { db } from '@/lib/firebase';
-import { collection, query, orderBy, getDocs, Timestamp } from 'firebase/firestore';
 import { useAuth } from '@/components/auth-context';
+import { getLabs_SA, getResourceTypes_SA, getUsers_SA } from '@/lib/actions/data.actions';
 
 interface AdminDataContextType {
   labs: Lab[];
@@ -25,41 +24,61 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Tracks which user ID we last completed a fetch for.
+  // This allows us to detect when we need a fresh fetch after logout → re-login.
+  const fetchedForUserIdRef = useRef<string | null>(null);
+
+  // Reset loading state immediately when the current user changes.
+  // This effect runs before the fetchData effect (effects run in declaration order),
+  // so admin pages see isLoading=true right away instead of briefly showing empty state.
+  useEffect(() => {
+    if (currentUser?.role === 'Admin') {
+      // A different admin (or same admin after logout/re-login) needs fresh data.
+      if (fetchedForUserIdRef.current !== currentUser.id) {
+        setIsLoading(true);
+      }
+    } else {
+      // Non-admin or logged out: clear data immediately.
+      setLabs([]);
+      setResourceTypes([]);
+      setAllUsers([]);
+      setIsLoading(false);
+      fetchedForUserIdRef.current = null;
+    }
+  }, [currentUser]);
+
   const fetchData = useCallback(async () => {
     if (!currentUser || currentUser.role !== 'Admin') {
       setLabs([]);
       setResourceTypes([]);
       setAllUsers([]);
       setIsLoading(false);
+      fetchedForUserIdRef.current = null;
       return;
     }
 
     setIsLoading(true);
     try {
-      const [labsSnapshot, typesSnapshot, usersSnapshot] = await Promise.all([
-        getDocs(query(collection(db, 'labs'), orderBy('name'))),
-        getDocs(query(collection(db, 'resourceTypes'), orderBy('name'))),
-        getDocs(query(collection(db, 'users'), orderBy('name')))
+      const [labsResult, typesResult, usersResult] = await Promise.all([
+        getLabs_SA(),
+        getResourceTypes_SA(),
+        getUsers_SA(currentUser.id)
       ]);
 
-      const fetchedLabs: Lab[] = labsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lab));
-      const fetchedTypes: ResourceType[] = typesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ResourceType));
-      const fetchedUsers: User[] = usersSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date()
-        } as User;
-      });
+      const fetchedLabs: Lab[] = labsResult.success && labsResult.data ? labsResult.data : [];
+      const fetchedTypes: ResourceType[] = typesResult.success && typesResult.data ? typesResult.data : [];
+      const fetchedUsers: User[] = usersResult.success && usersResult.data ? usersResult.data.map(u => ({
+        ...u,
+        createdAt: u.createdAt ? new Date(u.createdAt) : new Date()
+      })) : [];
 
       setLabs(fetchedLabs);
       setResourceTypes(fetchedTypes);
       setAllUsers(fetchedUsers);
+      fetchedForUserIdRef.current = currentUser.id;
 
     } catch (error) {
       console.error("Failed to fetch admin data context:", error);
-      // In case of error, set to empty to avoid partial data states
       setLabs([]);
       setResourceTypes([]);
       setAllUsers([]);

@@ -17,12 +17,11 @@ import { Badge } from "@/components/ui/badge";
 import type { User, Lab, LabMembership, LabMembershipStatus } from '@/types';
 import { Loader2, CheckCircle, Ban, PlusCircle, ShieldCheck, ShieldOff, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { useAuth } from '@/components/auth-context';
+import { getLabMemberships_SA, getUsers_SA } from '@/lib/actions/data.actions';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { manageLabMembership_SA } from '@/lib/firestore-helpers';
+import { manageLabMembership_SA } from '@/lib/db-helpers';
 import { Separator } from '@/components/ui/separator';
 
 interface ManageUserLabAccessDialogProps {
@@ -74,9 +73,8 @@ export function ManageUserLabAccessDialog({
     if (initialTargetUser) {
       setIsLoadingMemberships(true);
       try {
-        const q = query(collection(db, 'labMemberships'), where('userId', '==', initialTargetUser.id));
-        const querySnapshot = await getDocs(q);
-        const userMemberships = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LabMembership));
+        const result = await getLabMemberships_SA(initialTargetUser.id);
+        const userMemberships = result.success && result.data ? result.data : [];
 
         const displayInfos = allLabs.map(lab => {
           const membership = userMemberships.find(m => m.labId === lab.id);
@@ -93,14 +91,14 @@ export function ManageUserLabAccessDialog({
         setCurrentMembershipsInfo(allLabs.map(lab => ({ labId: lab.id, labName: lab.name, status: 'not_member' })));
       }
       setIsLoadingMemberships(false);
-    } else if (preselectedLabId) {
+    } else if (preselectedLabId && adminUser?.id) {
         setIsLoadingMemberships(true);
         try {
-            const usersSnapshot = await getDocs(query(collection(db, "users"), orderBy("name")));
-            const users = usersSnapshot.docs.map(d => ({id: d.id, ...d.data()} as User))
+            const result = await getUsers_SA(adminUser.id);
+            const activeUsers = (result.success && result.data ? result.data : [])
                                          .filter(u => u.status === 'active');
-            setAllUsersForSearch(users);
-            setFilteredUsersForSearch(users);
+            setAllUsersForSearch(activeUsers);
+            setFilteredUsersForSearch(activeUsers);
         } catch (error: any) {
             toast({ title: "Error", description: `Failed to load users for search: ${error.message}`, variant: "destructive" });
             setAllUsersForSearch([]);

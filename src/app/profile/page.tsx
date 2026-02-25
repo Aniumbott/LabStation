@@ -9,6 +9,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Separator } from '@/components/ui/separator';
 import {
   Tooltip,
@@ -21,6 +24,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { changePassword_SA } from '@/lib/actions/auth.actions';
 
 export default function ProfilePage() {
   const { currentUser, updateUserProfile, isLoading: authIsLoading, logout } = useAuth();
@@ -99,19 +103,29 @@ export default function ProfilePage() {
       return;
     }
 
+    if (!currentUser) return;
     setIsSavingPassword(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      const result = await changePassword_SA({
+        callerUserId: currentUser.id,
+        currentPassword,
+        newPassword,
+      });
 
-
-    setIsSavingPassword(false);
-    setPasswordChangeSuccess("Password changed successfully (mock). Please use your new password next time you log in.");
-    toast({
-      title: "Password Changed (Mock)",
-      description: "Your password has been 'changed'. This is a mock and does not affect your actual login.",
-    });
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmNewPassword('');
+      if (result.success) {
+        setPasswordChangeSuccess("Password changed successfully. Please use your new password next time you log in.");
+        toast({ title: "Password Changed", description: "Your password has been updated successfully." });
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+      } else {
+        setPasswordChangeError(result.message);
+      }
+    } catch {
+      setPasswordChangeError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsSavingPassword(false);
+    }
   };
 
 
@@ -123,204 +137,185 @@ export default function ProfilePage() {
 
   if (authIsLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-200px)] text-muted-foreground">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <p className="ml-3">Loading profile...</p>
+      <div className="space-y-6 max-w-2xl mx-auto">
+        <Skeleton className="h-10 w-48" />
+        <div className="rounded-lg border border-border p-6 flex items-center gap-4">
+          <Skeleton className="h-20 w-20 rounded-full flex-shrink-0" />
+          <div className="space-y-2 flex-1">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-4 w-40" />
+          </div>
+        </div>
+        <div className="rounded-lg border border-border p-6 space-y-4">
+          <Skeleton className="h-5 w-36" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
       </div>
     );
   }
 
   if (!currentUser && !authIsLoading) {
     return (
-      <div className="space-y-8">
-        <PageHeader
-          title="My Profile"
-          description="Please log in to view your profile."
-          icon={UserCog}
+      <div className="space-y-6">
+        <PageHeader title="My Profile" description="Please log in to view your profile." icon={UserCog} />
+        <EmptyState
+          icon={Info}
+          title="Login Required"
+          description="You need to be logged in to view your profile information."
+          action={<Button onClick={() => router.push('/login')}>Go to Login</Button>}
         />
-        <Card className="max-w-2xl mx-auto shadow-lg text-center py-10">
-          <CardContent>
-            <Info className="mx-auto h-12 w-12 mb-4 text-muted-foreground opacity-50" />
-            <p className="text-lg font-medium text-muted-foreground">Login Required</p>
-            <p className="text-sm text-muted-foreground mb-4">
-              You need to be logged in to view your profile information.
-            </p>
-            <Button onClick={() => router.push('/login')}>Go to Login</Button>
-          </CardContent>
-        </Card>
       </div>
     );
   }
 
   if (!currentUser) return null;
 
+  const userInitials = currentUser.name.split(' ').map(n => n[0]).join('').toUpperCase();
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="My Profile"
         description="View and manage your personal information and settings."
         icon={UserCog}
       />
       <TooltipProvider>
-        <Card className="w-full max-w-2xl mx-auto shadow-lg">
-          <CardHeader className="items-center text-center p-6">
-            <div className="relative group mb-4">
-              <Avatar className="w-32 h-32 mx-auto border-4 border-primary/20 shadow-md group-hover:opacity-80 transition-opacity">
-                <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} data-ai-hint="user avatar" />
-                <AvatarFallback className="text-4xl">{currentUser.name.split(' ').map(n => n[0]).join('').toUpperCase()}</AvatarFallback>
+        <div className="w-full max-w-2xl mx-auto space-y-4">
+          {/* Avatar header section */}
+          <div className="rounded-lg border border-border bg-card p-6 flex items-center gap-5">
+            <div className="relative group flex-shrink-0">
+              <Avatar className="w-20 h-20 border-2 border-border">
+                <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} />
+                <AvatarFallback className="text-2xl font-semibold bg-primary text-primary-foreground">{userInitials}</AvatarFallback>
               </Avatar>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="outline" size="icon" className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 h-8 w-8 cursor-not-allowed" disabled>
-                    <ImageIcon className="h-4 w-4" />
-                    <span className="sr-only">Change Avatar (Coming Soon)</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Change Avatar (Coming Soon)</p>
-                </TooltipContent>
-              </Tooltip>
             </div>
-
-            <CardTitle className="text-2xl">{currentUser.name}</CardTitle>
-            <CardDescription className="flex items-center justify-center gap-1 text-base">
-              <Shield className="h-4 w-4 text-muted-foreground" /> {currentUser.role}
-            </CardDescription>
-          </CardHeader>
-          <Separator />
-          <CardContent className="space-y-6 p-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-primary">Account Information</h3>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="profileName" className="font-medium">Full Name</Label>
-                  <Input
-                    id="profileName"
-                    value={editableName}
-                    onChange={(e) => setEditableName(e.target.value)}
-                    className="mt-1"
-                    disabled={isSavingName}
-                  />
-                </div>
-                 <Button onClick={handleSaveNameChanges} disabled={isSavingName || (currentUser && editableName.trim() === currentUser.name) || !editableName.trim()} className="w-full sm:w-auto mt-2">
-                    {isSavingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    {isSavingName ? 'Saving Name...' : 'Save Name Changes'}
-                 </Button>
-                <div>
-                  <Label htmlFor="profileEmail" className="font-medium">Email Address</Label>
-                  <div className="flex items-center mt-1">
-                    <Input id="profileEmail" type="email" value={currentUser.email} readOnly disabled className="bg-muted/10 flex-grow" />
-                  </div>
-                </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl font-semibold truncate">{currentUser.name}</h2>
+              <p className="text-sm text-muted-foreground truncate">{currentUser.email}</p>
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <Shield className="h-3 w-3" />{currentUser.role}
+                </Badge>
+                <Badge variant={currentUser.status === 'active' ? 'outline' : 'destructive'} className="capitalize text-xs">
+                  {currentUser.status}
+                </Badge>
               </div>
             </div>
-
-            <Separator />
-
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-primary">Security</h3>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="currentPassword">Current Password</Label>
-                  <div className="relative mt-1">
-                    <Input
-                      id="currentPassword"
-                      type={showCurrentPassword ? "text" : "password"}
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      placeholder="Enter your current password"
-                      disabled={isSavingPassword}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
-                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                      disabled={isSavingPassword}
-                    >
-                      {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      <span className="sr-only">{showCurrentPassword ? "Hide" : "Show"} current password</span>
-                    </Button>
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="newPassword">New Password</Label>
-                   <div className="relative mt-1">
-                    <Input
-                      id="newPassword"
-                      type={showNewPassword ? "text" : "password"}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Enter new password (min. 6 characters)"
-                      disabled={isSavingPassword}
-                    />
-                     <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
-                      onClick={() => setShowNewPassword(!showNewPassword)}
-                      disabled={isSavingPassword}
-                    >
-                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      <span className="sr-only">{showNewPassword ? "Hide" : "Show"} new password</span>
-                    </Button>
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
-                  <div className="relative mt-1">
-                    <Input
-                      id="confirmNewPassword"
-                      type={showConfirmPassword ? "text" : "password"}
-                      value={confirmNewPassword}
-                      onChange={(e) => setConfirmNewPassword(e.target.value)}
-                      placeholder="Confirm new password"
-                      disabled={isSavingPassword}
-                    />
-                     <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      disabled={isSavingPassword}
-                    >
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      <span className="sr-only">{showConfirmPassword ? "Hide" : "Show"} confirm password</span>
-                    </Button>
-                  </div>
-                </div>
-                {passwordChangeError && (
-                  <Alert variant="destructive" className="mt-2">
-                     <AlertCircle className="h-4 w-4" />
-                     <AlertTitle>Error</AlertTitle>
-                    <AlertDescription>{passwordChangeError}</AlertDescription>
-                  </Alert>
-                )}
-                {passwordChangeSuccess && (
-                  <Alert variant="default" className="mt-2 bg-green-50 border-green-200 dark:bg-green-900/30 dark:border-green-700">
-                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                    <AlertTitle className="text-green-700 dark:text-green-300">Success</AlertTitle>
-                    <AlertDescription className="text-green-700 dark:text-green-400">{passwordChangeSuccess}</AlertDescription>
-                  </Alert>
-                )}
-                <Button onClick={handleChangePassword} disabled={isSavingPassword || !currentPassword || !newPassword || !confirmNewPassword} className="w-full sm:w-auto">
-                  {isSavingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
-                  {isSavingPassword ? 'Changing Password...' : 'Change Password'}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-          <Separator />
-          <CardFooter className="p-6 flex justify-end">
-            <Button variant="destructive" onClick={handleLogout}>
+            <Button variant="destructive" size="sm" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Logout
             </Button>
-          </CardFooter>
-        </Card>
+          </div>
+
+          {/* Account Information */}
+          <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+            <h3 className="text-base font-semibold">Account Information</h3>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="profileName">Full Name</Label>
+                <Input
+                  id="profileName"
+                  value={editableName}
+                  onChange={(e) => setEditableName(e.target.value)}
+                  className="mt-1"
+                  disabled={isSavingName}
+                />
+              </div>
+              <div>
+                <Label htmlFor="profileEmail">Email Address</Label>
+                <Input id="profileEmail" type="email" value={currentUser.email} readOnly disabled className="mt-1 bg-muted/30" />
+              </div>
+              <Button
+                onClick={handleSaveNameChanges}
+                disabled={isSavingName || editableName.trim() === currentUser.name || !editableName.trim()}
+                size="sm"
+              >
+                {isSavingName ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                {isSavingName ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Security */}
+          <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+            <h3 className="text-base font-semibold">Security</h3>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="currentPassword">Current Password</Label>
+                <div className="relative mt-1">
+                  <Input
+                    id="currentPassword"
+                    type={showCurrentPassword ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter your current password"
+                    disabled={isSavingPassword}
+                  />
+                  <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)} disabled={isSavingPassword}>
+                    {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="newPassword">New Password</Label>
+                <div className="relative mt-1">
+                  <Input
+                    id="newPassword"
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Min. 6 characters"
+                    disabled={isSavingPassword}
+                  />
+                  <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
+                    onClick={() => setShowNewPassword(!showNewPassword)} disabled={isSavingPassword}>
+                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
+                <div className="relative mt-1">
+                  <Input
+                    id="confirmNewPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                    disabled={isSavingPassword}
+                  />
+                  <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)} disabled={isSavingPassword}>
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              {passwordChangeError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{passwordChangeError}</AlertDescription>
+                </Alert>
+              )}
+              {passwordChangeSuccess && (
+                <Alert className="bg-green-50 border-green-200">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-700">{passwordChangeSuccess}</AlertDescription>
+                </Alert>
+              )}
+              <Button
+                onClick={handleChangePassword}
+                disabled={isSavingPassword || !currentPassword || !newPassword || !confirmNewPassword}
+                size="sm"
+              >
+                {isSavingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
+                {isSavingPassword ? 'Changing Password...' : 'Change Password'}
+              </Button>
+            </div>
+          </div>
+        </div>
       </TooltipProvider>
     </div>
   );

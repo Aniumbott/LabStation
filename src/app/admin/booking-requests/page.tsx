@@ -3,10 +3,10 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
-import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, Filter as FilterIcon, Clock, Info, Loader2, User as UserIcon, Package as ResourceIcon, CheckCircle2, StickyNote } from 'lucide-react';
+import { CheckSquare, ThumbsUp, ThumbsDown, FilterX, Search as SearchIcon, Filter as FilterIcon, Clock, Info, User as UserIcon, Package as ResourceIcon, CheckCircle2, StickyNote } from 'lucide-react';
 import type { Booking, Resource, User } from '@/types';
-import { addNotification, addAuditLog, processWaitlistForResource } from '@/lib/firestore-helpers';
 import { useAuth } from '@/components/auth-context';
+import { approveBooking_SA, rejectBooking_SA } from '@/lib/actions/booking.actions';
 import { useAdminData } from '@/contexts/AdminDataContext';
 import {
   Table,
@@ -40,9 +40,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn, formatDateSafe } from '@/lib/utils';
-import { db, auth } from '@/lib/firebase';
-import { collection, query, where, getDocs, updateDoc, doc, getDoc, orderBy, Timestamp } from 'firebase/firestore';
+import { getResources_SA, getPendingBookings_SA } from '@/lib/actions/data.actions';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 
 
 const bookingStatusesForApprovalFilter: Array<'all' | 'Pending' | 'Waitlisted'> = ['all', 'Pending', 'Waitlisted'];
@@ -76,46 +77,31 @@ export default function BookingRequestsPage() {
     }
     setIsLoading(true);
     try {
-      const resourcesSnapshot = await getDocs(query(collection(db, "resources"), orderBy("name", "asc")));
-      const fetchedResources = resourcesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Resource));
+      const [resourcesResult, bookingsResult] = await Promise.all([
+        getResources_SA(),
+        getPendingBookings_SA(),
+      ]);
+
+      const fetchedResources: Resource[] = resourcesResult.success && resourcesResult.data ? resourcesResult.data : [];
       setAllResources(fetchedResources);
 
-      const bookingsRef = collection(db, "bookings");
-      const q = query(bookingsRef, where("status", "in", ["Pending", "Waitlisted"]), orderBy("startTime", "asc"));
-      const querySnapshot = await getDocs(q);
-
-      const fetchedBookingsPromises = querySnapshot.docs.map(async (docSnap) => {
-        const data = docSnap.data();
-        let resourceName = "Unknown Resource";
-        let userName = "Unknown User";
-
-        const resource = fetchedResources.find(r => r.id === data.resourceId);
-        if (resource) resourceName = resource.name;
-        
-        const user = allUsers.find(u => u.id === data.userId);
-        if (user) userName = user.name;
-        
-        return {
-          id: docSnap.id,
-          resourceId: data.resourceId,
-          userId: data.userId,
-          startTime: (data.startTime as Timestamp)?.toDate(),
-          endTime: (data.endTime as Timestamp)?.toDate(),
-          createdAt: (data.createdAt as Timestamp)?.toDate(),
-          status: data.status as Booking['status'],
-          notes: data.notes,
-          resourceName: resourceName,
-          userName: userName,
-          usageDetails: data.usageDetails ? {
-            ...data.usageDetails,
-            actualStartTime: (data.usageDetails.actualStartTime as Timestamp)?.toDate(),
-            actualEndTime: (data.usageDetails.actualEndTime as Timestamp)?.toDate(),
-          } : undefined,
-        } as Booking & { resourceName?: string, userName?: string };
-      });
-      const bookingsWithDetails = await Promise.all(fetchedBookingsPromises);
-      setAllBookingsState(bookingsWithDetails);
-
+      if (bookingsResult.success && bookingsResult.data) {
+        const bookingsWithDetails = bookingsResult.data.map(data => {
+          const resource = fetchedResources.find(r => r.id === data.resourceId);
+          const user = allUsers.find(u => u.id === data.userId);
+          return {
+            ...data,
+            startTime: data.startTime ? new Date(data.startTime) : new Date(),
+            endTime: data.endTime ? new Date(data.endTime) : new Date(),
+            createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
+            resourceName: resource?.name || "Unknown Resource",
+            userName: user?.name || "Unknown User",
+          } as Booking & { resourceName?: string, userName?: string };
+        });
+        setAllBookingsState(bookingsWithDetails);
+      } else {
+        setAllBookingsState([]);
+      }
     } catch (error: any) {
       setAllBookingsState([]);
     }
@@ -153,53 +139,20 @@ export default function BookingRequestsPage() {
   }, [allBookingsState, activeSearchTerm, activeFilterResourceId, activeFilterStatus]);
 
   const handleApproveBooking = useCallback(async (bookingId: string) => {
-    if (!loggedInUserFromContext || !loggedInUserFromContext.id || !loggedInUserFromContext.name) {
+    if (!loggedInUserFromContext || !loggedInUserFromContext.id) {
         toast({ title: "Authentication Error", description: "Current user context is missing for approval.", variant: "destructive" });
         return;
     }
     const bookingToUpdate = allBookingsState.find(b => b.id === bookingId);
-    if (!bookingToUpdate || !bookingToUpdate.resourceId || !bookingToUpdate.userId || !bookingToUpdate.startTime) {
-        toast({ title: "Error", description: "Booking data is incomplete for approval.", variant: "destructive" });
+    if (!bookingToUpdate) {
+        toast({ title: "Error", description: "Booking data not found for approval.", variant: "destructive" });
         return;
     }
 
-    const bookingDocRef = doc(db, "bookings", bookingId);
     setIsLoading(true);
     try {
-      await updateDoc(bookingDocRef, { status: 'Confirmed' });
+      await approveBooking_SA({ callerUserId: loggedInUserFromContext.id, bookingId });
       toast({ title: 'Booking Approved', description: `Booking for "${bookingToUpdate.resourceName || 'Unknown Resource'}" by ${bookingToUpdate.userName || 'Unknown User'} has been confirmed.`});
-
-      try {
-        await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_APPROVED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} approved.`});
-      } catch (auditError: any) {
-          console.warn("Audit log failed for booking approval:", auditError);
-      }
-
-      if (bookingToUpdate.userId && bookingToUpdate.resourceName && bookingToUpdate.startTime) {
-        const directAuthUser = auth.currentUser;
-        if (!directAuthUser || !directAuthUser.uid) {
-           console.warn("Direct Firebase auth user not found for sending notification on approval.");
-        } else {
-            const notificationParams = {
-                userId: bookingToUpdate.userId,
-                title: 'Booking Confirmed',
-                message: `Your booking for ${bookingToUpdate.resourceName} on ${formatDateSafe(bookingToUpdate.startTime, '', 'MMM dd, HH:mm')} has been confirmed.`,
-                type: 'booking_confirmed' as const,
-                linkTo: `/bookings?bookingId=${bookingToUpdate.id}`
-            };
-            try {
-              await addNotification(
-                notificationParams.userId,
-                notificationParams.title,
-                notificationParams.message,
-                notificationParams.type,
-                notificationParams.linkTo
-              );
-            } catch (notificationError: any) {
-              console.warn("Notification failed for booking approval:", notificationError);
-            }
-        }
-      }
       await fetchBookingRequestsAndRelatedData();
     } catch (error: any) {
       console.error("Error approving booking:", error);
@@ -210,67 +163,20 @@ export default function BookingRequestsPage() {
   }, [loggedInUserFromContext, allBookingsState, fetchBookingRequestsAndRelatedData, toast]);
 
   const handleRejectBooking = useCallback(async (bookingId: string) => {
-    if(!loggedInUserFromContext || !loggedInUserFromContext.id || !loggedInUserFromContext.name) {
+    if (!loggedInUserFromContext || !loggedInUserFromContext.id) {
         toast({ title: "Authentication Error", description: "Current user context is missing for rejection.", variant: "destructive" });
         return;
     }
     const bookingToUpdate = allBookingsState.find(b => b.id === bookingId);
-     if (!bookingToUpdate || !bookingToUpdate.resourceId || !bookingToUpdate.userId || !bookingToUpdate.startTime || !bookingToUpdate.endTime) {
-        toast({ title: "Error", description: "Booking data is incomplete for rejection.", variant: "destructive" });
+    if (!bookingToUpdate) {
+        toast({ title: "Error", description: "Booking data not found for rejection.", variant: "destructive" });
         return;
     }
 
-    const bookingDocRef = doc(db, "bookings", bookingId);
     setIsLoading(true);
     try {
-      await updateDoc(bookingDocRef, { status: 'Cancelled' });
+      await rejectBooking_SA({ callerUserId: loggedInUserFromContext.id, bookingId });
       toast({ title: 'Booking Rejected', description: `Booking for "${bookingToUpdate.resourceName || 'Unknown Resource'}" by ${bookingToUpdate.userName || 'Unknown User'} has been cancelled.`, variant: 'destructive'});
-
-      try {
-        await addAuditLog(loggedInUserFromContext.id, loggedInUserFromContext.name, 'BOOKING_REJECTED', { entityType: 'Booking', entityId: bookingToUpdate.id, details: `Booking for ${bookingToUpdate.resourceName || 'Unknown Resource'} by ${bookingToUpdate.userName || 'Unknown User'} rejected/cancelled.`});
-      } catch (auditError: any) {
-          console.warn("Audit log failed for booking rejection:", auditError);
-      }
-
-      if (bookingToUpdate.userId && bookingToUpdate.resourceName && bookingToUpdate.startTime) {
-        const directAuthUser = auth.currentUser;
-        if (!directAuthUser || !directAuthUser.uid) {
-           console.warn("Direct Firebase auth user not found for sending notification on rejection.");
-        } else {
-            const notificationParams = {
-                userId: bookingToUpdate.userId,
-                title: 'Booking Rejected',
-                message: `Your booking for ${bookingToUpdate.resourceName} on ${formatDateSafe(bookingToUpdate.startTime, '', 'MMM dd, HH:mm')} has been rejected and cancelled.`,
-                type: 'booking_rejected' as const,
-                linkTo: `/bookings?bookingId=${bookingToUpdate.id}`
-            };
-            try {
-              await addNotification(
-                notificationParams.userId,
-                notificationParams.title,
-                notificationParams.message,
-                notificationParams.type,
-                notificationParams.linkTo
-              );
-            } catch (notificationError: any) {
-              console.warn("Notification failed for booking rejection:", notificationError);
-            }
-        }
-      }
-
-      if (bookingToUpdate.status === 'Pending' && bookingToUpdate.resourceId) {
-        try {
-            await processWaitlistForResource(
-                bookingToUpdate.resourceId,
-                new Date(bookingToUpdate.startTime),
-                new Date(bookingToUpdate.endTime),
-                'admin_reject'
-            );
-        } catch (waitlistError: any) {
-            console.warn("Error processing waitlist after rejection:", waitlistError);
-        }
-      }
-
       await fetchBookingRequestsAndRelatedData();
     } catch (error: any) {
       console.error("Error rejecting booking:", error);
@@ -410,107 +316,88 @@ export default function BookingRequestsPage() {
           }
         />
 
-        {(isLoading || isAdminDataLoading) && allBookingsState.length === 0 ? (
-          <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading requests...</div>
-        ) : bookingsForApproval.length > 0 ? (
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                Pending & Waitlisted Requests
-                {bookingsForApproval.length > 0 && (
-                  <Badge
-                    variant="secondary"
-                    className="rounded-full h-6 w-6 p-0 flex items-center justify-center text-xs"
-                  >
-                    {bookingsForApproval.length}
-                  </Badge>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto border rounded-b-lg rounded-t-none">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead><ResourceIcon className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Resource</TableHead>
-                      <TableHead><UserIcon className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Booked By</TableHead>
-                      <TableHead><Clock className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Date & Time</TableHead>
-                      <TableHead><Info className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Status</TableHead>
-                      <TableHead><StickyNote className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Notes</TableHead>
-                      <TableHead className="text-right w-[100px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {bookingsForApproval.map((booking) => (
-                      <TableRow key={booking.id}>
-                        <TableCell className="font-medium">{booking.resourceName}</TableCell>
-                        <TableCell>{booking.userName}</TableCell>
-                        <TableCell>
-                          <div>{formatDateSafe(booking.startTime, 'N/A', 'MMM dd, yyyy')}</div>
-                          <div className="text-xs text-muted-foreground">
-                              {formatTimeField(booking.startTime)} - {formatTimeField(booking.endTime)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                            <Badge
-                                className={cn(
-                                    "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
-                                    booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
-                                    booking.status === 'Waitlisted' && 'bg-purple-500 text-white hover:bg-purple-600'
-                                )}
-                            >
-                                {booking.status}
-                            </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-xs truncate" title={booking.notes || undefined}>{booking.notes || 'N/A'}</TableCell>
-                        <TableCell className="text-right space-x-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleApproveBooking(booking.id)} disabled={isLoading}>
-                                <ThumbsUp className="h-4 w-4 text-green-600" />
-                                <span className="sr-only">Approve Booking</span>
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Approve Booking</p></TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => handleRejectBooking(booking.id)} disabled={isLoading}>
-                                <ThumbsDown className="h-4 w-4" />
-                                <span className="sr-only">Reject Booking</span>
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Reject Booking</p></TooltipContent>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
-            <CardContent>
-              <CheckSquare className="mx-auto h-12 w-12 mb-4 opacity-50" />
-              <p className="text-lg font-medium">
-                  {activeFilterCount > 0 ? "No Requests Match Filters" : "No Pending or Waitlisted Booking Requests"}
-              </p>
-              <p className="text-sm mb-4">
-                  {activeFilterCount > 0
-                      ? "Try adjusting your filter criteria."
-                      : "There are currently no booking requests awaiting approval or on the waitlist."
-                  }
-              </p>
-              {activeFilterCount > 0 && (
-                  <Button variant="outline" onClick={resetAllActivePageFilters}>
-                      <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
-                  </Button>
+        <div className="rounded-lg border border-border overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50 hover:bg-muted/50">
+                <TableHead className="font-semibold text-foreground"><ResourceIcon className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Resource</TableHead>
+                <TableHead className="font-semibold text-foreground"><UserIcon className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Booked By</TableHead>
+                <TableHead className="font-semibold text-foreground"><Clock className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Date & Time</TableHead>
+                <TableHead className="font-semibold text-foreground"><Info className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Status</TableHead>
+                <TableHead className="font-semibold text-foreground"><StickyNote className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Notes</TableHead>
+                <TableHead className="font-semibold text-foreground text-right w-[100px]">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(isLoading || isAdminDataLoading) && allBookingsState.length === 0 ? (
+                <TableSkeleton rows={5} cols={6} />
+              ) : bookingsForApproval.length > 0 ? (
+                bookingsForApproval.map((booking) => (
+                  <TableRow key={booking.id} className="hover:bg-muted/30 transition-colors">
+                    <TableCell className="font-medium">{booking.resourceName}</TableCell>
+                    <TableCell>{booking.userName}</TableCell>
+                    <TableCell>
+                      <div>{formatDateSafe(booking.startTime, 'N/A', 'MMM dd, yyyy')}</div>
+                      <div className="text-xs text-muted-foreground">
+                          {formatTimeField(booking.startTime)} - {formatTimeField(booking.endTime)}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                        <Badge
+                            className={cn(
+                                "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
+                                booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
+                                booking.status === 'Waitlisted' && 'bg-purple-500 text-white hover:bg-purple-600'
+                            )}
+                        >
+                            {booking.status}
+                        </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-xs truncate" title={booking.notes || undefined}>{booking.notes || 'N/A'}</TableCell>
+                    <TableCell className="text-right space-x-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleApproveBooking(booking.id)} disabled={isLoading}>
+                            <ThumbsUp className="h-4 w-4 text-green-600" />
+                            <span className="sr-only">Approve Booking</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>Approve Booking</p></TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive h-8 w-8" onClick={() => handleRejectBooking(booking.id)} disabled={isLoading}>
+                            <ThumbsDown className="h-4 w-4" />
+                            <span className="sr-only">Reject Booking</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>Reject Booking</p></TooltipContent>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6}>
+                    <EmptyState
+                      icon={CheckSquare}
+                      title={activeFilterCount > 0 ? "No Requests Match Filters" : "No Pending or Waitlisted Booking Requests"}
+                      description={activeFilterCount > 0
+                        ? "Try adjusting your filter criteria."
+                        : "There are currently no booking requests awaiting approval or on the waitlist."
+                      }
+                      action={activeFilterCount > 0 ? (
+                        <Button variant="outline" onClick={resetAllActivePageFilters}>
+                          <FilterX className="mr-2 h-4 w-4" /> Reset All Filters
+                        </Button>
+                      ) : undefined}
+                    />
+                  </TableCell>
+                </TableRow>
               )}
-            </CardContent>
-          </Card>
-        )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </TooltipProvider>
   );

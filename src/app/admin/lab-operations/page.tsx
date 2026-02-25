@@ -19,9 +19,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp, where, limit } from 'firebase/firestore';
-import { addNotification, addAuditLog, manageLabMembership_SA } from '@/lib/firestore-helpers';
+import { manageLabMembership_SA } from '@/lib/db-helpers';
+import { getResources_SA, getMaintenanceRequests_SA, getBlackoutDates_SA, getRecurringBlackoutRules_SA, getAllLabMemberships_SA, getBookings_SA } from '@/lib/actions/data.actions';
+import { createLab_SA, updateLab_SA, deleteLab_SA } from '@/lib/actions/lab.actions';
+import { createBlackoutDate_SA, deleteBlackoutDate_SA, createRecurringRule_SA, deleteRecurringRule_SA, createMaintenanceRequest_SA, updateMaintenanceRequest_SA } from '@/lib/actions/lab-operations.actions';
 
 // Import Tab Components
 import { ManageLabsTab } from '@/components/admin/lab-operations/tabs/ManageLabsTab';
@@ -146,32 +147,29 @@ export default function LabOperationsCenterPage() {
       setIsLoadingData(true);
       setIsLabAccessRequestLoading(true);
       try {
-        const [resourcesSnapshot, maintenanceSnapshot, boSnapshot, rrSnapshot, membershipsSnapshot, bookingsSnapshot] = await Promise.all([
-          getDocs(query(collection(db, "resources"))),
-          getDocs(query(collection(db, "maintenanceRequests"), orderBy("dateReported", "desc"))),
-          getDocs(query(collection(db, "blackoutDates"), orderBy("date", "asc"))),
-          getDocs(query(collection(db, "recurringBlackoutRules"), orderBy("name", "asc"))),
-          getDocs(query(collection(db, 'labMemberships'), orderBy('requestedAt', 'asc'))), 
-          getDocs(query(collection(db, "bookings"), orderBy("startTime", "asc"))),
+        const [resourcesResult, maintenanceResult, blackoutResult, recurringResult, membershipsResult, bookingsResult] = await Promise.all([
+          getResources_SA(),
+          getMaintenanceRequests_SA(),
+          getBlackoutDates_SA(),
+          getRecurringBlackoutRules_SA(),
+          getAllLabMemberships_SA(),
+          getBookings_SA({}),
         ]);
 
-        const fetchedResourcesAll = resourcesSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as Resource));
+        const fetchedResourcesAll = resourcesResult.success && resourcesResult.data ? resourcesResult.data : [];
         setAllResourcesForCountsAndChecks(fetchedResourcesAll);
 
-        setMaintenanceRequests(maintenanceSnapshot.docs.map(docSnap => {
-            const data = docSnap.data();
-            return { id: docSnap.id, ...data, dateReported: (data.dateReported as Timestamp)?.toDate() || new Date(), dateResolved: (data.dateResolved as Timestamp)?.toDate() } as MaintenanceRequest;
-        }));
+        setMaintenanceRequests(maintenanceResult.success && maintenanceResult.data ? maintenanceResult.data : []);
 
-        setAllBlackoutDates(boSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as BlackoutDate)));
-        setAllRecurringRules(rrSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as RecurringBlackoutRule)));
+        setAllBlackoutDates(blackoutResult.success && blackoutResult.data ? blackoutResult.data : []);
+        setAllRecurringRules(recurringResult.success && recurringResult.data ? recurringResult.data : []);
 
-        const allFetchedMemberships = membershipsSnapshot.docs.map(mDoc => ({ id: mDoc.id, ...mDoc.data() } as LabMembership));
-        setUserLabMemberships(allFetchedMemberships); 
+        const allFetchedMemberships = membershipsResult.success && membershipsResult.data ? membershipsResult.data : [];
+        setUserLabMemberships(allFetchedMemberships);
 
-        const pendingRequestsPromises = allFetchedMemberships 
+        const pendingRequests = allFetchedMemberships
             .filter(m => m.status === 'pending_approval')
-            .map(async (membershipData) => {
+            .map((membershipData) => {
                 const user = allUsersData.find(u => u.id === membershipData.userId);
                 const lab = labs.find(l => l.id === membershipData.labId);
                 return {
@@ -181,26 +179,12 @@ export default function LabOperationsCenterPage() {
                     userEmail: user?.email || 'N/A',
                     userAvatarUrl: user?.avatarUrl,
                     labName: lab?.name || 'Unknown Lab',
-                    requestedAt: (membershipData.requestedAt as Timestamp)?.toDate()
                 } as LabMembershipRequest;
             });
-        setAllLabAccessRequests(await Promise.all(pendingRequestsPromises));
-        
-        const bookingsWithDetailsPromises = bookingsSnapshot.docs.map(async (docSnap) => {
-            const data = docSnap.data();
-            const resource = fetchedResourcesAll.find(r => r.id === data.resourceId);
-            const user = allUsersData.find(u => u.id === data.userId);
-            return {
-              id: docSnap.id,
-              ...data,
-              startTime: (data.startTime as Timestamp).toDate(),
-              endTime: (data.endTime as Timestamp).toDate(),
-              createdAt: (data.createdAt as Timestamp)?.toDate(),
-              resourceName: resource?.name || 'Unknown Resource',
-              userName: user?.name || 'Unknown User',
-            } as Booking & { resourceName?: string, userName?: string };
-          });
-        setAllBookingsState(await Promise.all(bookingsWithDetailsPromises));
+        setAllLabAccessRequests(pendingRequests);
+
+        const fetchedBookings = bookingsResult.success && bookingsResult.data ? bookingsResult.data : [];
+        setAllBookingsState(fetchedBookings as (Booking & { resourceName?: string, userName?: string })[]);
 
       } catch (error: any) {
         toast({ title: "Error", description: `Failed to load operational data: ${error.message}`, variant: "destructive" });
@@ -337,25 +321,27 @@ export default function LabOperationsCenterPage() {
         if (!currentUser || !currentUser.name || !canManageAny) { toast({ title: "Permission Denied", variant: "destructive" }); return; }
         setIsLoadingData(true);
         try {
-            const labDataToSave: Partial<Omit<Lab, 'id' | 'createdAt' | 'lastUpdatedAt'>> & { lastUpdatedAt?: any, createdAt?: any } = {
-                name: data.name,
-                location: data.location || null,
-                description: data.description || null,
-            };
-            const auditAction = editingLab ? 'LAB_UPDATED' : 'LAB_CREATED';
-            let entityId = editingLab ? editingLab.id : '';
-            if (editingLab) { 
-                labDataToSave.lastUpdatedAt = serverTimestamp();
-                await updateDoc(doc(db, "labs", entityId), labDataToSave as any);
-            } else { 
-                labDataToSave.createdAt = serverTimestamp();
-                const docRef = await addDoc(collection(db, "labs"), labDataToSave as any);
-                entityId = docRef.id;
+            if (editingLab) {
+                const result = await updateLab_SA({
+                    callerUserId: currentUser.id,
+                    labId: editingLab.id,
+                    name: data.name,
+                    location: data.location || undefined,
+                    description: data.description || undefined,
+                });
+                if (!result.success) { toast({ title: "Save Error", description: result.message || "Could not update lab.", variant: "destructive" }); return; }
+            } else {
+                const result = await createLab_SA({
+                    callerUserId: currentUser.id,
+                    name: data.name,
+                    location: data.location || undefined,
+                    description: data.description || undefined,
+                });
+                if (!result.success) { toast({ title: "Save Error", description: result.message || "Could not create lab.", variant: "destructive" }); return; }
             }
-            await addAuditLog(currentUser.id, currentUser.name, auditAction, { entityType: 'Lab', entityId, details: `Lab '${data.name}' ${editingLab ? 'updated' : 'created'}.` });
             toast({ title: `Lab ${editingLab ? 'Updated' : 'Created'}`, description: `"${data.name}" has been ${editingLab ? 'updated' : 'created'}.` });
             setIsLabFormDialogOpen(false);
-            setEditingLab(null); 
+            setEditingLab(null);
             fetchRemainingData();
         } catch (error: any) {
             toast({ title: "Save Error", description: `Could not save lab: ${error.message}`, variant: "destructive" });
@@ -383,8 +369,8 @@ export default function LabOperationsCenterPage() {
 
         setIsLoadingData(true);
         try {
-            await deleteDoc(doc(db, "labs", labId));
-            await addAuditLog(currentUser.id, currentUser.name, 'LAB_DELETED', { entityType: 'Lab', entityId: labId, details: `Lab '${deletedLab.name}' deleted.` });
+            const result = await deleteLab_SA({ callerUserId: currentUser.id, labId });
+            if (!result.success) { toast({ title: "Delete Error", description: result.message || "Could not delete lab.", variant: "destructive" }); return; }
             toast({ title: "Lab Deleted", description: `Lab "${deletedLab.name}" removed.`, variant: "destructive" });
             setLabToDelete(null);
             fetchRemainingData();
@@ -411,7 +397,7 @@ export default function LabOperationsCenterPage() {
             const isGlobal = !bd.labId;
             const lowerSearchTerm = activeGlobalClosureSearchTerm.toLowerCase();
             const reasonMatch = bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm);
-            const dateString = typeof bd.date === 'string' ? bd.date : (bd.date as unknown as Timestamp)?.toDate()?.toISOString().split('T')[0];
+            const dateString = bd.date;
             const dateMatch = dateString && isValidDateFn(parseISO(dateString)) && formatDateSafe(parseISO(dateString), '', 'PPP').toLowerCase().includes(lowerSearchTerm);
             return isGlobal && (!activeGlobalClosureSearchTerm || reasonMatch || dateMatch);
         });
@@ -433,21 +419,18 @@ export default function LabOperationsCenterPage() {
     const handleSaveGlobalBlackoutDate = useCallback(async (data: BlackoutDateDialogFormValues) => {
         if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
         const formattedDateOnly = formatDateSafe(data.date, '', 'yyyy-MM-dd');
-        const displayDate = formatDateSafe(data.date, '', 'PPP');
-        const blackoutDataToSave: Omit<BlackoutDate, 'id'> = {
-            labId: null, 
-            date: formattedDateOnly,
-            reason: data.reason || undefined,
-        };
         setIsLoadingData(true);
         try {
             if (editingGlobalBlackoutDate) {
-                await updateDoc(doc(db, "blackoutDates", editingGlobalBlackoutDate.id), blackoutDataToSave as any);
-                addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_UPDATED', { entityType: 'BlackoutDate', entityId: editingGlobalBlackoutDate.id, details: `Global Blackout Date for ${displayDate} updated. Reason: ${data.reason || 'N/A'}`});
+                // Global blackout dates: delete old and create new (no update SA for blackout dates)
+                const deleteResult = await deleteBlackoutDate_SA({ callerUserId: currentUser.id, blackoutDateId: editingGlobalBlackoutDate.id });
+                if (!deleteResult.success) { toast({ title: "Save Failed", description: deleteResult.message || "Could not update global blackout date.", variant: "destructive" }); return; }
+                const createResult = await createBlackoutDate_SA({ callerUserId: currentUser.id, date: formattedDateOnly, reason: data.reason || undefined });
+                if (!createResult.success) { toast({ title: "Save Failed", description: createResult.message || "Could not recreate global blackout date.", variant: "destructive" }); return; }
                 toast({ title: 'Global Blackout Date Updated'});
             } else {
-                const docRef = await addDoc(collection(db, "blackoutDates"), blackoutDataToSave);
-                addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_CREATED', { entityType: 'BlackoutDate', entityId: docRef.id, details: `Global Blackout Date for ${displayDate} created. Reason: ${data.reason || 'N/A'}`});
+                const result = await createBlackoutDate_SA({ callerUserId: currentUser.id, date: formattedDateOnly, reason: data.reason || undefined });
+                if (!result.success) { toast({ title: "Save Failed", description: result.message || "Could not add global blackout date.", variant: "destructive" }); return; }
                 toast({ title: 'Global Blackout Date Added'});
             }
             setIsGlobalDateFormDialogOpen(false);
@@ -459,40 +442,34 @@ export default function LabOperationsCenterPage() {
 
     const handleDeleteGlobalBlackoutDate = useCallback(async (blackoutDateId: string) => {
         if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
-        const deletedDateObj = allBlackoutDates.find(bd => bd.id === blackoutDateId);
-        if (!deletedDateObj) return;
-        const dateString = typeof deletedDateObj.date === 'string' ? deletedDateObj.date : (deletedDateObj.date as unknown as Timestamp)?.toDate()?.toISOString().split('T')[0];
         setIsLoadingData(true);
         try {
-            await deleteDoc(doc(db, "blackoutDates", blackoutDateId));
-            addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Global Blackout Date for ${dateString ? formatDateSafe(parseISO(dateString), '', 'PPP') : 'Invalid Date'} (Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`});
+            const result = await deleteBlackoutDate_SA({ callerUserId: currentUser.id, blackoutDateId });
+            if (!result.success) { toast({ title: "Delete Failed", description: result.message || "Could not delete global blackout date.", variant: "destructive" }); return; }
             toast({ title: "Global Blackout Date Removed", variant: "destructive" });
             setGlobalDateToDelete(null);
             fetchRemainingData();
         } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete global blackout date: ${error.message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
-    }, [currentUser, allBlackoutDates, fetchRemainingData, toast]);
+    }, [currentUser, fetchRemainingData, toast]);
 
     const handleOpenNewGlobalRecurringDialog = useCallback(() => { setEditingGlobalRecurringRule(null); setIsGlobalRecurringFormDialogOpen(true); }, []);
     const handleOpenEditGlobalRecurringDialog = useCallback((rule: RecurringBlackoutRule) => { setEditingGlobalRecurringRule(rule); setIsGlobalRecurringFormDialogOpen(true); }, []);
 
     const handleSaveGlobalRecurringRule = useCallback(async (data: RecurringRuleDialogFormValues) => {
         if (!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
-        const ruleDataToSave: Omit<RecurringBlackoutRule, 'id'> = {
-            labId: null, 
-            name: data.name,
-            daysOfWeek: data.daysOfWeek,
-            reason: data.reason || undefined,
-        };
         setIsLoadingData(true);
         try {
             if (editingGlobalRecurringRule) {
-                await updateDoc(doc(db, "recurringBlackoutRules", editingGlobalRecurringRule.id), ruleDataToSave as any);
-                addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_UPDATED', { entityType: 'RecurringBlackoutRule', entityId: editingGlobalRecurringRule.id, details: `Global recurring rule '${data.name}' updated.`});
+                // Global recurring rules: delete old and create new (no update SA for recurring rules)
+                const deleteResult = await deleteRecurringRule_SA({ callerUserId: currentUser.id, ruleId: editingGlobalRecurringRule.id });
+                if (!deleteResult.success) { toast({ title: "Save Failed", description: deleteResult.message || "Could not update global recurring rule.", variant: "destructive" }); return; }
+                const createResult = await createRecurringRule_SA({ callerUserId: currentUser.id, name: data.name, daysOfWeek: data.daysOfWeek, reason: data.reason || undefined });
+                if (!createResult.success) { toast({ title: "Save Failed", description: createResult.message || "Could not recreate global recurring rule.", variant: "destructive" }); return; }
                 toast({ title: 'Global Recurring Rule Updated'});
             } else {
-                const docRef = await addDoc(collection(db, "recurringBlackoutRules"), ruleDataToSave);
-                addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_CREATED', { entityType: 'RecurringBlackoutRule', entityId: docRef.id, details: `Global recurring rule '${data.name}' created.`});
+                const result = await createRecurringRule_SA({ callerUserId: currentUser.id, name: data.name, daysOfWeek: data.daysOfWeek, reason: data.reason || undefined });
+                if (!result.success) { toast({ title: "Save Failed", description: result.message || "Could not add global recurring rule.", variant: "destructive" }); return; }
                 toast({ title: 'Global Recurring Rule Added'});
             }
             setIsGlobalRecurringFormDialogOpen(false);
@@ -504,18 +481,16 @@ export default function LabOperationsCenterPage() {
 
     const handleDeleteGlobalRecurringRule = useCallback(async (ruleId: string) => {
         if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
-        const deletedRuleObj = allRecurringRules.find(r => r.id === ruleId);
-        if (!deletedRuleObj) return;
         setIsLoadingData(true);
         try {
-            await deleteDoc(doc(db, "recurringBlackoutRules", ruleId));
-            addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Global recurring rule '${deletedRuleObj.name}' deleted.`});
+            const result = await deleteRecurringRule_SA({ callerUserId: currentUser.id, ruleId });
+            if (!result.success) { toast({ title: "Delete Failed", description: result.message || "Could not delete global recurring rule.", variant: "destructive" }); return; }
             toast({ title: "Global Recurring Rule Removed", variant: "destructive" });
             setGlobalRuleToDelete(null);
             fetchRemainingData();
         } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete global recurring rule: ${error.message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
-    }, [currentUser, allRecurringRules, fetchRemainingData, toast]);
+    }, [currentUser, fetchRemainingData, toast]);
     
     const handleApplyGlobalClosureDialogFilters = useCallback(() => {
         setActiveGlobalClosureSearchTerm(tempGlobalClosureSearchTerm);
@@ -545,7 +520,7 @@ export default function LabOperationsCenterPage() {
             const isForCurrentLab = bd.labId === activeContextId;
             const lowerSearchTerm = activeLabSpecificClosureSearchTerm.toLowerCase();
             const reasonMatch = bd.reason && bd.reason.toLowerCase().includes(lowerSearchTerm);
-            const dateString = typeof bd.date === 'string' ? bd.date : (bd.date as unknown as Timestamp)?.toDate()?.toISOString().split('T')[0];
+            const dateString = bd.date;
             const dateMatch = dateString && isValidDateFn(parseISO(dateString)) && formatDateSafe(parseISO(dateString), '', 'PPP').toLowerCase().includes(lowerSearchTerm);
             return isForCurrentLab && (!activeLabSpecificClosureSearchTerm || reasonMatch || dateMatch);
         });
@@ -567,21 +542,18 @@ export default function LabOperationsCenterPage() {
     const handleSaveLabSpecificBlackoutDate = useCallback(async (data: BlackoutDateDialogFormValues) => {
         if (!currentUser || !currentUser.id || !currentUser.name || activeContextId === GLOBAL_CONTEXT_VALUE) { toast({ title: "Error", description: "Cannot save lab-specific date without lab context or auth.", variant: "destructive" }); return; }
         const formattedDateOnly = formatDateSafe(data.date, '', 'yyyy-MM-dd');
-        const displayDate = formatDateSafe(data.date, '', 'PPP');
-        const blackoutDataToSave: Omit<BlackoutDate, 'id'> = {
-            labId: activeContextId, 
-            date: formattedDateOnly,
-            reason: data.reason || undefined,
-        };
         setIsLoadingData(true);
         try {
             if (editingLabSpecificBlackoutDate) {
-                await updateDoc(doc(db, "blackoutDates", editingLabSpecificBlackoutDate.id), blackoutDataToSave as any);
-                addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_UPDATED', { entityType: 'BlackoutDate', entityId: editingLabSpecificBlackoutDate.id, details: `Lab-specific Blackout Date for ${displayDate} (Lab ID: ${activeContextId}) updated. Reason: ${data.reason || 'N/A'}`});
+                // Lab-specific blackout dates: delete old and create new (no update SA for blackout dates)
+                const deleteResult = await deleteBlackoutDate_SA({ callerUserId: currentUser.id, blackoutDateId: editingLabSpecificBlackoutDate.id });
+                if (!deleteResult.success) { toast({ title: "Save Failed", description: deleteResult.message || "Could not update lab blackout date.", variant: "destructive" }); return; }
+                const createResult = await createBlackoutDate_SA({ callerUserId: currentUser.id, labId: activeContextId, date: formattedDateOnly, reason: data.reason || undefined });
+                if (!createResult.success) { toast({ title: "Save Failed", description: createResult.message || "Could not recreate lab blackout date.", variant: "destructive" }); return; }
                 toast({ title: 'Lab Blackout Date Updated'});
             } else {
-                const docRef = await addDoc(collection(db, "blackoutDates"), blackoutDataToSave);
-                addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_CREATED', { entityType: 'BlackoutDate', entityId: docRef.id, details: `Lab-specific Blackout Date for ${displayDate} (Lab ID: ${activeContextId}) created. Reason: ${data.reason || 'N/A'}`});
+                const result = await createBlackoutDate_SA({ callerUserId: currentUser.id, labId: activeContextId, date: formattedDateOnly, reason: data.reason || undefined });
+                if (!result.success) { toast({ title: "Save Failed", description: result.message || "Could not add lab blackout date.", variant: "destructive" }); return; }
                 toast({ title: 'Lab Blackout Date Added'});
             }
             setIsLabSpecificDateFormDialogOpen(false);
@@ -593,40 +565,34 @@ export default function LabOperationsCenterPage() {
 
     const handleDeleteLabSpecificBlackoutDate = useCallback(async (blackoutDateId: string) => {
         if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
-        const deletedDateObj = allBlackoutDates.find(bd => bd.id === blackoutDateId);
-        if (!deletedDateObj) return;
-        const dateString = typeof deletedDateObj.date === 'string' ? deletedDateObj.date : (deletedDateObj.date as unknown as Timestamp)?.toDate()?.toISOString().split('T')[0];
         setIsLoadingData(true);
         try {
-            await deleteDoc(doc(db, "blackoutDates", blackoutDateId));
-            addAuditLog(currentUser.id, currentUser.name, 'BLACKOUT_DATE_DELETED', { entityType: 'BlackoutDate', entityId: blackoutDateId, details: `Lab-specific Blackout Date for ${dateString ? formatDateSafe(parseISO(dateString), '', 'PPP') : 'Invalid Date'} (Lab ID: ${deletedDateObj.labId}, Reason: ${deletedDateObj.reason || 'N/A'}) deleted.`});
+            const result = await deleteBlackoutDate_SA({ callerUserId: currentUser.id, blackoutDateId });
+            if (!result.success) { toast({ title: "Delete Failed", description: result.message || "Could not delete lab blackout date.", variant: "destructive" }); return; }
             toast({ title: "Lab Blackout Date Removed", variant: "destructive" });
             setLabSpecificDateToDelete(null);
             fetchRemainingData();
         } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete lab-specific blackout date: ${error.message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
-    }, [currentUser, allBlackoutDates, fetchRemainingData, toast]);
+    }, [currentUser, fetchRemainingData, toast]);
 
     const handleOpenNewLabSpecificRecurringDialog = useCallback(() => { setEditingLabSpecificRecurringRule(null); setIsLabSpecificRecurringFormDialogOpen(true); }, []);
     const handleOpenEditLabSpecificRecurringDialog = useCallback((rule: RecurringBlackoutRule) => { setEditingLabSpecificRecurringRule(rule); setIsLabSpecificRecurringFormDialogOpen(true); }, []);
 
     const handleSaveLabSpecificRecurringRule = useCallback(async (data: RecurringRuleDialogFormValues) => {
         if (!currentUser || !currentUser.id || !currentUser.name || activeContextId === GLOBAL_CONTEXT_VALUE) { toast({ title: "Error", description: "Cannot save lab-specific rule without lab context or auth.", variant: "destructive" }); return; }
-        const ruleDataToSave: Omit<RecurringBlackoutRule, 'id'> = {
-            labId: activeContextId, 
-            name: data.name,
-            daysOfWeek: data.daysOfWeek,
-            reason: data.reason || undefined,
-        };
         setIsLoadingData(true);
         try {
             if (editingLabSpecificRecurringRule) {
-                await updateDoc(doc(db, "recurringBlackoutRules", editingLabSpecificRecurringRule.id), ruleDataToSave as any);
-                addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_UPDATED', { entityType: 'RecurringBlackoutRule', entityId: editingLabSpecificRecurringRule.id, details: `Lab-specific recurring rule '${data.name}' (Lab ID: ${activeContextId}) updated.`});
+                // Lab-specific recurring rules: delete old and create new (no update SA for recurring rules)
+                const deleteResult = await deleteRecurringRule_SA({ callerUserId: currentUser.id, ruleId: editingLabSpecificRecurringRule.id });
+                if (!deleteResult.success) { toast({ title: "Save Failed", description: deleteResult.message || "Could not update lab recurring rule.", variant: "destructive" }); return; }
+                const createResult = await createRecurringRule_SA({ callerUserId: currentUser.id, labId: activeContextId, name: data.name, daysOfWeek: data.daysOfWeek, reason: data.reason || undefined });
+                if (!createResult.success) { toast({ title: "Save Failed", description: createResult.message || "Could not recreate lab recurring rule.", variant: "destructive" }); return; }
                 toast({ title: 'Lab Recurring Rule Updated'});
             } else {
-                const docRef = await addDoc(collection(db, "recurringBlackoutRules"), ruleDataToSave);
-                addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_CREATED', { entityType: 'RecurringBlackoutRule', entityId: docRef.id, details: `Lab-specific recurring rule '${data.name}' (Lab ID: ${activeContextId}) created.`});
+                const result = await createRecurringRule_SA({ callerUserId: currentUser.id, labId: activeContextId, name: data.name, daysOfWeek: data.daysOfWeek, reason: data.reason || undefined });
+                if (!result.success) { toast({ title: "Save Failed", description: result.message || "Could not add lab recurring rule.", variant: "destructive" }); return; }
                 toast({ title: 'Lab Recurring Rule Added'});
             }
             setIsLabSpecificRecurringFormDialogOpen(false);
@@ -638,18 +604,16 @@ export default function LabOperationsCenterPage() {
 
     const handleDeleteLabSpecificRecurringRule = useCallback(async (ruleId: string) => {
         if(!currentUser || !currentUser.id || !currentUser.name) { toast({ title: "Auth Error", variant: "destructive" }); return; }
-        const deletedRuleObj = allRecurringRules.find(r => r.id === ruleId);
-        if (!deletedRuleObj) return;
         setIsLoadingData(true);
         try {
-            await deleteDoc(doc(db, "recurringBlackoutRules", ruleId));
-            addAuditLog(currentUser.id, currentUser.name, 'RECURRING_RULE_DELETED', { entityType: 'RecurringBlackoutRule', entityId: ruleId, details: `Lab-specific recurring rule '${deletedRuleObj.name}' (Lab ID: ${deletedRuleObj.labId}) deleted.`});
+            const result = await deleteRecurringRule_SA({ callerUserId: currentUser.id, ruleId });
+            if (!result.success) { toast({ title: "Delete Failed", description: result.message || "Could not delete lab recurring rule.", variant: "destructive" }); return; }
             toast({ title: "Lab Recurring Rule Removed", variant: "destructive" });
             setLabSpecificRuleToDelete(null);
             fetchRemainingData();
         } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete lab-specific recurring rule: ${error.message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
-    }, [currentUser, allRecurringRules, fetchRemainingData, toast]);
+    }, [currentUser, fetchRemainingData, toast]);
 
     const handleApplyLabSpecificClosureDialogFilters = useCallback(() => {
         setActiveLabSpecificClosureSearchTerm(tempLabSpecificClosureSearchTerm);
@@ -856,53 +820,29 @@ export default function LabOperationsCenterPage() {
         const resource = allResourcesForCountsAndChecks.find(r => r.id === data.resourceId);
         if (!resource) { toast({ title: "Error", variant: "destructive" }); return;}
 
-        let dateResolvedForFirestore: Timestamp | null = null;
-        if ((data.status === 'Resolved' || data.status === 'Closed') && data.dateResolved && isValidDateFn(parseISO(data.dateResolved))) {
-            dateResolvedForFirestore = Timestamp.fromDate(parseISO(data.dateResolved));
-        } else if ((data.status === 'Resolved' || data.status === 'Closed') && !editingMaintenanceRequest?.dateResolved) {
-            dateResolvedForFirestore = serverTimestamp() as Timestamp;
-        } else if (editingMaintenanceRequest?.dateResolved && (data.status === 'Resolved' || data.status === 'Closed')) {
-            dateResolvedForFirestore = Timestamp.fromDate(editingMaintenanceRequest.dateResolved);
-        }
+        const resolvedTechnicianId = data.assignedTechnicianId === '--unassigned--' || !data.assignedTechnicianId ? undefined : data.assignedTechnicianId;
 
-        const requestDataToSave: any = {
-            resourceId: data.resourceId,
-            issueDescription: data.issueDescription,
-            status: data.status,
-            assignedTechnicianId: data.assignedTechnicianId === '--unassigned--' || !data.assignedTechnicianId ? null : data.assignedTechnicianId,
-            resolutionNotes: data.resolutionNotes || null,
-            dateResolved: dateResolvedForFirestore,
-        };
         setIsLoadingData(true);
         try {
             if (editingMaintenanceRequest) {
-                await updateDoc(doc(db, "maintenanceRequests", editingMaintenanceRequest.id), requestDataToSave);
-                await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_UPDATED', { entityType: 'MaintenanceRequest', entityId: editingMaintenanceRequest.id, details: `Maintenance request for '${resource.name}' updated. Status: ${data.status}.`});
+                const result = await updateMaintenanceRequest_SA({
+                    callerUserId: currentUser.id,
+                    requestId: editingMaintenanceRequest.id,
+                    status: data.status,
+                    assignedTechnicianId: resolvedTechnicianId,
+                    resolutionNotes: data.resolutionNotes || undefined,
+                });
+                if (!result.success) { toast({ title: "Update Failed", description: result.message || "Could not update maintenance request.", variant: "destructive" }); return; }
                 toast({ title: 'Request Updated'});
-                if ((data.status === 'Resolved' && editingMaintenanceRequest.status !== 'Resolved') && editingMaintenanceRequest.reportedByUserId !== currentUser.id && editingMaintenanceRequest.reportedByUserId) {
-                    await addNotification( editingMaintenanceRequest.reportedByUserId, 'Maintenance Resolved', `Issue for ${resource.name} resolved.`, 'maintenance_resolved', `/maintenance?requestId=${editingMaintenanceRequest.id}`);
-                }
-                if (data.assignedTechnicianId && data.assignedTechnicianId !== editingMaintenanceRequest.assignedTechnicianId && data.assignedTechnicianId !== '--unassigned--') {
-                    await addNotification( data.assignedTechnicianId, 'Maintenance Task Assigned', `Task for ${resource.name}: ${data.issueDescription.substring(0,50)}...`, 'maintenance_assigned', `/maintenance?requestId=${editingMaintenanceRequest.id}`);
-                }
             } else {
-                const newRequestPayload = { ...requestDataToSave, reportedByUserId: currentUser.id, dateReported: serverTimestamp(), };
-                const docRef = await addDoc(collection(db, "maintenanceRequests"), newRequestPayload);
-                await addAuditLog(currentUser.id, currentUser.name, 'MAINTENANCE_CREATED', { entityType: 'MaintenanceRequest', entityId: docRef.id, details: `New request for '${resource.name}' by ${currentUser.name}.`});
+                const result = await createMaintenanceRequest_SA({
+                    callerUserId: currentUser.id,
+                    resourceId: data.resourceId,
+                    issueDescription: data.issueDescription,
+                    assignedTechnicianId: resolvedTechnicianId,
+                });
+                if (!result.success) { toast({ title: "Logging Failed", description: result.message || "Could not log maintenance request.", variant: "destructive" }); return; }
                 toast({ title: 'Request Logged'});
-                const techIdForNotification = requestDataToSave.assignedTechnicianId;
-                if(techIdForNotification && techIdForNotification !== '--unassigned--'){
-                    await addNotification( techIdForNotification, 'New Maintenance Request Assigned', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... assigned.`, 'maintenance_assigned', `/maintenance?requestId=${docRef.id}`);
-                } else {
-                    const usersToNotifyQuery = query(collection(db, 'users'), where('role', 'in', ['Admin', 'Technician']), orderBy('name', 'asc'));
-                    const usersToNotifySnapshot = await getDocs(usersToNotifyQuery);
-                    const notificationPromises = usersToNotifySnapshot.docs.map(userDoc => {
-                        if(userDoc.id !== currentUser?.id) {
-                            return addNotification( userDoc.id, 'New Unassigned Maintenance Request', `New request for ${resource.name}: ${data.issueDescription.substring(0, 50)}... needs attention.`, 'maintenance_new', '/admin/lab-operations?tab=maintenance-log');
-                        } return Promise.resolve();
-                    });
-                    await Promise.all(notificationPromises);
-                }
             }
             setIsMaintenanceFormDialogOpen(false);
             setEditingMaintenanceRequest(null);

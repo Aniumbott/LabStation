@@ -10,8 +10,10 @@ import { useAuth } from '@/components/auth-context';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import { isValid as isValidDateFn, formatDistanceToNowStrict } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn, formatDateSafe } from '@/lib/utils';
 import {
   Tooltip,
   TooltipContent,
@@ -30,9 +32,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
-import { collection, query, where, orderBy, getDocs, doc, updateDoc, deleteDoc, writeBatch, Timestamp } from 'firebase/firestore';
-import { formatDateSafe } from '@/lib/utils';
+import { getNotifications_SA } from '@/lib/actions/data.actions';
+import { markNotificationRead_SA, markAllNotificationsRead_SA, deleteNotification_SA, deleteAllNotifications_SA } from '@/lib/actions/notification.actions';
 import { useRouter } from 'next/navigation';
 
 
@@ -78,21 +79,16 @@ export default function NotificationsPage() {
     }
     setIsLoadingNotifications(true);
     try {
-      const notificationsQuery = query(
-        collection(db, "notifications"),
-        where("userId", "==", currentUser.id),
-        orderBy("createdAt", "desc")
-      );
-      const querySnapshot = await getDocs(notificationsQuery);
-      const fetchedNotifications: NotificationType[] = querySnapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          ...data,
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(), // Convert Firestore Timestamp
-        } as NotificationType;
-      });
-      setNotifications(fetchedNotifications);
+      const result = await getNotifications_SA(currentUser.id);
+      if (result.success && result.data) {
+        const fetchedNotifications: NotificationType[] = result.data.map(n => ({
+          ...n,
+          createdAt: n.createdAt ? new Date(n.createdAt) : new Date(),
+        }));
+        setNotifications(fetchedNotifications);
+      } else {
+        setNotifications([]);
+      }
     } catch (error: any) {
       console.error("Error fetching notifications:", error);
       toast({ title: "Error", description: `Failed to load notifications: ${error.message}`, variant: "destructive" });
@@ -116,11 +112,14 @@ export default function NotificationsPage() {
         return;
     }
     try {
-      const notifDocRef = doc(db, "notifications", id);
-      await updateDoc(notifDocRef, { isRead: true });
-      setNotifications(prev =>
-        prev.map(n => (n.id === id ? { ...n, isRead: true } : n))
-      );
+      const result = await markNotificationRead_SA({ callerUserId: currentUser.id, notificationId: id });
+      if (result.success) {
+        setNotifications(prev =>
+          prev.map(n => (n.id === id ? { ...n, isRead: true } : n))
+        );
+      } else {
+        toast({ title: "Error", description: result.message || "Could not mark notification as read.", variant: "destructive" });
+      }
     } catch (error: any) {
       toast({ title: "Error", description: `Could not mark notification as read: ${error.message}`, variant: "destructive"});
     }
@@ -136,17 +135,16 @@ export default function NotificationsPage() {
       toast({ title: "No Unread Notifications", description: "All notifications are already marked as read." });
       return;
     }
-    
+
     setIsLoadingNotifications(true);
     try {
-      const batch = writeBatch(db);
-      unreadNotifications.forEach(notification => {
-        const notifDocRef = doc(db, "notifications", notification.id);
-        batch.update(notifDocRef, { isRead: true });
-      });
-      await batch.commit();
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-      toast({ title: "All Read", description: "All notifications have been marked as read." });
+      const result = await markAllNotificationsRead_SA({ callerUserId: currentUser.id });
+      if (result.success) {
+        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+        toast({ title: "All Read", description: "All notifications have been marked as read." });
+      } else {
+        toast({ title: "Error", description: result.message || "Could not mark all notifications as read.", variant: "destructive" });
+      }
     } catch (error: any) {
       toast({ title: "Error", description: `Could not mark all notifications as read: ${error.message}`, variant: "destructive"});
     } finally {
@@ -159,14 +157,17 @@ export default function NotificationsPage() {
         toast({ title: "Authentication Error", description: "You must be logged in to perform this action.", variant: "destructive" });
         return;
     }
-     try {
-       const notifDocRef = doc(db, "notifications", id);
-       await deleteDoc(notifDocRef);
-       setNotifications(prev => prev.filter(n => n.id !== id));
-       toast({ title: "Notification Deleted", description: "The notification has been removed." });
-     } catch (error: any) {
-       toast({ title: "Error", description: `Could not delete notification: ${error.message}`, variant: "destructive"});
-     }
+    try {
+      const result = await deleteNotification_SA({ callerUserId: currentUser.id, notificationId: id });
+      if (result.success) {
+        setNotifications(prev => prev.filter(n => n.id !== id));
+        toast({ title: "Notification Deleted", description: "The notification has been removed." });
+      } else {
+        toast({ title: "Error", description: result.message || "Could not delete notification.", variant: "destructive" });
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: `Could not delete notification: ${error.message}`, variant: "destructive"});
+    }
   }, [currentUser, toast]);
 
   const handleDeleteAllNotifications = useCallback(async () => {
@@ -181,14 +182,13 @@ export default function NotificationsPage() {
     }
     setIsLoadingNotifications(true);
     try {
-      const batch = writeBatch(db);
-      notifications.forEach(notification => {
-        const notifDocRef = doc(db, "notifications", notification.id);
-        batch.delete(notifDocRef);
-      });
-      await batch.commit();
-      setNotifications([]);
-      toast({ title: "All Notifications Cleared", description: "All your notifications have been deleted.", variant: "destructive" });
+      const result = await deleteAllNotifications_SA({ callerUserId: currentUser.id });
+      if (result.success) {
+        setNotifications([]);
+        toast({ title: "All Notifications Cleared", description: "All your notifications have been deleted.", variant: "destructive" });
+      } else {
+        toast({ title: "Error", description: result.message || "Could not clear all notifications.", variant: "destructive" });
+      }
     } catch (error: any) {
       toast({ title: "Error", description: `Could not clear all notifications: ${error.message}`, variant: "destructive"});
     } finally {
@@ -201,26 +201,26 @@ export default function NotificationsPage() {
 
   if (authIsLoading) {
     return (
-      <div className="flex justify-center items-center min-h-[calc(100vh-200px)] text-muted-foreground">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <p className="ml-3 text-sm">Loading notifications...</p>
+      <div className="space-y-4">
+        <Skeleton className="h-12 w-48 rounded-lg" />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-20 w-full rounded-lg" />
+        ))}
       </div>
     );
   }
-  
+
   if (!currentUser && !authIsLoading) {
     return (
-         <div className="space-y-8">
-            <PageHeader title="Notifications" icon={Bell} description="Please log in to view your notifications." />
-            <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
-                <CardContent>
-                    <Info className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                    <p className="text-lg font-medium">Login Required</p>
-                    <p className="text-sm mb-4">You need to be logged in to view your notifications.</p>
-                     <Button onClick={() => router.push('/login')} className="mt-4">Go to Login</Button>
-                </CardContent>
-            </Card>
-        </div>
+      <div className="space-y-6">
+        <PageHeader title="Notifications" icon={Bell} description="Please log in to view your notifications." />
+        <EmptyState
+          icon={Info}
+          title="Login Required"
+          description="You need to be logged in to view your notifications."
+          action={<Button onClick={() => router.push('/login')}>Go to Login</Button>}
+        />
+      </div>
     );
   }
 
@@ -254,7 +254,7 @@ export default function NotificationsPage() {
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter className="pt-6 border-t">
-                    <AlertDialogAction onClick={handleDeleteAllNotifications} variant="destructive">
+                    <AlertDialogAction onClick={handleDeleteAllNotifications} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                       Yes, Clear All
                     </AlertDialogAction>
                   </AlertDialogFooter>
@@ -265,70 +265,68 @@ export default function NotificationsPage() {
         }
       />
 
-      {isLoadingNotifications && notifications.length === 0 ? ( 
-         <div className="flex justify-center items-center py-10"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading notifications...</div>
+      {isLoadingNotifications && notifications.length === 0 ? (
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full rounded-lg" />
+          ))}
+        </div>
       ) : notifications.length === 0 ? (
-        <Card className="text-center py-10 text-muted-foreground bg-card border-0 shadow-none">
-          <CardContent>
-            <Bell className="mx-auto h-12 w-12 mb-4 opacity-50" />
-            <p className="text-lg font-medium">No Notifications</p>
-            <p className="text-sm">You're all caught up!</p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Bell}
+          title="No notifications"
+          description="You're all caught up!"
+        />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-2">
           {notifications.map(notification => (
-            <Card
+            <div
               key={notification.id}
               className={cn(
-                "shadow-md hover:shadow-lg transition-shadow duration-200",
-                !notification.isRead && "bg-primary/5 border-primary/20"
+                "rounded-lg border border-border bg-card flex items-start gap-3 p-4 transition-colors",
+                !notification.isRead
+                  ? "border-l-4 border-l-primary bg-primary/5"
+                  : "border-l-4 border-l-transparent"
               )}
             >
-              <CardHeader className="flex flex-row items-start gap-3 p-4 pb-2">
-                <div className="flex-shrink-0 pt-0.5">{getNotificationIcon(notification.type)}</div>
-                <div className="flex-grow">
-                  <CardTitle className="text-base font-semibold">{notification.title}</CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    {isValidDateFn(notification.createdAt)
-                      ? formatDistanceToNowStrict(notification.createdAt, { addSuffix: true })
-                      : 'Invalid date'}
-                  </p>
-                </div>
-                <div className="flex-shrink-0 space-x-1">
-                  {!notification.isRead && (
-                    <Tooltip>
-                       <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMarkAsRead(notification.id)}>
-                            <Check className="h-4 w-4 text-green-600" />
-                            <span className="sr-only">Mark as Read</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent><p>Mark as Read</p></TooltipContent>
-                    </Tooltip>
-                  )}
-                   <Tooltip>
-                       <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteNotification(notification.id)}>
-                            <Trash2 className="h-4 w-4" />
-                            <span className="sr-only">Delete Notification</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent><p>Delete Notification</p></TooltipContent>
-                    </Tooltip>
-                </div>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 ml-[calc(1.25rem+0.75rem)]"> 
-                <p className="text-sm text-muted-foreground">{notification.message}</p>
-              </CardContent>
-              {notification.linkTo && (
-                <CardFooter className="px-4 pb-3 pt-0 ml-[calc(1.25rem+0.75rem)] justify-start">
-                  <Button asChild variant="link" size="sm" className="p-0 h-auto text-xs">
+              <div className="flex-shrink-0 pt-0.5">{getNotificationIcon(notification.type)}</div>
+              <div className="flex-grow min-w-0">
+                <p className="text-sm font-semibold leading-tight">{notification.title}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {isValidDateFn(notification.createdAt)
+                    ? formatDistanceToNowStrict(notification.createdAt, { addSuffix: true })
+                    : 'Invalid date'}
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">{notification.message}</p>
+                {notification.linkTo && (
+                  <Button asChild variant="link" size="sm" className="p-0 h-auto text-xs mt-1">
                     <Link href={notification.linkTo}>View Details</Link>
                   </Button>
-                </CardFooter>
-              )}
-            </Card>
+                )}
+              </div>
+              <div className="flex-shrink-0 flex items-center gap-1">
+                {!notification.isRead && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMarkAsRead(notification.id)}>
+                        <Check className="h-4 w-4 text-green-600" />
+                        <span className="sr-only">Mark as Read</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Mark as Read</p></TooltipContent>
+                  </Tooltip>
+                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteNotification(notification.id)}>
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">Delete Notification</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Delete Notification</p></TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
           ))}
         </div>
       )}

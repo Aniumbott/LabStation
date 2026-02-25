@@ -15,9 +15,10 @@ import {
   Loader2,
   History,
   Cog,
+  LogOut,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 
 import {
   SidebarProvider,
@@ -28,10 +29,13 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarInset,
+  SidebarFooter,
+  SidebarTrigger,
 } from '@/components/ui/sidebar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/icons/logo';
-import { MobileSidebarToggle } from './MobileSidebarToggle';
 import type { RoleName } from '@/types';
 import { useAuth } from '@/components/auth-context';
 
@@ -40,7 +44,7 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   adminOnly?: boolean;
-  technicianOrAdmin?: boolean; // New property
+  technicianOrAdmin?: boolean;
 }
 
 const PUBLIC_ROUTES = ['/login', '/signup'];
@@ -77,12 +81,25 @@ const navItems: NavItem[] = [
   },
 ];
 
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
-  const { currentUser, isLoading: authIsLoading } = useAuth();
+  const { currentUser, isLoading: authIsLoading, logout } = useAuth();
+
+  const handleLogout = useCallback(async () => {
+    await logout();
+    router.refresh();
+  }, [logout, router]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -95,8 +112,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     return navItems.filter(item => {
       if (item.adminOnly) return currentUser.role === 'Admin';
       if (item.technicianOrAdmin) return currentUser.role === 'Admin' || currentUser.role === 'Technician';
-      // Ensure regular users can see the /admin/resources path as per previous logic
-      if (item.href === '/admin/resources') return true; 
+      if (item.href === '/admin/resources') return true;
       return true;
     });
   }, [currentUser]);
@@ -122,7 +138,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }
 
   if (!currentUser && !PUBLIC_ROUTES.includes(pathname)) {
-     return (
+    return (
       <div className="flex flex-col items-center justify-center min-h-svh bg-background text-muted-foreground">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
         <p className="mt-3 text-lg">Redirecting to login...</p>
@@ -130,13 +146,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
+  const initials = currentUser ? getInitials(currentUser.name) : '?';
+
   return (
     <SidebarProvider defaultOpen>
       <Sidebar>
         <SidebarHeader className="p-4 border-b border-sidebar-border">
           <Link href="/dashboard">
             <span className="inline-flex items-center justify-center gap-2 group-data-[collapsible=icon]:justify-center">
-                <Logo />
+              <Logo />
             </span>
           </Link>
         </SidebarHeader>
@@ -165,10 +183,50 @@ export function AppLayout({ children }: { children: ReactNode }) {
             ))}
           </SidebarMenu>
         </SidebarContent>
+
+        <SidebarFooter className="border-t border-sidebar-border p-3">
+          <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+            <Avatar className="h-8 w-8 flex-shrink-0">
+              <AvatarImage src={currentUser?.avatarUrl ?? undefined} alt={currentUser?.name} />
+              <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="overflow-hidden flex-1 group-data-[collapsible=icon]:hidden">
+              <p className="text-sm font-medium truncate leading-tight">{currentUser?.name}</p>
+              <p className="text-xs text-muted-foreground truncate">{currentUser?.role}</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 flex-shrink-0 group-data-[collapsible=icon]:hidden text-muted-foreground hover:text-foreground"
+              onClick={handleLogout}
+              title="Log out"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
+        </SidebarFooter>
       </Sidebar>
 
       <SidebarInset className="flex flex-col relative">
-        <MobileSidebarToggle />
+        {/* Sticky topbar */}
+        <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-border bg-background/80 backdrop-blur-sm px-4 md:px-6 flex-shrink-0">
+          <div className="flex items-center gap-2 md:hidden">
+            <SidebarTrigger />
+          </div>
+          <div className="flex-1" />
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground hidden sm:block">{currentUser?.name}</span>
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={currentUser?.avatarUrl ?? undefined} alt={currentUser?.name} />
+              <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+          </div>
+        </header>
+
         <div className="p-4 md:p-6 lg:p-8 flex-grow bg-background">
           {children}
         </div>

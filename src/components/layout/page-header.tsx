@@ -11,19 +11,19 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, icon: Icon, actions }: PageHeaderProps) {
   return (
-    <div className="mb-6 sm:mb-8 pt-12 md:pt-0">
+    <div className="mb-6 border-b border-border pb-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3 mb-2 sm:mb-0">
-          {Icon && <Icon className="h-7 w-7 sm:h-8 sm:w-8 text-primary flex-shrink-0" />}
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{title}</h1>
+        <div className="flex items-center gap-2.5 mb-1.5 sm:mb-0">
+          {Icon && <Icon className="h-6 w-6 text-primary flex-shrink-0" />}
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">{title}</h1>
         </div>
         {actions && <div className="mt-2 sm:mt-0 flex flex-wrap gap-2">{actions}</div>}
       </div>
       {description && (
         typeof description === 'string' ? (
-          <p className="mt-1 text-sm sm:text-base text-muted-foreground">{description}</p>
+          <p className="mt-1 text-sm text-muted-foreground/80">{description}</p>
         ) : (
-          <div className="mt-1 text-sm sm:text-base text-muted-foreground">{description}</div>
+          <div className="mt-1 text-sm text-muted-foreground/80">{description}</div>
         )
       )}
     </div>

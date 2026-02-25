@@ -8,13 +8,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useAuth } from '@/components/auth-context';
-import { UserPlus, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
-import { Logo } from '@/components/icons/logo';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertCircle, CheckCircle, Loader2, FlaskConical } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 
 const signupSchema = z.object({
@@ -69,12 +67,12 @@ export default function SignupPage() {
     } catch (error) {
       setErrorMessage("An unexpected error occurred. Please try again.");
     } finally {
-      if(!successMessage) {
-         form.control.disabled = false;
+      if (!successMessage) {
+        form.control.disabled = false;
       }
     }
   };
-  
+
   if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -82,9 +80,9 @@ export default function SignupPage() {
       </div>
     );
   }
-  
+
   if (currentUser) {
-     return (
+    return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p className="text-muted-foreground">Redirecting to dashboard...</p>
       </div>
@@ -92,30 +90,51 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-secondary p-4">
-      <Card className="w-full max-w-sm shadow-xl">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto mb-4">
-            <Logo />
+    <div className="flex min-h-screen">
+      {/* Brand panel */}
+      <div className="hidden md:flex w-1/2 bg-primary flex-col items-center justify-center p-12 gap-6">
+        <div className="flex items-center justify-center rounded-2xl bg-white/10 p-5">
+          <FlaskConical className="h-14 w-14 text-white" />
+        </div>
+        <div className="text-center">
+          <h2 className="text-white text-4xl font-bold mb-3">LabStation</h2>
+          <p className="text-primary-foreground/75 text-base max-w-xs leading-relaxed">
+            Join your team on LabStation and get access to lab resources and equipment.
+          </p>
+        </div>
+        <div className="mt-4 rounded-xl bg-white/10 p-5 max-w-xs w-full">
+          <p className="text-white/90 text-sm leading-relaxed">
+            After creating your account, an admin will review and approve your request before you can log in.
+          </p>
+        </div>
+      </div>
+
+      {/* Form panel */}
+      <div className="flex w-full md:w-1/2 items-center justify-center p-8 bg-background">
+        <div className="w-full max-w-sm">
+          {/* Mobile logo */}
+          <div className="flex items-center gap-2 mb-8 md:hidden">
+            <FlaskConical className="h-6 w-6 text-primary" />
+            <span className="text-xl font-bold">LabStation</span>
           </div>
-          <CardTitle className="text-2xl">Create an Account</CardTitle>
-          <CardDescription>Join LabStation to manage lab resources.</CardDescription>
-        </CardHeader>
-        <CardContent>
+
+          <div className="mb-8">
+            <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
+            <p className="text-muted-foreground text-sm mt-1">Fill in your details to request access.</p>
+          </div>
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               {errorMessage && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Signup Error</AlertTitle>
                   <AlertDescription>{errorMessage}</AlertDescription>
                 </Alert>
               )}
               {successMessage && (
-                <Alert variant="default" className="bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700">
-                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                  <AlertTitle className="text-green-700 dark:text-green-300">Success</AlertTitle>
-                  <AlertDescription className="text-green-600 dark:text-green-400">{successMessage} Redirecting to login...</AlertDescription>
+                <Alert className="bg-green-50 border-green-200">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-700">{successMessage} Redirecting to login...</AlertDescription>
                 </Alert>
               )}
               <FormField
@@ -123,9 +142,9 @@ export default function SignupPage() {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Full Name</FormLabel>
+                    <FormLabel>Full name</FormLabel>
                     <FormControl>
-                      <Input type="text" placeholder="e.g., Ada Lovelace" {...field} disabled={form.formState.isSubmitting || !!successMessage} />
+                      <Input type="text" placeholder="Ada Lovelace" {...field} disabled={form.formState.isSubmitting || !!successMessage} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -136,9 +155,9 @@ export default function SignupPage() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email Address</FormLabel>
+                    <FormLabel>Email address</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="you@example.com" {...field} disabled={form.formState.isSubmitting || !!successMessage}/>
+                      <Input type="email" placeholder="you@example.com" {...field} disabled={form.formState.isSubmitting || !!successMessage} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -151,27 +170,26 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="•••••••• (min. 6 characters)" {...field} disabled={form.formState.isSubmitting || !!successMessage}/>
+                      <Input type="password" placeholder="Min. 6 characters" {...field} disabled={form.formState.isSubmitting || !!successMessage} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || !!successMessage}>
-                {form.formState.isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating Account...</> : 'Create Account'}
+                {form.formState.isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating account...</> : 'Create account'}
               </Button>
             </form>
           </Form>
-        </CardContent>
-        <CardFooter className="flex flex-col items-center text-sm space-y-2 pt-4">
-           <p className="text-muted-foreground">
+
+          <p className="text-center text-sm text-muted-foreground mt-6">
             Already have an account?{' '}
             <Link href="/login" className="font-medium text-primary hover:underline">
-              Sign In
+              Sign in
             </Link>
           </p>
-        </CardFooter>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
