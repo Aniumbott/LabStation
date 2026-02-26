@@ -1,11 +1,34 @@
 
 'use client';
 
-import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Lab, ResourceType, User } from '@/types';
 import { useAuth } from '@/components/auth-context';
 import { getLabs_SA, getResourceTypes_SA, getUsers_SA } from '@/lib/actions/data.actions';
+import { qk } from '@/lib/query-keys';
 
+// ─── Inline helper (avoids circular import with use-queries.ts) ───────────────
+interface ActionResponse<T> {
+  success: boolean;
+  data?: T;
+  message?: string;
+}
+async function unwrap<T>(promise: Promise<ActionResponse<T>>): Promise<T> {
+  const result = await promise;
+  if (!result.success || result.data === undefined || result.data === null) {
+    throw new Error(result.message ?? 'Request failed');
+  }
+  return result.data as T;
+}
+
+// ─── Context shape (unchanged — all consumers keep working) ──────────────────
 interface AdminDataContextType {
   labs: Lab[];
   resourceTypes: ResourceType[];
@@ -17,90 +40,84 @@ interface AdminDataContextType {
 
 const AdminDataContext = createContext<AdminDataContextType | undefined>(undefined);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Provider — backed by TanStack Query instead of manual useState/useEffect.
+//
+// Benefits vs the previous implementation:
+//  • Navigate away and back → data served instantly from cache (no spinner).
+//  • Multiple admin pages requesting the same data → 1 network call (dedup).
+//  • refetch() calls invalidateQueries so the UI keeps showing cached data
+//    while the background refetch completes (no loading flash on mutations).
+//  • Non-admin users: queries are disabled; isLoading = false immediately.
+//  • Cache is cleared on logout (see auth-context.tsx), so no stale admin
+//    data leaks to the next non-admin session.
+// ─────────────────────────────────────────────────────────────────────────────
 export function AdminDataProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
-  const [labs, setLabs] = useState<Lab[]>([]);
-  const [resourceTypes, setResourceTypes] = useState<ResourceType[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  // Tracks which user ID we last completed a fetch for.
-  // This allows us to detect when we need a fresh fetch after logout → re-login.
-  const fetchedForUserIdRef = useRef<string | null>(null);
+  const isAdmin = currentUser?.role === 'Admin';
+  const callerUserId = currentUser?.id;
 
-  // Reset loading state immediately when the current user changes.
-  // This effect runs before the fetchData effect (effects run in declaration order),
-  // so admin pages see isLoading=true right away instead of briefly showing empty state.
-  useEffect(() => {
-    if (currentUser?.role === 'Admin') {
-      // A different admin (or same admin after logout/re-login) needs fresh data.
-      if (fetchedForUserIdRef.current !== currentUser.id) {
-        setIsLoading(true);
-      }
-    } else {
-      // Non-admin or logged out: clear data immediately.
-      setLabs([]);
-      setResourceTypes([]);
-      setAllUsers([]);
-      setIsLoading(false);
-      fetchedForUserIdRef.current = null;
-    }
-  }, [currentUser]);
+  // ── Labs ──────────────────────────────────────────────────────────────────
+  const labsQuery = useQuery({
+    queryKey: qk.labs(),
+    queryFn: () => unwrap(getLabs_SA()),
+    enabled: isAdmin,
+    staleTime: 120_000, // labs change rarely
+  });
 
-  const fetchData = useCallback(async () => {
-    if (!currentUser || currentUser.role !== 'Admin') {
-      setLabs([]);
-      setResourceTypes([]);
-      setAllUsers([]);
-      setIsLoading(false);
-      fetchedForUserIdRef.current = null;
-      return;
-    }
+  // ── Resource types ────────────────────────────────────────────────────────
+  const resourceTypesQuery = useQuery({
+    queryKey: qk.resourceTypes(),
+    queryFn: () => unwrap(getResourceTypes_SA()),
+    enabled: isAdmin,
+    staleTime: 120_000,
+  });
 
-    setIsLoading(true);
-    try {
-      const [labsResult, typesResult, usersResult] = await Promise.all([
-        getLabs_SA(),
-        getResourceTypes_SA(),
-        getUsers_SA(currentUser.id)
-      ]);
+  // ── Users ─────────────────────────────────────────────────────────────────
+  const usersQuery = useQuery({
+    queryKey: qk.users(),
+    queryFn: () =>
+      unwrap(getUsers_SA(callerUserId!)).then((users) =>
+        users.map((u) => ({
+          ...u,
+          createdAt: u.createdAt ? new Date(u.createdAt) : new Date(),
+        }))
+      ),
+    enabled: isAdmin && !!callerUserId,
+    staleTime: 60_000,
+  });
 
-      const fetchedLabs: Lab[] = labsResult.success && labsResult.data ? labsResult.data : [];
-      const fetchedTypes: ResourceType[] = typesResult.success && typesResult.data ? typesResult.data : [];
-      const fetchedUsers: User[] = usersResult.success && usersResult.data ? usersResult.data.map(u => ({
-        ...u,
-        createdAt: u.createdAt ? new Date(u.createdAt) : new Date()
-      })) : [];
+  /**
+   * Invalidate all three admin query keys → React Query refetches them in the
+   * background while the UI keeps showing the existing cached data.
+   */
+  const refetch = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: qk.labs() });
+    queryClient.invalidateQueries({ queryKey: qk.resourceTypes() });
+    queryClient.invalidateQueries({ queryKey: qk.users() });
+  }, [queryClient]);
 
-      setLabs(fetchedLabs);
-      setResourceTypes(fetchedTypes);
-      setAllUsers(fetchedUsers);
-      fetchedForUserIdRef.current = currentUser.id;
+  const labs: Lab[] = labsQuery.data ?? [];
+  const resourceTypes: ResourceType[] = resourceTypesQuery.data ?? [];
+  const allUsers: User[] = usersQuery.data ?? [];
 
-    } catch (error) {
-      console.error("Failed to fetch admin data context:", error);
-      setLabs([]);
-      setResourceTypes([]);
-      setAllUsers([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentUser]);
+  // isLoading is true only while a query is pending AND actively fetching.
+  // Disabled queries (non-admins) report isLoading = false immediately.
+  const isLoading = isAdmin
+    ? labsQuery.isLoading || resourceTypesQuery.isLoading || usersQuery.isLoading
+    : false;
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const allTechnicians = useMemo(
+    () => allUsers.filter((u) => u.role === 'Technician' || u.role === 'Admin'),
+    [allUsers]
+  );
 
-  const allTechnicians = useMemo(() => allUsers.filter(u => u.role === 'Technician' || u.role === 'Admin'), [allUsers]);
-
-  const value = useMemo(() => ({
-    labs,
-    resourceTypes,
-    allUsers,
-    allTechnicians,
-    isLoading,
-    refetch: fetchData,
-  }), [labs, resourceTypes, allUsers, allTechnicians, isLoading, fetchData]);
+  const value = useMemo(
+    () => ({ labs, resourceTypes, allUsers, allTechnicians, isLoading, refetch }),
+    [labs, resourceTypes, allUsers, allTechnicians, isLoading, refetch]
+  );
 
   return (
     <AdminDataContext.Provider value={value}>

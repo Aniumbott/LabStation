@@ -1,13 +1,13 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
-import { Bell, Check, Trash2, CalendarCheck2, Wrench, AlertTriangle, Clock, CircleEllipsis, CircleCheck, Info, ShieldAlert, Loader2 } from 'lucide-react';
-import type { Notification as NotificationType } from '@/types'; // Renamed to avoid conflict
+import { Bell, Check, Trash2, CalendarCheck2, Wrench, AlertTriangle, Clock, CircleEllipsis, CircleCheck, Info, ShieldAlert } from 'lucide-react';
+import type { Notification as NotificationType } from '@/types';
 import { useAuth } from '@/components/auth-context';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,9 +32,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
-import { getNotifications_SA } from '@/lib/actions/data.actions';
-import { markNotificationRead_SA, markAllNotificationsRead_SA, deleteNotification_SA, deleteAllNotifications_SA } from '@/lib/actions/notification.actions';
 import { useRouter } from 'next/navigation';
+import {
+  useNotifications,
+  useMarkNotificationRead,
+  useMarkAllNotificationsRead,
+  useDeleteNotification,
+  useDeleteAllNotifications,
+} from '@/lib/hooks/use-queries';
 
 
 const getNotificationIcon = (type: NotificationType['type']) => {
@@ -65,137 +70,89 @@ const getNotificationIcon = (type: NotificationType['type']) => {
 
 export default function NotificationsPage() {
   const { currentUser, isLoading: authIsLoading } = useAuth();
-  const [notifications, setNotifications] = useState<NotificationType[]>([]);
-  const [isLoadingNotifications, setIsLoadingNotifications] = useState(true);
   const [isClearAllAlertOpen, setIsClearAllAlertOpen] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
-  const fetchNotifications = useCallback(async () => {
-    if (!currentUser?.id) {
-      setNotifications([]);
-      setIsLoadingNotifications(false);
-      return;
-    }
-    setIsLoadingNotifications(true);
-    try {
-      const result = await getNotifications_SA(currentUser.id);
-      if (result.success && result.data) {
-        const fetchedNotifications: NotificationType[] = result.data.map(n => ({
-          ...n,
-          createdAt: n.createdAt ? new Date(n.createdAt) : new Date(),
-        }));
-        setNotifications(fetchedNotifications);
-      } else {
-        setNotifications([]);
-      }
-    } catch (error: any) {
-      console.error("Error fetching notifications:", error);
-      toast({ title: "Error", description: `Failed to load notifications: ${error.message}`, variant: "destructive" });
-      setNotifications([]);
-    }
-    setIsLoadingNotifications(false);
-  }, [currentUser?.id, toast]);
+  const userId = currentUser?.id;
 
-  useEffect(() => {
-    if (!authIsLoading && currentUser) { 
-        fetchNotifications();
-    } else if (!authIsLoading && !currentUser) {
-        setIsLoadingNotifications(false);
-        setNotifications([]);
-    }
-  }, [authIsLoading, currentUser, fetchNotifications]);
+  // ── Data query (replaces useState + useCallback + useEffect) ──────────────
+  const { data: notifications = [], isLoading: isLoadingNotifications } = useNotifications(userId);
+
+  // ── Optimistic mutation hooks ─────────────────────────────────────────────
+  const markReadMutation = useMarkNotificationRead(userId ?? '');
+  const markAllReadMutation = useMarkAllNotificationsRead(userId ?? '');
+  const deleteMutation = useDeleteNotification(userId ?? '');
+  const deleteAllMutation = useDeleteAllNotifications(userId ?? '');
+
+  const isAnyMutating =
+    markReadMutation.isPending ||
+    markAllReadMutation.isPending ||
+    deleteMutation.isPending ||
+    deleteAllMutation.isPending;
 
   const handleMarkAsRead = useCallback(async (id: string) => {
-    if (!currentUser?.id) {
-        toast({ title: "Authentication Error", description: "You must be logged in to perform this action.", variant: "destructive" });
-        return;
+    if (!userId) {
+      toast({ title: "Authentication Error", description: "You must be logged in to perform this action.", variant: "destructive" });
+      return;
     }
     try {
-      const result = await markNotificationRead_SA({ callerUserId: currentUser.id, notificationId: id });
-      if (result.success) {
-        setNotifications(prev =>
-          prev.map(n => (n.id === id ? { ...n, isRead: true } : n))
-        );
-      } else {
-        toast({ title: "Error", description: result.message || "Could not mark notification as read.", variant: "destructive" });
-      }
+      await markReadMutation.mutateAsync({ callerUserId: userId, notificationId: id });
     } catch (error: any) {
-      toast({ title: "Error", description: `Could not mark notification as read: ${error.message}`, variant: "destructive"});
+      toast({ title: "Error", description: error.message || "Could not mark notification as read.", variant: "destructive" });
     }
-  }, [currentUser, toast]);
+  }, [userId, markReadMutation, toast]);
 
   const handleMarkAllAsRead = useCallback(async () => {
-    if (!currentUser?.id) {
-        toast({ title: "Authentication Error", description: "You must be logged in to perform this action.", variant: "destructive" });
-        return;
+    if (!userId) {
+      toast({ title: "Authentication Error", description: "You must be logged in to perform this action.", variant: "destructive" });
+      return;
     }
-    const unreadNotifications = notifications.filter(n => !n.isRead);
-    if (unreadNotifications.length === 0) {
+    const unreadCount = notifications.filter(n => !n.isRead).length;
+    if (unreadCount === 0) {
       toast({ title: "No Unread Notifications", description: "All notifications are already marked as read." });
       return;
     }
+    try {
+      await markAllReadMutation.mutateAsync({ callerUserId: userId });
+      toast({ title: "All Read", description: "All notifications have been marked as read." });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Could not mark all notifications as read.", variant: "destructive" });
+    }
+  }, [userId, markAllReadMutation, notifications, toast]);
 
-    setIsLoadingNotifications(true);
-    try {
-      const result = await markAllNotificationsRead_SA({ callerUserId: currentUser.id });
-      if (result.success) {
-        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-        toast({ title: "All Read", description: "All notifications have been marked as read." });
-      } else {
-        toast({ title: "Error", description: result.message || "Could not mark all notifications as read.", variant: "destructive" });
-      }
-    } catch (error: any) {
-      toast({ title: "Error", description: `Could not mark all notifications as read: ${error.message}`, variant: "destructive"});
-    } finally {
-      setIsLoadingNotifications(false);
-    }
-  }, [currentUser, notifications, toast]);
-  
   const handleDeleteNotification = useCallback(async (id: string) => {
-    if (!currentUser?.id) {
-        toast({ title: "Authentication Error", description: "You must be logged in to perform this action.", variant: "destructive" });
-        return;
+    if (!userId) {
+      toast({ title: "Authentication Error", description: "You must be logged in to perform this action.", variant: "destructive" });
+      return;
     }
     try {
-      const result = await deleteNotification_SA({ callerUserId: currentUser.id, notificationId: id });
-      if (result.success) {
-        setNotifications(prev => prev.filter(n => n.id !== id));
-        toast({ title: "Notification Deleted", description: "The notification has been removed." });
-      } else {
-        toast({ title: "Error", description: result.message || "Could not delete notification.", variant: "destructive" });
-      }
+      await deleteMutation.mutateAsync({ callerUserId: userId, notificationId: id });
+      toast({ title: "Notification Deleted", description: "The notification has been removed." });
     } catch (error: any) {
-      toast({ title: "Error", description: `Could not delete notification: ${error.message}`, variant: "destructive"});
+      toast({ title: "Error", description: error.message || "Could not delete notification.", variant: "destructive" });
     }
-  }, [currentUser, toast]);
+  }, [userId, deleteMutation, toast]);
 
   const handleDeleteAllNotifications = useCallback(async () => {
-    if (!currentUser?.id) {
-        toast({ title: "Authentication Error", description: "You must be logged in to perform this action.", variant: "destructive" });
-        setIsClearAllAlertOpen(false);
-        return;
+    if (!userId) {
+      toast({ title: "Authentication Error", description: "You must be logged in to perform this action.", variant: "destructive" });
+      setIsClearAllAlertOpen(false);
+      return;
     }
     if (notifications.length === 0) {
       setIsClearAllAlertOpen(false);
       return;
     }
-    setIsLoadingNotifications(true);
     try {
-      const result = await deleteAllNotifications_SA({ callerUserId: currentUser.id });
-      if (result.success) {
-        setNotifications([]);
-        toast({ title: "All Notifications Cleared", description: "All your notifications have been deleted.", variant: "destructive" });
-      } else {
-        toast({ title: "Error", description: result.message || "Could not clear all notifications.", variant: "destructive" });
-      }
+      await deleteAllMutation.mutateAsync({ callerUserId: userId });
+      toast({ title: "All Notifications Cleared", description: "All your notifications have been deleted.", variant: "destructive" });
     } catch (error: any) {
-      toast({ title: "Error", description: `Could not clear all notifications: ${error.message}`, variant: "destructive"});
+      toast({ title: "Error", description: error.message || "Could not clear all notifications.", variant: "destructive" });
     } finally {
-      setIsLoadingNotifications(false);
       setIsClearAllAlertOpen(false);
     }
-  }, [currentUser, notifications, toast]);
+  }, [userId, deleteAllMutation, notifications.length, toast]);
 
   const unreadCount = useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
 
@@ -235,14 +192,14 @@ export default function NotificationsPage() {
           notifications.length > 0 ? (
             <div className="flex items-center gap-2">
               {unreadCount > 0 && (
-                <Button onClick={handleMarkAllAsRead} variant="outline" disabled={isLoadingNotifications}>
-                  {isLoadingNotifications && unreadCount > 0 ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                <Button onClick={handleMarkAllAsRead} variant="outline" disabled={isAnyMutating}>
+                  {markAllReadMutation.isPending ? <><span className="mr-2 h-4 w-4 animate-spin inline-block border-2 border-current border-t-transparent rounded-full" /></> : <Check className="mr-2 h-4 w-4" />}
                   Mark All as Read ({unreadCount})
                 </Button>
               )}
               <AlertDialog open={isClearAllAlertOpen} onOpenChange={setIsClearAllAlertOpen}>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" disabled={isLoadingNotifications || notifications.length === 0}>
+                  <Button variant="destructive" disabled={isAnyMutating || notifications.length === 0}>
                     <Trash2 className="mr-2 h-4 w-4" /> Clear All
                   </Button>
                 </AlertDialogTrigger>
@@ -254,6 +211,7 @@ export default function NotificationsPage() {
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter className="pt-6 border-t">
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction onClick={handleDeleteAllNotifications} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                       Yes, Clear All
                     </AlertDialogAction>
@@ -308,7 +266,7 @@ export default function NotificationsPage() {
                 {!notification.isRead && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMarkAsRead(notification.id)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMarkAsRead(notification.id)} disabled={isAnyMutating}>
                         <Check className="h-4 w-4 text-green-600" />
                         <span className="sr-only">Mark as Read</span>
                       </Button>
@@ -318,7 +276,7 @@ export default function NotificationsPage() {
                 )}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteNotification(notification.id)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteNotification(notification.id)} disabled={isAnyMutating}>
                       <Trash2 className="h-4 w-4" />
                       <span className="sr-only">Delete Notification</span>
                     </Button>

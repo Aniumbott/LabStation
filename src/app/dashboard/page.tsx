@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { Resource, Booking, Lab, LabMembership, LabMembershipStatus } from '@/types';
+import type { Resource, Booking, Lab, LabMembership } from '@/types';
 import { Separator } from '@/components/ui/separator';
 import {
   Table,
@@ -21,13 +21,15 @@ import {
 } from "@/components/ui/table";
 import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-import { format, isValid, isPast, parseISO, compareAsc, startOfToday, startOfDay } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useAuth } from '@/components/auth-context';
 import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 import { requestLabAccess_SA, cancelLabAccessRequest_SA, leaveLab_SA } from '@/lib/db-helpers';
-import { getDashboardData_SA } from '@/lib/actions/data.actions';
+import { useDashboardData } from '@/lib/hooks/use-queries';
+import { qk } from '@/lib/query-keys';
 
 
 const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Date => {
@@ -58,99 +60,44 @@ const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Da
 export default function DashboardPage() {
   const { currentUser } = useAuth();
   const { toast } = useToast();
-  const [frequentlyUsedResources, setFrequentlyUsedResources] = useState<(Resource & { labName?: string })[]>([]);
-  const [upcomingUserBookings, setUpcomingUserBookings] = useState<(Booking & { resourceName?: string })[]>([]);
+  const queryClient = useQueryClient();
 
-  const [allLabs, setAllLabs] = useState<Lab[]>([]);
-  const [userMemberships, setUserMemberships] = useState<LabMembership[]>([]);
-
-  const [isLoadingResources, setIsLoadingResources] = useState(true);
-  const [isLoadingBookings, setIsLoadingBookings] = useState(true);
-  const [isLoadingLabsAndMemberships, setIsLoadingLabsAndMemberships] = useState(true);
   const [isMembershipActionLoading, setIsMembershipActionLoading] = useState<Record<string, boolean>>({});
 
+  // ── Single query replaces 3 useStates + useCallback + useEffect ────────────
+  const { data, isLoading: isLoadingAll } = useDashboardData(currentUser?.id);
 
-  const fetchDashboardData = useCallback(async () => {
-    if (!currentUser || !currentUser.id) {
-      setFrequentlyUsedResources([]);
-      setUpcomingUserBookings([]);
-      setAllLabs([]);
-      setUserMemberships([]);
-      setIsLoadingResources(false);
-      setIsLoadingBookings(false);
-      setIsLoadingLabsAndMemberships(false);
-      return;
-    }
+  // ── Derived data (memoised to avoid re-processing on unrelated re-renders) ─
+  const frequentlyUsedResources = useMemo(() => {
+    if (!data?.recentResources) return [];
+    return data.recentResources.map(r => ({
+      ...r,
+      labName: r.labName || (r.labId ? 'Unknown Lab' : 'Global/No Lab'),
+      imageUrl: r.imageUrl || 'https://placehold.co/600x400.png',
+      features: r.features || [],
+      purchaseDate: r.purchaseDate ? safeConvertToDate(r.purchaseDate, 'purchaseDate', r.id) : undefined,
+      lastUpdatedAt: r.lastUpdatedAt ? safeConvertToDate(r.lastUpdatedAt, 'lastUpdatedAt', r.id) : undefined,
+      createdAt: r.createdAt ? safeConvertToDate(r.createdAt, 'createdAt', r.id) : undefined,
+    }));
+  }, [data?.recentResources]);
 
-    setIsLoadingResources(true);
-    setIsLoadingBookings(true);
-    setIsLoadingLabsAndMemberships(true);
+  const allLabs: Lab[] = data?.labs ?? [];
 
-    try {
-      const result = await getDashboardData_SA(currentUser.id);
+  const userMemberships: LabMembership[] = useMemo(() => {
+    if (currentUser?.role === 'Admin') return [];
+    return data?.userLabMemberships ?? [];
+  }, [data?.userLabMemberships, currentUser?.role]);
 
-      if (result.success && result.data) {
-        const { labs, userLabMemberships, recentResources, upcomingBookings } = result.data;
-
-        // Set labs
-        setAllLabs(labs);
-
-        // Set memberships (only for non-admin users)
-        if (currentUser.role !== 'Admin') {
-          setUserMemberships(userLabMemberships);
-        } else {
-          setUserMemberships([]);
-        }
-        setIsLoadingLabsAndMemberships(false);
-
-        // Set resources with lab names
-        const resourcesWithLabName = recentResources.map(r => ({
-          ...r,
-          labName: r.labName || (r.labId ? 'Unknown Lab' : 'Global/No Lab'),
-          imageUrl: r.imageUrl || 'https://placehold.co/600x400.png',
-          features: r.features || [],
-          purchaseDate: r.purchaseDate ? safeConvertToDate(r.purchaseDate, 'purchaseDate', r.id) : undefined,
-          lastUpdatedAt: r.lastUpdatedAt ? safeConvertToDate(r.lastUpdatedAt, 'lastUpdatedAt', r.id) : undefined,
-          createdAt: r.createdAt ? safeConvertToDate(r.createdAt, 'createdAt', r.id) : undefined,
-        }));
-        setFrequentlyUsedResources(resourcesWithLabName);
-        setIsLoadingResources(false);
-
-        // Set bookings with proper date conversion
-        const now = new Date();
-        const processedBookings = upcomingBookings.map(b => ({
-          ...b,
-          startTime: safeConvertToDate(b.startTime, 'startTime', b.id),
-          endTime: safeConvertToDate(b.endTime, 'endTime', b.id),
-          createdAt: safeConvertToDate(b.createdAt, 'createdAt', b.id),
-        })).filter(b => b.endTime >= now && b.status !== 'Cancelled');
-        setUpcomingUserBookings(processedBookings);
-        setIsLoadingBookings(false);
-      } else {
-        toast({ title: "Error Loading Dashboard Data", description: result.message || "Failed to load dashboard data.", variant: "destructive" });
-        setAllLabs([]);
-        setUserMemberships([]);
-        setFrequentlyUsedResources([]);
-        setUpcomingUserBookings([]);
-        setIsLoadingLabsAndMemberships(false);
-        setIsLoadingResources(false);
-        setIsLoadingBookings(false);
-      }
-    } catch (error: any) {
-      toast({ title: "Error Loading Dashboard Data", description: error.message || "An unexpected error occurred.", variant: "destructive" });
-      setAllLabs([]);
-      setUserMemberships([]);
-      setFrequentlyUsedResources([]);
-      setUpcomingUserBookings([]);
-      setIsLoadingLabsAndMemberships(false);
-      setIsLoadingResources(false);
-      setIsLoadingBookings(false);
-    }
-  }, [currentUser, toast]);
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
+  const upcomingUserBookings = useMemo(() => {
+    if (!data?.upcomingBookings) return [];
+    const now = new Date();
+    return data.upcomingBookings.map(b => ({
+      ...b,
+      startTime: safeConvertToDate(b.startTime, 'startTime', b.id),
+      endTime: safeConvertToDate(b.endTime, 'endTime', b.id),
+      createdAt: safeConvertToDate(b.createdAt, 'createdAt', b.id),
+    })).filter(b => b.endTime >= now && b.status !== 'Cancelled');
+  }, [data?.upcomingBookings]);
 
   const userActiveLabs = useMemo(() => {
     if (!currentUser || currentUser.role === 'Admin') return [];
@@ -170,44 +117,45 @@ export default function DashboardPage() {
     );
   }, [currentUser, allLabs, userMemberships]);
 
-  const handleRequestAccess = async (labId: string, labName: string) => {
+  // ── Lab membership mutation handlers (now invalidate the query cache) ──────
+  const handleRequestAccess = useCallback(async (labId: string, labName: string) => {
     if (!currentUser) return;
     setIsMembershipActionLoading(prev => ({ ...prev, [labId]: true }));
     const result = await requestLabAccess_SA(currentUser.id, currentUser.name, labId, labName);
     if (result.success) {
       toast({ title: "Request Submitted", description: result.message });
-      fetchDashboardData(); // Refresh memberships
+      queryClient.invalidateQueries({ queryKey: qk.dashboard(currentUser.id) });
     } else {
       toast({ title: "Request Failed", description: result.message, variant: "destructive" });
     }
     setIsMembershipActionLoading(prev => ({ ...prev, [labId]: false }));
-  };
+  }, [currentUser, toast, queryClient]);
 
-  const handleCancelRequest = async (membershipId: string, labName: string) => {
+  const handleCancelRequest = useCallback(async (membershipId: string, labName: string) => {
     if (!currentUser || !membershipId) return;
     setIsMembershipActionLoading(prev => ({ ...prev, [membershipId]: true }));
     const result = await cancelLabAccessRequest_SA(currentUser.id, currentUser.name, membershipId, labName);
     if (result.success) {
       toast({ title: "Request Cancelled", description: result.message });
-      fetchDashboardData(); // Refresh memberships
+      queryClient.invalidateQueries({ queryKey: qk.dashboard(currentUser.id) });
     } else {
       toast({ title: "Cancellation Failed", description: result.message, variant: "destructive" });
     }
     setIsMembershipActionLoading(prev => ({ ...prev, [membershipId]: false }));
-  };
+  }, [currentUser, toast, queryClient]);
 
-  const handleLeaveLab = async (membershipId: string, labName: string) => {
+  const handleLeaveLab = useCallback(async (membershipId: string, labName: string) => {
     if (!currentUser || !membershipId) return;
     setIsMembershipActionLoading(prev => ({ ...prev, [membershipId]: true }));
     const result = await leaveLab_SA(currentUser.id, currentUser.name, membershipId, labName);
     if (result.success) {
       toast({ title: "Left Lab", description: result.message });
-      fetchDashboardData(); // Refresh memberships
+      queryClient.invalidateQueries({ queryKey: qk.dashboard(currentUser.id) });
     } else {
       toast({ title: "Failed to Leave Lab", description: result.message, variant: "destructive" });
     }
     setIsMembershipActionLoading(prev => ({ ...prev, [membershipId]: false }));
-  };
+  }, [currentUser, toast, queryClient]);
 
 
   const getBookingStatusBadge = (status: Booking['status']) => {
@@ -224,9 +172,6 @@ export default function DashboardPage() {
         return <Badge variant="outline">{status}</Badge>;
     }
   };
-
-
-  const isLoadingAll = isLoadingResources || isLoadingBookings || isLoadingLabsAndMemberships;
 
   return (
     <div className="space-y-8">
@@ -273,7 +218,7 @@ export default function DashboardPage() {
             </Button>
           )}
         </div>
-        {isLoadingResources ? (
+        {isLoadingAll ? (
           <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 w-fit">
             {Array.from({ length: 2 }).map((_, i) => (
               <Skeleton key={i} className="h-64 w-full md:max-w-md rounded-lg" />
@@ -342,7 +287,7 @@ export default function DashboardPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoadingBookings ? (
+              {isLoadingAll ? (
                 <TableSkeleton rows={3} cols={4} />
               ) : upcomingUserBookings.length === 0 ? (
                 <TableRow>
@@ -397,7 +342,7 @@ export default function DashboardPage() {
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-semibold">My Labs</h2>
             </div>
-            {isLoadingLabsAndMemberships ? (
+            {isLoadingAll ? (
                 <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-lg" />)}
                 </div>

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { History, Filter as FilterIcon, Search as SearchIcon, FilterX, CheckCircle2 } from 'lucide-react';
 import type { AuditLogEntry, AuditActionType } from '@/types';
@@ -30,11 +30,11 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatDateSafe } from '@/lib/utils';
-import { getAuditLogs_SA } from '@/lib/actions/data.actions';
 import { AuditLogDetailsDialog } from '@/components/admin/audit-log-details-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useAuditLogs } from '@/lib/hooks/use-queries';
 
 const auditActionTypesForFilter: AuditActionType[] = [
   'USER_CREATED', 'USER_UPDATED', 'USER_DELETED', 'USER_APPROVED', 'USER_REJECTED',
@@ -51,8 +51,6 @@ const auditActionTypesForFilter: AuditActionType[] = [
 
 export default function AuditLogPage() {
   const { currentUser } = useAuth();
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [tempSearchTerm, setTempSearchTerm] = useState('');
@@ -65,33 +63,9 @@ export default function AuditLogPage() {
   const [selectedLogForDetails, setSelectedLogForDetails] = useState<AuditLogEntry | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
-  const fetchAuditLogs = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const result = await getAuditLogs_SA();
-      if (result.success && result.data) {
-        const fetchedLogs: AuditLogEntry[] = result.data.map(log => ({
-          ...log,
-          timestamp: log.timestamp ? new Date(log.timestamp) : new Date(),
-        }));
-        setAuditLogs(fetchedLogs);
-      } else {
-        setAuditLogs([]);
-      }
-    } catch (error: any) {
-      setAuditLogs([]);
-    }
-    setIsLoading(false);
-  }, []);
-
-  useEffect(() => {
-    if (currentUser?.role === 'Admin') {
-      fetchAuditLogs();
-    } else {
-      setAuditLogs([]);
-      setIsLoading(false);
-    }
-  }, [currentUser, fetchAuditLogs]);
+  // ── Single query replaces useState + useCallback + useEffect ──────────────
+  // Only fetch when the user is an Admin (query is disabled otherwise).
+  const { data: auditLogs = [], isLoading } = useAuditLogs();
 
   useEffect(() => {
     if (isFilterDialogOpen) {

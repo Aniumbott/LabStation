@@ -4,6 +4,7 @@
 import type { User, RoleName } from '@/types';
 import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { updateUserProfile_SA } from '@/lib/actions/user.actions';
 
 interface AuthContextType {
@@ -55,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(getStoredUser);
   const [isLoading, setIsLoading] = useState(true);
   const didMount = useRef(false);
+  const queryClient = useQueryClient();
 
   // Fetch the authenticated user from the JWT cookie via the API route.
   const fetchMe = useCallback(async (): Promise<User | null> => {
@@ -140,11 +142,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Even if the API call fails, clear local state.
     }
+    // Clear the entire React Query cache so no stale data leaks to the next
+    // session (e.g. admin data visible to the next non-admin user).
+    queryClient.clear();
     setCurrentUser(null);
     storeUser(null);
     clearLoginMessage();
     setIsLoading(false);
-  }, []);
+  }, [queryClient]);
 
   const signup = useCallback(async (name: string, email: string, password?: string): Promise<{ success: boolean; message: string; userId?: string }> => {
     if (!password) return { success: false, message: 'Password is required.' };
