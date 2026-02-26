@@ -3,107 +3,129 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   KEYSIGHT BRAND COLOR PALETTE
+   ─────────────────────────────────────────────────────────────────────────────
+   Source colors (all tokens derive from these):
+     Keysight Red         #E90029   hsl(349 100% 46%)
+     Keysight Dark Red    #891518   hsl(358  73% 31%)
+     Keysight Gray        #555555   hsl(  0   0% 33%)
+     Keysight Medium Gray #9C9C9C   hsl(  0   0% 61%)
+     Keysight Light Gray  #E8E8E8   hsl(  0   0% 91%)
+     Keysight Dark Blue   #24377C   hsl(227  55% 31%)
+     Keysight Purple      #8B3C8F   hsl(297  41% 40%)
+     Keysight Orange      #ED5E1A   hsl( 19  85% 52%)
+     Keysight Yellow      #FDC206   hsl( 46  98% 51%)
+     Keysight Light Green #8DC229   hsl( 77  66% 46%)
+     Keysight Green       #019642   hsl(146  99% 30%)
+   ───────────────────────────────────────────────────────────────────────────── */
+
 @layer base {
+  /* ── LIGHT THEME ────────────────────────────────────────────────────────── */
   :root {
-    --background: 0 0% 100%; /* White #ffffff */
-    --foreground: 240 10% 20%; /* Dark Gray #2d2d33 (derived from #555555, slightly darker for better contrast with primary) */
+    /* Surface — page canvas is light gray so white cards visually lift off  */
+    --background:         0 0% 96%;    /* #F5F5F5 — page canvas (light gray) */
+    --foreground:         0 0% 10%;    /* #1A1A1A — primary text             */
+    --card:               0 0% 100%;   /* #FFFFFF — card surface (pops off bg) */
+    --card-foreground:    0 0% 10%;
+    --popover:            0 0% 100%;
+    --popover-foreground: 0 0% 10%;
 
-    --card: 0 0% 100%; /* White #ffffff */
-    --card-foreground: 240 10% 20%; /* Dark Gray #2d2d33 */
+    /* Brand — Keysight Red as hero colour */
+    --primary:            349 100% 46%; /* #E90029 Keysight Red              */
+    --primary-foreground: 0 0% 100%;    /* #FFFFFF                           */
 
-    --popover: 0 0% 100%; /* White #ffffff */
-    --popover-foreground: 240 10% 20%; /* Dark Gray #2d2d33 */
+    /* Secondary — Keysight Light Gray */
+    --secondary:          0 0% 91%;    /* #E8E8E8 Keysight Light Gray        */
+    --secondary-foreground: 0 0% 33%;  /* #555555 Keysight Gray              */
 
-    --primary: 349 100% 46%; /* Red #e90029 */
-    --primary-foreground: 0 0% 100%; /* White #ffffff (for text on primary) */
+    /* Muted — for table headers, subtler sections */
+    --muted:              0 0% 93%;    /* #EDEDED — slightly darker than bg  */
+    --muted-foreground:   0 0% 55%;    /* #8C8C8C — more readable            */
 
-    --secondary: 0 0% 96.1%; /* Light Gray #f5f5f5 (derived from #e8e8e8 but slightly adjusted for modern feel) */
-    --secondary-foreground: 240 10% 20%; /* Dark Gray #2d2d33 (text on secondary) */
+    /* Accent — pale red tint used for ghost/outline hover backgrounds */
+    --accent:             349 100% 97%; /* #FFF0F2 very pale rose            */
+    --accent-foreground:  349 100% 46%; /* #E90029 Keysight Red              */
 
-    --muted: 0 0% 96.1%; /* Light Gray #f5f5f5 */
-    --muted-foreground: 0 0% 61%; /* Medium Gray #9c9c9c */
+    /* Destructive — Keysight Dark Red */
+    --destructive:        358 73% 31%;  /* #891518                           */
+    --destructive-foreground: 0 0% 100%;
 
-    /* Updated for subtle, branded button hovers */
-    --accent: 349 100% 95%; /* Very Light Red/Pale Pink #ffe5e9 (for outline/ghost button hover BG) */
-    --accent-foreground: 349 100% 46%; /* Red #e90029 (for text on new accent) */
+    /* Chrome — stronger borders for clear element separation */
+    --border:  0 0% 83%;   /* #D4D4D4 — more visible than before */
+    --input:   0 0% 83%;
+    --ring:    349 100% 46%; /* Keysight Red focus rings */
+    --radius:  0.5rem;
 
-    --destructive: 352 70% 32%; /* Dark Red #891518 */
-    --destructive-foreground: 0 0% 100%; /* White #ffffff (text on destructive) */
+    /* ── Sidebar — white against the gray page for clean delineation ─────── */
+    --sidebar-background:          0 0% 100%;   /* #FFFFFF clean white        */
+    --sidebar-foreground:          0 0% 20%;    /* #333333                   */
+    --sidebar-primary:             349 100% 46%; /* Keysight Red active item  */
+    --sidebar-primary-foreground:  0 0% 100%;
+    --sidebar-accent:              0 0% 95%;    /* #F2F2F2 hover bg          */
+    --sidebar-accent-foreground:   349 100% 46%; /* Keysight Red hover text  */
+    --sidebar-border:              0 0% 80%;    /* #CCCCCC — visible separator */
+    --sidebar-ring:                349 100% 46%;
 
-    --border: 0 0% 91.8%; /* Light Gray #eaeaea (derived from #e8e8e8, slightly lighter) */
-    --input: 0 0% 91.8%; /* Light Gray #eaeaea */
-    --ring: 349 100% 46%; /* Red #e90029 (for focus rings) */
-
-    --radius: 0.5rem;
-
-    /* Sidebar specific variables - updated for polished hover */
-    --sidebar-background: 0 0% 98%; /* Off-white, slightly different from main BG for subtle separation #fafafa */
-    --sidebar-foreground: 240 10% 20%; /* Dark Gray #2d2d33 */
-    --sidebar-primary: 349 100% 46%; /* Red #e90029 (active items) */
-    --sidebar-primary-foreground: 0 0% 100%; /* White #ffffff (text on active) */
-    
-    /* Updated sidebar hover */
-    --sidebar-accent: 0 0% 96.1%; /* Very Light Gray #f5f5f5 (hover background) */
-    --sidebar-accent-foreground: 349 100% 46%; /* Red #e90029 (text on hover) */
-    
-    --sidebar-border: 0 0% 85%; /* Slightly darker gray for sidebar border #d9d9d9 */
-    --sidebar-ring: 349 100% 46%; /* Red for focus rings in sidebar */
-    
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    /* ── Charts (Keysight accent palette) ─────────────────────────────────  */
+    --chart-1: 19  85% 52%;   /* Keysight Orange  #ED5E1A */
+    --chart-2: 146 99% 30%;   /* Keysight Green   #019642 */
+    --chart-3: 227 55% 31%;   /* Keysight Dark Blue #24377C */
+    --chart-4: 297 41% 40%;   /* Keysight Purple  #8B3C8F */
+    --chart-5: 46  98% 51%;   /* Keysight Yellow  #FDC206 */
   }
 
+  /* ── DARK THEME ─────────────────────────────────────────────────────────── */
   .dark {
-    /* Keeping dark mode fairly standard, can be customized further based on the new palette if needed */
-    --background: 240 10% 10%; /* Darker Gray */
-    --foreground: 0 0% 95%; /* Light Gray text */
+    /* Comfortable charcoal — VS Code / Linear style, not pure black        */
+    --background:         0 0% 11%;    /* #1C1C1C                           */
+    --foreground:         0 0% 91%;    /* #E8E8E8 Keysight Light Gray        */
+    --card:               0 0% 18%;    /* #2E2E2E elevated surface (7% gap)  */
+    --card-foreground:    0 0% 91%;
+    --popover:            0 0% 18%;
+    --popover-foreground: 0 0% 91%;
 
-    --card: 240 10% 10%;
-    --card-foreground: 0 0% 95%;
+    /* Brand — slightly brighter red so it reads well on dark backgrounds   */
+    --primary:            349 100% 55%; /* #FF1A3D                          */
+    --primary-foreground: 0 0% 100%;
 
-    --popover: 240 10% 10%;
-    --popover-foreground: 0 0% 95%;
+    /* Secondary */
+    --secondary:          0 0% 22%;    /* #383838                           */
+    --secondary-foreground: 0 0% 82%;  /* #D0D0D0                           */
 
-    --primary: 349 100% 56%; /* Slightly brighter red for dark mode */
-    --primary-foreground: 0 0% 10%; /* Dark text on primary */
+    /* Muted — used for table headers; needs to be distinct from card       */
+    --muted:              0 0% 22%;    /* #383838 — clearly above card bg    */
+    --muted-foreground:   0 0% 62%;    /* #9E9E9E — more readable           */
 
-    --secondary: 0 0% 14.9%; /* Darker Light Gray */
-    --secondary-foreground: 0 0% 98%; /* Off-white */
+    /* Accent — dark red tint for ghost/outline hover on dark bg */
+    --accent:             349 100% 8%;  /* #2A0009 near-black red           */
+    --accent-foreground:  349 100% 65%; /* #FF4D6A bright rose              */
 
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 62.7%; /* Lighter Medium Gray */
+    /* Destructive */
+    --destructive:        358 73% 40%;  /* Keysight Dark Red, brighter      */
+    --destructive-foreground: 0 0% 100%;
 
-    /* Dark mode accent for button hovers */
-    --accent: 349 100% 20%; /* Darker shade of pale red for dark mode hover BG */
-    --accent-foreground: 349 100% 66%; /* Brighter red for text on dark accent */
-    
-    --destructive: 352 70% 42%; /* Brighter Dark Red */
-    --destructive-foreground: 0 0% 98%;
+    /* Chrome — visible borders against the charcoal background */
+    --border: 0 0% 26%;   /* #424242 — clearly visible */
+    --input:  0 0% 26%;
+    --ring:   349 100% 55%; /* Bright red focus rings */
 
-    --border: 0 0% 14.9%; 
-    --input: 0 0% 14.9%;
-    --ring: 349 100% 56%;
+    /* ── Sidebar — clearly darker than content for strong depth signal ─── */
+    --sidebar-background:          0 0% 8%;     /* #141414 darkest layer     */
+    --sidebar-foreground:          0 0% 85%;    /* #D9D9D9                   */
+    --sidebar-primary:             349 100% 55%; /* Bright red active item   */
+    --sidebar-primary-foreground:  0 0% 100%;
+    --sidebar-accent:              0 0% 14%;    /* #242424 hover bg          */
+    --sidebar-accent-foreground:   349 100% 65%; /* Bright rose hover text  */
+    --sidebar-border:              0 0% 26%;    /* #424242 matches --border  */
+    --sidebar-ring:                349 100% 55%;
 
-    /* Sidebar specific variables for dark mode */
-    --sidebar-background: 240 10% 12%; /* Darker for sidebar */
-    --sidebar-foreground: 0 0% 90%;
-    --sidebar-primary: 349 100% 56%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    /* Dark mode sidebar hover */
-    --sidebar-accent: 0 0% 20%; /* Darker gray for hover background */
-    --sidebar-accent-foreground: 349 100% 66%; /* Brighter red for text on hover */
-    
-    --sidebar-border: 0 0% 20%;
-    --sidebar-ring: 349 100% 56%;
-
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    /* ── Charts — brighter variants for readability on dark backgrounds ────  */
+    --chart-1: 19  85% 62%;   /* Bright orange  */
+    --chart-2: 146 80% 45%;   /* Bright green   */
+    --chart-3: 227 65% 55%;   /* Bright blue    */
+    --chart-4: 297 55% 60%;   /* Bright purple  */
+    --chart-5: 46  98% 60%;   /* Bright yellow  */
   }
 }
 
@@ -113,7 +135,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    /* Default font family is set by Geist Sans in layout.tsx, removing explicit body font-family */
   }
   html {
     scroll-behavior: smooth;
@@ -134,7 +155,7 @@
   }
 }
 
-/* Style for the dot indicator on booked calendar days */
+/* ── Calendar booking dot ────────────────────────────────────────────────── */
 @layer components {
   .day-booked-dot {
     position: relative;
@@ -142,25 +163,21 @@
   .day-booked-dot::after {
     content: '';
     position: absolute;
-    bottom: 4px; /* Adjust as needed */
+    bottom: 4px;
     left: 50%;
     transform: translateX(-50%);
-    width: 6px; /* Size of the dot */
-    height: 6px; /* Size of the dot */
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
-    background-color: hsl(var(--primary)); /* Use primary color for the dot */
-    /* If the day is also selected, make the dot more visible */
+    background-color: hsl(var(--primary));
   }
-  
-  /* Ensure dot is visible on selected day (which has primary background) */
   .rdp-day_selected.day-booked-dot::after {
-     background-color: hsl(var(--primary-foreground)); /* White dot on red background */
+    background-color: hsl(var(--primary-foreground));
   }
-   /* Ensure dot is visible on today's day (which has accent background) */
   .rdp-day_today.day-booked-dot::after {
-    background-color: hsl(var(--accent-foreground)); /* Primary red dot on accent background */
+    background-color: hsl(var(--accent-foreground));
   }
   .rdp-day_today {
-    @apply font-bold; /* Make today's date text bold */
+    @apply font-bold;
   }
 }

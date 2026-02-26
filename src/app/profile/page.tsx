@@ -300,9 +300,9 @@ export default function ProfilePage() {
                 </Alert>
               )}
               {passwordChangeSuccess && (
-                <Alert className="bg-green-50 border-green-200">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <AlertDescription className="text-green-700">{passwordChangeSuccess}</AlertDescription>
+                <Alert className="bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900">
+                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  <AlertDescription className="text-green-700 dark:text-green-400">{passwordChangeSuccess}</AlertDescription>
                 </Alert>
               )}
               <Button

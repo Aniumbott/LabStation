@@ -67,11 +67,11 @@ export function formatDateSafe(
 export function getResourceStatusBadge(status: ResourceStatus): JSX.Element {
   switch (status) {
     case 'Working':
-      return <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      return <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 dark:bg-green-950/50 dark:text-green-400 dark:border-green-900"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     case 'Maintenance':
-      return <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100"><Wrench className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      return <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-900"><Wrench className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     case 'Broken':
-      return <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100"><XCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      return <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-950/50 dark:text-red-400 dark:border-red-900"><XCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     default:
       const exhaustiveCheck: never = status;
       return <Badge variant="outline">{String(exhaustiveCheck || status || "Unknown")}</Badge>;
@@ -81,13 +81,13 @@ export function getResourceStatusBadge(status: ResourceStatus): JSX.Element {
 export function getBookingStatusBadge(status: BookingStatus): JSX.Element {
   switch (status) {
     case 'Confirmed':
-      return <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      return <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 dark:bg-green-950/50 dark:text-green-400 dark:border-green-900"><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     case 'Pending':
-      return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-100"><Clock className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-100 dark:bg-yellow-950/50 dark:text-yellow-400 dark:border-yellow-900"><Clock className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     case 'Cancelled':
-      return <Badge className="bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-100"><Ban className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      return <Badge className="bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-100 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700"><Ban className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     case 'Waitlisted':
-      return <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100"><User className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
+      return <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-900"><User className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
@@ -96,11 +96,11 @@ export function getBookingStatusBadge(status: BookingStatus): JSX.Element {
 export function getUserStatusBadge(status: UserStatus): JSX.Element {
   switch (status) {
     case 'active':
-      return <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 capitalize">{status}</Badge>;
+      return <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 capitalize dark:bg-green-950/50 dark:text-green-400 dark:border-green-900">{status}</Badge>;
     case 'pending_approval':
-      return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-100">Pending Approval</Badge>;
+      return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-100 dark:bg-yellow-950/50 dark:text-yellow-400 dark:border-yellow-900">Pending Approval</Badge>;
     case 'suspended':
-      return <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100 capitalize">{status}</Badge>;
+      return <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100 capitalize dark:bg-red-950/50 dark:text-red-400 dark:border-red-900">{status}</Badge>;
     default:
       return <Badge variant="outline" className="capitalize">{status}</Badge>;
   }
@@ -109,11 +109,11 @@ export function getUserStatusBadge(status: UserStatus): JSX.Element {
 export function getRoleBadge(role: RoleName): JSX.Element {
   switch (role) {
     case 'Admin':
-      return <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">{role}</Badge>;
+      return <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-950/50 dark:text-red-400 dark:border-red-900">{role}</Badge>;
     case 'Technician':
-      return <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">{role}</Badge>;
+      return <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-900">{role}</Badge>;
     case 'Researcher':
-      return <Badge className="bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-100">{role}</Badge>;
+      return <Badge className="bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-100 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700">{role}</Badge>;
     default:
       return <Badge variant="outline">{role}</Badge>;
   }
@@ -122,13 +122,13 @@ export function getRoleBadge(role: RoleName): JSX.Element {
 export function getMaintenanceStatusBadge(status: string): JSX.Element {
   switch (status) {
     case 'Open':
-      return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-100">{status}</Badge>;
+      return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-100 dark:bg-yellow-950/50 dark:text-yellow-400 dark:border-yellow-900">{status}</Badge>;
     case 'InProgress':
-      return <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">In Progress</Badge>;
+      return <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-900">In Progress</Badge>;
     case 'Resolved':
-      return <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">{status}</Badge>;
+      return <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 dark:bg-green-950/50 dark:text-green-400 dark:border-green-900">{status}</Badge>;
     case 'Closed':
-      return <Badge className="bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-100">{status}</Badge>;
+      return <Badge className="bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-100 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700">{status}</Badge>;
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
@@ -137,13 +137,13 @@ export function getMaintenanceStatusBadge(status: string): JSX.Element {
 export function getMembershipStatusBadge(status: string): JSX.Element {
   switch (status) {
     case 'active':
-      return <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 capitalize">{status}</Badge>;
+      return <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100 capitalize dark:bg-green-950/50 dark:text-green-400 dark:border-green-900">{status}</Badge>;
     case 'pending_approval':
-      return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-100">Pending</Badge>;
+      return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-100 dark:bg-yellow-950/50 dark:text-yellow-400 dark:border-yellow-900">Pending</Badge>;
     case 'rejected':
-      return <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100 capitalize">{status}</Badge>;
+      return <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100 capitalize dark:bg-red-950/50 dark:text-red-400 dark:border-red-900">{status}</Badge>;
     case 'revoked':
-      return <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100 capitalize">{status}</Badge>;
+      return <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100 capitalize dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-900">{status}</Badge>;
     default:
       return <Badge variant="outline" className="capitalize">{status}</Badge>;
   }

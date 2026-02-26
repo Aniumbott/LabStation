@@ -304,7 +304,7 @@ export default function UsersPage() {
 
   if (!loggedInUser || loggedInUser.role !== 'Admin') {
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         <PageHeader title="Users" icon={UsersIconLucide} description="Access Denied." />
         <Card className="text-center py-10 text-muted-foreground">
           <CardContent><p>You do not have permission to view this page.</p></CardContent>
@@ -314,7 +314,7 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="Users"
         description="View, add, and manage user accounts, roles, and signup requests."
@@ -402,7 +402,7 @@ export default function UsersPage() {
         }
       />
       <TooltipProvider>
-        <div className="rounded-lg border border-border overflow-hidden">
+        <div className="rounded-lg border border-border overflow-hidden bg-card">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">

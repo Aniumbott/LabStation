@@ -16,6 +16,8 @@ import {
   History,
   Cog,
   LogOut,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -38,6 +40,7 @@ import { cn } from '@/lib/utils';
 import { Logo } from '@/components/icons/logo';
 import type { RoleName } from '@/types';
 import { useAuth } from '@/components/auth-context';
+import { useTheme } from 'next-themes';
 
 interface NavItem {
   href: string;
@@ -95,6 +98,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
   const { currentUser, isLoading: authIsLoading, logout } = useAuth();
+  const { resolvedTheme, setTheme } = useTheme();
 
   const handleLogout = useCallback(async () => {
     await logout();
@@ -200,6 +204,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
               variant="ghost"
               size="icon"
               className="h-8 w-8 flex-shrink-0 group-data-[collapsible=icon]:hidden text-muted-foreground hover:text-foreground"
+              onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+              title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 flex-shrink-0 group-data-[collapsible=icon]:hidden text-muted-foreground hover:text-foreground"
               onClick={handleLogout}
               title="Log out"
             >
@@ -209,23 +223,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </SidebarFooter>
       </Sidebar>
 
-      <SidebarInset className="flex flex-col relative">
-        {/* Sticky topbar */}
-        <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-border bg-background/80 backdrop-blur-sm px-4 md:px-6 flex-shrink-0">
-          <div className="flex items-center gap-2 md:hidden">
-            <SidebarTrigger />
-          </div>
-          <div className="flex-1" />
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground hidden sm:block">{currentUser?.name}</span>
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={currentUser?.avatarUrl ?? undefined} alt={currentUser?.name} />
-              <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-        </header>
+      <SidebarInset className="flex flex-col">
+        {/* Mobile-only trigger strip — sidebar handles its own toggle on desktop */}
+        <div className="md:hidden flex h-12 items-center border-b border-border px-4 flex-shrink-0 bg-background">
+          <SidebarTrigger />
+        </div>
 
         <div className="p-4 md:p-6 lg:p-8 flex-grow bg-background">
           {children}

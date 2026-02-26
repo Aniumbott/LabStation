@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { AuthProviderWrapper } from '@/components/layout/auth-provider-wrapper';
 import { AdminDataProvider } from '@/contexts/AdminDataContext';
 import { QueryProvider } from '@/providers/query-provider';
+import { ThemeProvider } from '@/providers/theme-provider';
 
 export const metadata: Metadata = {
   title: 'LabStation',
@@ -22,14 +23,21 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body className="font-sans antialiased" suppressHydrationWarning>
-        <QueryProvider>
-          <AuthProviderWrapper>
-            <AdminDataProvider>
-              <AppLayout>{children}</AppLayout>
-            </AdminDataProvider>
-          </AuthProviderWrapper>
-        </QueryProvider>
-        <Toaster />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <QueryProvider>
+            <AuthProviderWrapper>
+              <AdminDataProvider>
+                <AppLayout>{children}</AppLayout>
+              </AdminDataProvider>
+            </AuthProviderWrapper>
+          </QueryProvider>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

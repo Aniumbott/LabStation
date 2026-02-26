@@ -3,7 +3,7 @@
 
 import React, { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams }from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Info, Clock, Calendar as CalendarIconLucide, User as UserIcon, Package as ResourceIcon, CheckCircle2, Save, CheckCircle, AlertCircle, Users, ToggleLeft, ToggleRight, X } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Info, Clock, Calendar as CalendarIconLucide, User as UserIcon, Package as ResourceIcon, CheckCircle2, Save, CheckCircle, AlertCircle, Users, X } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -670,7 +670,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
 
   if (!currentUser && isClient && !authIsLoading) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         <PageHeader title="Bookings" description="Please log in to manage bookings." icon={CalendarDays} />
         <Card className="text-center py-10 text-muted-foreground border-0 shadow-none">
           <CardContent><Info className="mx-auto h-12 w-12 mb-4 opacity-50" /><p className="text-lg font-medium">Login Required</p><p className="text-sm mb-4">You need to be logged in to view and manage bookings.</p><Button onClick={() => router.push('/login')} className="mt-4">Go to Login</Button></CardContent>
@@ -688,7 +688,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
 
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="Bookings"
         description={pageHeaderDescription}
@@ -705,8 +705,6 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                     id="displayScopeToggle"
                     checked={displayScope === 'all'}
                     onCheckedChange={(checked) => setDisplayScope(checked ? 'all' : 'mine')}
-                    className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-primary"
-                    thumbIcon={displayScope === 'all' ? <ToggleRight className="h-3.5 w-3.5 text-primary-foreground" /> : <ToggleLeft className="h-3.5 w-3.5 text-primary-foreground" />}
                   />
                 </div>
               )}
@@ -768,7 +766,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
             {isLoadingAnyData && bookingsToDisplay.length === 0 && allBookingsDataSource.length === 0 ? (
                 <div className="text-center py-10 text-muted-foreground"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary mb-2" />Loading bookings...</div>
             ) : bookingsToDisplay.length > 0 ? (
-                <div className="overflow-x-auto border rounded-b-lg rounded-t-none">
+                <div className="overflow-x-auto border rounded-b-lg rounded-t-none bg-card">
                 <Table>
                     <TableHeader>
                     <TableRow>

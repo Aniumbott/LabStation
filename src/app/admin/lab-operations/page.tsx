@@ -967,7 +967,7 @@ export default function LabOperationsCenterPage() {
 
 
     if (!currentUser || !canManageAny) {
-      return ( <div className="space-y-8"><PageHeader title="Lab Operations Center" icon={Cog} description="Access Denied." /><Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission.</p></CardContent></Card></div>);
+      return ( <div className="space-y-6"><PageHeader title="Lab Operations Center" icon={Cog} description="Access Denied." /><Card className="text-center py-10 text-muted-foreground"><CardContent><p>You do not have permission.</p></CardContent></Card></div>);
     }
 
   return (

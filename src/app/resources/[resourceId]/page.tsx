@@ -36,7 +36,7 @@ import {
 
 function ResourceDetailPageSkeleton() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title={<Skeleton className="h-8 w-3/4 rounded-md bg-muted" />}
         description={<div className="mt-1"><Skeleton className="h-4 w-1/2 rounded-md bg-muted" /></div>}
@@ -148,7 +148,7 @@ function NotFoundMessage({ resourceIdParam, reason }: { resourceIdParam: string 
     : `The resource with ID "${resourceIdParam || 'unknown'}" could not be found.`;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader title={title} icon={reason === 'access_denied' ? ShieldAlert : PackageSearch}
           actions={
             <Button variant="outline" asChild onClick={() => router.push('/admin/resources')}>
@@ -476,7 +476,7 @@ export default function ResourceDetailPage() {
 
   return (
     <TooltipProvider>
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title={resource.name}
         description={

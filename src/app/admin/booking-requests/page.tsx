@@ -39,7 +39,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { cn, formatDateSafe } from '@/lib/utils';
+import { cn, formatDateSafe, getBookingStatusBadge } from '@/lib/utils';
 import { getResources_SA, getPendingBookings_SA } from '@/lib/actions/data.actions';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TableSkeleton } from '@/components/ui/table-skeleton';
@@ -220,7 +220,7 @@ export default function BookingRequestsPage() {
 
   if (!canManageBookingRequests) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         <PageHeader title="Booking Requests" icon={CheckSquare} description="Access Denied." />
         <Card className="text-center py-10 text-muted-foreground">
           <CardContent>
@@ -233,7 +233,7 @@ export default function BookingRequestsPage() {
 
   return (
     <TooltipProvider>
-      <div className="space-y-8">
+      <div className="space-y-6">
         <PageHeader
           title="Booking Requests"
           description="Review and manage pending or waitlisted booking requests."
@@ -316,15 +316,15 @@ export default function BookingRequestsPage() {
           }
         />
 
-        <div className="rounded-lg border border-border overflow-hidden">
+        <div className="rounded-lg border border-border overflow-hidden bg-card">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead className="font-semibold text-foreground"><ResourceIcon className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Resource</TableHead>
-                <TableHead className="font-semibold text-foreground"><UserIcon className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Booked By</TableHead>
-                <TableHead className="font-semibold text-foreground"><Clock className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Date & Time</TableHead>
-                <TableHead className="font-semibold text-foreground"><Info className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Status</TableHead>
-                <TableHead className="font-semibold text-foreground"><StickyNote className="inline-block mr-1 h-4 w-4 text-muted-foreground" />Notes</TableHead>
+                <TableHead className="font-semibold text-foreground"><div className="flex items-center gap-1.5"><ResourceIcon className="h-4 w-4 text-muted-foreground" />Resource</div></TableHead>
+                <TableHead className="font-semibold text-foreground"><div className="flex items-center gap-1.5"><UserIcon className="h-4 w-4 text-muted-foreground" />Booked By</div></TableHead>
+                <TableHead className="font-semibold text-foreground"><div className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-muted-foreground" />Date & Time</div></TableHead>
+                <TableHead className="font-semibold text-foreground"><div className="flex items-center gap-1.5"><Info className="h-4 w-4 text-muted-foreground" />Status</div></TableHead>
+                <TableHead className="font-semibold text-foreground"><div className="flex items-center gap-1.5"><StickyNote className="h-4 w-4 text-muted-foreground" />Notes</div></TableHead>
                 <TableHead className="font-semibold text-foreground text-right w-[100px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -343,15 +343,7 @@ export default function BookingRequestsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                        <Badge
-                            className={cn(
-                                "whitespace-nowrap text-xs px-2 py-0.5 border-transparent",
-                                booking.status === 'Pending' && 'bg-yellow-500 text-yellow-950 hover:bg-yellow-600',
-                                booking.status === 'Waitlisted' && 'bg-purple-500 text-white hover:bg-purple-600'
-                            )}
-                        >
-                            {booking.status}
-                        </Badge>
+                        {getBookingStatusBadge(booking.status as Booking['status'])}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-xs truncate" title={booking.notes || undefined}>{booking.notes || 'N/A'}</TableCell>
                     <TableCell className="text-right space-x-1">

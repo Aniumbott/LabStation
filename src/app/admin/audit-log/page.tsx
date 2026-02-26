@@ -118,7 +118,7 @@ export default function AuditLogPage() {
 
   if (currentUser?.role !== 'Admin') {
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         <PageHeader title="Audit Log" icon={History} description="Access Denied." />
         <Card className="text-center py-10 text-muted-foreground">
           <CardContent>
@@ -130,7 +130,7 @@ export default function AuditLogPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="Audit Log"
         description="Track significant actions performed within the system. Click a row for details."
@@ -198,7 +198,7 @@ export default function AuditLogPage() {
         }
       />
 
-      <div className="rounded-lg border border-border overflow-hidden">
+      <div className="rounded-lg border border-border overflow-hidden bg-card">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50 hover:bg-muted/50">

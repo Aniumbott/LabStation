@@ -21,9 +21,9 @@ export function PageHeader({ title, description, icon: Icon, actions }: PageHead
       </div>
       {description && (
         typeof description === 'string' ? (
-          <p className="mt-1 text-sm text-muted-foreground/80">{description}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         ) : (
-          <div className="mt-1 text-sm text-muted-foreground/80">{description}</div>
+          <div className="mt-1 text-sm text-muted-foreground">{description}</div>
         )
       )}
     </div>

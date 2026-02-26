@@ -183,7 +183,7 @@ export default function NotificationsPage() {
 
   return (
     <TooltipProvider>
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="Notifications"
         description="Stay updated with important alerts and messages."

@@ -174,7 +174,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="Dashboard"
         description="Overview of lab resources, your bookings, and lab access."
@@ -227,7 +227,7 @@ export default function DashboardPage() {
         ) : frequentlyUsedResources.length > 0 ? (
           <div className="w-fit grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2">
             {frequentlyUsedResources.map((resource) => (
-              <Card key={resource.id} className="w-full md:max-w-md flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300 p-4">
+              <Card key={resource.id} className="w-full md:max-w-md flex flex-col border border-border hover:border-primary/30 transition-colors duration-200 p-4">
                 <CardHeader className="p-0 pb-3">
                   <div className="flex justify-between items-start">
                     <CardTitle className="text-lg hover:text-primary transition-colors">
@@ -276,7 +276,7 @@ export default function DashboardPage() {
 
       <section>
         <h2 className="text-xl font-semibold mb-4">Your Upcoming Bookings</h2>
-        <div className="rounded-lg border border-border overflow-hidden">
+        <div className="rounded-lg border border-border overflow-hidden bg-card">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -351,7 +351,7 @@ export default function DashboardPage() {
                     {userActiveLabs.map(lab => {
                         const membership = userMemberships.find(m => m.labId === lab.id && m.status === 'active');
                         return (
-                            <Card key={lab.id} className="shadow-md hover:shadow-lg transition-shadow">
+                            <Card key={lab.id} className="border border-border hover:border-primary/30 transition-colors duration-200">
                                 <CardHeader>
                                     <CardTitle className="text-lg flex items-center gap-2"><University className="h-5 w-5 text-primary"/>{lab.name}</CardTitle>
                                     {lab.location && <CardDescription>{lab.location}</CardDescription>}
