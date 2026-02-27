@@ -100,8 +100,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const handleLogout = useCallback(async () => {
     await logout();
-    router.refresh();
-  }, [logout, router]);
+    // Hard redirect clears the entire Next.js Router Cache and React state,
+    // preventing stale admin/non-admin data from leaking into the next session.
+    window.location.href = '/login';
+  }, [logout]);
 
   useEffect(() => {
     setIsMounted(true);

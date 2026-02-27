@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useAuth } from '@/components/auth-context';
-import { AlertCircle, CheckCircle, Loader2, FlaskConical } from 'lucide-react';
+import { AlertCircle, CheckCircle, Loader2, Microwave } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 
@@ -89,7 +89,7 @@ export default function SignupPage() {
       {/* Brand panel */}
       <div className="hidden md:flex w-1/2 bg-primary flex-col items-center justify-center p-12 gap-6">
         <div className="flex items-center justify-center rounded-2xl bg-white/10 p-5">
-          <FlaskConical className="h-14 w-14 text-white" />
+          <Microwave className="h-14 w-14 text-white" />
         </div>
         <div className="text-center">
           <h2 className="text-white text-4xl font-bold mb-3">LabStation</h2>
@@ -109,7 +109,7 @@ export default function SignupPage() {
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="flex items-center gap-2 mb-8 md:hidden">
-            <FlaskConical className="h-6 w-6 text-primary" />
+            <Microwave className="h-6 w-6 text-primary" />
             <span className="text-xl font-bold">LabStation</span>
           </div>
 

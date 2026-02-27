@@ -68,34 +68,41 @@ export const LabSpecificClosuresTab: FC<LabSpecificClosuresTabProps> = ({
   labSpecificRuleToDelete, setLabSpecificRuleToDelete, handleDeleteLabSpecificRecurringRule
 }) => {
   return (
+    <Tabs value={activeLabClosuresTab} onValueChange={setActiveLabClosuresTab}>
     <Card>
       <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
         <div>
             <CardTitle>{selectedLabDetails.name} - Closures</CardTitle>
             <CardDescription>Manage specific and recurring unavailability for this lab.</CardDescription>
         </div>
-        <FilterSortDialog open={isLabSpecificClosureFilterDialogOpen} onOpenChange={setIsLabSpecificClosureFilterDialogOpen}>
-            <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter {activeLabSpecificClosureFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeLabSpecificClosureFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
-            <FilterSortDialogContent className="sm:max-w-md">
-                <FilterSortDialogHeader><FilterSortDialogTitle>Filter Closures for {selectedLabDetails.name}</FilterSortDialogTitle></FilterSortDialogHeader>
-                <Separator className="my-3" />
-                <div className="space-y-3">
-                <div className="relative"><Label htmlFor="labSpecificClosureSearchDialog">Search (Reason/Name/Date)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="labSpecificClosureSearchDialog" value={tempLabSpecificClosureSearchTerm} onChange={e => setTempLabSpecificClosureSearchTerm(e.target.value)} placeholder="e.g., Holiday, Weekend, Jan 1" className="mt-1 h-9 pl-8"/></div>
-                </div>
-                <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabSpecificClosureDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button onClick={handleApplyLabSpecificClosureDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
-            </FilterSortDialogContent>
-        </FilterSortDialog>
+        <div className="flex items-center gap-2">
+          <TabsList className="inline-flex h-9 items-center justify-center rounded-md bg-muted p-0.5 text-muted-foreground">
+            <TabsTrigger value="specific-dates-lab" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex items-center gap-1.5">
+              <CalendarDays className="h-4 w-4"/>Dates
+            </TabsTrigger>
+            <TabsTrigger value="recurring-rules-lab" className="px-3 py-1.5 text-sm h-full data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex items-center gap-1.5">
+              <Repeat className="h-4 w-4"/>Rules
+            </TabsTrigger>
+          </TabsList>
+          {activeLabClosuresTab === 'specific-dates-lab'
+            ? <Button onClick={handleOpenNewLabSpecificDateDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Date</Button>
+            : <Button onClick={handleOpenNewLabSpecificRecurringDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add Rule</Button>
+          }
+          <FilterSortDialog open={isLabSpecificClosureFilterDialogOpen} onOpenChange={setIsLabSpecificClosureFilterDialogOpen}>
+              <FilterSortDialogTrigger asChild><Button variant="outline" size="sm"><FilterIcon className="mr-2 h-4 w-4" />Filter {activeLabSpecificClosureFilterCount > 0 && <Badge variant="secondary" className="ml-1 rounded-full px-1.5 text-xs">{activeLabSpecificClosureFilterCount}</Badge>}</Button></FilterSortDialogTrigger>
+              <FilterSortDialogContent className="sm:max-w-md">
+                  <FilterSortDialogHeader><FilterSortDialogTitle>Filter Closures for {selectedLabDetails.name}</FilterSortDialogTitle></FilterSortDialogHeader>
+                  <Separator className="my-3" />
+                  <div className="space-y-3">
+                  <div className="relative"><Label htmlFor="labSpecificClosureSearchDialog">Search (Reason/Name/Date)</Label><SearchIcon className="absolute left-2.5 top-[calc(1.25rem_+_8px)] h-4 w-4 text-muted-foreground" /><Input id="labSpecificClosureSearchDialog" value={tempLabSpecificClosureSearchTerm} onChange={e => setTempLabSpecificClosureSearchTerm(e.target.value)} placeholder="e.g., Holiday, Weekend, Jan 1" className="mt-1 h-9 pl-8"/></div>
+                  </div>
+                  <FilterSortDialogFooter className="mt-4 pt-4 border-t"><Button variant="ghost" onClick={resetLabSpecificClosureDialogFiltersOnly} className="mr-auto"><FilterX className="mr-2 h-4 w-4"/>Reset</Button><Button onClick={handleApplyLabSpecificClosureDialogFilters}><CheckCircle2 className="mr-2 h-4 w-4"/>Apply</Button></FilterSortDialogFooter>
+              </FilterSortDialogContent>
+          </FilterSortDialog>
+        </div>
       </CardHeader>
       <CardContent>
-        <Tabs value={activeLabClosuresTab} onValueChange={setActiveLabClosuresTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="specific-dates-lab"><CalendarDays className="mr-2 h-4 w-4"/>Specific Dates</TabsTrigger>
-            <TabsTrigger value="recurring-rules-lab"><Repeat className="mr-2 h-4 w-4"/>Recurring Rules</TabsTrigger>
-          </TabsList>
-          <TabsContent value="specific-dates-lab">
-            <div className="flex justify-end mb-3">
-              <Button onClick={handleOpenNewLabSpecificDateDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add</Button>
-            </div>
+          <TabsContent value="specific-dates-lab" className="mt-0">
             {isLoadingData && filteredLabSpecificBlackoutDates.length === 0 && !activeLabSpecificClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
             ) : filteredLabSpecificBlackoutDates.length > 0 ? (
               <div className="overflow-x-auto border rounded-b-md">
@@ -120,10 +127,7 @@ export const LabSpecificClosuresTab: FC<LabSpecificClosuresTabProps> = ({
               <div className="text-center py-8 text-muted-foreground"><CalendarOff className="h-10 w-10 mx-auto mb-2 opacity-50"/><p className="font-medium">{activeLabSpecificClosureSearchTerm ? "No dates match filter." : `No specific blackout dates for ${selectedLabDetails.name}.`}</p></div>
             )}
           </TabsContent>
-          <TabsContent value="recurring-rules-lab">
-              <div className="flex justify-end mb-3">
-              <Button onClick={handleOpenNewLabSpecificRecurringDialog} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Add</Button>
-            </div>
+          <TabsContent value="recurring-rules-lab" className="mt-0">
             {isLoadingData && filteredLabSpecificRecurringRules.length === 0 && !activeLabSpecificClosureSearchTerm ? ( <div className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto"/></div>
             ) : filteredLabSpecificRecurringRules.length > 0 ? (
               <div className="overflow-x-auto border rounded-b-md">
@@ -148,8 +152,8 @@ export const LabSpecificClosuresTab: FC<LabSpecificClosuresTabProps> = ({
               <div className="text-center py-8 text-muted-foreground"><Repeat className="h-10 w-10 mx-auto mb-2 opacity-50"/><p className="font-medium">{activeLabSpecificClosureSearchTerm ? "No rules match filter." : `No recurring closure rules for ${selectedLabDetails.name}.`}</p></div>
             )}
           </TabsContent>
-        </Tabs>
       </CardContent>
     </Card>
+    </Tabs>
   );
 };

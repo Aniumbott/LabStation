@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { PageHeader } from '@/components/layout/page-header';
 import { Cog, Loader2, Building, Globe } from 'lucide-react';
@@ -200,14 +200,23 @@ export default function LabOperationsCenterPage() {
         }
     }, [fetchRemainingData, isAdminDataLoading]);
 
+    // Sync URL → state only on initial load (once labs are available).
+    // After init, handleContextChange is the sole owner of both state and URL.
+    const didInitFromUrl = useRef(false);
     useEffect(() => {
+      if (didInitFromUrl.current) return;
+      if (labs.length === 0) return; // Wait for labs to load
+
+      didInitFromUrl.current = true;
       const preselectedLabIdFromUrl = searchParamsObj.get('labId');
       if (preselectedLabIdFromUrl && labs.find(l => l.id === preselectedLabIdFromUrl)) {
         setActiveContextId(preselectedLabIdFromUrl);
       } else if (preselectedLabIdFromUrl) {
+        // labId in URL doesn't match any known lab — clean it up
         const newSearchParams = new URLSearchParams(searchParamsObj.toString());
         newSearchParams.delete('labId');
-        router.replace(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
+        const qs = newSearchParams.toString();
+        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
         setActiveContextId(GLOBAL_CONTEXT_VALUE);
       }
     }, [searchParamsObj, labs, router, pathname]);
@@ -222,7 +231,8 @@ export default function LabOperationsCenterPage() {
         } else {
             newSearchParams.set('labId', newContextId);
         }
-        router.push(`${pathname}?${newSearchParams.toString()}`, { scroll: false });
+        const qs = newSearchParams.toString();
+        router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     };
 
     const pageHeaderActionsContent = (

@@ -119,6 +119,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Successful login — hydrate user state.
+      // Clear the entire query cache so the new session starts fresh
+      // (prevents stale admin/non-admin data leaking across role changes).
+      queryClient.clear();
       const user: User = {
         ...data.user,
         createdAt: data.user.createdAt ? new Date(data.user.createdAt) : new Date(),
@@ -133,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       return { success: false, message };
     }
-  }, []);
+  }, [queryClient]);
 
   const logout = useCallback(async (): Promise<void> => {
     setIsLoading(true);

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useAuth } from '@/components/auth-context';
-import { AlertCircle, Loader2, FlaskConical } from 'lucide-react';
+import { AlertCircle, Loader2, Microwave } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const loginSchema = z.object({
@@ -60,11 +60,10 @@ export default function LoginPage() {
     const result = await login(data.email, data.password);
 
     if (result.success) {
-      // Refresh the Next.js router cache so all route segments re-render with
-      // the new session — prevents stale cached redirects from a previous
-      // user's session affecting the newly logged-in user.
-      router.refresh();
-      router.push('/dashboard');
+      // Hard navigation ensures the entire React tree remounts with fresh state
+      // and the Next.js Router Cache is fully cleared — prevents stale cached
+      // layouts/redirects from a previous session affecting the new user.
+      window.location.href = '/dashboard';
       return;
     }
 
@@ -92,9 +91,9 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen">
       {/* Brand panel */}
-      <div className="hidden md:flex w-1/2 bg-primary flex-col items-center justify-center p-12 gap-6">
-        <div className="flex items-center justify-center rounded-2xl bg-white/10 p-5">
-          <FlaskConical className="h-14 w-14 text-white" />
+      <div className="hidden md:flex w-1/2 bg-foreground flex-col items-center justify-center p-12 gap-6">
+        <div className="flex items-center justify-center rounded-2xl bg-primary p-5">
+          <Microwave className="h-14 w-14 text-white" />
         </div>
         <div className="text-center">
           <h2 className="text-white text-4xl font-bold mb-3">LabStation</h2>
@@ -123,7 +122,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="flex items-center gap-2 mb-8 md:hidden">
-            <FlaskConical className="h-6 w-6 text-primary" />
+            <Microwave className="h-6 w-6 text-primary" />
             <span className="text-xl font-bold">LabStation</span>
           </div>
 

@@ -241,7 +241,7 @@ export default function NotificationsPage() {
             <div
               key={notification.id}
               className={cn(
-                "rounded-lg border border-border bg-card flex items-start gap-3 p-4 transition-colors",
+                "rounded-r-lg rounded-l-sm border border-border bg-card flex items-start gap-3 p-4 transition-colors",
                 !notification.isRead
                   ? "border-l-4 border-l-primary bg-primary/5"
                   : "border-l-4 border-l-transparent"
