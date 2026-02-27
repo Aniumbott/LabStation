@@ -112,7 +112,7 @@ export const GlobalClosuresTab: FC<GlobalClosuresTabProps> = ({
                       <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setGlobalDateToDelete(bd)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Date</TooltipContent></Tooltip>
                       <AlertDialogContent>
                         <AlertDialogHeader><AlertDialogTitle>Delete Global Blackout on {formatDateSafe(globalDateToDelete ? parseISO(globalDateToDelete.date) : new Date(), '', 'PPP')}?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                        <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => globalDateToDelete && handleDeleteGlobalBlackoutDate(globalDateToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
+                        <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => globalDateToDelete && handleDeleteGlobalBlackoutDate(globalDateToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
                   </TableCell></TableRow>
@@ -148,7 +148,7 @@ export const GlobalClosuresTab: FC<GlobalClosuresTabProps> = ({
                       <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setGlobalRuleToDelete(rule)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Rule</TooltipContent></Tooltip>
                       <AlertDialogContent>
                         <AlertDialogHeader><AlertDialogTitle>Delete Global Rule "{globalRuleToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                        <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => globalRuleToDelete && handleDeleteGlobalRecurringRule(globalRuleToDelete.id)}>Delete Rule</AlertDialogAction></AlertDialogFooter>
+                        <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => globalRuleToDelete && handleDeleteGlobalRecurringRule(globalRuleToDelete.id)}>Delete Rule</AlertDialogAction></AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
                   </TableCell></TableRow>

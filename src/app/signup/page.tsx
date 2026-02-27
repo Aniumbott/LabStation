@@ -48,7 +48,6 @@ export default function SignupPage() {
   const onSubmit = async (data: SignupFormValues) => {
     setErrorMessage(null);
     setSuccessMessage(null);
-    form.control.disabled = true;
     try {
       const result = await signup(data.name, data.email, data.password);
       if (result.success) {
@@ -66,10 +65,6 @@ export default function SignupPage() {
       }
     } catch (error) {
       setErrorMessage("An unexpected error occurred. Please try again.");
-    } finally {
-      if (!successMessage) {
-        form.control.disabled = false;
-      }
     }
   };
 

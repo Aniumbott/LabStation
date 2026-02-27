@@ -109,7 +109,7 @@ export const LabSpecificClosuresTab: FC<LabSpecificClosuresTabProps> = ({
                       <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabSpecificDateToDelete(bd)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Date</TooltipContent></Tooltip>
                       <AlertDialogContent>
                         <AlertDialogHeader><AlertDialogTitle>Delete Blackout on {formatDateSafe(labSpecificDateToDelete ? parseISO(labSpecificDateToDelete.date) : new Date(), '', 'PPP')} for {selectedLabDetails.name}?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                        <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => labSpecificDateToDelete && handleDeleteLabSpecificBlackoutDate(labSpecificDateToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
+                        <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => labSpecificDateToDelete && handleDeleteLabSpecificBlackoutDate(labSpecificDateToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
                   </TableCell></TableRow>
@@ -137,7 +137,7 @@ export const LabSpecificClosuresTab: FC<LabSpecificClosuresTabProps> = ({
                       <Tooltip><TooltipTrigger asChild><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8" onClick={() => setLabSpecificRuleToDelete(rule)} disabled={isLoadingData}><Trash2 className="h-4 w-4"/></Button></AlertDialogTrigger></TooltipTrigger><TooltipContent>Delete Rule</TooltipContent></Tooltip>
                       <AlertDialogContent>
                         <AlertDialogHeader><AlertDialogTitle>Delete Rule "{labSpecificRuleToDelete?.name}" for {selectedLabDetails.name}?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                        <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => labSpecificRuleToDelete && handleDeleteLabSpecificRecurringRule(labSpecificRuleToDelete.id)}>Delete Rule</AlertDialogAction></AlertDialogFooter>
+                        <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => labSpecificRuleToDelete && handleDeleteLabSpecificRecurringRule(labSpecificRuleToDelete.id)}>Delete Rule</AlertDialogAction></AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
                   </TableCell></TableRow>

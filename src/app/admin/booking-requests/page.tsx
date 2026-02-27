@@ -102,7 +102,7 @@ export default function BookingRequestsPage() {
       } else {
         setAllBookingsState([]);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       setAllBookingsState([]);
     }
     setIsLoading(false);
@@ -154,9 +154,8 @@ export default function BookingRequestsPage() {
       await approveBooking_SA({ callerUserId: loggedInUserFromContext.id, bookingId });
       toast({ title: 'Booking Approved', description: `Booking for "${bookingToUpdate.resourceName || 'Unknown Resource'}" by ${bookingToUpdate.userName || 'Unknown User'} has been confirmed.`});
       await fetchBookingRequestsAndRelatedData();
-    } catch (error: any) {
-      console.error("Error approving booking:", error);
-      toast({ title: "Error Approving Booking", description: `Failed to approve booking: ${error.message || 'Unknown error'}`, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error Approving Booking", description: `Failed to approve booking: ${(error as Error).message || 'Unknown error'}`, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -178,9 +177,8 @@ export default function BookingRequestsPage() {
       await rejectBooking_SA({ callerUserId: loggedInUserFromContext.id, bookingId });
       toast({ title: 'Booking Rejected', description: `Booking for "${bookingToUpdate.resourceName || 'Unknown Resource'}" by ${bookingToUpdate.userName || 'Unknown User'} has been cancelled.`, variant: 'destructive'});
       await fetchBookingRequestsAndRelatedData();
-    } catch (error: any) {
-      console.error("Error rejecting booking:", error);
-      toast({ title: "Error Rejecting Booking", description: `Failed to reject booking: ${error.message || 'Unknown error'}`, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error Rejecting Booking", description: `Failed to reject booking: ${(error as Error).message || 'Unknown error'}`, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }

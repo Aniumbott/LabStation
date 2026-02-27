@@ -9,9 +9,9 @@ import {
   type ReactNode,
 } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Lab, ResourceType, User } from '@/types';
+import type { Lab, Resource, ResourceType, User } from '@/types';
 import { useAuth } from '@/components/auth-context';
-import { getLabs_SA, getResourceTypes_SA, getUsers_SA } from '@/lib/actions/data.actions';
+import { getLabs_SA, getResources_SA, getResourceTypes_SA, getUsers_SA } from '@/lib/actions/data.actions';
 import { qk } from '@/lib/query-keys';
 
 // ─── Inline helper (avoids circular import with use-queries.ts) ───────────────
@@ -28,9 +28,10 @@ async function unwrap<T>(promise: Promise<ActionResponse<T>>): Promise<T> {
   return result.data as T;
 }
 
-// ─── Context shape (unchanged — all consumers keep working) ──────────────────
+// ─── Context shape ────────────────────────────────────────────────────────────
 interface AdminDataContextType {
   labs: Lab[];
+  resources: Resource[];
   resourceTypes: ResourceType[];
   allUsers: User[];
   allTechnicians: User[];
@@ -67,6 +68,14 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
     staleTime: 120_000, // labs change rarely
   });
 
+  // ── Resources ─────────────────────────────────────────────────────────────
+  const resourcesQuery = useQuery({
+    queryKey: qk.resources(),
+    queryFn: () => unwrap(getResources_SA()),
+    enabled: isAdmin,
+    staleTime: 60_000,
+  });
+
   // ── Resource types ────────────────────────────────────────────────────────
   const resourceTypesQuery = useQuery({
     queryKey: qk.resourceTypes(),
@@ -95,18 +104,20 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
    */
   const refetch = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: qk.labs() });
+    queryClient.invalidateQueries({ queryKey: qk.resources() });
     queryClient.invalidateQueries({ queryKey: qk.resourceTypes() });
     queryClient.invalidateQueries({ queryKey: qk.users() });
   }, [queryClient]);
 
   const labs: Lab[] = labsQuery.data ?? [];
+  const resources: Resource[] = resourcesQuery.data ?? [];
   const resourceTypes: ResourceType[] = resourceTypesQuery.data ?? [];
   const allUsers: User[] = usersQuery.data ?? [];
 
   // isLoading is true only while a query is pending AND actively fetching.
   // Disabled queries (non-admins) report isLoading = false immediately.
   const isLoading = isAdmin
-    ? labsQuery.isLoading || resourceTypesQuery.isLoading || usersQuery.isLoading
+    ? labsQuery.isLoading || resourcesQuery.isLoading || resourceTypesQuery.isLoading || usersQuery.isLoading
     : false;
 
   const allTechnicians = useMemo(
@@ -115,8 +126,8 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ labs, resourceTypes, allUsers, allTechnicians, isLoading, refetch }),
-    [labs, resourceTypes, allUsers, allTechnicians, isLoading, refetch]
+    () => ({ labs, resources, resourceTypes, allUsers, allTechnicians, isLoading, refetch }),
+    [labs, resources, resourceTypes, allUsers, allTechnicians, isLoading, refetch]
   );
 
   return (

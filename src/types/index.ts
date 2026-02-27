@@ -114,6 +114,7 @@ export interface MaintenanceRequest {
   issueDescription: string;
   status: MaintenanceRequestStatus;
   assignedTechnicianId?: string | null;
+  resolutionNotes?: string | null;
   dateReported: Date;
   dateResolved?: Date | null;
   resourceName?: string;

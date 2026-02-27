@@ -187,8 +187,8 @@ export default function UsersPage() {
       toast({ title: 'User Profile Created (Admin)', description: `User profile for ${data.name} created. A temporary password has been set.` });
       setIsAddUserFormDialogOpen(false);
       refetchAdminData();
-    } catch (error: any) {
-      toast({ title: "Save Error", description: `Could not save user profile: ${error.message}`, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Save Error", description: `Could not save user profile: ${(error as Error).message}`, variant: "destructive" });
     } finally {
       setIsProcessingAction(false);
     }
@@ -220,8 +220,8 @@ export default function UsersPage() {
       toast({ title: "User Profile Deleted", description: `User "${userToDeleteDetails.name}" profile and lab memberships removed.`, variant: "destructive" });
       setUserToDelete(null);
       refetchAdminData();
-    } catch (error: any) {
-      toast({ title: "Delete Error", description: `Could not delete user profile: ${error.message}`, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Delete Error", description: `Could not delete user profile: ${(error as Error).message}`, variant: "destructive" });
     } finally {
       setIsProcessingAction(false);
     }
@@ -253,8 +253,8 @@ export default function UsersPage() {
         const approvedUserName = userToApproveDetails.name || 'A user';
         toast({ title: 'User Approved', description: `User ${approvedUserName} has been approved and is now active.` });
         refetchAdminData();
-    } catch (error: any) {
-        toast({ title: "Approval Error", description: `Could not approve user: ${error.message}`, variant: "destructive" });
+    } catch (error: unknown) {
+        toast({ title: "Approval Error", description: `Could not approve user: ${(error as Error).message}`, variant: "destructive" });
     } finally {
       setIsProcessingAction(false);
     }
@@ -289,8 +289,8 @@ export default function UsersPage() {
       toast({ title: 'Signup Request Rejected', description: `Signup request for ${rejectedUserName} has been rejected and profile removed.`, variant: 'destructive' });
       setUserToReject(null);
       refetchAdminData();
-    } catch (error: any) {
-      toast({ title: "Rejection Error", description: `Could not reject signup: ${error.message}`, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Rejection Error", description: `Could not reject signup: ${(error as Error).message}`, variant: "destructive" });
     } finally {
       setIsProcessingAction(false);
     }
@@ -474,7 +474,7 @@ export default function UsersPage() {
                                   </AlertDialogHeader>
                                   <AlertDialogFooter className="pt-6 border-t">
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction variant="destructive" onClick={handleConfirmRejectUser}>
+                                    <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleConfirmRejectUser}>
                                       Reject Signup
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
@@ -515,7 +515,7 @@ export default function UsersPage() {
                                   </AlertDialogHeader>
                                   <AlertDialogFooter className="pt-6 border-t">
                                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction variant="destructive" onClick={() => userToDelete && handleDeleteUser(userToDelete.id)}>
+                                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => userToDelete && handleDeleteUser(userToDelete.id)}>
                                       Delete User Profile
                                       </AlertDialogAction>
                                   </AlertDialogFooter>

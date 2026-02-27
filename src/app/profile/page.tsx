@@ -75,10 +75,10 @@ export default function ProfilePage() {
           variant: "destructive",
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "An unexpected error occurred while updating your profile.",
+        description: error instanceof Error ? error.message : "An unexpected error occurred while updating your profile.",
         variant: "destructive",
       });
     } finally {

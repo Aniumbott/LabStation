@@ -186,8 +186,8 @@ export default function LabOperationsCenterPage() {
         const fetchedBookings = bookingsResult.success && bookingsResult.data ? bookingsResult.data : [];
         setAllBookingsState(fetchedBookings as (Booking & { resourceName?: string, userName?: string })[]);
 
-      } catch (error: any) {
-        toast({ title: "Error", description: `Failed to load operational data: ${error.message}`, variant: "destructive" });
+      } catch (error: unknown) {
+        toast({ title: "Error", description: `Failed to load operational data: ${(error as Error).message}`, variant: "destructive" });
       } finally {
         setIsLoadingData(false);
         setIsLabAccessRequestLoading(false);
@@ -343,8 +343,8 @@ export default function LabOperationsCenterPage() {
             setIsLabFormDialogOpen(false);
             setEditingLab(null);
             fetchRemainingData();
-        } catch (error: any) {
-            toast({ title: "Save Error", description: `Could not save lab: ${error.message}`, variant: "destructive" });
+        } catch (error: unknown) {
+            toast({ title: "Save Error", description: `Could not save lab: ${(error as Error).message}`, variant: "destructive" });
         } finally {
             setIsLoadingData(false);
         }
@@ -377,8 +377,8 @@ export default function LabOperationsCenterPage() {
             if (activeContextId === labId) {
                 setActiveContextId(GLOBAL_CONTEXT_VALUE);
             }
-        } catch (error: any) {
-            toast({ title: "Delete Error", description: `Could not delete lab: ${error.message}`, variant: "destructive" });
+        } catch (error: unknown) {
+            toast({ title: "Delete Error", description: `Could not delete lab: ${(error as Error).message}`, variant: "destructive" });
         } finally {
             setIsLoadingData(false);
         }
@@ -436,7 +436,7 @@ export default function LabOperationsCenterPage() {
             setIsGlobalDateFormDialogOpen(false);
             setEditingGlobalBlackoutDate(null);
             fetchRemainingData();
-        } catch (error: any) { toast({ title: "Save Failed", description: `Failed to save global blackout date: ${error.message}`, variant: "destructive"});
+        } catch (error: unknown) { toast({ title: "Save Failed", description: `Failed to save global blackout date: ${(error as Error).message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
     }, [currentUser, editingGlobalBlackoutDate, fetchRemainingData, toast]);
 
@@ -449,7 +449,7 @@ export default function LabOperationsCenterPage() {
             toast({ title: "Global Blackout Date Removed", variant: "destructive" });
             setGlobalDateToDelete(null);
             fetchRemainingData();
-        } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete global blackout date: ${error.message}`, variant: "destructive"});
+        } catch (error: unknown) { toast({ title: "Delete Failed", description: `Failed to delete global blackout date: ${(error as Error).message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
     }, [currentUser, fetchRemainingData, toast]);
 
@@ -475,7 +475,7 @@ export default function LabOperationsCenterPage() {
             setIsGlobalRecurringFormDialogOpen(false);
             setEditingGlobalRecurringRule(null);
             fetchRemainingData();
-        } catch (error: any) { toast({ title: "Save Failed", description: `Failed to save global recurring rule: ${error.message}`, variant: "destructive"});
+        } catch (error: unknown) { toast({ title: "Save Failed", description: `Failed to save global recurring rule: ${(error as Error).message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
     }, [currentUser, editingGlobalRecurringRule, fetchRemainingData, toast]);
 
@@ -488,7 +488,7 @@ export default function LabOperationsCenterPage() {
             toast({ title: "Global Recurring Rule Removed", variant: "destructive" });
             setGlobalRuleToDelete(null);
             fetchRemainingData();
-        } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete global recurring rule: ${error.message}`, variant: "destructive"});
+        } catch (error: unknown) { toast({ title: "Delete Failed", description: `Failed to delete global recurring rule: ${(error as Error).message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
     }, [currentUser, fetchRemainingData, toast]);
     
@@ -559,7 +559,7 @@ export default function LabOperationsCenterPage() {
             setIsLabSpecificDateFormDialogOpen(false);
             setEditingLabSpecificBlackoutDate(null);
             fetchRemainingData();
-        } catch (error: any) { toast({ title: "Save Failed", description: `Failed to save lab-specific blackout date: ${error.message}`, variant: "destructive"});
+        } catch (error: unknown) { toast({ title: "Save Failed", description: `Failed to save lab-specific blackout date: ${(error as Error).message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
     }, [currentUser, editingLabSpecificBlackoutDate, activeContextId, fetchRemainingData, toast]);
 
@@ -572,7 +572,7 @@ export default function LabOperationsCenterPage() {
             toast({ title: "Lab Blackout Date Removed", variant: "destructive" });
             setLabSpecificDateToDelete(null);
             fetchRemainingData();
-        } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete lab-specific blackout date: ${error.message}`, variant: "destructive"});
+        } catch (error: unknown) { toast({ title: "Delete Failed", description: `Failed to delete lab-specific blackout date: ${(error as Error).message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
     }, [currentUser, fetchRemainingData, toast]);
 
@@ -598,7 +598,7 @@ export default function LabOperationsCenterPage() {
             setIsLabSpecificRecurringFormDialogOpen(false);
             setEditingLabSpecificRecurringRule(null);
             fetchRemainingData();
-        } catch (error: any) { toast({ title: "Save Failed", description: `Failed to save lab-specific recurring rule: ${error.message}`, variant: "destructive"});
+        } catch (error: unknown) { toast({ title: "Save Failed", description: `Failed to save lab-specific recurring rule: ${(error as Error).message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
     }, [currentUser, editingLabSpecificRecurringRule, activeContextId, fetchRemainingData, toast]);
 
@@ -611,7 +611,7 @@ export default function LabOperationsCenterPage() {
             toast({ title: "Lab Recurring Rule Removed", variant: "destructive" });
             setLabSpecificRuleToDelete(null);
             fetchRemainingData();
-        } catch (error: any) { toast({ title: "Delete Failed", description: `Failed to delete lab-specific recurring rule: ${error.message}`, variant: "destructive"});
+        } catch (error: unknown) { toast({ title: "Delete Failed", description: `Failed to delete lab-specific recurring rule: ${(error as Error).message}`, variant: "destructive"});
         } finally { setIsLoadingData(false); }
     }, [currentUser, fetchRemainingData, toast]);
 
@@ -847,12 +847,12 @@ export default function LabOperationsCenterPage() {
             setIsMaintenanceFormDialogOpen(false);
             setEditingMaintenanceRequest(null);
             fetchRemainingData();
-        } catch (error: any) { toast({ title: `${editingMaintenanceRequest ? "Update" : "Logging"} Failed`, description: `Failed to ${editingMaintenanceRequest ? "update" : "log"} request: ${error.message}`, variant: "destructive" });
+        } catch (error: unknown) { toast({ title: `${editingMaintenanceRequest ? "Update" : "Logging"} Failed`, description: `Failed to ${editingMaintenanceRequest ? "update" : "log"} request: ${(error as Error).message}`, variant: "destructive" });
         } finally { setIsLoadingData(false); }
     }, [currentUser, editingMaintenanceRequest, allResourcesForCountsAndChecks, fetchRemainingData, toast]);
 
     const activeMaintenanceFilterCount = useMemo(() => [activeMaintenanceSearchTerm !== '', activeMaintenanceFilterStatus !== 'all', activeMaintenanceFilterResourceId !== 'all', activeMaintenanceFilterTechnicianId !== 'all'].filter(Boolean).length, [activeMaintenanceSearchTerm, activeMaintenanceFilterStatus, activeMaintenanceFilterResourceId, activeMaintenanceFilterTechnicianId]);
-    const canEditAnyMaintenanceRequest = useMemo(() => currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Technician'), [currentUser]);
+    const canEditAnyMaintenanceRequest = useMemo(() => !!(currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Technician')), [currentUser]);
 
     const handleMembershipAction = useCallback(async (
         targetUserId: string, targetUserName: string, labId: string, labName: string,
@@ -880,8 +880,8 @@ export default function LabOperationsCenterPage() {
           } else {
             toast({ title: "Action Failed", description: result.message, variant: "destructive" });
           }
-        } catch (error: any) {
-          toast({ title: "Error", description: `Failed to process request: ${error.message}`, variant: "destructive" });
+        } catch (error: unknown) {
+          toast({ title: "Error", description: `Failed to process request: ${(error as Error).message}`, variant: "destructive" });
         } finally {
           setIsProcessingLabAccessAction(prev => ({ ...prev, [actionKey]: false }));
         }

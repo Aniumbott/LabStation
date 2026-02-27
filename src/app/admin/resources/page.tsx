@@ -14,7 +14,7 @@ import { Package, PlusCircle, Filter as FilterIcon, FilterX, Search as SearchIco
 import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import type { Resource, ResourceStatus, ResourceType, Lab, LabMembership } from '@/types';
-import { resourceStatusesList } from '@/lib/app-constants';
+import { resourceStatusesList, PLACEHOLDER_IMAGE, PLACEHOLDER_AVATAR } from '@/lib/app-constants';
 import { useAuth } from '@/components/auth-context';
 import { useAdminData } from '@/contexts/AdminDataContext';
 import {
@@ -141,8 +141,8 @@ export default function AdminResourcesPage() {
         fetchedResources = fetchedResources.filter(resource => activeUserLabIds.includes(resource.labId) || !resource.labId);
       }
       setAllResourcesDataSource(fetchedResources);
-    } catch (error: any) {
-      toast({ title: "Data Load Error", description: `Failed to load resources: ${error.message}`, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Data Load Error", description: `Failed to load resources: ${(error as Error).message}`, variant: "destructive" });
       setAllResourcesDataSource([]);
       setUserLabMemberships([]);
     }
@@ -303,7 +303,7 @@ export default function AdminResourcesPage() {
           labId: labIdForSave,
           status: data.status,
           description: data.description || '',
-          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+          imageUrl: data.imageUrl || PLACEHOLDER_IMAGE,
           manufacturer: data.manufacturer || undefined,
           model: data.model || undefined,
           serialNumber: data.serialNumber || undefined,
@@ -326,7 +326,7 @@ export default function AdminResourcesPage() {
           labId: labIdForSave,
           status: data.status,
           description: data.description || '',
-          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+          imageUrl: data.imageUrl || PLACEHOLDER_IMAGE,
           manufacturer: data.manufacturer || undefined,
           model: data.model || undefined,
           serialNumber: data.serialNumber || undefined,
@@ -346,8 +346,8 @@ export default function AdminResourcesPage() {
       setEditingResource(null);
       await fetchResourcePageData();
       refetchAdminData();
-    } catch (error: any) {
-        toast({ title: "Save Failed", description: `Could not save resource: ${error.message}`, variant: "destructive" });
+    } catch (error: unknown) {
+        toast({ title: "Save Failed", description: `Could not save resource: ${(error as Error).message}`, variant: "destructive" });
     } finally {
       setIsLoadingData(false);
     }
@@ -457,8 +457,8 @@ export default function AdminResourcesPage() {
           setIsResourceTypeFormDialogOpen(false);
           setEditingResourceType(null);
           refetchAdminData();
-      } catch (error: any) {
-          toast({ title: "Save Failed", description: `Could not save resource type: ${error.message}`, variant: "destructive" });
+      } catch (error: unknown) {
+          toast({ title: "Save Failed", description: `Could not save resource type: ${(error as Error).message}`, variant: "destructive" });
       } finally {
           setIsLoadingData(false);
       }
@@ -484,8 +484,8 @@ export default function AdminResourcesPage() {
           toast({ title: "Resource Type Deleted", description: `"${deletedType.name}" removed.`, variant: "destructive" });
           setTypeToDelete(null);
           refetchAdminData();
-      } catch (error: any) {
-          toast({ title: "Delete Error", description: `Could not delete resource type: ${error.message}`, variant: "destructive" });
+      } catch (error: unknown) {
+          toast({ title: "Delete Error", description: `Could not delete resource type: ${(error as Error).message}`, variant: "destructive" });
       } finally {
           setIsLoadingData(false);
       }
@@ -634,7 +634,7 @@ export default function AdminResourcesPage() {
                             <TableRow key={resource.id} className="hover:bg-muted/30 transition-colors">
                               <TableCell>
                                 <Link href={`/admin/resources/${resource.id}`}>
-                                  <Image src={resource.imageUrl || 'https://placehold.co/100x100.png'} alt={resource.name} width={40} height={40} className="rounded-md object-cover h-10 w-10 hover:opacity-80 transition-opacity" data-ai-hint="lab equipment"/>
+                                  <Image src={resource.imageUrl || PLACEHOLDER_AVATAR} alt={resource.name} width={40} height={40} className="rounded-md object-cover h-10 w-10 hover:opacity-80 transition-opacity" data-ai-hint="lab equipment"/>
                                 </Link>
                               </TableCell>
                               <TableCell className="font-medium">
@@ -737,7 +737,7 @@ export default function AdminResourcesPage() {
                                     </TooltipTrigger><TooltipContent>{type.resourceCount > 0 ? "Cannot delete: type in use" : "Delete Type"}</TooltipContent></Tooltip></TooltipProvider>
                                     <AlertDialogContent>
                                         <AlertDialogHeader className="mt-4"><AlertDialogTitle>Delete "{typeToDelete?.name}"?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Ensure no resources use this type.</AlertDialogDescription></AlertDialogHeader>
-                                        <AlertDialogFooter className="pt-6 border-t"><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
+                                        <AlertDialogFooter className="pt-6 border-t"><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => typeToDelete && handleDeleteResourceType(typeToDelete.id)}>Delete</AlertDialogAction></AlertDialogFooter>
                                     </AlertDialogContent>
                                 </AlertDialog>
                               </TableCell>

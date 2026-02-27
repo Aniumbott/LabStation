@@ -68,15 +68,14 @@ export function MaintenanceRequestFormDialog({
     open, onOpenChange, initialRequest, onSave, currentUserRole, labContextId
 }: MaintenanceRequestFormDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { allResources, allTechnicians, isLoading: isAdminDataLoading, labs } = useAdminData();
-  
+  const { resources, allTechnicians, isLoading: isAdminDataLoading, labs } = useAdminData();
+
   const availableResourcesForForm = useMemo(() => {
-    if (!allResources) return []; // Ensure allResources is not undefined
     if (labContextId) {
-      return allResources.filter(r => r.labId === labContextId);
+      return resources.filter(r => r.labId === labContextId);
     }
-    return allResources;
-  }, [allResources, labContextId]);
+    return resources;
+  }, [resources, labContextId]);
   
   const form = useForm<MaintenanceRequestFormValues>({
     resolver: zodResolver(maintenanceRequestFormSchema),

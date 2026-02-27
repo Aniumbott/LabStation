@@ -25,7 +25,7 @@ import { Separator } from '@/components/ui/separator';
 const userFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }).max(100, "Name cannot exceed 100 characters."),
   email: z.string().email({ message: 'Please enter a valid email address.' }),
-  role: z.enum(userRolesList as [string, ...string[]], { required_error: 'Please select a role.' }),
+  role: z.enum(userRolesList as unknown as [RoleName, ...RoleName[]], { required_error: 'Please select a role.' }),
 });
 
 export type UserFormValues = z.infer<typeof userFormSchema>;

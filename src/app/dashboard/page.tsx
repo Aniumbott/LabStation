@@ -3,7 +3,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { LayoutDashboard, CalendarPlus, ChevronRight, CheckCircle, Wrench, Loader2, ThumbsUp, Clock, X, User as UserIconLucide, XCircle, Building, KeyRound, University, PlusCircle, LogOut, Ban, Package, CalendarDays, Info } from 'lucide-react';
+import { LayoutDashboard, CalendarPlus, ChevronRight, Wrench, Loader2, Clock, XCircle, Building, KeyRound, University, PlusCircle, LogOut, Ban, Package, CalendarDays, Info } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,7 @@ import {
 import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { format, isValid, parseISO } from 'date-fns';
-import { cn, formatDateSafe, getResourceStatusBadge } from '@/lib/utils';
+import { cn, formatDateSafe, getResourceStatusBadge, getBookingStatusBadge } from '@/lib/utils';
 import { useState, useMemo, useCallback } from 'react';
 import { useAuth } from '@/components/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -30,6 +30,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { requestLabAccess_SA, cancelLabAccessRequest_SA, leaveLab_SA } from '@/lib/db-helpers';
 import { useDashboardData } from '@/lib/hooks/use-queries';
 import { qk } from '@/lib/query-keys';
+import { PLACEHOLDER_IMAGE } from '@/lib/app-constants';
 
 
 const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Date => {
@@ -52,7 +53,6 @@ const safeConvertToDate = (value: any, fieldName: string, bookingId: string): Da
          return dateFromNum;
      }
   }
-  console.error(`[Dashboard] CRITICAL: Unexpected data type or invalid date for ${fieldName} in booking ${bookingId}. Using current date as fallback. Value:`, value, `Type: ${typeof value}`);
   return new Date();
 };
 
@@ -73,7 +73,7 @@ export default function DashboardPage() {
     return data.recentResources.map(r => ({
       ...r,
       labName: r.labName || (r.labId ? 'Unknown Lab' : 'Global/No Lab'),
-      imageUrl: r.imageUrl || 'https://placehold.co/600x400.png',
+      imageUrl: r.imageUrl || PLACEHOLDER_IMAGE,
       features: r.features || [],
       purchaseDate: r.purchaseDate ? safeConvertToDate(r.purchaseDate, 'purchaseDate', r.id) : undefined,
       lastUpdatedAt: r.lastUpdatedAt ? safeConvertToDate(r.lastUpdatedAt, 'lastUpdatedAt', r.id) : undefined,
@@ -158,21 +158,6 @@ export default function DashboardPage() {
   }, [currentUser, toast, queryClient]);
 
 
-  const getBookingStatusBadge = (status: Booking['status']) => {
-    switch (status) {
-      case 'Confirmed':
-        return <Badge className={cn("bg-green-500 text-white hover:bg-green-600 border-transparent")}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-      case 'Pending':
-        return <Badge className={cn("bg-yellow-500 text-yellow-950 hover:bg-yellow-600 border-transparent")}><Clock className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-      case 'Cancelled':
-        return <Badge className={cn("bg-gray-400 text-white hover:bg-gray-500 border-transparent")}><X className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-       case 'Waitlisted':
-         return <Badge className={cn("bg-purple-500 text-white hover:bg-purple-600 border-transparent")}><UserIconLucide className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -243,7 +228,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="p-0 flex-grow space-y-3">
                   <div className="relative w-full h-40 rounded-md overflow-hidden">
-                    <Image src={resource.imageUrl || 'https://placehold.co/600x400.png'} alt={resource.name} fill style={{objectFit:"cover"}} data-ai-hint="lab equipment"/>
+                    <Image src={resource.imageUrl || PLACEHOLDER_IMAGE} alt={resource.name} fill style={{objectFit:"cover"}} data-ai-hint="lab equipment"/>
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{resource.description}</p>
                 </CardContent>

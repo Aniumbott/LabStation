@@ -33,7 +33,7 @@ const logUsageFormSchema = z.object({
   actualEndTime: z.string().optional().refine(val => !val || isValid(parseISO(val)), {
     message: "Invalid end date/time format. Use YYYY-MM-DDTHH:mm",
   }),
-  outcome: z.enum(BookingUsageOutcomes as [string, ...string[]]).optional(),
+  outcome: z.enum(BookingUsageOutcomes as unknown as [NonNullable<BookingUsageDetails['outcome']>, ...NonNullable<BookingUsageDetails['outcome']>[]]).optional(),
   dataStorageLocation: z.string().max(255, "Cannot exceed 255 characters.").optional().or(z.literal('')),
   usageComments: z.string().max(1000, "Cannot exceed 1000 characters.").optional().or(z.literal('')),
 }).refine(data => {

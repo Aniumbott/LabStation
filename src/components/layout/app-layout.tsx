@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   Package,
   CalendarDays,
-  UserCog,
   Users as UsersIconLucide,
   CheckSquare,
   Bell,
@@ -74,7 +73,6 @@ const navItems: NavItem[] = [
     icon: UsersIconLucide,
     adminOnly: true,
   },
-  { href: '/profile', label: 'My Profile', icon: UserCog },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   {
     href: '/admin/audit-log',
@@ -190,16 +188,25 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         <SidebarFooter className="border-t border-sidebar-border p-3">
           <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-            <Avatar className="h-8 w-8 flex-shrink-0">
-              <AvatarImage src={currentUser?.avatarUrl ?? undefined} alt={currentUser?.name} />
-              <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            <div className="overflow-hidden flex-1 group-data-[collapsible=icon]:hidden">
-              <p className="text-sm font-medium truncate leading-tight">{currentUser?.name}</p>
-              <p className="text-xs text-muted-foreground truncate">{currentUser?.role}</p>
-            </div>
+            <Link
+              href="/profile"
+              className={cn(
+                'flex items-center gap-2 flex-1 min-w-0 rounded-md px-1 py-1 transition-colors',
+                'hover:bg-sidebar-accent group-data-[collapsible=icon]:flex-none',
+                pathname === '/profile' && 'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
+              )}
+            >
+              <Avatar className="h-8 w-8 flex-shrink-0">
+                <AvatarImage src={currentUser?.avatarUrl ?? undefined} alt={currentUser?.name} />
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="overflow-hidden group-data-[collapsible=icon]:hidden">
+                <p className="text-sm font-medium truncate leading-tight">{currentUser?.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{currentUser?.role}</p>
+              </div>
+            </Link>
             <Button
               variant="ghost"
               size="icon"
@@ -226,7 +233,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <SidebarInset className="flex flex-col">
         {/* Mobile-only trigger strip — sidebar handles its own toggle on desktop */}
         <div className="md:hidden flex h-12 items-center border-b border-border px-4 flex-shrink-0 bg-background">
-          <SidebarTrigger />
+          <SidebarTrigger aria-label="Toggle navigation sidebar" />
         </div>
 
         <div className="p-4 md:p-6 lg:p-8 flex-grow bg-background">

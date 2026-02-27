@@ -28,7 +28,7 @@ import { Separator } from '@/components/ui/separator';
 const recurringBlackoutRuleFormSchema = z.object({
   labId: z.string().optional().nullable(),
   name: z.string().min(2, { message: 'Rule name must be at least 2 characters.' }).max(100, { message: 'Rule name cannot exceed 100 characters.' }),
-  daysOfWeek: z.array(z.enum(daysOfWeekArray)).min(1, { message: "Please select at least one day of the week." }),
+  daysOfWeek: z.array(z.enum(daysOfWeekArray as unknown as [DayOfWeek, ...DayOfWeek[]])).min(1, { message: "Please select at least one day of the week." }),
   reason: z.string().max(100, { message: 'Reason cannot exceed 100 characters.' }).optional().or(z.literal('')),
 });
 

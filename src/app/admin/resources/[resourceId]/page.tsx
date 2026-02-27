@@ -33,6 +33,7 @@ import {
   deleteResource_SA,
   updateResourceUnavailability_SA,
 } from '@/lib/actions/resource.actions';
+import { PLACEHOLDER_IMAGE } from '@/lib/app-constants';
 
 
 function ResourceDetailPageSkeleton() {
@@ -231,8 +232,8 @@ export default function ResourceDetailPage() {
         setResource(null);
         setHasAccess(false);
       }
-    } catch (error: any) {
-      toast({ title: "Error Fetching Resource", description: `Could not load resource details. ${error.message}`, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error Fetching Resource", description: `Could not load resource details. ${(error as Error).message}`, variant: "destructive" });
       setResource(null);
       setHasAccess(false);
     } finally {
@@ -272,8 +273,8 @@ export default function ResourceDetailPage() {
         } else {
           setResourceUserBookings([]);
         }
-      } catch (error: any) {
-        toast({ title: "Error Fetching Bookings", description: `Could not load your past bookings for this resource. ${error.message}`, variant: "destructive" });
+      } catch (error: unknown) {
+        toast({ title: "Error Fetching Bookings", description: `Could not load your past bookings for this resource. ${(error as Error).message}`, variant: "destructive" });
         setResourceUserBookings([]);
       }
     };
@@ -338,7 +339,7 @@ export default function ResourceDetailPage() {
           labId: data.labId,
           status: data.status,
           description: data.description || '',
-          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+          imageUrl: data.imageUrl || PLACEHOLDER_IMAGE,
           manufacturer: data.manufacturer || undefined,
           model: data.model || undefined,
           serialNumber: data.serialNumber || undefined,
@@ -361,8 +362,8 @@ export default function ResourceDetailPage() {
           toast({ title: 'Resource Updated', description: `Resource "${data.name}" has been updated.` });
           await fetchResourceData();
         }
-    } catch (error: any) {
-        toast({ title: "Update Failed", description: `Could not update resource: ${error.message}`, variant: "destructive" });
+    } catch (error: unknown) {
+        toast({ title: "Update Failed", description: `Could not update resource: ${(error as Error).message}`, variant: "destructive" });
     }
     setIsFormDialogOpen(false);
   }, [currentUser, canManageResource, resource, fetchResourceData, toast]);
@@ -385,8 +386,8 @@ export default function ResourceDetailPage() {
           toast({ title: "Resource Deleted", description: `Resource "${resource.name}" has been removed.`, variant: "destructive" });
           router.push('/admin/resources');
         }
-    } catch (error: any) {
-        toast({ title: "Delete Failed", description: `Could not delete resource: ${error.message}`, variant: "destructive" });
+    } catch (error: unknown) {
+        toast({ title: "Delete Failed", description: `Could not delete resource: ${(error as Error).message}`, variant: "destructive" });
     } finally {
       setIsAlertOpen(false);
       setResourceToDeleteId(null);
@@ -416,8 +417,8 @@ export default function ResourceDetailPage() {
         toast({ title: 'Unavailability Updated', description: `Unavailability periods for ${resource.name} have been updated.` });
         setResource(prev => prev ? ({ ...prev, unavailabilityPeriods: periodsToSave, lastUpdatedAt: new Date() }) : null);
       }
-    } catch (error: any) {
-      toast({ title: "Update Failed", description: `Could not save unavailability periods: ${error.message}`, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Update Failed", description: `Could not save unavailability periods: ${(error as Error).message}`, variant: "destructive" });
     }
   }, [resource, currentUser, canManageResource, toast]);
 
@@ -502,7 +503,7 @@ export default function ResourceDetailPage() {
                         </AlertDialogHeader>
                         <AlertDialogFooter className="pt-6 border-t">
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
+                          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleConfirmDelete}>
                             Delete
                           </AlertDialogAction>
                         </AlertDialogFooter>
@@ -520,7 +521,7 @@ export default function ResourceDetailPage() {
             <Card className="shadow-lg">
                 <CardContent className="p-0">
                     <div className="relative w-full h-64 md:h-80 rounded-t-lg overflow-hidden">
-                        <Image src={resource.imageUrl || 'https://placehold.co/600x400.png'} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint="lab equipment" />
+                        <Image src={resource.imageUrl || PLACEHOLDER_IMAGE} alt={resource.name} layout="fill" objectFit="cover" data-ai-hint="lab equipment" />
                     </div>
                 </CardContent>
             </Card>

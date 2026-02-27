@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
+import { PLACEHOLDER_AVATAR } from '@/lib/app-constants';
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
         passwordHash,
         role: 'Researcher',
         status: 'pending_approval',
-        avatarUrl: 'https://placehold.co/100x100.png',
+        avatarUrl: PLACEHOLDER_AVATAR,
       },
     });
 

@@ -5,6 +5,7 @@ import { hashPassword } from '@/lib/auth';
 import { verifyUserRole } from './helpers';
 import { CreateUserProfileSchema, ApproveUserSchema, RejectUserSchema, DeleteUserSchema, UpdateUserProfileSchema, UpdateUserRoleSchema } from './validation';
 import { addAuditLog, addNotification } from '@/lib/db-helpers';
+import { PLACEHOLDER_AVATAR } from '@/lib/app-constants';
 
 export async function createUserProfile_SA(input: {
   callerUserId: string;
@@ -33,7 +34,7 @@ export async function createUserProfile_SA(input: {
         email: parsed.email,
         role: parsed.role,
         passwordHash: defaultPasswordHash,
-        avatarUrl: 'https://placehold.co/100x100.png',
+        avatarUrl: PLACEHOLDER_AVATAR,
         status: 'active',
         mustChangePassword: true,
       },

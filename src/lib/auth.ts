@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import type { RoleName } from '@/types';
 import { COOKIE_NAME, getJwtPayloadFromToken, signJwtEdge } from '@/lib/auth-edge';
+import type { JwtPayload } from '@/lib/auth-edge';
 export type { JwtPayload } from '@/lib/auth-edge';
 
 // --- Password Utilities ---

@@ -104,8 +104,8 @@ export function ManageUserDetailsAndAccessDialog({
         };
       });
       setCurrentMembershipsInfo(displayInfos);
-    } catch (error: any) {
-      toast({ title: "Error Loading Memberships", description: `Failed to load lab memberships: ${error.message}`, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error Loading Memberships", description: `Failed to load lab memberships: ${(error as Error).message}`, variant: "destructive" });
       setCurrentMembershipsInfo(allLabs.map(lab => ({ labId: lab.id, labName: lab.name, status: 'not_member' })));
     }
     setIsLoadingMemberships(false);
@@ -145,8 +145,8 @@ export function ManageUserDetailsAndAccessDialog({
       } else {
         toast({ title: "Profile Save Error", description: result.message || 'Could not save profile.', variant: "destructive" });
       }
-    } catch (error: any) {
-      toast({ title: "Profile Save Error", description: `Could not save profile: ${error.message}`, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Profile Save Error", description: `Could not save profile: ${(error as Error).message}`, variant: "destructive" });
     } finally {
       setIsSavingProfile(false);
     }
@@ -178,8 +178,8 @@ export function ManageUserDetailsAndAccessDialog({
       } else {
         toast({ title: "Action Failed", description: result.message, variant: "destructive" });
       }
-    } catch (error: any) {
-      toast({ title: "Error", description: `Operation failed: ${error.message}`, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: `Operation failed: ${(error as Error).message}`, variant: "destructive" });
     } finally {
       setIsProcessingLabRowAction(prev => ({ ...prev, [actionKey]: false }));
     }

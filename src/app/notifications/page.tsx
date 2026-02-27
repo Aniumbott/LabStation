@@ -98,8 +98,8 @@ export default function NotificationsPage() {
     }
     try {
       await markReadMutation.mutateAsync({ callerUserId: userId, notificationId: id });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message || "Could not mark notification as read.", variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Could not mark notification as read.", variant: "destructive" });
     }
   }, [userId, markReadMutation, toast]);
 
@@ -116,8 +116,8 @@ export default function NotificationsPage() {
     try {
       await markAllReadMutation.mutateAsync({ callerUserId: userId });
       toast({ title: "All Read", description: "All notifications have been marked as read." });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message || "Could not mark all notifications as read.", variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Could not mark all notifications as read.", variant: "destructive" });
     }
   }, [userId, markAllReadMutation, notifications, toast]);
 
@@ -129,8 +129,8 @@ export default function NotificationsPage() {
     try {
       await deleteMutation.mutateAsync({ callerUserId: userId, notificationId: id });
       toast({ title: "Notification Deleted", description: "The notification has been removed." });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message || "Could not delete notification.", variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Could not delete notification.", variant: "destructive" });
     }
   }, [userId, deleteMutation, toast]);
 
@@ -147,8 +147,8 @@ export default function NotificationsPage() {
     try {
       await deleteAllMutation.mutateAsync({ callerUserId: userId });
       toast({ title: "All Notifications Cleared", description: "All your notifications have been deleted.", variant: "destructive" });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message || "Could not clear all notifications.", variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Could not clear all notifications.", variant: "destructive" });
     } finally {
       setIsClearAllAlertOpen(false);
     }

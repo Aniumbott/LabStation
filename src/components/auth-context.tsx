@@ -127,8 +127,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       storeUser(user);
       setIsLoading(false);
       return { success: true };
-    } catch (error: any) {
-      const message = error.message || 'Login failed. Please try again.';
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Login failed. Please try again.';
       setLoginMessage(message);
       setIsLoading(false);
       return { success: false, message };
@@ -174,9 +174,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // On success do NOT set currentUser — the user is pending approval.
       return { success: true, message: data.message || 'Signup successful! Your request is awaiting admin approval.', userId: data.userId };
-    } catch (error: any) {
+    } catch (error: unknown) {
       setIsLoading(false);
-      return { success: false, message: error.message || 'Signup failed. Please try again.' };
+      return { success: false, message: error instanceof Error ? error.message : 'Signup failed. Please try again.' };
     }
   }, []);
 
@@ -204,9 +204,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await fetchMe();
       setIsLoading(false);
       return { success: true, message: 'Profile updated successfully.' };
-    } catch (error: any) {
+    } catch (error: unknown) {
       setIsLoading(false);
-      return { success: false, message: error.message || 'Failed to update profile.' };
+      return { success: false, message: error instanceof Error ? error.message : 'Failed to update profile.' };
     }
   }, [currentUser, fetchMe]);
 

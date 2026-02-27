@@ -81,13 +81,13 @@ export function ManageUserLabAccessDialog({
           return {
             labId: lab.id,
             labName: lab.name,
-            status: membership ? membership.status : 'not_member',
+            status: (membership ? membership.status : 'not_member') as LabMembershipStatus | 'not_member',
             membershipDocId: membership?.id,
           };
         });
         setCurrentMembershipsInfo(displayInfos);
-      } catch (error: any) {
-        toast({ title: "Error", description: `Failed to load memberships: ${error.message}`, variant: "destructive" });
+      } catch (error: unknown) {
+        toast({ title: "Error", description: `Failed to load memberships: ${(error as Error).message}`, variant: "destructive" });
         setCurrentMembershipsInfo(allLabs.map(lab => ({ labId: lab.id, labName: lab.name, status: 'not_member' })));
       }
       setIsLoadingMemberships(false);
@@ -99,8 +99,8 @@ export function ManageUserLabAccessDialog({
                                          .filter(u => u.status === 'active');
             setAllUsersForSearch(activeUsers);
             setFilteredUsersForSearch(activeUsers);
-        } catch (error: any) {
-            toast({ title: "Error", description: `Failed to load users for search: ${error.message}`, variant: "destructive" });
+        } catch (error: unknown) {
+            toast({ title: "Error", description: `Failed to load users for search: ${(error as Error).message}`, variant: "destructive" });
             setAllUsersForSearch([]);
             setFilteredUsersForSearch([]);
         }
@@ -158,8 +158,8 @@ export function ManageUserLabAccessDialog({
         } else {
           toast({ title: "Action Failed", description: result.message, variant: "destructive" });
         }
-    } catch (error: any) {
-      toast({ title: "Error", description: `Operation failed: ${error.message}`, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: `Operation failed: ${(error as Error).message}`, variant: "destructive" });
     } finally {
       setIsProcessingLabRowAction(prev => ({ ...prev, [actionKey]: false }));
     }
@@ -186,8 +186,8 @@ export function ManageUserLabAccessDialog({
               } else {
                   toast({title: "Action Failed", description: result.message, variant: "destructive"});
               }
-            } catch (error: any) {
-                toast({title: "Error", description: `Failed to grant access: ${error.message}`, variant: "destructive"});
+            } catch (error: unknown) {
+                toast({title: "Error", description: `Failed to grant access: ${(error as Error).message}`, variant: "destructive"});
             } finally {
                 setIsProcessingManualGrant(false);
             }

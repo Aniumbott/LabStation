@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyUserRole } from './helpers';
 import { CreateResourceSchema, UpdateResourceSchema, DeleteResourceSchema, UpdateResourceUnavailabilitySchema, CreateResourceTypeSchema, UpdateResourceTypeSchema, DeleteResourceTypeSchema } from './validation';
 import { addAuditLog } from '@/lib/db-helpers';
+import { PLACEHOLDER_IMAGE } from '@/lib/app-constants';
 
 export async function createResource_SA(input: {
   callerUserId: string;
@@ -33,7 +34,7 @@ export async function createResource_SA(input: {
         labId: parsed.labId || '',
         status: parsed.status,
         description: parsed.description || '',
-        imageUrl: parsed.imageUrl || 'https://placehold.co/600x400.png',
+        imageUrl: parsed.imageUrl || PLACEHOLDER_IMAGE,
         manufacturer: parsed.manufacturer || '',
         model: parsed.model || '',
         serialNumber: parsed.serialNumber || '',

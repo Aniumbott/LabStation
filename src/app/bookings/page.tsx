@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { Suspense, useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } from 'react';
 import { useRouter, usePathname, useSearchParams }from 'next/navigation';
-import { CalendarDays, PlusCircle, Edit3, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Info, Clock, Calendar as CalendarIconLucide, User as UserIcon, Package as ResourceIcon, CheckCircle2, Save, CheckCircle, AlertCircle, Users, X } from 'lucide-react';
+import { CalendarDays, PlusCircle, Edit3, Search as SearchIcon, FilterX, Eye, Loader2, Filter as FilterIcon, Info, Clock, Calendar as CalendarIconLucide, Package as ResourceIcon, CheckCircle2, Save, Users, X } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -22,11 +22,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { Booking, Resource, RoleName, BookingUsageDetails, User, LabMembership, BlackoutDate, RecurringBlackoutRule } from '@/types';
+import type { Booking, Resource, RoleName, BookingUsageDetails, User, LabMembership, BlackoutDate, RecurringBlackoutRule, DayOfWeek } from '@/types';
 import { format, parseISO, isValid as isValidDateFn, startOfDay, isSameDay, set, isBefore, getDay, startOfToday, compareAsc, addDays as dateFnsAddDays } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { cn, formatDateSafe } from '@/lib/utils';
+import { cn, formatDateSafe, getBookingStatusBadge } from '@/lib/utils';
 import { BookingDetailsDialog } from '@/components/bookings/booking-details-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -114,7 +114,7 @@ function BookingsPageContent() {
     }
     setIsLoadingBookings(true);
     try {
-      const bookingsFilter: { userId?: string; status?: string } = {};
+      const bookingsFilter: { userId?: string; status?: string[] } = {};
       if (!(displayScope === 'all' && canViewAllBookings)) {
         bookingsFilter.userId = currentUser.id;
       }
@@ -151,7 +151,7 @@ function BookingsPageContent() {
       } else {
         setAllBookingsDataSource([]);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       setAllBookingsDataSource([]);
     }
     setIsLoadingBookings(false);
@@ -183,7 +183,7 @@ function BookingsPageContent() {
       }
       setAllAvailableResources(resourcesData);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       setAllAvailableResources([]);
       setUserLabMemberships([]);
     } finally {
@@ -193,7 +193,7 @@ function BookingsPageContent() {
     try {
       const usersResult = await getUsers_SA(currentUser!.id);
       setAllUsersForFilter(usersResult.success && usersResult.data ? usersResult.data : []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       setAllUsersForFilter([]);
     } finally {
       setIsLoadingUsersForFilter(false);
@@ -206,7 +206,7 @@ function BookingsPageContent() {
       ]);
       setFetchedBlackoutDates(blackoutResult.success && blackoutResult.data ? blackoutResult.data : []);
       setFetchedRecurringRules(recurringResult.success && recurringResult.data ? recurringResult.data : []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       setFetchedBlackoutDates([]);
       setFetchedRecurringRules([]);
     } finally {
@@ -332,13 +332,21 @@ function BookingsPageContent() {
   }, [searchParams, isClient, currentUser, allBookingsDataSource, handleOpenForm, isLoadingBookings, isLoadingResourcesAndLabs, isLoadingAvailabilityRules, authIsLoading, activeSelectedDate, isFormOpen, currentBooking, canViewAllBookings]);
 
 
+  // Deferred filter values let React prioritize the Apply-button click response
+  // before committing to the expensive re-filter of the bookings list.
+  const deferredSearchTerm = useDeferredValue(activeSearchTerm);
+  const deferredFilterResourceId = useDeferredValue(activeFilterResourceId);
+  const deferredFilterStatus = useDeferredValue(activeFilterStatus);
+  const deferredFilterRequesterId = useDeferredValue(activeFilterRequesterId);
+  const deferredSelectedDate = useDeferredValue(activeSelectedDate);
+
   const bookingsToDisplay = useMemo(() => {
     if (!currentUser || isLoadingBookings || isLoadingResourcesAndLabs || isLoadingUsersForFilter) return [];
 
-    let filteredBookings = [...allBookingsDataSource];
+    let filteredBookings = allBookingsDataSource.slice();
 
-    if (activeSearchTerm) {
-      const lowerSearchTerm = activeSearchTerm.toLowerCase();
+    if (deferredSearchTerm) {
+      const lowerSearchTerm = deferredSearchTerm.toLowerCase();
       filteredBookings = filteredBookings.filter(b =>
         (b.resourceName && b.resourceName.toLowerCase().includes(lowerSearchTerm)) ||
         (b.userName && b.userName.toLowerCase().includes(lowerSearchTerm)) ||
@@ -346,19 +354,19 @@ function BookingsPageContent() {
       );
     }
 
-    if (activeFilterResourceId !== 'all') {
-      filteredBookings = filteredBookings.filter(b => b.resourceId === activeFilterResourceId);
+    if (deferredFilterResourceId !== 'all') {
+      filteredBookings = filteredBookings.filter(b => b.resourceId === deferredFilterResourceId);
     }
-    if (activeFilterStatus !== 'all') {
-      filteredBookings = filteredBookings.filter(b => b.status === activeFilterStatus);
+    if (deferredFilterStatus !== 'all') {
+      filteredBookings = filteredBookings.filter(b => b.status === deferredFilterStatus);
     }
-    if (displayScope === 'all' && canViewAllBookings && activeFilterRequesterId !== 'all') {
-      filteredBookings = filteredBookings.filter(b => b.userId === activeFilterRequesterId);
+    if (displayScope === 'all' && canViewAllBookings && deferredFilterRequesterId !== 'all') {
+      filteredBookings = filteredBookings.filter(b => b.userId === deferredFilterRequesterId);
     }
 
 
-    if (activeSelectedDate) {
-      return filteredBookings.filter(b => b.startTime && isValidDateFn(b.startTime) && isSameDay(b.startTime, activeSelectedDate));
+    if (deferredSelectedDate) {
+      return filteredBookings.filter(b => b.startTime && isValidDateFn(b.startTime) && isSameDay(b.startTime, deferredSelectedDate));
     } else {
       return filteredBookings.filter(b =>
         b.startTime &&
@@ -366,7 +374,7 @@ function BookingsPageContent() {
         (b.status !== 'Cancelled')
       ).sort((a, b) => compareAsc(a.startTime, b.startTime));
     }
-  }, [allBookingsDataSource, activeSelectedDate, activeSearchTerm, activeFilterResourceId, activeFilterStatus, activeFilterRequesterId, displayScope, canViewAllBookings, currentUser, isLoadingBookings, isLoadingResourcesAndLabs, isLoadingUsersForFilter]);
+  }, [allBookingsDataSource, deferredSelectedDate, deferredSearchTerm, deferredFilterResourceId, deferredFilterStatus, deferredFilterRequesterId, displayScope, canViewAllBookings, currentUser, isLoadingBookings, isLoadingResourcesAndLabs, isLoadingUsersForFilter]);
 
 
   useEffect(() => {
@@ -501,7 +509,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
 
     const resourceLabId = selectedResource.labId;
     const bookingDayIndex = getDay(finalStartTime);
-    const bookingDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][bookingDayIndex];
+    const bookingDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][bookingDayIndex] as DayOfWeek;
     const labSpecificRecurringBlackout = fetchedRecurringRules.find(rule => rule.labId === resourceLabId && rule.daysOfWeek.includes(bookingDayName));
     const globalRecurringBlackout = fetchedRecurringRules.find(rule => !rule.labId && rule.daysOfWeek.includes(bookingDayName));
 
@@ -566,10 +574,10 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                 } return Promise.resolve();
               });
               await Promise.allSettled(notificationPromises);
-            } catch { /* Log error */ }
+            } catch { /* ignore */ }
           } else if (finalStatus === 'Waitlisted') {
             try { await addNotification(bookingForUserId, 'Added to Waitlist', `Your booking for ${selectedResourceNameForNotif} on ${format(finalStartTime, 'MMM dd, HH:mm')} is waitlisted${actingUserId !== bookingForUserId ? ` (created by ${actingUserName})` : ''}.`, 'booking_waitlisted', `/bookings?bookingId=${newBookingId}`);
-            } catch { /* Log error */ }
+            } catch { /* ignore */ }
           }
         }
       } else if (formData.id) {
@@ -649,15 +657,6 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
   }, [currentUser, selectedBookingForDetails, allAvailableResources, allUsersForFilter]);
 
 
-  const getBookingStatusBadgeElement = (status: Booking['status']) => {
-    switch (status) {
-      case 'Confirmed': return <Badge className={cn("bg-green-500 text-white hover:bg-green-600 border-transparent")}><CheckCircle className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-      case 'Pending': return <Badge className={cn("bg-yellow-500 text-yellow-950 hover:bg-yellow-600 border-transparent")}><Clock className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-      case 'Cancelled': return <Badge className={cn("bg-gray-400 text-white hover:bg-gray-500 border-transparent")}><X className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-      case 'Waitlisted': return <Badge className={cn("bg-purple-500 text-white hover:bg-purple-600 border-transparent")}><UserIcon className="mr-1 h-3.5 w-3.5" />{status}</Badge>;
-      default: return <Badge variant="outline">{status}</Badge>;
-    }
-  };
 
   const dialogHeaderDateString = useMemo(() => {
     if (isFormOpen && currentBooking?.startTime && isValidDateFn(new Date(currentBooking.startTime))) return format(new Date(currentBooking.startTime), "PPP");
@@ -749,7 +748,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
           )
         }
       />
-       <Card className="shadow-lg">
+       <Card>
             <CardHeader className="pb-3 border-b-0 flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-2">
                 <div>
                     <CardTitle>
@@ -792,7 +791,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
                             {canViewAllBookings && displayScope === 'all' && <TableCell>{booking.userName || 'N/A'}</TableCell>}
                             {!activeSelectedDate && <TableCell>{formatDateSafe(booking.startTime, 'Invalid Date', 'MMM dd, yyyy')}</TableCell>}
                             <TableCell>{isValidDateFn(booking.startTime) ? format(booking.startTime, 'p') : ''} - {isValidDateFn(booking.endTime) ? format(booking.endTime, 'p') : ''}</TableCell>
-                            <TableCell>{getBookingStatusBadgeElement(booking.status)}</TableCell>
+                            <TableCell>{getBookingStatusBadge(booking.status)}</TableCell>
                             <TableCell className="text-right space-x-1">
                                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenDetailsDialog(booking.id)}><Eye className="h-4 w-4" /> <span className="sr-only">View Details</span></Button>
                             {booking.status !== 'Cancelled' && canEditThisBooking && (<Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenForm(booking)}><Edit3 className="h-4 w-4" /> <span className="sr-only">Edit Booking</span></Button>)}
@@ -843,7 +842,7 @@ const handleSaveBooking = useCallback(async (formData: BookingFormValues) => {
           {(isLoadingResourcesAndLabs || isLoadingAvailabilityRules || isLoadingUsersForFilter) && isFormOpen ? (<div className="flex justify-center items-center py-10 mt-4"><Loader2 className="mr-2 h-6 w-6 animate-spin text-primary" /> Loading form data...</div>
           ) : allAvailableResources.length > 0 && currentUser && currentUser.name && currentUser.role ? (
             <BookingForm
-                initialData={currentBooking}
+                initialData={currentBooking ?? undefined}
                 onSave={handleSaveBooking}
                 onCancel={() => handleDialogClose(false)}
                 currentUser={currentUser}
